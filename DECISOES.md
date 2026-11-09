@@ -65,6 +65,6 @@ Aprovadas em 2026-11-09 por Kayky Felipe (chat), com as opções recomendadas na
 
 | ID | Data | Mudança | Situação |
 |---|---|---|---|
-| M3 | 2026-11-09 | Pull request da branch `claude/new-session-w616rq` para `main` após a aprovação da Etapa 1 (sem merge automático). | Autorizado por Kayky Felipe (chat) |
+| M3 | 2026-11-09 | Pull request da branch `claude/new-session-w616rq` para `main` (KaykyFelipe/IAtiva#1) e merge na `main` após a aprovação da Etapa 1. | Autorizado por Kayky Felipe (chat: "faz o merge na main") |
 | M2 | 2026-11-09 | Exceção à D8: commit e push da Etapa 1 **antes** da aprovação da etapa, para que o servidor possa clonar o código e testar o ambiente em containers. (A Etapa 1 foi aprovada depois, no mesmo dia.) | Autorizada por Kayky Felipe (chat: "faz o commit") |
 | M1 | 2026-11-09 | Etapa 1 cria apenas as apps necessárias agora (`core`, `chat`, `synthetic_erp`). As apps `accounts`, `memory`, `knowledge`, `metadata`, `agent`, `query` e `audit` serão criadas nas etapas correspondentes, em vez de esqueletos vazios. | Aprovada com a Etapa 1 |

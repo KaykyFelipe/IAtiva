@@ -7,7 +7,7 @@
 ## Histórico
 
 - Etapa 0 — Levantamento e proposta: **aprovada** em 2026-11-09 (D1–D12; ver `DECISOES.md`).
-- Etapa 1 — Fundação em localhost: **aprovada** em 2026-11-09 (inclui T1–T7, M1). Commit de segurança antes da aprovação (M2). Pull request para `main` aberto, sem merge (M3).
+- Etapa 1 — Fundação em localhost: **aprovada** em 2026-11-09 (inclui T1–T7, M1). Commit de segurança antes da aprovação (M2). Pull request KaykyFelipe/IAtiva#1 com merge na `main` (M3).
 
 ## Etapa 1 — o que foi entregue
 
@@ -21,9 +21,8 @@
 
 ## Pendências da Etapa 1 (não bloqueiam a Etapa 2)
 
-- [ ] Executar no servidor Windows: `docker compose up -d --build` e `docker compose run --rm app pytest -p no:cacheprovider` (ainda não executado em Docker real).
+- [ ] Executar no servidor Windows (a partir da `main`): `docker compose up -d --build` e `docker compose run --rm app pytest -p no:cacheprovider` (ainda não executado em Docker real).
 - [ ] Confirmar a versão do Windows Server e se o Docker roda em WSL2 ou em VM Ubuntu.
-- [ ] Revisar e fazer o merge do pull request para `main` (decisão de vocês).
 
 ## Informações pendentes
 
