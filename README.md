@@ -102,15 +102,20 @@ Acesse <http://127.0.0.1:8000/> e entre com o usuário criado. Para criar outros
 Este é o ambiente de **desenvolvimento** em containers Linux (imagem Ubuntu 24.04), pensado para o
 servidor Windows. Não é configuração de produção.
 
-**Pré-requisito:** um Docker Engine que rode containers Linux no servidor. O Docker Desktop não tem
-suporte oficial no Windows Server, então há dois caminhos:
+**Pré-requisito:** servidor Ubuntu (22.04 ou 24.04) com **Docker Engine** e o plugin
+`docker compose`, instalados pelo repositório oficial da Docker
+(https://docs.docker.com/engine/install/ubuntu/). Para usar o Docker sem `sudo`:
+`sudo usermod -aG docker $USER`. Depois disso, saia da sessão e entre de novo.
 
-- **Docker Engine dentro de uma distribuição Ubuntu no WSL2** (Windows Server 2022 ou mais recente).
-  O WSL encaminha o `127.0.0.1` do Ubuntu para o `127.0.0.1` do Windows, e o chat abre no navegador
-  do próprio servidor.
-- **Máquina virtual Ubuntu (Hyper-V) com Docker Engine.** Aqui o `127.0.0.1` é o da VM. Para abrir o
-  chat no Windows, use um redirecionamento SSH
-  (`ssh -L 8000:127.0.0.1:8000 usuario@vm`), sem publicar a porta na rede.
+**Acesso ao chat:** as portas ficam só em `127.0.0.1` do servidor. Para abrir o chat no navegador do
+seu computador sem expor nada na rede, use um túnel SSH a partir do seu computador:
+
+```bash
+ssh -L 8000:127.0.0.1:8000 usuario@ip-do-servidor
+```
+
+Com o túnel aberto, acesse <http://127.0.0.1:8000/> no seu computador. Liberar o acesso pela rede
+interna é a Etapa 9 e exige autorização própria.
 
 Na pasta do projeto, depois de preencher o `.env` (passo 2):
 
@@ -147,6 +152,58 @@ Como o ambiente funciona:
   O banco da aplicação fica no volume `iativa_pgdata`.
 - **Usuário sem privilégios:** a aplicação roda com `iativa` (uid 10001).
 - **Atualizar o código:** rode `git pull` e depois `docker compose up -d --build`.
+
+## Atualização automática a partir do GitHub
+
+O script `scripts/atualizar.sh` roda **no servidor**, no terminal Ubuntu, fora dos containers, e
+acompanha a branch `main`. A `main` só recebe etapas aprovadas.
+
+Quando a `main` tem commits novos, ele:
+
+1. avança o código (somente fast-forward);
+2. reconstrói a imagem;
+3. **roda os testes antes de trocar o container**;
+4. recria o container;
+5. confere se o chat responde.
+
+Se qualquer passo falhar, o script **volta para a versão anterior**.
+
+Proteções do script:
+
+- não roda se houver alterações locais em arquivos versionados nem se a pasta estiver em outra branch;
+- impede duas execuções ao mesmo tempo;
+- os logs ficam em `var/atualizacao/` e registram só horários, commits e o resultado de cada passo.
+
+Rodar à mão:
+
+```bash
+scripts/atualizar.sh --checar
+```
+
+```bash
+scripts/atualizar.sh
+```
+
+Agendar a cada 5 minutos (systemd timer):
+
+```bash
+sudo scripts/instalar_agendamento.sh
+```
+
+Para outro intervalo, use `sudo INTERVALO=15min scripts/instalar_agendamento.sh`. Para remover, use
+`sudo scripts/instalar_agendamento.sh --remover`.
+
+Requisitos e observações:
+
+- **systemd ativo.** No WSL, adicione em `/etc/wsl.conf` as linhas `[boot]` e `systemd=true` e rode
+  `wsl --shutdown` no Windows.
+- **Docker sem `sudo`:** o usuário precisa estar no grupo `docker` (`sudo usermod -aG docker $USER`).
+- **Repositório privado:** o servidor precisa de uma credencial **somente leitura**, de preferência
+  uma *deploy key* do GitHub.
+- **WSL ligado:** o WSL precisa estar em execução para os containers e o agendamento funcionarem.
+  Confira se ele continua ativo com o servidor sem sessão aberta.
+- **Primeira subida:** é manual (`docker compose up -d --build`). O script atualiza um ambiente que
+  já existe.
 
 ## Testes
 
