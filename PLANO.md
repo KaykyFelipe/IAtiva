@@ -1,7 +1,7 @@
 # PLANO — IAtiva
 
-> **Situação: PROPOSTA DA ETAPA 0 — AGUARDANDO APROVAÇÃO.**
-> Este arquivo só passa a ser "o plano aprovado" depois da validação explícita registrada em `DECISOES.md`.
+> **Situação: APROVADO em 2026-11-09** (Etapa 0, Kayky Felipe, via chat — ver `DECISOES.md`).
+> Pendências que não bloqueiam a Etapa 1: escolha do provedor de IA (D5) e prazos de retenção marcados "a definir" (D11).
 > Requisitos completos e regras obrigatórias: `docs/PEDIDO_INICIAL.md` (o pedido original prevalece em caso de divergência).
 
 ## 1. Entendimento

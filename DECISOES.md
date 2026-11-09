@@ -4,6 +4,12 @@ Registro de decisões tomadas e mudanças de escopo. Uma decisão só é marcada
 
 Formato: `ID | data | decisão | situação | aprovado por | observações`
 
+## Etapas aprovadas
+
+| Etapa | Data | Aprovado por |
+|---|---|---|
+| 0 — Levantamento e proposta | 2026-11-09 | Kayky Felipe (chat) |
+
 ## Definidas pelo pedido inicial (`docs/PEDIDO_INICIAL.md`)
 
 | ID | Decisão | Situação |
@@ -17,22 +23,36 @@ Formato: `ID | data | decisão | situação | aprovado por | observações`
 | R7 | Sem deploy, exposição externa, alteração no ERP ou operação destrutiva sem autorização específica | Definida |
 | R8 | Interface substituível para o provedor de IA | Definida |
 
-## Pendentes de validação (propostas na Etapa 0)
+## Decisões da Etapa 0
 
-| ID | Data | Decisão proposta | Situação | Aprovado por |
+Aprovadas em 2026-11-09 por Kayky Felipe (chat), com as opções recomendadas na proposta.
+
+| ID | Data | Decisão | Situação | Aprovado por |
 |---|---|---|---|---|
-| D1 | 2026-11-09 | Frontend: templates Django + HTMX (alternativa: React) | Pendente | — |
-| D2 | 2026-11-09 | Banco da aplicação: PostgreSQL 16; SQLite só em testes automatizados | Pendente | — |
-| D3 | 2026-11-09 | Modelo gera plano de consulta estruturado; backend compila o SQL (sem SQL livre do modelo) | Pendente | — |
-| D4 | 2026-11-09 | ERP sintético em esquema estilo Protheus; SQLite somente leitura para testes rápidos + SQL Server Developer (Docker) em máquina da empresa para testes de T-SQL | Pendente | — |
-| D5 | 2026-11-09 | Provedor de IA: API sob contrato comercial com termos de retenção verificados e/ou modelo local | Pendente | — |
-| D6 | 2026-11-09 | Não enviar linhas de resultado ao modelo na v1 | Pendente | — |
-| D7 | 2026-11-09 | Autenticação inicial com usuários locais do Django; AD/LDAP/Entra ID depois | Pendente | — |
-| D8 | 2026-11-09 | Commit e push: um commit por etapa após aprovação, na branch `claude/new-session-w616rq`, sem PR salvo pedido | **Aprovada** (2026-11-09) | Kayky Felipe (chat) |
-| D9 | 2026-11-09 | Testes com `pytest` + `pytest-django`, só dados sintéticos | Pendente | — |
-| D10 | 2026-11-09 | Domínio inicial: Financeiro — Contas a Receber | Pendente | — |
-| D11 | 2026-11-09 | Tabela de persistência e retenção (`PLANO.md` §4) | Pendente | — |
-| D12 | 2026-11-09 | Política de precedência de memória (`PLANO.md` §3, princípio 6) | Pendente | — |
+| D1 | 2026-11-09 | Frontend: templates Django + HTMX | **Aprovada** | Kayky Felipe (chat) |
+| D2 | 2026-11-09 | Banco da aplicação: PostgreSQL 16; SQLite só em testes automatizados | **Aprovada** | Kayky Felipe (chat) |
+| D3 | 2026-11-09 | Modelo gera plano de consulta estruturado; backend compila o SQL (sem SQL livre do modelo) | **Aprovada** | Kayky Felipe (chat) |
+| D4 | 2026-11-09 | ERP sintético em esquema estilo Protheus; SQLite somente leitura para testes rápidos + SQL Server Developer (Docker) em máquina da empresa para testes de T-SQL | **Aprovada** | Kayky Felipe (chat) |
+| D5 | 2026-11-09 | Provedor de IA: API sob contrato comercial com termos de retenção verificados e/ou modelo local | **Aprovada como diretriz** — escolha do provedor e verificação contratual pendentes (necessárias antes da Etapa 4) | Kayky Felipe (chat) |
+| D6 | 2026-11-09 | Não enviar linhas de resultado ao modelo na v1 | **Aprovada** | Kayky Felipe (chat) |
+| D7 | 2026-11-09 | Autenticação inicial com usuários locais do Django; AD/LDAP/Entra ID depois | **Aprovada** | Kayky Felipe (chat) |
+| D8 | 2026-11-09 | Commit e push: um commit por etapa após aprovação, na branch `claude/new-session-w616rq`, sem PR salvo pedido | **Aprovada** | Kayky Felipe (chat) |
+| D9 | 2026-11-09 | Testes com `pytest` + `pytest-django`, só dados sintéticos | **Aprovada** | Kayky Felipe (chat) |
+| D10 | 2026-11-09 | Domínio inicial: Financeiro — Contas a Receber | **Aprovada** | Kayky Felipe (chat) |
+| D11 | 2026-11-09 | Tabela de persistência e retenção (`PLANO.md` §4) | **Aprovada** — prazos marcados "a definir" (auditoria, revisões) continuam pendentes | Kayky Felipe (chat) |
+| D12 | 2026-11-09 | Política de precedência de memória (`PLANO.md` §3, princípio 6) | **Aprovada** | Kayky Felipe (chat) |
+
+## Decisões técnicas de implementação (Etapa 1 — sujeitas à validação da etapa)
+
+| ID | Data | Decisão | Situação |
+|---|---|---|---|
+| T1 | 2026-11-09 | `DEBUG` fixo em `False` (não lido do ambiente). O `runserver` restrito serve os estáticos localmente (equivalente a `--insecure`). | Proposta na Etapa 1 |
+| T2 | 2026-11-09 | `runserver` substituído: aceita apenas `127.0.0.1`/`localhost`; recusa `0.0.0.0`, IPs da rede e IPv6. Verificações do sistema `iativa.E001`–`E005` impedem inicialização fora das regras. | Proposta na Etapa 1 |
+| T3 | 2026-11-09 | htmx 2.0.4 servido localmente (sem CDN), com histórico desativado para não gravar páginas no navegador; integridade conferida por SHA-256 em teste. | Proposta na Etapa 1 |
+| T4 | 2026-11-09 | CSP restritiva (`script-src 'self'`, sem inline), `Cache-Control: no-store` em todas as respostas, cookies `HttpOnly` + `SameSite=Strict`, cache da aplicação desativado (`DummyCache`). | Proposta na Etapa 1 |
+| T5 | 2026-11-09 | Base sintética do ERP marcada com tabela `IATIVA_SINTETICO`; a conexão de leitura recusa arquivos sem essa marca. | Proposta na Etapa 1 |
+| T6 | 2026-11-09 | Exceção de bind em container: `runserver` aceita `0.0.0.0` somente dentro de container Docker (`/.dockerenv`) **e** com `IATIVA_ALLOW_CONTAINER_BIND=1`; a restrição a localhost passa a ser garantida pela publicação da porta em `127.0.0.1` do host (verificada por teste). IPs da rede continuam recusados. | Proposta na Etapa 1 |
+| T7 | 2026-11-09 | Ambiente de desenvolvimento em containers Linux (Ubuntu 24.04 + PostgreSQL 16) via `compose.yaml`, para o servidor Windows (Docker Engine em WSL2 ou VM Ubuntu). Não é configuração de produção. | Solicitado por Kayky Felipe (chat) — proposta na Etapa 1 |
 
 ## Organização do trabalho
 
@@ -42,4 +62,7 @@ Formato: `ID | data | decisão | situação | aprovado por | observações`
 
 ## Mudanças de escopo
 
-Nenhuma até o momento.
+| ID | Data | Mudança | Situação |
+|---|---|---|---|
+| M2 | 2026-11-09 | Exceção à D8: commit e push da Etapa 1 **antes** da aprovação da etapa, para que o servidor possa clonar o código e testar o ambiente em containers. A Etapa 1 continua aguardando validação. | Autorizada por Kayky Felipe (chat: "faz o commit") |
+| M1 | 2026-11-09 | Etapa 1 cria apenas as apps necessárias agora (`core`, `chat`, `synthetic_erp`). As apps `accounts`, `memory`, `knowledge`, `metadata`, `agent`, `query` e `audit` serão criadas nas etapas correspondentes, em vez de esqueletos vazios. | Proposta na Etapa 1 — aguardando validação |

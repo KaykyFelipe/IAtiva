@@ -1,0 +1,11 @@
+# Ambiente e segredos
+.venv/
+.env
+# Dados locais (banco sintético, arquivos gerados)
+var/
+*.sqlite3
+staticfiles/
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/

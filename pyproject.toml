@@ -1,0 +1,10 @@
+[project]
+name = "iativa"
+version = "0.1.0"
+description = "Chat corporativo para consultas de leitura ao TOTVS Protheus (Etapa 1: fundação em localhost)."
+requires-python = ">=3.12"
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "config.settings.test"
+testpaths = ["tests"]
+addopts = "-ra"
