@@ -1,0 +1,6 @@
+# Mantém finais de linha Unix em arquivos usados dentro de containers Linux (checkout no Windows).
+* text=auto
+*.sh text eol=lf
+Dockerfile text eol=lf
+*.yaml text eol=lf
+*.py text eol=lf

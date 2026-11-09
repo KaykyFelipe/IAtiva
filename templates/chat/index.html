@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}Chat · IAtiva{% endblock %}
+{% block content %}
+<section class="cartao">
+  <h1>Chat</h1>
+  <p class="aviso">Versão de fundação: a mensagem é apenas confirmada como recebida. Ela não é
+    interpretada nem armazenada. A interpretação chega na Etapa 4.</p>
+  {% include "chat/_painel.html" %}
+</section>
+{% endblock %}

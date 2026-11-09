@@ -1,0 +1,58 @@
+# Ambiente de DESENVOLVIMENTO do IAtiva (Etapa 1 — somente localhost, dados sintéticos).
+#
+# Portas publicadas SOMENTE em 127.0.0.1 do servidor: o chat só abre a partir da própria máquina.
+# Não altere para 0.0.0.0 nem publique na rede sem passar pela Etapa 9 (acesso externo).
+#
+# Uso (na pasta do projeto, com o .env preenchido):
+#   docker compose up -d --build                               sobe banco + aplicação
+#   docker compose exec app python manage.py createsuperuser   cria o primeiro usuário
+#   docker compose run --rm app pytest -p no:cacheprovider     roda os testes
+#   docker compose down                                        para (dados ficam nos volumes)
+name: iativa
+
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${IATIVA_DB_NAME:-iativa}
+      POSTGRES_USER: ${IATIVA_DB_USER:-iativa}
+      POSTGRES_PASSWORD: ${IATIVA_DB_PASSWORD:?defina IATIVA_DB_PASSWORD no .env}
+    ports:
+      - "127.0.0.1:${IATIVA_DB_PORT:-5432}:5432"
+    volumes:
+      - iativa_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      IATIVA_DB_HOST: db
+      IATIVA_DB_PORT: "5432"
+      IATIVA_SYNTHETIC_ERP_PATH: /app/var/erp_sintetico.sqlite3
+      # Exceção T6: escuta em 0.0.0.0 só dentro do container; a porta abaixo fica em 127.0.0.1.
+      IATIVA_ALLOW_CONTAINER_BIND: "1"
+    command:
+      - sh
+      - -c
+      - >-
+        python manage.py migrate --noinput &&
+        (test -f "$$IATIVA_SYNTHETIC_ERP_PATH" || python manage.py seed_synthetic) &&
+        exec python manage.py runserver 0.0.0.0:8000 --noreload
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - iativa_var:/app/var
+
+volumes:
+  iativa_pgdata:
+  iativa_var:

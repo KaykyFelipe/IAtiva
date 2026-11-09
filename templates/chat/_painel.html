@@ -1,0 +1,17 @@
+<div id="painel-chat">
+  {% if resposta %}
+    <div class="resposta" role="status">
+      <span class="estado estado-{{ resposta.estado }}">{{ resposta.estado }}</span>
+      Mensagem recebida às {{ resposta.recebida_em|time:"H:i:s" }} ({{ resposta.caracteres }} caracteres).
+      Nada foi armazenado.
+    </div>
+  {% endif %}
+  <form method="post" action="{% url 'chat:index' %}"
+        hx-post="{% url 'chat:index' %}" hx-target="#painel-chat" hx-swap="outerHTML">
+    {% csrf_token %}
+    <label for="{{ form.mensagem.id_for_label }}">{{ form.mensagem.label }}</label>
+    {{ form.mensagem }}
+    {% for erro in form.mensagem.errors %}<p class="erro">{{ erro }}</p>{% endfor %}
+    <button type="submit">Enviar</button>
+  </form>
+</div>
