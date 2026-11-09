@@ -17,12 +17,18 @@
 - Banco da aplicação PostgreSQL 16; base sintética do ERP separada e somente leitura (`manage.py seed_synthetic`).
 - Restrições: `runserver` só em 127.0.0.1 (exceção controlada em container, T6); verificações do sistema; `DEBUG` fixo em `False`; `no-store`; CSP; filtro de redação de logs.
 - Ambiente de desenvolvimento em containers (`Dockerfile` Ubuntu 24.04 + `compose.yaml`), portas só em 127.0.0.1.
-- 82 testes automatizados (`pytest`), sem rede.
+- 82 testes automatizados (`pytest`), sem rede (92 com a rotina M4).
+
+## Aprovado fora das etapas
+
+- **M4 — Atualização automática a partir do GitHub** (`scripts/atualizar.sh`, `scripts/instalar_agendamento.sh`): aprovada em 2026-11-09; testada com Docker simulado (10 testes). Falta executar no servidor.
+- **M5 — Servidor Ubuntu nativo**: aprovada em 2026-11-09; `compose.yaml` sem alteração; acesso por túnel SSH.
 
 ## Pendências da Etapa 1 (não bloqueiam a Etapa 2)
 
-- [ ] Executar no servidor Windows (a partir da `main`): `docker compose up -d --build` e `docker compose run --rm app pytest -p no:cacheprovider` (ainda não executado em Docker real).
-- [ ] Confirmar a versão do Windows Server e se o Docker roda em WSL2 ou em VM Ubuntu.
+- [ ] Executar no servidor Ubuntu (a partir da `main`): `docker compose up -d --build` e `docker compose run --rm app pytest -p no:cacheprovider` (ainda não executado em Docker real).
+- [ ] Servidor alterado para Ubuntu nativo (informado em 2026-11-09). Confirmar versão do Ubuntu e instalação do Docker Engine.
+- [ ] Confirmar se o repositório é privado (o servidor precisará de credencial somente leitura para a atualização automática).
 
 ## Informações pendentes
 
