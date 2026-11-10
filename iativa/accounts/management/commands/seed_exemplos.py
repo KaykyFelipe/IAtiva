@@ -11,9 +11,9 @@ from iativa.accounts.models import Department
 from iativa.memory.models import ParameterDefinition, TipoValor
 
 SETORES = (
-    ("financeiro-cobranca", "Financeiro — Cobrança (exemplo)"),
-    ("diretoria", "Diretoria (exemplo)"),
-    ("ti", "TI (exemplo)"),
+    ("financeiro-cobranca", "Financeiro — Cobrança"),
+    ("diretoria", "Diretoria"),
+    ("ti", "TI"),
 )
 
 DEFINICOES = (
