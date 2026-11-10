@@ -1,3 +1,4 @@
 # Dependências de execução (versões travadas por faixa; ver README).
 Django>=5.2.19,<5.3
 psycopg[binary]>=3.3,<4
+pyodbc>=5.2,<6

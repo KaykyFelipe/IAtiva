@@ -12,6 +12,17 @@ RUN apt-get update \
     && apt-get clean \
     && python3 -m venv /opt/venv
 
+# Microsoft ODBC Driver 18 para SQL Server (leitura do ERP; Etapa 3 só metadados).
+# ACCEPT_EULA=Y aceita a licença do driver da Microsoft, exigida pelo pacote.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl gnupg \
+    && curl -fsSL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor -o /usr/share/keyrings/microsoft-prod.gpg \
+    && curl -fsSL https://packages.microsoft.com/config/ubuntu/24.04/prod.list -o /etc/apt/sources.list.d/mssql-release.list \
+    && apt-get update \
+    && ACCEPT_EULA=Y apt-get install -y --no-install-recommends msodbcsql18 unixodbc \
+    && apt-get purge -y curl gnupg && apt-get autoremove -y && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 COPY requirements.txt requirements-dev.txt ./
 RUN pip install --no-cache-dir -r requirements-dev.txt

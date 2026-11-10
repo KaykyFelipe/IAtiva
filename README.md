@@ -177,6 +177,18 @@ python manage.py descobrir_metadados USUARIO --tabelas SE1 SA1 --buscar "baixa p
 
 `descobrir_metadados` mostra só metadados e trechos aprovados, com as permissões do usuário.
 
+### Conexão com o ERP real (homologação)
+
+A imagem Docker inclui o Microsoft ODBC Driver 18 e `pyodbc`. Preencha `IATIVA_ERP_*` no `.env` do
+servidor (veja `.env.example`) e confira:
+
+```bash
+docker compose exec app python manage.py verificar_erp
+```
+
+O comando lê só metadados: versão, permissões do próprio login, sufixos do dicionário (SX2) e
+contagens de campos de SA1, SE1 e SE5. Para com erro se o login tiver qualquer permissão de escrita.
+
 ## Execução com Docker (banco e aplicação)
 
 Este é o ambiente de **desenvolvimento** em containers Linux (imagem Ubuntu 24.04), pensado para o

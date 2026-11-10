@@ -22,4 +22,19 @@ DATABASES = {
     }
 }
 
-SYNTHETIC_ERP_PATH = Path(env("IATIVA_SYNTHETIC_ERP_PATH", str(BASE_DIR / "var" / "erp_sintetico.sqlite3")))
+# ERP real (SQL Server). Só preenchido no .env do servidor; sem IATIVA_ERP_HOST fica desligado.
+IATIVA_ERP = (
+    {
+        "host": env("IATIVA_ERP_HOST"),
+        "porta": env("IATIVA_ERP_PORT", "1433"),
+        "banco": env_required("IATIVA_ERP_DATABASE"),
+        "usuario": env_required("IATIVA_ERP_USER"),
+        "senha": env_required("IATIVA_ERP_PASSWORD"),
+        "criptografar": env("IATIVA_ERP_ENCRYPT", "yes"),
+        "confiar_certificado": env("IATIVA_ERP_TRUST_CERT", "no"),
+    }
+    if env("IATIVA_ERP_HOST")
+    else None
+)
+
+SYNTHETIC_ERP_PATH =Path(env("IATIVA_SYNTHETIC_ERP_PATH", str(BASE_DIR / "var" / "erp_sintetico.sqlite3")))
