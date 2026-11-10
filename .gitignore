@@ -9,3 +9,6 @@ staticfiles/
 __pycache__/
 *.py[cod]
 .pytest_cache/
+
+# Configuração local do Claude Code (caminhos desta máquina)
+.claude/launch.json
