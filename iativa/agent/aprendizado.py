@@ -45,9 +45,16 @@ def _normalizar(texto: str) -> str:
     return unicodedata.normalize("NFKD", texto or "").encode("ascii", "ignore").decode().upper()
 
 
+def _radical(palavra: str) -> str:
+    """Radical leve em português: particípio "-tido(s)" vira "-ss" para casar com o substantivo
+    ("DEMITIDAS"→"DEMISS" ~ "DEMISSAO", "EMITIDOS"→"EMISS" ~ "EMISSAO"); depois 5 letras."""
+    p = re.sub(r"TID[OA]S?$", "SS", palavra)
+    p = re.sub(r"S$", "", p) if len(p) > 5 else p
+    return p[:5]
+
+
 def _radicais(texto: str) -> set[str]:
-    # Radical de 3 letras: "DEMITIDOS"/"DEMISSAO" → DEM, "EMITIDOS"/"EMISSAO" → EMI.
-    return {p[:3] for p in re.findall(r"[A-Z]+", _normalizar(texto)) if len(p) >= 5 and p not in IGNORAR}
+    return {_radical(p) for p in re.findall(r"[A-Z]+", _normalizar(texto)) if len(p) >= 5 and p not in IGNORAR}
 
 
 def _aliases_citados(texto: str) -> list[str]:
