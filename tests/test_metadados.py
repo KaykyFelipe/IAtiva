@@ -75,6 +75,25 @@ def test_information_schema_usa_consulta_fixa_parametrizada():
         InformationSchemaSqlServer(conn).colunas("SE1010; DROP TABLE x")
 
 
+@pytest.mark.parametrize("expr,esperado", [
+    ("E5_FILIAL+DTOS(E5_DATA)+E5_BANCO", ("E5_FILIAL", "E5_DATA", "E5_BANCO")),
+    ("E1_FILIAL+STR(E1_VALOR,14,2)", ("E1_FILIAL", "E1_VALOR")),
+    ("a1_cod+a1_loja", ("A1_COD", "A1_LOJA")),
+])
+def test_expressao_de_chave_com_funcoes(expr, esperado):
+    from iativa.metadata.fontes import _expressao
+
+    assert _expressao(expr) == esperado
+
+
+@pytest.mark.parametrize("expr", ["", "SUBSTR(X,1,2)", "E1_A+1", "E1_A+IIF(E1_B,E1_C,'')"])
+def test_expressao_invalida(expr):
+    from iativa.metadata.fontes import _expressao
+
+    with pytest.raises(FonteInvalida):
+        _expressao(expr)
+
+
 # --- Catálogo -------------------------------------------------------------------------------
 
 def test_catalogo_junta_dicionario_e_estrutura_fisica(erp_sintetico):

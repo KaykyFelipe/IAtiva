@@ -36,11 +36,25 @@ def validar_fisica(nome: str) -> str:
     return nome
 
 
+CAMPO_EM_EXPR_RE = re.compile(r"\b[A-Z][A-Z0-9]{1,2}_[A-Z0-9_]+\b")
+
+
 def _expressao(expr: str) -> tuple[str, ...]:
-    campos = tuple(p.strip() for p in (expr or "").split("+") if p.strip())
-    if not campos or not all(CAMPO_RE.match(c) for c in campos):
-        raise FonteInvalida("Expressão de relacionamento fora do formato campo+campo.")
-    return campos
+    """Campos de uma expressão de chave do Protheus (ex.: `E5_FILIAL+DTOS(E5_DATA)+STR(E5_VALOR,14,2)`).
+
+    Cada parte precisa conter exatamente um campo; funções de conversão (DTOS, STR...) são descartadas.
+    """
+    campos = []
+    for parte in (expr or "").upper().split("+"):
+        if not parte.strip():
+            continue
+        achados = CAMPO_EM_EXPR_RE.findall(parte)
+        if len(achados) != 1 or not CAMPO_RE.match(achados[0]):
+            raise FonteInvalida("Expressão de chave fora do formato esperado.")
+        campos.append(achados[0])
+    if not campos:
+        raise FonteInvalida("Expressão de chave vazia.")
+    return tuple(campos)
 
 
 def _marcadores(n: int) -> str:
@@ -138,7 +152,12 @@ class DicionarioProtheus:
         rows = self._consultar(
             f"SELECT CHAVE FROM {self.six} WHERE D_E_L_E_T_ = ' ' AND INDICE = ? AND ORDEM = '1'", (alias,)
         )
-        return _expressao(rows[0][0]) if rows else ()
+        if not rows:
+            return ()
+        try:
+            return _expressao(rows[0][0])
+        except FonteInvalida:
+            return ()
 
     def relacionamentos(self, aliases: list[str]) -> list[Relacionamento]:
         aliases = [validar_alias(a) for a in aliases]
@@ -152,7 +171,10 @@ class DicionarioProtheus:
         )
         out = []
         for dom, cdom, expdom, expcdom in rows:
-            origem, destino = _expressao(expdom), _expressao(expcdom)
+            try:
+                origem, destino = _expressao(expdom), _expressao(expcdom)
+            except FonteInvalida:
+                continue  # expressão que não sabemos ler com segurança não é oferecida
             if len(origem) != len(destino):
                 continue  # relacionamento incompleto não é oferecido
             out.append(Relacionamento(dom, cdom, origem, destino))
