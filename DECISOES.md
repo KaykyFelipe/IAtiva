@@ -38,7 +38,7 @@ Aprovadas em 2026-11-09 por Kayky Felipe (chat), com as opções recomendadas na
 | D5 | 2026-11-09 | Provedor de IA: API sob contrato comercial com termos de retenção verificados e/ou modelo local | **Aprovada como diretriz** — escolha do provedor e verificação contratual pendentes (necessárias antes da Etapa 4) | Kayky Felipe (chat) |
 | D6 | 2026-11-09 | Não enviar linhas de resultado ao modelo na v1 | **Aprovada** | Kayky Felipe (chat) |
 | D7 | 2026-11-09 | Autenticação inicial com usuários locais do Django; AD/LDAP/Entra ID depois | **Aprovada** | Kayky Felipe (chat) |
-| D8 | 2026-11-09 | Commit e push: um commit por etapa após aprovação, na branch `claude/new-session-w616rq`, sem PR salvo pedido | **Aprovada** | Kayky Felipe (chat) |
+| D8 | 2026-11-09 | Commit e push: um commit por etapa após aprovação, na branch `claude/new-session-w616rq`, sem PR salvo pedido | **Substituída pela M7** em 2026-11-10 | Kayky Felipe (chat) |
 | D9 | 2026-11-09 | Testes com `pytest` + `pytest-django`, só dados sintéticos | **Aprovada** | Kayky Felipe (chat) |
 | D10 | 2026-11-09 | Domínio inicial: Financeiro — Contas a Receber | **Aprovada** | Kayky Felipe (chat) |
 | D11 | 2026-11-09 | Tabela de persistência e retenção (`PLANO.md` §4) | **Aprovada** — prazos marcados "a definir" (auditoria, revisões) continuam pendentes | Kayky Felipe (chat) |
@@ -77,6 +77,7 @@ Aprovadas em 2026-11-09 por Kayky Felipe (chat), com as opções recomendadas na
 
 | ID | Data | Mudança | Situação |
 |---|---|---|---|
+| M7 | 2026-11-10 | Substitui a D8: commit e push sempre direto na `main`, sem pull request salvo pedido. Como a `main` dispara a atualização automática do servidor (M4), etapas ainda em validação também chegam ao servidor; `pytest` roda antes de cada push e o script roda os testes de novo antes de trocar o container. A Etapa 2 foi levada à `main` nesta data, ainda em validação. | Autorizado por Diego (chat: "eu quero que manda sempre para a main") |
 | M6 | 2026-11-10 | Exceção à D8: commit e push da Etapa 2 **antes** da validação da etapa, na branch `claude/new-session-w616rq`. A `main` só recebe a etapa depois de aprovada. | Autorizado por Diego (chat: "faça o commit e o push") |
 | M5 | 2026-11-09 | Servidor de desenvolvimento passa de Windows (WSL2/VM) para Ubuntu nativo com Docker Engine. `compose.yaml` mantido sem alteração (portas só em 127.0.0.1); acesso a partir de outros computadores por túnel SSH, sem publicar portas. | **Aprovada** em 2026-11-09 por Kayky Felipe (chat: "aprovo") |
 | M4 | 2026-11-09 | Rotina de atualização automática do ambiente de desenvolvimento no servidor a partir da `main` (`scripts/atualizar.sh` + systemd timer): fast-forward, build, testes antes de trocar o container, verificação final e reversão automática em falha. Roda no host; nenhum container recebe acesso ao socket do Docker. | **Aprovada** em 2026-11-09 por Kayky Felipe (chat: "aprovo") |

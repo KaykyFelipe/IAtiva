@@ -2,7 +2,7 @@
 
 **Atualizado em:** 2026-11-10
 **Etapa atual:** 2 — Autorização e memória de parâmetros
-**Situação:** **implementada, aguardando validação.** Plano aprovado em 2026-11-10; implementada com setores de exemplo (fictícios) enquanto a lista real não chega. Commit e push na branch `claude/new-session-w616rq` antes da validação (M6); a `main` não foi alterada.
+**Situação:** **implementada, aguardando validação.** Plano aprovado em 2026-11-10; implementada com setores de exemplo (fictícios) enquanto a lista real não chega. Commit e push na `main` antes da validação (M6, M7); o servidor recebe pela atualização automática.
 
 ## Histórico
 
@@ -34,7 +34,7 @@
 
 - [ ] Lista real de setores e perfis; quem aprova em cada nível; quem tem visão consolidada (informações 1 e 2). Hoje: exemplos fictícios.
 - [ ] Agendar `expurgar_retencao` diariamente no servidor.
-- [ ] Após a validação: levar a Etapa 2 para a `main` (pull request), que o servidor acompanha.
+- [ ] No servidor: confirmar que a atualização automática aplicou a Etapa 2 (migrações e testes em PostgreSQL).
 - [ ] Solicitações abandonadas (não encerradas) não são expurgadas; definir política.
 - [ ] Interface de usuário para memória/aprovação: hoje só pelo admin (API e telas nas Etapas 4 e 6).
 

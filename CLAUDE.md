@@ -12,4 +12,4 @@ Regras de trabalho:
 - Trabalhe somente no escopo da etapa atual indicada em `STATUS.md`; não avance sem aprovação explícita registrada em `DECISOES.md`.
 - Ao terminar uma interação que mude o estado do projeto, atualize `STATUS.md` (e `DECISOES.md` quando houver decisão ou mudança de escopo).
 - Nunca registre nesses arquivos SQL gerado, resultados, dados do ERP, credenciais ou transcrições completas.
-- Commit e push seguem a decisão D8 em `DECISOES.md`: um commit por etapa, somente após aprovação, na branch `claude/new-session-w616rq`, sem pull request salvo pedido.
+- Commit e push seguem a decisão M7 em `DECISOES.md` (substitui a D8): commit e push direto na `main`, sem pull request salvo pedido. A `main` dispara a atualização automática do servidor (M4), então rode `pytest` antes de cada push.

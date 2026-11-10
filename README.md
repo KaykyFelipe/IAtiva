@@ -34,7 +34,6 @@ Linux / macOS:
 ```bash
 git clone https://github.com/KaykyFelipe/IAtiva.git
 cd IAtiva
-git checkout claude/new-session-w616rq
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements-dev.txt
@@ -45,7 +44,6 @@ Windows (PowerShell):
 ```powershell
 git clone https://github.com/KaykyFelipe/IAtiva.git
 cd IAtiva
-git checkout claude/new-session-w616rq
 py -3 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements-dev.txt
@@ -202,7 +200,8 @@ Como o ambiente funciona:
 ## Atualização automática a partir do GitHub
 
 O script `scripts/atualizar.sh` roda **no servidor**, no terminal Ubuntu, fora dos containers, e
-acompanha a branch `main`. A `main` só recebe etapas aprovadas.
+acompanha a branch `main`. Todo o trabalho vai direto para a `main` (M7), inclusive etapas ainda em
+validação.
 
 Quando a `main` tem commits novos, ele:
 
