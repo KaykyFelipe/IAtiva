@@ -36,6 +36,10 @@ class Command(BaseCommand):
 
             fisico = InformationSchemaSqlServer(conn)
             for sufixo in sufixos:
+                faltando = [t for t in ("SX3", "SIX", "SX9") if not erp.tabela_existe(conn, f"{t}{sufixo}")]
+                if faltando:
+                    self.stdout.write(f"[{sufixo}] dicionário incompleto (faltam {', '.join(faltando)}): ignorado")
+                    continue
                 dic = DicionarioProtheus(conn, sufixo)
                 for dominio, spec in DOMINIOS.items():
                     tabelas = dic.tabelas(list(spec["tabelas"]))
