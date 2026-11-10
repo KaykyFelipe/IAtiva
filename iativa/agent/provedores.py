@@ -165,7 +165,7 @@ def _regras(entrada: EntradaModelo) -> dict:
         params.append({"codigo": "tratamento-baixa-parcial", "valor": "considerar-valor-original"})
     elif "saldo" in t:
         params.append({"codigo": "tratamento-baixa-parcial", "valor": "considerar-saldo"})
-    if m := re.search(r"filial\s*(\d{6})", t):
+    if m := re.search(r"filial\s*(\d{6}|\d{2})\b", t):
         params.append({"codigo": "filial-analise", "valor": m.group(1)})
     if m := re.search(r"cliente\s*(\d{6})(?:\s*-?\s*(\d{2}))?", t):
         params.append({"codigo": "cliente-especifico", "valor": f"{m.group(1)}-{m.group(2) or '01'}"})

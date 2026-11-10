@@ -1,8 +1,24 @@
 # STATUS — IAtiva
 
 **Atualizado em:** 2026-11-10
-**Etapa atual:** 4 — Agente e esclarecimentos
-**Situação:** **implementada com provedor de teste, aguardando validação.** Plano aprovado em 2026-11-10. Provedor escolhido: API da Anthropic (Claude); falta chave e posição do DPO para ligar.
+**Etapa atual:** 5 — Consulta de leitura
+**Situação:** **implementada, aguardando validação.** Etapa 4 aprovada em 2026-11-10. Execução na homologação, somente leitura.
+
+## Etapa 5 — o que foi entregue
+
+- `iativa/query`: plano estruturado por objetivo (`plano.py`), compilador para T-SQL com nomes do catálogo (`compilador.py`), validação AST com `sqlglot` (`validador.py`), execução somente leitura com limite de linhas e tempo (`executor.py`), serviço com reconferência, estados e checagem de duplicação (`servico.py`).
+- Chat: botão "Executar consulta" na ficha pronta; resultado em tabela com total e premissas; "Executar de novo" nas conversas reabertas. Resultado nunca é salvo.
+- 303 testes passando (10 da rotina M4 pulados no Windows), inclusive comparação com consulta de referência na base sintética.
+
+## Checklist de validação da Etapa 5
+
+- [ ] Inadimplência, títulos a vencer e posição de cliente batem com o que o Financeiro vê no Protheus (conferir na homologação).
+- [ ] Premissas T29 (tipos excluídos, saldo atual, regra de atraso) aprovadas ou corrigidas pelo Financeiro.
+- [ ] SQL recusado pelo validador nos casos proibidos; só leitura; filial e exclusão lógica sempre aplicadas.
+- [ ] Resultado não fica no histórico nem no banco; reabrir pede nova execução.
+- [ ] Perda de permissão/filial entre "pronta" e a execução bloqueia.
+
+## Etapa 4 (aprovada) — notas
 
 ## Mudança M8 — novo chat com histórico (2026-11-10)
 
@@ -50,7 +66,8 @@
 - 161 testes passando (10 da rotina M4 pulados no Windows), sem rede.
 
 - Etapa 3 — Conhecimento e metadados: **aprovada** em 2026-11-10 (T14–T19), com fonte real de homologação.
-- Etapa 4 — Agente e esclarecimentos: plano aprovado em 2026-11-10; entregue para validação com provedor de teste (T20–T24).
+- Etapa 4 — Agente e esclarecimentos: **aprovada** em 2026-11-10 (T20–T24, M8).
+- Etapa 5 — Consulta de leitura: iniciada e entregue para validação em 2026-11-10 (T25–T29).
 
 ## Etapa 3 — o que foi entregue
 

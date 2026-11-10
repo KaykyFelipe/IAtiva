@@ -30,9 +30,11 @@ def nivel_compartilhamento(t) -> str:
 
 
 class Catalogo:
-    def __init__(self, dicionario, fisico):
+    def __init__(self, dicionario, fisico, conn=None, dialeto="tsql"):
         self.dicionario = dicionario
         self.fisico = fisico
+        self.conn = conn  # mesma conexão somente leitura, usada pela execução (Etapa 5)
+        self.dialeto = dialeto
 
     def tabelas(self, aliases: list[str], com_campos: bool = False) -> dict[str, Tabela]:
         out = {}
@@ -98,7 +100,8 @@ def abrir_catalogo():
         try:
             if erp.verificar_login(conn):
                 raise erp.LoginNaoSomenteLeitura("Login do ERP não é somente leitura: acesso bloqueado.")
-            yield Catalogo(DicionarioProtheus(conn, settings.IATIVA_ERP_SUFIXO), InformationSchemaSqlServer(conn))
+            yield Catalogo(DicionarioProtheus(conn, settings.IATIVA_ERP_SUFIXO), InformationSchemaSqlServer(conn),
+                           conn=conn, dialeto="tsql")
         finally:
             conn.close()
         return
@@ -108,6 +111,6 @@ def abrir_catalogo():
 
     conn = open_readonly()
     try:
-        yield Catalogo(DicionarioProtheus(conn, SUFIXO), FisicoSqlite(conn))
+        yield Catalogo(DicionarioProtheus(conn, SUFIXO), FisicoSqlite(conn), conn=conn, dialeto="sqlite")
     finally:
         conn.close()

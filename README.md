@@ -222,6 +222,15 @@ Para usar o chat, o usuário precisa de perfil num setor habilitado em **Domíni
 política com "consultar" e filiais. Depois de atualizar, rode `python manage.py seed_exemplos`
 (cria a definição "periodo-analise").
 
+## Consulta de leitura (Etapa 5)
+
+Com a ficha **pronta**, o botão "Executar consulta" roda a consulta no ERP (homologação, somente
+leitura). O backend monta o plano a partir do objetivo, compila o T-SQL com nomes do catálogo,
+valida a árvore sintática (`sqlglot`) e executa com até 500 linhas e 30 segundos
+(`IATIVA_CONSULTA`). O resultado aparece em tabela com total e premissas e **não é salvo**: ao
+reabrir a conversa, use "Executar de novo". As premissas de negócio (tipos excluídos, saldo atual,
+regra de atraso) estão na decisão T29 e precisam da aprovação do Financeiro.
+
 ## Execução com Docker (banco e aplicação)
 
 Este é o ambiente de **desenvolvimento** em containers Linux (imagem Ubuntu 24.04), pensado para o

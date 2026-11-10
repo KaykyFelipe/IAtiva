@@ -229,4 +229,6 @@ tr:last-child td { border-bottom: 0; }
 .erro { color: var(--erro); margin: 0 0 6px; font-size: 14px; }
 button:disabled { opacity: .55; cursor: not-allowed; }
 .somente-leitura { padding: 14px 24px 18px; }
-.htmx-request .enviar { opacity: .5; }
+.htmx-request .enviar { opacity: .5; }.resultado table td.num, .resultado table th.num { text-align: right; }
+.premissas { margin: 8px 0; font-size: 14px; color: var(--sutil); }
+.premissas summary { cursor: pointer; color: var(--azul); }

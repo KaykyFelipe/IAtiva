@@ -3,3 +3,4 @@ Django>=5.2.19,<5.3
 psycopg[binary]>=3.3,<4
 pyodbc>=5.2,<6
 anthropic>=2.8,<3
+sqlglot>=28.10,<29

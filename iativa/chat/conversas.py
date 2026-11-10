@@ -187,6 +187,54 @@ def cancelar_atual(user, c: ConversationContext) -> None:
     _tocar(c, "")
 
 
+def _executar_e_registrar(user, c, s):
+    from iativa.query import servico
+
+    res = servico.executar_solicitacao(user, s)
+    if res.ok:
+        # M8: o histórico guarda só que a consulta rodou e quantas linhas; nunca os dados.
+        texto = (f"Consulta executada em {timezone.localtime():%d/%m/%Y às %H:%M}: {len(res.linhas)} linha(s). "
+                 "Os dados não ficam salvos; use “Executar de novo” para ver outra vez.")
+    else:
+        texto = res.mensagem
+    ficha = {"tipo": "executada" if res.ok else "falha_execucao", "estado": res.estado,
+             "estado_nome": res.solicitacao.get_estado_display() if res.solicitacao else "",
+             "objetivo": orquestrador.OBJETIVOS[s.objetivo].nome}
+    msg = Mensagem.objects.create(conversa=c, papel=Papel.IA, texto=texto, ficha=ficha, solicitacao=res.solicitacao)
+    _tocar(c, "")
+    return msg, res
+
+
+@transaction.atomic
+def executar(user, c: ConversationContext):
+    """Executa a solicitação pronta desta conversa. Devolve (mensagem, resultado em memória)."""
+    if not pode_escrever(user, c):
+        raise PermissaoNegada("Somente leitura nesta conversa.")
+    s = c.solicitacoes.filter(usuario=user, estado="pronta").order_by("-id").first()
+    if s is None:
+        raise ValidationError("Não há consulta pronta para executar.")
+    Mensagem.objects.create(conversa=c, papel=Papel.USUARIO, autor=user, texto="Executar consulta.")
+    return _executar_e_registrar(user, c, s)
+
+
+@transaction.atomic
+def executar_de_novo(user, c: ConversationContext, solicitacao_id):
+    from iativa.query import servico
+
+    if not pode_escrever(user, c):
+        raise PermissaoNegada("Somente leitura nesta conversa.")
+    anterior = c.solicitacoes.filter(pk=solicitacao_id, usuario=user).first()
+    if anterior is None:
+        raise PermissaoNegada("Solicitação indisponível.")
+    Mensagem.objects.create(conversa=c, papel=Papel.USUARIO, autor=user, texto="Executar de novo.")
+    nova = servico.repetir(user, anterior, conversa=c)
+    r = orquestrador.avaliar(user, nova)
+    if r.tipo != "pronta":
+        return _resposta_ia(c, r), None
+    nova.refresh_from_db()
+    return _executar_e_registrar(user, c, nova)
+
+
 def mensagens_com_interacao(user, c: ConversationContext) -> list[dict]:
     """Histórico para a tela. Só a última ficha de cada solicitação em andamento do próprio
     usuário fica editável; as anteriores aparecem como registro."""
@@ -198,10 +246,13 @@ def mensagens_com_interacao(user, c: ConversationContext) -> list[dict]:
     out = []
     for m in msgs:
         s = m.solicitacao
-        editavel = bool(
-            s and ultima_por_solicitacao.get(s.pk) == m.pk and s.usuario_id == user.pk
-            and s.estado in ("aguardando_parametros",)
-        )
-        out.append({"m": m, "editavel": editavel, "proprio": m.autor_id == user.pk})
+        ultima_dono = bool(s and ultima_por_solicitacao.get(s.pk) == m.pk and s.usuario_id == user.pk)
+        out.append({
+            "m": m,
+            "proprio": m.autor_id == user.pk,
+            "editavel": ultima_dono and s.estado == "aguardando_parametros",
+            "executavel": ultima_dono and s.estado == "pronta",
+            "repetivel": ultima_dono and m.ficha.get("tipo") in ("executada", "falha_execucao"),
+        })
     return out
 

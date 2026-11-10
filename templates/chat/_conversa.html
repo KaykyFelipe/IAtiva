@@ -31,7 +31,8 @@
             <div class="msg usuario"><p>{{ m.texto|linebreaksbr }}</p></div>
           {% endif %}
         {% else %}
-          {% include "chat/_resposta.html" with m=m editavel=item.editavel %}
+          {% include "chat/_resposta.html" with m=m editavel=item.editavel executavel=item.executavel repetivel=item.repetivel %}
+          {% if resultado and resultado_msg == m.pk %}{% include "chat/_resultado.html" %}{% endif %}
         {% endif %}
         {% endwith %}
       {% empty %}

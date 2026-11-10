@@ -13,6 +13,7 @@ from iativa.accounts.authz import PermissaoNegada, setor_do_usuario
 from iativa.memory.models import ParameterDefinition, TipoValor
 
 from . import conversas
+from .estados import TransicaoInvalida
 from .forms import MessageForm
 from .models import ConversationContext, TipoConversa
 
@@ -24,7 +25,7 @@ def _obter(request, conversa_id) -> ConversationContext:
         raise Http404 from None
 
 
-def _contexto(request, c=None, form=None, erro=""):
+def _contexto(request, c=None, form=None, erro="", resultado=None, resultado_msg=None):
     setor = setor_do_usuario(request.user)
     nome = request.user.get_full_name() or request.user.get_username()
     iniciais = "".join(p[0] for p in nome.split()[:2]).upper()
@@ -35,6 +36,9 @@ def _contexto(request, c=None, form=None, erro=""):
         "pode_escrever": conversas.pode_escrever(request.user, c) if c else bool(setor),
         "form": form or MessageForm(),
         "erro": erro,
+        # Resultado só existe nesta resposta (memória); não vai para o banco nem para a sessão.
+        "resultado": resultado,
+        "resultado_msg": resultado_msg,
         "tipos": TipoValor,
         "TipoConversa": TipoConversa,
         "perfil": {"nome": nome, "iniciais": iniciais or "?", "setor": setor.nome if setor else "Sem setor"},
@@ -113,6 +117,26 @@ def parametro(request, conversa_id):
     except (PermissaoNegada, ValidationError) as exc:
         return _render(request, c, erro=getattr(exc, "messages", ["Não foi possível registrar."])[0])
     return _render(request, c)
+
+
+@require_POST
+def executar(request, conversa_id):
+    c = _obter(request, conversa_id)
+    try:
+        msg, resultado = conversas.executar(request.user, c)
+    except (PermissaoNegada, ValidationError, TransicaoInvalida) as exc:
+        return _render(request, c, erro=getattr(exc, "messages", ["Não foi possível executar."])[0])
+    return _render(request, c, resultado=resultado, resultado_msg=msg.pk)
+
+
+@require_POST
+def executar_de_novo(request, conversa_id, solicitacao_id):
+    c = _obter(request, conversa_id)
+    try:
+        msg, resultado = conversas.executar_de_novo(request.user, c, solicitacao_id)
+    except (PermissaoNegada, ValidationError, TransicaoInvalida) as exc:
+        return _render(request, c, erro=getattr(exc, "messages", ["Não foi possível executar."])[0])
+    return _render(request, c, resultado=resultado, resultado_msg=msg.pk)
 
 
 @require_POST

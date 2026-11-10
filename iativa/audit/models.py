@@ -29,6 +29,7 @@ class Acao(models.TextChoices):
     CONHECIMENTO_CONSULTADO = "conhecimento_consultado", "Conhecimento consultado"
     INTERPRETACAO = "interpretacao", "Mensagem interpretada"
     MODELO_FALHOU = "modelo_falhou", "Falha do modelo de IA"
+    CONSULTA_EXECUTADA = "consulta_executada", "Consulta executada"
 
 
 class Entidade(models.TextChoices):
