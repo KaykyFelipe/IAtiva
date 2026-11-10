@@ -13,6 +13,7 @@ Formato: `ID | data | decisão | situação | aprovado por | observações`
 | 2 — Plano de autorização e memória (início autorizado) | 2026-11-10 | Diego (chat: "Aprovo a etapa 2, pode fazer") — com setores de exemplo enquanto a lista real não chega |
 | 2 — Autorização e memória de parâmetros (entrega validada, inclui T8–T13) | 2026-11-10 | Diego (chat: "Aprovo a Etapa 2") — setores reais e agendamento do expurgo seguem como pendências |
 | 3 — Plano de conhecimento e metadados (início autorizado, só fontes sintéticas) | 2026-11-10 | Diego (chat: "Aprovo a Etapa 3") — Protheus real só após liberação explícita e informações 4–8 |
+| 3 — Conhecimento e metadados (entrega validada, inclui T14–T19; fonte real de homologação) | 2026-11-10 | Diego (chat: "Aprovo a Etapa 3") |
 | 3 — Liberação para conectar na base de **homologação** com o login somente leitura (só metadados) | 2026-11-10 | Diego (chat: "pode tentar conectar") — dados de conexão só no `.env` do servidor |
 
 ## Definidas pelo pedido inicial (`docs/PEDIDO_INICIAL.md`)
@@ -38,7 +39,7 @@ Aprovadas em 2026-11-09 por Kayky Felipe (chat), com as opções recomendadas na
 | D2 | 2026-11-09 | Banco da aplicação: PostgreSQL 16; SQLite só em testes automatizados | **Aprovada** | Kayky Felipe (chat) |
 | D3 | 2026-11-09 | Modelo gera plano de consulta estruturado; backend compila o SQL (sem SQL livre do modelo) | **Aprovada** | Kayky Felipe (chat) |
 | D4 | 2026-11-09 | ERP sintético em esquema estilo Protheus; SQLite somente leitura para testes rápidos + SQL Server Developer (Docker) em máquina da empresa para testes de T-SQL | **Aprovada** | Kayky Felipe (chat) |
-| D5 | 2026-11-09 | Provedor de IA: API sob contrato comercial com termos de retenção verificados e/ou modelo local | **Aprovada como diretriz** — escolha do provedor e verificação contratual pendentes (necessárias antes da Etapa 4) | Kayky Felipe (chat) |
+| D5 | 2026-11-09 | Provedor de IA: API sob contrato comercial com termos de retenção verificados e/ou modelo local | **Aprovada como diretriz** — provedor escolhido em 2026-11-10: API da Anthropic (Claude), ainda sem contrato/chave; verificação contratual e posição do DPO pendentes | Kayky Felipe (chat) |
 | D6 | 2026-11-09 | Não enviar linhas de resultado ao modelo na v1 | **Aprovada** | Kayky Felipe (chat) |
 | D7 | 2026-11-09 | Autenticação inicial com usuários locais do Django; AD/LDAP/Entra ID depois | **Aprovada** | Kayky Felipe (chat) |
 | D8 | 2026-11-09 | Commit e push: um commit por etapa após aprovação, na branch `claude/new-session-w616rq`, sem PR salvo pedido | **Substituída pela M7** em 2026-11-10 | Kayky Felipe (chat) |
@@ -70,16 +71,16 @@ Aprovadas em 2026-11-09 por Kayky Felipe (chat), com as opções recomendadas na
 | T12 | 2026-11-10 | Objetivo da solicitação guardado como código (`SlugField`), nunca o texto da pergunta. Concluída e cancelada são finais; "não validada" só volta para "aguardando parâmetros". | Aprovada com a Etapa 2 |
 | T13 | 2026-11-10 | Auditoria imutável com campos de código validados (sem texto livre). Expurgo por comando (`expurgar_retencao`); prazos "a definir" ficam em `None` e não removem nada. | Aprovada com a Etapa 2 |
 
-## Decisões técnicas de implementação (Etapa 3 — sujeitas à validação da etapa)
+## Decisões técnicas de implementação (Etapa 3)
 
 | ID | Data | Decisão | Situação |
 |----|------|---------|----------|
-| T14 | 2026-11-10 | Conhecimento em arquivos `knowledge/**/*.md` versionados no Git, com cabeçalho chave: valor; aprovação registrada no cabeçalho (aprovado_por, aprovado_em). Documento com padrão de CPF, CNPJ, credencial ou string de conexão é recusado inteiro. | Em validação |
-| T15 | 2026-11-10 | Busca local por pontuação BM25 (sem IA, sem rede, sem dependência nova), por seção, no máximo 5 trechos de até 1.200 caracteres. | Em validação |
-| T16 | 2026-11-10 | Dicionário lido de tabelas SX no banco (SX2, SX3, SIX, SX9 com sufixo da empresa) por consultas fixas e parametrizadas; estrutura física por PRAGMA (sintético) ou INFORMATION_SCHEMA (SQL Server). Forma de acesso real ainda a confirmar (informação 4). | Em validação |
-| T17 | 2026-11-10 | Acesso à descoberta: domínio habilitado por setor (`DominioSetor`) + "consultar" no setor; `RestricaoMetadado` esconde tabela ou campo exceto para setores listados. Domínio tem lista fechada de tabelas. | Em validação |
-| T19 | 2026-11-10 | Fonte de metadados passa a ser o Protheus real (homologação, empresa 010) quando `IATIVA_ERP_*` está configurado; a base sintética fica só para testes automatizados e máquinas sem ERP. Cada abertura do catálogo real confere que o login segue somente leitura e bloqueia se não estiver. Somente metadados; leitura de dados continua na Etapa 5. Pedido por Diego (chat: "Pare de usar fonte sintetica e comece a usar o banco de dados real"). | Em validação |
-| T18 | 2026-11-10 | Conhecimento com `origem: sintetico` só é usado com a fonte sintética, e o real só com a fonte real. Base sintética passa à versão 2 (com dicionário SX); é preciso regerar com `seed_synthetic --substituir`. | Em validação |
+| T14 | 2026-11-10 | Conhecimento em arquivos `knowledge/**/*.md` versionados no Git, com cabeçalho chave: valor; aprovação registrada no cabeçalho (aprovado_por, aprovado_em). Documento com padrão de CPF, CNPJ, credencial ou string de conexão é recusado inteiro. | Aprovada com a Etapa 3 |
+| T15 | 2026-11-10 | Busca local por pontuação BM25 (sem IA, sem rede, sem dependência nova), por seção, no máximo 5 trechos de até 1.200 caracteres. | Aprovada com a Etapa 3 |
+| T16 | 2026-11-10 | Dicionário lido de tabelas SX no banco (SX2, SX3, SIX, SX9 com sufixo da empresa) por consultas fixas e parametrizadas; estrutura física por PRAGMA (sintético) ou INFORMATION_SCHEMA (SQL Server). Forma de acesso real ainda a confirmar (informação 4). | Aprovada com a Etapa 3 |
+| T17 | 2026-11-10 | Acesso à descoberta: domínio habilitado por setor (`DominioSetor`) + "consultar" no setor; `RestricaoMetadado` esconde tabela ou campo exceto para setores listados. Domínio tem lista fechada de tabelas. | Aprovada com a Etapa 3 |
+| T19 | 2026-11-10 | Fonte de metadados passa a ser o Protheus real (homologação, empresa 010) quando `IATIVA_ERP_*` está configurado; a base sintética fica só para testes automatizados e máquinas sem ERP. Cada abertura do catálogo real confere que o login segue somente leitura e bloqueia se não estiver. Somente metadados; leitura de dados continua na Etapa 5. Pedido por Diego (chat: "Pare de usar fonte sintetica e comece a usar o banco de dados real"). | Aprovada com a Etapa 3 |
+| T18 | 2026-11-10 | Conhecimento com `origem: sintetico` só é usado com a fonte sintética, e o real só com a fonte real. Base sintética passa à versão 2 (com dicionário SX); é preciso regerar com `seed_synthetic --substituir`. | Aprovada com a Etapa 3 |
 
 ## Organização do trabalho
 

@@ -1,8 +1,8 @@
 # STATUS — IAtiva
 
 **Atualizado em:** 2026-11-10
-**Etapa atual:** 3 — Conhecimento e metadados
-**Situação:** **implementada com fontes sintéticas, aguardando validação.** Plano aprovado em 2026-11-10. Informação 3 recebida; informações 4–8 pendentes para ligar o Protheus real.
+**Etapa atual:** 4 — Agente e esclarecimentos
+**Situação:** **aguardando aprovação do plano.** Etapa 3 aprovada em 2026-11-10 (fonte real de homologação). Provedor escolhido: API da Anthropic (Claude), ainda sem chave/contrato; até lá, testes com provedor falso.
 
 ## Histórico
 
@@ -19,7 +19,7 @@
 - Comando `seed_exemplos` (setores e definições fictícios). Admin com aprovação/rejeição de propostas via serviços.
 - 161 testes passando (10 da rotina M4 pulados no Windows), sem rede.
 
-- Etapa 3 — Conhecimento e metadados: plano aprovado em 2026-11-10; implementação com fontes sintéticas entregue para validação em 2026-11-10 (T14–T18).
+- Etapa 3 — Conhecimento e metadados: **aprovada** em 2026-11-10 (T14–T19), com fonte real de homologação.
 
 ## Etapa 3 — o que foi entregue
 
