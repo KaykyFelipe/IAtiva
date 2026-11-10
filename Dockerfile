@@ -19,9 +19,11 @@ RUN apt-get update \
     && curl -fsSL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor -o /usr/share/keyrings/microsoft-prod.gpg \
     && curl -fsSL https://packages.microsoft.com/config/ubuntu/24.04/prod.list -o /etc/apt/sources.list.d/mssql-release.list \
     && apt-get update \
-    && ACCEPT_EULA=Y apt-get install -y --no-install-recommends msodbcsql18 unixodbc \
+    && ACCEPT_EULA=Y apt-get install -y --no-install-recommends msodbcsql18 unixodbc libgssapi-krb5-2 \
+    && apt-mark manual libgssapi-krb5-2 \
     && apt-get purge -y curl gnupg && apt-get autoremove -y && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && ! ldd /opt/microsoft/msodbcsql18/lib64/libmsodbcsql-18*.so* | grep -q "not found"
 
 WORKDIR /app
 COPY requirements.txt requirements-dev.txt ./
