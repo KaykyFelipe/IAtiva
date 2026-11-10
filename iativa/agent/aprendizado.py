@@ -31,7 +31,7 @@ from .models import ConsultaModelo, SituacaoModelo
 MAX_COLUNAS = 15
 MAX_FILTROS = 3
 VALOR_FIXO_RE = re.compile(r"^[0-9A-Za-z \-]{1,40}$")
-IGNORAR = {"QUAIS", "QUAL", "QUANTOS", "QUANTAS", "PESSOAS", "DIAS", "ULTIMOS", "ULTIMAS", "MATRIZ",
+IGNORAR = {"QUAIS", "QUAL", "QUANTOS", "QUANTAS", "DIAS", "ULTIMOS", "ULTIMAS", "MATRIZ",
            "FILIAL", "LISTA", "LISTAR", "MOSTRE", "MOSTRAR", "PARA", "COM", "SEM", "QUE", "FORAM", "ESTAO",
            "TODOS", "TODAS", "MINHA", "NOSSA", "ESSE", "ESSA", "ENTRE", "DESDE", "PERIODO"}
 SISTEMA = ("SX", "SIX", "XX", "SYS", "SM0")
@@ -53,8 +53,13 @@ def _radical(palavra: str) -> str:
     return p[:5]
 
 
+# Sinônimos de negócio (radical → radical usado no dicionário do Protheus).
+SINONIMOS = {"PESSO": "FUNCI", "COLAB": "FUNCI", "EMPRE": "FUNCI", "TRABA": "FUNCI"}
+
+
 def _radicais(texto: str) -> set[str]:
-    return {_radical(p) for p in re.findall(r"[A-Z]+", _normalizar(texto)) if len(p) >= 5 and p not in IGNORAR}
+    radicais = {_radical(p) for p in re.findall(r"[A-Z]+", _normalizar(texto)) if len(p) >= 5 and p not in IGNORAR}
+    return {SINONIMOS.get(r, r) for r in radicais}
 
 
 def _aliases_citados(texto: str) -> list[str]:
