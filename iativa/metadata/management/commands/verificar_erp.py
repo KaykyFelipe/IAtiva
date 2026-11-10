@@ -8,7 +8,9 @@ linhas de dados. Para se o login tiver qualquer permissão de escrita.
 from django.core.management.base import BaseCommand, CommandError
 
 from iativa.metadata import erp_sqlserver as erp
-from iativa.metadata.catalogo import MODOS
+from django.conf import settings
+
+from iativa.metadata.catalogo import nivel_compartilhamento
 from iativa.metadata.dominios import DOMINIOS
 from iativa.metadata.fontes import DicionarioProtheus, InformationSchemaSqlServer
 
@@ -35,7 +37,9 @@ class Command(BaseCommand):
             self.stdout.write(f"SYS_COMPANY (empresas/filiais): {'existe' if erp.tabela_existe(conn, 'SYS_COMPANY') else 'não encontrada'}")
 
             fisico = InformationSchemaSqlServer(conn)
-            for sufixo in sufixos:
+            escolhido = settings.IATIVA_ERP_SUFIXO
+            self.stdout.write(f"Empresa configurada: {escolhido} ({'encontrada' if escolhido in sufixos else 'NÃO encontrada'})")
+            for sufixo in [escolhido] if escolhido in sufixos else []:
                 faltando = [t for t in ("SX3", "SIX", "SX9") if not erp.tabela_existe(conn, f"{t}{sufixo}")]
                 if faltando:
                     self.stdout.write(f"[{sufixo}] dicionário incompleto (faltam {', '.join(faltando)}): ignorado")
@@ -50,7 +54,8 @@ class Command(BaseCommand):
                         reais = [c for c in campos if not c.virtual]
                         sem_fisico = sum(1 for c in reais if c.nome not in colunas)
                         self.stdout.write(
-                            f"    {alias} -> {t.fisica}: {MODOS.get(t.modo, t.modo or '?')}; "
+                            f"    {alias} -> {t.fisica}: filial por {nivel_compartilhamento(t)} "
+                            f"({t.modo}/{t.modo_unidade}/{t.modo_empresa}); "
                             f"SX3 {len(campos)} campos ({sum(c.personalizado for c in campos)} personalizados, "
                             f"{len(campos) - len(reais)} virtuais, {sem_fisico} sem coluna física); "
                             f"físico {len(colunas)} colunas; chave {'+'.join(dic.chave_primaria(alias)) or '?'}"

@@ -13,7 +13,7 @@ from . import schema
 
 SUFIXO = "010"
 DICT_TABLES = {
-    "SX2": ["X2_CHAVE", "X2_ARQUIVO", "X2_NOME", "X2_MODO"],
+    "SX2": ["X2_CHAVE", "X2_ARQUIVO", "X2_NOME", "X2_MODO", "X2_MODOUN", "X2_MODOEMP"],
     "SX3": [
         "X3_ARQUIVO", "X3_ORDEM", "X3_CAMPO", "X3_TIPO", "X3_TAMANHO", "X3_DECIMAL",
         "X3_TITULO", "X3_DESCRIC", "X3_PROPRI", "X3_CONTEXT",
@@ -23,8 +23,9 @@ DICT_TABLES = {
 }
 
 NOMES_TABELAS = {"SA1": "Clientes", "SE1": "Contas a Receber", "SE5": "Movimentação Bancária"}
-# 'C' compartilhado, 'E' exclusivo (por filial). Fictício: o real vem da informação 5.
-MODOS = {"SA1": "C", "SE1": "E", "SE5": "E"}
+# (X2_MODO, X2_MODOUN, X2_MODOEMP): 'C' compartilhado, 'E' exclusivo. Mesmo padrão da
+# homologação: clientes compartilhados; títulos e movimentos exclusivos por filial.
+MODOS = {"SA1": ("C", "C", "C"), "SE1": ("E", "E", "E"), "SE5": ("E", "E", "E")}
 CAMPOS_DATA = {"E1_EMISSAO", "E1_VENCTO", "E1_VENCREA", "E1_BAIXA", "E5_DATA"}
 TITULOS = {
     "A1_FILIAL": "Filial", "A1_COD": "Código", "A1_LOJA": "Loja", "A1_NOME": "Nome",
@@ -72,7 +73,8 @@ def linhas() -> dict[str, list[dict]]:
     for fisica, spec in schema.TABLES.items():
         alias = fisica[:3]
         rows["SX2"].append({
-            "X2_CHAVE": alias, "X2_ARQUIVO": fisica, "X2_NOME": NOMES_TABELAS[alias], "X2_MODO": MODOS[alias],
+            "X2_CHAVE": alias, "X2_ARQUIVO": fisica, "X2_NOME": NOMES_TABELAS[alias],
+            "X2_MODO": MODOS[alias][0], "X2_MODOUN": MODOS[alias][1], "X2_MODOEMP": MODOS[alias][2],
         })
         for ordem, (campo, info) in enumerate(spec["campos"].items(), start=1):
             tipo, tamanho, decimal = _tipo_x3(campo, info["tipo"])

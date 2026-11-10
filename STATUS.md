@@ -89,9 +89,10 @@ Necessárias a partir da Etapa 3 (equipe do ERP):
 **Conexão com a homologação (2026-11-10):** rede liberada; `verificar_erp` conectou com o login somente leitura (confirmado: sem papéis ou permissões de escrita). Achados (só metadados):
 - Dicionário no banco com sufixos 010, 020 (incompleto: só SX2) e 990. Tabela `SYS_COMPANY` existe.
 - Empresa 010: SA1, SE1 e SE5 presentes; campos personalizados marcados no SX3; 4 relacionamentos SX9 entre elas.
-- **Divergência a confirmar:** o X2_MODO marca SE1 e SE5 como **exclusivas** (SA1 compartilhada), mas foi informado que todas são compartilhadas.
+- Compartilhamento esclarecido em 2026-11-10: filial tem 6 posições (3 da empresa do grupo + 3 da filial). O catálogo lê X2_MODO, X2_MODOUN e X2_MODOEMP: SE1/SE5 exclusivas por filial (código completo), SA1 compartilhada (em branco), SF4 exclusiva só por empresa (`001   `). Documento `knowledge/protheus/filiais-e-compartilhamento.md` em **rascunho**, aguardando aprovação.
 - O índice 1 do SE5 é por data/banco, não pela chave do título; a ligação SE1–SE5 deve vir do SX9.
-- A confirmar: qual empresa usar (010? 990 parece base de teste/padrão).
+- Empresa de sistema: **010** (`IATIVA_ERP_SUFIXO`), confirmada em 2026-11-10.
+- Base sintética versão 3: rodar `seed_synthetic --substituir` no servidor após atualizar.
 6. Documentação das personalizações do domínio.
 7. Base de homologação disponível e responsável pelo login somente leitura. Parcial (2026-11-10): login dedicado somente leitura informado (nome registrado só no `.env` do servidor quando liberado; senha nunca no chat ou no repositório). Base: homologação. Endereço e nome do banco recebidos em 2026-11-10 (ficam só no `.env` do servidor, não no repositório). Faltam, confirmação das permissões do login e liberação explícita.
 8. Responsável de negócio no Financeiro para aprovar definições (ex.: "inadimplente").

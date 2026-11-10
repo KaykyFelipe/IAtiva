@@ -126,11 +126,11 @@ class DicionarioProtheus:
         if not aliases:
             return {}
         rows = self._consultar(
-            f"SELECT X2_CHAVE, X2_ARQUIVO, X2_NOME, X2_MODO FROM {self.sx2} "
+            f"SELECT X2_CHAVE, X2_ARQUIVO, X2_NOME, X2_MODO, X2_MODOUN, X2_MODOEMP FROM {self.sx2} "
             f"WHERE D_E_L_E_T_ = ' ' AND X2_CHAVE IN ({_marcadores(len(aliases))})",
             tuple(aliases),
         )
-        return {r[0]: TabelaDicionario(r[0], r[1], r[2], r[3]) for r in rows}
+        return {r[0]: TabelaDicionario(*r) for r in rows}
 
     def campos(self, alias: str) -> list[CampoDicionario]:
         validar_alias(alias)

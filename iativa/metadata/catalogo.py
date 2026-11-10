@@ -18,6 +18,17 @@ COLUNAS_TECNICAS = frozenset({"D_E_L_E_T_", "R_E_C_N_O_", "R_E_C_D_E_L_", "S_T_A
 MODOS = {"C": "compartilhado", "E": "exclusivo"}
 
 
+def nivel_compartilhamento(t) -> str:
+    """Do mais específico ao mais amplo: o primeiro nível exclusivo define o que o campo filial guarda."""
+    modos = (t.modo, t.modo_unidade or t.modo, t.modo_empresa or t.modo)
+    if any(m not in ("C", "E") for m in modos):
+        return "desconhecido"
+    for nivel, modo in zip(("filial", "unidade", "empresa"), modos):
+        if modo == "E":
+            return nivel
+    return "compartilhado"
+
+
 class Catalogo:
     def __init__(self, dicionario, fisico):
         self.dicionario = dicionario
@@ -34,7 +45,7 @@ class Catalogo:
                 alias=alias,
                 fisica=td.fisica,
                 nome=td.nome,
-                compartilhamento=MODOS.get(td.modo, "desconhecido"),
+                compartilhamento=nivel_compartilhamento(td),
                 exclusao_logica="D_E_L_E_T_" in colunas,
                 campo_filial=filial if filial in colunas else None,
                 chave=self.dicionario.chave_primaria(alias),

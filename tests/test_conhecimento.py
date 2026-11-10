@@ -32,7 +32,7 @@ def test_documentos_do_repositorio_sao_validos():
     saida = StringIO()
     call_command("validar_conhecimento", stdout=saida)
     assert "com_problema=0" in saida.getvalue()
-    assert all(d.recuperavel for d in carregar_todos())
+    assert all(not d.problemas for d in carregar_todos())  # rascunhos são válidos, só não recuperáveis
 
 
 def test_readme_sem_cabecalho_e_ignorado(tmp_path):

@@ -128,6 +128,8 @@ IATIVA_RETENCAO = {
 # o Protheus real exige liberação explícita (DECISOES.md) e as informações 4–8 do STATUS.md.
 IATIVA_CONHECIMENTO_DIR = BASE_DIR / "knowledge"
 IATIVA_METADADOS = {"fonte": "sintetico"}
+# Empresa do ERP real (sufixo das tabelas: SE1010, SX2010...). Confirmada em 2026-11-10.
+IATIVA_ERP_SUFIXO = "010"
 
 LOGGING = {
     "version": 1,

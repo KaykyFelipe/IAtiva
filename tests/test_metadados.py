@@ -94,6 +94,21 @@ def test_expressao_invalida(expr):
         _expressao(expr)
 
 
+@pytest.mark.parametrize("modos,nivel", [
+    (("E", "E", "E"), "filial"),
+    (("C", "C", "E"), "empresa"),  # ex.: SF4 com F4_FILIAL = "001   "
+    (("C", "E", "E"), "unidade"),
+    (("C", "C", "C"), "compartilhado"),
+    (("C", "", ""), "compartilhado"),
+    (("X", "C", "C"), "desconhecido"),
+])
+def test_nivel_de_compartilhamento(modos, nivel):
+    from iativa.metadata.catalogo import nivel_compartilhamento
+    from iativa.metadata.tipos import TabelaDicionario
+
+    assert nivel_compartilhamento(TabelaDicionario("SF4", "SF4010", "TES", *modos)) == nivel
+
+
 # --- Catálogo -------------------------------------------------------------------------------
 
 def test_catalogo_junta_dicionario_e_estrutura_fisica(erp_sintetico):
@@ -101,7 +116,7 @@ def test_catalogo_junta_dicionario_e_estrutura_fisica(erp_sintetico):
         tabelas = cat.tabelas(["SA1", "SE1", "SE5"], com_campos=True)
         rels = cat.relacionamentos(["SA1", "SE1"])
     sa1, se1 = tabelas["SA1"], tabelas["SE1"]
-    assert sa1.compartilhamento == "compartilhado" and se1.compartilhamento == "exclusivo"
+    assert sa1.compartilhamento == "compartilhado" and se1.compartilhamento == "filial"
     assert se1.exclusao_logica and se1.campo_filial == "E1_FILIAL"
     assert se1.chave == ("E1_FILIAL", "E1_PREFIXO", "E1_NUM", "E1_PARCELA", "E1_TIPO")
     campos = {c.nome: c for c in se1.campos}
