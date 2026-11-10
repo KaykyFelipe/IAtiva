@@ -10,6 +10,7 @@ Formato: `ID | data | decisão | situação | aprovado por | observações`
 |---|---|---|
 | 0 — Levantamento e proposta | 2026-11-09 | Kayky Felipe (chat) |
 | 1 — Fundação em localhost (inclui T1–T7, M1) | 2026-11-09 | Kayky Felipe (chat: "eu aprovo, pode mandar") — aprovada antes da execução no servidor Windows; a validação do Docker no servidor segue como pendência |
+| 2 — Plano de autorização e memória (início autorizado; entrega ainda não validada) | 2026-11-10 | Diego (chat: "Aprovo a etapa 2, pode fazer") — com setores de exemplo enquanto a lista real não chega |
 
 ## Definidas pelo pedido inicial (`docs/PEDIDO_INICIAL.md`)
 
@@ -55,6 +56,17 @@ Aprovadas em 2026-11-09 por Kayky Felipe (chat), com as opções recomendadas na
 | T6 | 2026-11-09 | Exceção de bind em container: `runserver` aceita `0.0.0.0` somente dentro de container Docker (`/.dockerenv`) **e** com `IATIVA_ALLOW_CONTAINER_BIND=1`; a restrição a localhost passa a ser garantida pela publicação da porta em `127.0.0.1` do host (verificada por teste). IPs da rede continuam recusados. | Aprovada com a Etapa 1 |
 | T7 | 2026-11-09 | Ambiente de desenvolvimento em containers Linux (Ubuntu 24.04 + PostgreSQL 16) via `compose.yaml`, para o servidor Windows (Docker Engine em WSL2 ou VM Ubuntu). Não é configuração de produção. | Aprovada com a Etapa 1 |
 
+## Decisões técnicas de implementação (Etapa 2 — sujeitas à validação da etapa)
+
+| ID | Data | Decisão | Situação |
+|---|---|---|---|
+| T8 | 2026-11-10 | Nenhuma permissão universal ou automática: tudo vem de `AccessPolicy` explícita por setor (setor vazio = nível empresa, só memória/aprovação/administração). Função (diretoria/TI) e superusuário do admin não concedem acesso a dados. Visão consolidada = soma de políticas por setor. | Em validação |
+| T9 | 2026-11-10 | Valores de parâmetros num único modelo (`ParameterBinding`) com escopo solicitação/usuário/setor/empresa e restrição de coerência no banco; regra obrigatória só em setor/empresa. | Em validação |
+| T10 | 2026-11-10 | Memória privada (solicitação, usuário) aprovada na criação; setor e empresa entram como proposta e exigem `pode_aprovar_conhecimento` no nível, sem autoaprovação. Correção compartilhada mantém o valor anterior até a nova versão ser aprovada. | Em validação |
+| T11 | 2026-11-10 | Dado pessoal: definição marcada só aceita escopo de solicitação, com `expira_em` de 30 dias. Valores que pareçam CPF/CNPJ são recusados em qualquer escopo. | Em validação |
+| T12 | 2026-11-10 | Objetivo da solicitação guardado como código (`SlugField`), nunca o texto da pergunta. Concluída e cancelada são finais; "não validada" só volta para "aguardando parâmetros". | Em validação |
+| T13 | 2026-11-10 | Auditoria imutável com campos de código validados (sem texto livre). Expurgo por comando (`expurgar_retencao`); prazos "a definir" ficam em `None` e não removem nada. | Em validação |
+
 ## Organização do trabalho
 
 | ID | Data | Decisão | Situação | Observações |
@@ -65,6 +77,7 @@ Aprovadas em 2026-11-09 por Kayky Felipe (chat), com as opções recomendadas na
 
 | ID | Data | Mudança | Situação |
 |---|---|---|---|
+| M6 | 2026-11-10 | Exceção à D8: commit e push da Etapa 2 **antes** da validação da etapa, na branch `claude/new-session-w616rq`. A `main` só recebe a etapa depois de aprovada. | Autorizado por Diego (chat: "faça o commit e o push") |
 | M5 | 2026-11-09 | Servidor de desenvolvimento passa de Windows (WSL2/VM) para Ubuntu nativo com Docker Engine. `compose.yaml` mantido sem alteração (portas só em 127.0.0.1); acesso a partir de outros computadores por túnel SSH, sem publicar portas. | **Aprovada** em 2026-11-09 por Kayky Felipe (chat: "aprovo") |
 | M4 | 2026-11-09 | Rotina de atualização automática do ambiente de desenvolvimento no servidor a partir da `main` (`scripts/atualizar.sh` + systemd timer): fast-forward, build, testes antes de trocar o container, verificação final e reversão automática em falha. Roda no host; nenhum container recebe acesso ao socket do Docker. | **Aprovada** em 2026-11-09 por Kayky Felipe (chat: "aprovo") |
 | M3 | 2026-11-09 | Pull request da branch `claude/new-session-w616rq` para `main` (KaykyFelipe/IAtiva#1) e merge na `main` após a aprovação da Etapa 1. | Autorizado por Kayky Felipe (chat: "faz o merge na main") |

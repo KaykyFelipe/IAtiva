@@ -2,8 +2,10 @@
 
 Chat corporativo para consultas de leitura ao TOTVS Protheus em linguagem natural.
 
-> **Fase atual: Etapa 1, fundação em localhost.** Ainda não existe interpretação de perguntas
-> nem consulta ao ERP. O chat apenas confirma o recebimento da mensagem, sem armazená-la.
+> **Fase atual: Etapa 2, autorização e memória de parâmetros (em validação).** Ainda não existe
+> interpretação de perguntas nem consulta ao ERP. O chat apenas confirma o recebimento da mensagem,
+> sem armazená-la. Setores, permissões, solicitações e memória de parâmetros já existem no backend
+> e no admin.
 > Acompanhamento: [`STATUS.md`](STATUS.md) · decisões: [`DECISOES.md`](DECISOES.md) ·
 > plano: [`PLANO.md`](PLANO.md) · requisitos: [`docs/PEDIDO_INICIAL.md`](docs/PEDIDO_INICIAL.md).
 
@@ -95,7 +97,51 @@ python manage.py runserver
 ```
 
 Acesse <http://127.0.0.1:8000/> e entre com o usuário criado. Para criar outros usuários, use
-<http://127.0.0.1:8000/admin/>. Usuários, setores e permissões completos chegam na Etapa 2.
+<http://127.0.0.1:8000/admin/>.
+
+## Setores, permissões e memória (Etapa 2)
+
+Exemplos fictícios de setores e definições de parâmetros (a lista real de setores ainda está pendente):
+
+```bash
+python manage.py seed_exemplos
+```
+
+No admin (<http://127.0.0.1:8000/admin/>):
+
+1. **Setores:** cadastre os setores.
+2. **Perfis dos usuários:** ligue cada usuário a um setor. A função (colaborador, gestor, diretoria,
+   TI) é só informativa e **não concede acesso**.
+3. **Políticas de acesso:** conceda permissões por setor. As permissões são separadas: consultar,
+   ler memória, alteração operacional, aprovar definições e administrar.
+   - Consulta e alteração exigem um setor e a lista de filiais.
+   - Setor vazio = nível empresa, usado para aprovar definições da empresa.
+   - Visão consolidada (diretoria/TI) = uma política por setor autorizado. Não existe
+     "todos os setores", e o superusuário do admin não tem acesso automático a dados.
+4. **Definições de parâmetros:** o que é cada parâmetro (ex.: data de corte). Marque "contém dado
+   pessoal" quando o valor identificar alguém: ele só vale na solicitação e é descartado em 30 dias.
+5. **Valores de parâmetros:** somente leitura no admin. Propostas de setor e empresa são aprovadas ou
+   rejeitadas pelas ações da listagem, por quem tem "aprovar definições" naquele nível. Quem propôs
+   não aprova a própria proposta.
+
+Precedência na resolução de um parâmetro (D12): regra obrigatória aprovada (setor ou empresa) >
+valor da solicitação > preferência privada do usuário > setor > empresa. Conflitos não são
+resolvidos automaticamente: a solicitação volta para "aguardando parâmetros".
+
+### Retenção
+
+```bash
+python manage.py expurgar_retencao --simular
+```
+
+```bash
+python manage.py expurgar_retencao
+```
+
+Remove valores com dado pessoal vencidos (30 dias), solicitações encerradas há mais de 90 dias e
+conversas vazias. A auditoria só é removida quando `IATIVA_RETENCAO["auditoria_dias"]` for definido
+(prazo ainda "a definir"). Imprime só contagens. Agende uma execução diária no servidor; com Docker:
+`docker compose exec app python manage.py expurgar_retencao`.
 
 ## Execução com Docker (banco e aplicação)
 
@@ -224,18 +270,26 @@ qualquer tentativa de conexão de rede faz o teste falhar. Os testes cobrem:
 | `tests/test_logs.py` | redação de SQL, credenciais e query strings nos logs |
 | `tests/test_erp_sintetico.py` | determinismo, somente leitura, cenários do Protheus, separação dos bancos |
 | `tests/test_segredos.py` | nenhum segredo versionado e chave obrigatória via `.env` |
+| `tests/test_acessos.py` | permissões separadas, sem acesso universal, vigência, visão consolidada, filiais |
+| `tests/test_memoria.py` | escopos, dados pessoais, CPF/CNPJ recusados, aprovação, correção, precedência, conflitos |
+| `tests/test_solicitacoes.py` | máquina de estados, dono, cancelamento, visibilidade, liberação determinística |
+| `tests/test_auditoria_retencao.py` | auditoria imutável e sem valores, expurgo por retenção |
+| `tests/test_admin_etapa2.py` | páginas do admin e aprovação pelo admin respeitando políticas |
 
 ## Estrutura
 
 ```text
 config/                 configurações (base, local, test), URLs, WSGI/ASGI
 iativa/core/            verificações do sistema, middleware de segurança, filtro de logs, runserver restrito
-iativa/chat/            chat mínimo (mensagem transitória)
+iativa/accounts/        setores, perfis, políticas de acesso e autorização (authz.py)
+iativa/chat/            chat mínimo (mensagem transitória), contextos e estados da solicitação
+iativa/memory/          definições e valores de parâmetros, revisões, resolução por precedência
+iativa/audit/           auditoria sanitizada e expurgo por retenção
 iativa/synthetic_erp/   esquema, gerador e conexão somente leitura da base sintética
 templates/, static/     interface (templates Django + htmx 2.0.4 servido localmente)
 tests/                  testes automatizados
 docs/                   pedido inicial (requisitos)
 ```
 
-As demais apps da arquitetura (memória, conhecimento, metadados, agente, consulta e auditoria) serão
-criadas nas etapas correspondentes.
+As demais apps da arquitetura (conhecimento, metadados, agente e consulta) serão criadas nas etapas
+correspondentes.

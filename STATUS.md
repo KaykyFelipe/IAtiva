@@ -1,13 +1,42 @@
 # STATUS — IAtiva
 
-**Atualizado em:** 2026-11-09
+**Atualizado em:** 2026-11-10
 **Etapa atual:** 2 — Autorização e memória de parâmetros
-**Situação:** **não iniciada.** Etapa 1 aprovada; a Etapa 2 depende das informações pendentes abaixo (setores e perfis).
+**Situação:** **implementada, aguardando validação.** Plano aprovado em 2026-11-10; implementada com setores de exemplo (fictícios) enquanto a lista real não chega. Commit e push na branch `claude/new-session-w616rq` antes da validação (M6); a `main` não foi alterada.
 
 ## Histórico
 
 - Etapa 0 — Levantamento e proposta: **aprovada** em 2026-11-09 (D1–D12; ver `DECISOES.md`).
 - Etapa 1 — Fundação em localhost: **aprovada** em 2026-11-09 (inclui T1–T7, M1). Commit de segurança antes da aprovação (M2). Pull request KaykyFelipe/IAtiva#1 com merge na `main` (M3).
+- Etapa 2 — Autorização e memória de parâmetros: plano aprovado em 2026-11-10; implementação entregue para validação em 2026-11-10 (T8–T13).
+
+## Etapa 2 — o que foi entregue
+
+- `iativa/accounts`: `Department`, `UserProfile` (setor e função informativa), `AccessPolicy` (permissões separadas por setor, filiais, vigência). Autorização em `authz.py`; sem permissão universal; superusuário e função não concedem acesso a dados.
+- `iativa/chat`: `ConversationContext`, `RequestContext` (objetivo como código estruturado, nunca texto) e máquina de estados; checagem determinística de completude (`avaliar_completude`).
+- `iativa/memory`: `ParameterDefinition`, `ParameterBinding` (escopos solicitação/usuário/setor/empresa, aprovação, validade, versão), `MemoryRevision`; resolução por precedência (D12) com conflitos; dados pessoais só na solicitação (30 dias); CPF/CNPJ recusados.
+- `iativa/audit`: `OperationAudit` imutável, só códigos e contagens; comando `expurgar_retencao`.
+- Comando `seed_exemplos` (setores e definições fictícios). Admin com aprovação/rejeição de propostas via serviços.
+- 161 testes passando (10 da rotina M4 pulados no Windows), sem rede.
+
+## Checklist de validação da Etapa 2
+
+- [ ] Permissões separadas (consultar, ler memória, alterar, aprovar, administrar) e sem acesso universal.
+- [ ] Visão consolidada só com setores concedidos explicitamente; filiais por política.
+- [ ] Valor da solicitação não vira padrão; memória privada e de setor não vazam.
+- [ ] Afirmações viram proposta; aprovação por quem tem permissão no nível, sem autoaprovação.
+- [ ] Validade, correção com versão e histórico, revogação.
+- [ ] Precedência D12; conflitos e regra obrigatória contrariada voltam para "aguardando parâmetros".
+- [ ] Auditoria sem SQL, valores ou texto; expurgo com prazos D11.
+- [ ] Migrações aplicadas no PostgreSQL do servidor (`docker compose up -d --build`) — não verificado nesta máquina.
+
+## Pendências da Etapa 2
+
+- [ ] Lista real de setores e perfis; quem aprova em cada nível; quem tem visão consolidada (informações 1 e 2). Hoje: exemplos fictícios.
+- [ ] Agendar `expurgar_retencao` diariamente no servidor.
+- [ ] Após a validação: levar a Etapa 2 para a `main` (pull request), que o servidor acompanha.
+- [ ] Solicitações abandonadas (não encerradas) não são expurgadas; definir política.
+- [ ] Interface de usuário para memória/aprovação: hoje só pelo admin (API e telas nas Etapas 4 e 6).
 
 ## Etapa 1 — o que foi entregue
 
@@ -56,4 +85,4 @@ Necessárias antes da Etapa 7 (piloto):
 
 ## Próximo passo
 
-Receber as informações 1 e 2, apresentar o plano da Etapa 2 e iniciá-la.
+Validar a Etapa 2 pelo checklist acima. Depois da aprovação: commit (conforme D8 ou a decisão de branch) e informações 3–8 para a Etapa 3.

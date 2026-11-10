@@ -25,7 +25,10 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "iativa.accounts",
     "iativa.chat",
+    "iativa.memory",
+    "iativa.audit",
     "iativa.synthetic_erp",
 ]
 
@@ -111,6 +114,13 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # Limite de tamanho da mensagem do chat (caracteres).
 IATIVA_CHAT_MAX_CHARS = 2000
+
+# Retenção (D11, PLANO.md §4). None = prazo "a definir": nada é removido automaticamente.
+IATIVA_RETENCAO = {
+    "solicitacao_dias": 90,
+    "valor_dado_pessoal_dias": 30,
+    "auditoria_dias": None,
+}
 
 LOGGING = {
     "version": 1,
