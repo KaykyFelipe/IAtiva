@@ -1,7 +1,7 @@
 # Ambiente e segredos
 .venv/
 .env
-# Dados locais (banco sintético, arquivos gerados)
+# Dados locais (banco sintÃ©tico, arquivos gerados)
 var/
 *.sqlite3
 staticfiles/
@@ -10,5 +10,5 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 
-# Configura��o local do Claude Code (caminhos desta m�quina)
+# Configuração local do Claude Code (caminhos desta máquina)
 .claude/launch.json
