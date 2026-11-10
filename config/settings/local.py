@@ -37,4 +37,8 @@ IATIVA_ERP = (
     else None
 )
 
-SYNTHETIC_ERP_PATH =Path(env("IATIVA_SYNTHETIC_ERP_PATH", str(BASE_DIR / "var" / "erp_sintetico.sqlite3")))
+# Fonte de metadados: com o ERP configurado, usa o Protheus real; sem ele, a base sintética.
+# IATIVA_METADADOS_FONTE no .env força uma das duas (sintetico | protheus).
+IATIVA_METADADOS = {"fonte": env("IATIVA_METADADOS_FONTE", "protheus" if IATIVA_ERP else "sintetico")}
+
+SYNTHETIC_ERP_PATH = Path(env("IATIVA_SYNTHETIC_ERP_PATH", str(BASE_DIR / "var" / "erp_sintetico.sqlite3")))

@@ -128,11 +128,35 @@ def test_catalogo_junta_dicionario_e_estrutura_fisica(erp_sintetico):
     assert [(r.origem, r.destino, r.campos_destino) for r in rels] == [("SA1", "SE1", ("E1_CLIENTE", "E1_LOJA"))]
 
 
-def test_fonte_real_nao_liberada(settings, erp_sintetico):
-    settings.IATIVA_METADADOS = {"fonte": "protheus"}
+def test_fonte_desconhecida(settings, erp_sintetico):
+    settings.IATIVA_METADADOS = {"fonte": "outra"}
     with pytest.raises(ImproperlyConfigured):
         with abrir_catalogo():
             pass
+
+
+def test_fonte_real_sem_configuracao(settings):
+    from iativa.metadata.erp_sqlserver import ErpNaoConfigurado
+
+    settings.IATIVA_METADADOS = {"fonte": "protheus"}
+    settings.IATIVA_ERP = None
+    with pytest.raises(ErpNaoConfigurado):
+        with abrir_catalogo():
+            pass
+
+
+def test_fonte_real_bloqueia_login_com_escrita(settings, monkeypatch):
+    from iativa.metadata import erp_sqlserver as erp
+
+    fechada = []
+    conn = type("C", (), {"close": lambda self: fechada.append(True)})()
+    monkeypatch.setattr(erp, "conectar", lambda: conn)
+    monkeypatch.setattr(erp, "verificar_login", lambda c: ["papel db_datawriter"])
+    settings.IATIVA_METADADOS = {"fonte": "protheus"}
+    with pytest.raises(erp.LoginNaoSomenteLeitura):
+        with abrir_catalogo():
+            pass
+    assert fechada == [True]
 
 
 # --- Descoberta e acesso --------------------------------------------------------------------

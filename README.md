@@ -143,8 +143,9 @@ conversas vazias. A auditoria só é removida quando `IATIVA_RETENCAO["auditoria
 
 ## Conhecimento e metadados (Etapa 3)
 
-Só fontes sintéticas (`IATIVA_METADADOS = {"fonte": "sintetico"}`). O Protheus real exige liberação
-explícita e as informações 4–8 do `STATUS.md`.
+Com `IATIVA_ERP_*` no `.env`, a fonte de metadados é o Protheus real (homologação, empresa
+`IATIVA_ERP_SUFIXO = "010"`); sem ele, a base sintética. `IATIVA_METADADOS_FONTE` força uma das duas.
+Só metadados: nenhuma linha de dados é lida nesta etapa.
 
 - **Conhecimento:** documentos `.md` em `knowledge/` com cabeçalho (origem, versão, responsável,
   situação, aprovação). Só os aprovados e sem conteúdo proibido (CPF, CNPJ, credenciais) são

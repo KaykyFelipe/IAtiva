@@ -80,14 +80,29 @@ class Catalogo:
         return self.dicionario.relacionamentos(aliases)
 
 
+FONTES = ("sintetico", "protheus")
+
+
 @contextmanager
 def abrir_catalogo():
-    """Abre o catálogo da fonte configurada. Hoje só a fonte sintética está liberada (R5)."""
+    """Abre o catálogo da fonte configurada: base sintética ou Protheus real (homologação, liberado
+    em 2026-11-10). A fonte real confere a cada abertura que o login continua somente leitura."""
     fonte = settings.IATIVA_METADADOS["fonte"]
-    if fonte != "sintetico":
-        raise ImproperlyConfigured(
-            "Fonte de metadados não liberada. O ambiente Protheus só entra após liberação explícita."
-        )
+    if fonte not in FONTES:
+        raise ImproperlyConfigured("Fonte de metadados desconhecida.")
+    if fonte == "protheus":
+        from . import erp_sqlserver as erp
+        from .fontes import InformationSchemaSqlServer
+
+        conn = erp.conectar()
+        try:
+            if erp.verificar_login(conn):
+                raise erp.LoginNaoSomenteLeitura("Login do ERP não é somente leitura: acesso bloqueado.")
+            yield Catalogo(DicionarioProtheus(conn, settings.IATIVA_ERP_SUFIXO), InformationSchemaSqlServer(conn))
+        finally:
+            conn.close()
+        return
+
     from iativa.synthetic_erp.connection import open_readonly
     from iativa.synthetic_erp.dicionario import SUFIXO
 

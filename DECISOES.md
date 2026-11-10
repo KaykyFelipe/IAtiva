@@ -78,6 +78,7 @@ Aprovadas em 2026-11-09 por Kayky Felipe (chat), com as opções recomendadas na
 | T15 | 2026-11-10 | Busca local por pontuação BM25 (sem IA, sem rede, sem dependência nova), por seção, no máximo 5 trechos de até 1.200 caracteres. | Em validação |
 | T16 | 2026-11-10 | Dicionário lido de tabelas SX no banco (SX2, SX3, SIX, SX9 com sufixo da empresa) por consultas fixas e parametrizadas; estrutura física por PRAGMA (sintético) ou INFORMATION_SCHEMA (SQL Server). Forma de acesso real ainda a confirmar (informação 4). | Em validação |
 | T17 | 2026-11-10 | Acesso à descoberta: domínio habilitado por setor (`DominioSetor`) + "consultar" no setor; `RestricaoMetadado` esconde tabela ou campo exceto para setores listados. Domínio tem lista fechada de tabelas. | Em validação |
+| T19 | 2026-11-10 | Fonte de metadados passa a ser o Protheus real (homologação, empresa 010) quando `IATIVA_ERP_*` está configurado; a base sintética fica só para testes automatizados e máquinas sem ERP. Cada abertura do catálogo real confere que o login segue somente leitura e bloqueia se não estiver. Somente metadados; leitura de dados continua na Etapa 5. Pedido por Diego (chat: "Pare de usar fonte sintetica e comece a usar o banco de dados real"). | Em validação |
 | T18 | 2026-11-10 | Conhecimento com `origem: sintetico` só é usado com a fonte sintética, e o real só com a fonte real. Base sintética passa à versão 2 (com dicionário SX); é preciso regerar com `seed_synthetic --substituir`. | Em validação |
 
 ## Organização do trabalho
