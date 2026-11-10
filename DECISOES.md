@@ -10,7 +10,8 @@ Formato: `ID | data | decisão | situação | aprovado por | observações`
 |---|---|---|
 | 0 — Levantamento e proposta | 2026-11-09 | Kayky Felipe (chat) |
 | 1 — Fundação em localhost (inclui T1–T7, M1) | 2026-11-09 | Kayky Felipe (chat: "eu aprovo, pode mandar") — aprovada antes da execução no servidor Windows; a validação do Docker no servidor segue como pendência |
-| 2 — Plano de autorização e memória (início autorizado; entrega ainda não validada) | 2026-11-10 | Diego (chat: "Aprovo a etapa 2, pode fazer") — com setores de exemplo enquanto a lista real não chega |
+| 2 — Plano de autorização e memória (início autorizado) | 2026-11-10 | Diego (chat: "Aprovo a etapa 2, pode fazer") — com setores de exemplo enquanto a lista real não chega |
+| 2 — Autorização e memória de parâmetros (entrega validada, inclui T8–T13) | 2026-11-10 | Diego (chat: "Aprovo a Etapa 2") — setores reais e agendamento do expurgo seguem como pendências |
 
 ## Definidas pelo pedido inicial (`docs/PEDIDO_INICIAL.md`)
 
@@ -56,16 +57,16 @@ Aprovadas em 2026-11-09 por Kayky Felipe (chat), com as opções recomendadas na
 | T6 | 2026-11-09 | Exceção de bind em container: `runserver` aceita `0.0.0.0` somente dentro de container Docker (`/.dockerenv`) **e** com `IATIVA_ALLOW_CONTAINER_BIND=1`; a restrição a localhost passa a ser garantida pela publicação da porta em `127.0.0.1` do host (verificada por teste). IPs da rede continuam recusados. | Aprovada com a Etapa 1 |
 | T7 | 2026-11-09 | Ambiente de desenvolvimento em containers Linux (Ubuntu 24.04 + PostgreSQL 16) via `compose.yaml`, para o servidor Windows (Docker Engine em WSL2 ou VM Ubuntu). Não é configuração de produção. | Aprovada com a Etapa 1 |
 
-## Decisões técnicas de implementação (Etapa 2 — sujeitas à validação da etapa)
+## Decisões técnicas de implementação (Etapa 2)
 
 | ID | Data | Decisão | Situação |
 |---|---|---|---|
-| T8 | 2026-11-10 | Nenhuma permissão universal ou automática: tudo vem de `AccessPolicy` explícita por setor (setor vazio = nível empresa, só memória/aprovação/administração). Função (diretoria/TI) e superusuário do admin não concedem acesso a dados. Visão consolidada = soma de políticas por setor. | Em validação |
-| T9 | 2026-11-10 | Valores de parâmetros num único modelo (`ParameterBinding`) com escopo solicitação/usuário/setor/empresa e restrição de coerência no banco; regra obrigatória só em setor/empresa. | Em validação |
-| T10 | 2026-11-10 | Memória privada (solicitação, usuário) aprovada na criação; setor e empresa entram como proposta e exigem `pode_aprovar_conhecimento` no nível, sem autoaprovação. Correção compartilhada mantém o valor anterior até a nova versão ser aprovada. | Em validação |
-| T11 | 2026-11-10 | Dado pessoal: definição marcada só aceita escopo de solicitação, com `expira_em` de 30 dias. Valores que pareçam CPF/CNPJ são recusados em qualquer escopo. | Em validação |
-| T12 | 2026-11-10 | Objetivo da solicitação guardado como código (`SlugField`), nunca o texto da pergunta. Concluída e cancelada são finais; "não validada" só volta para "aguardando parâmetros". | Em validação |
-| T13 | 2026-11-10 | Auditoria imutável com campos de código validados (sem texto livre). Expurgo por comando (`expurgar_retencao`); prazos "a definir" ficam em `None` e não removem nada. | Em validação |
+| T8 | 2026-11-10 | Nenhuma permissão universal ou automática: tudo vem de `AccessPolicy` explícita por setor (setor vazio = nível empresa, só memória/aprovação/administração). Função (diretoria/TI) e superusuário do admin não concedem acesso a dados. Visão consolidada = soma de políticas por setor. | Aprovada com a Etapa 2 |
+| T9 | 2026-11-10 | Valores de parâmetros num único modelo (`ParameterBinding`) com escopo solicitação/usuário/setor/empresa e restrição de coerência no banco; regra obrigatória só em setor/empresa. | Aprovada com a Etapa 2 |
+| T10 | 2026-11-10 | Memória privada (solicitação, usuário) aprovada na criação; setor e empresa entram como proposta e exigem `pode_aprovar_conhecimento` no nível, sem autoaprovação. Correção compartilhada mantém o valor anterior até a nova versão ser aprovada. | Aprovada com a Etapa 2 |
+| T11 | 2026-11-10 | Dado pessoal: definição marcada só aceita escopo de solicitação, com `expira_em` de 30 dias. Valores que pareçam CPF/CNPJ são recusados em qualquer escopo. | Aprovada com a Etapa 2 |
+| T12 | 2026-11-10 | Objetivo da solicitação guardado como código (`SlugField`), nunca o texto da pergunta. Concluída e cancelada são finais; "não validada" só volta para "aguardando parâmetros". | Aprovada com a Etapa 2 |
+| T13 | 2026-11-10 | Auditoria imutável com campos de código validados (sem texto livre). Expurgo por comando (`expurgar_retencao`); prazos "a definir" ficam em `None` e não removem nada. | Aprovada com a Etapa 2 |
 
 ## Organização do trabalho
 

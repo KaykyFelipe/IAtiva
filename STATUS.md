@@ -1,14 +1,14 @@
 # STATUS — IAtiva
 
 **Atualizado em:** 2026-11-10
-**Etapa atual:** 2 — Autorização e memória de parâmetros
-**Situação:** **implementada, aguardando validação.** Plano aprovado em 2026-11-10; implementada com setores de exemplo (fictícios) enquanto a lista real não chega. Commit e push na `main` antes da validação (M6, M7); o servidor recebe pela atualização automática.
+**Etapa atual:** 3 — Conhecimento e metadados
+**Situação:** **aguardando aprovação do plano.** Etapa 2 aprovada em 2026-11-10. Informação 3 (versões e collation) recebida; informações 4–8 pendentes.
 
 ## Histórico
 
 - Etapa 0 — Levantamento e proposta: **aprovada** em 2026-11-09 (D1–D12; ver `DECISOES.md`).
 - Etapa 1 — Fundação em localhost: **aprovada** em 2026-11-09 (inclui T1–T7, M1). Commit de segurança antes da aprovação (M2). Pull request KaykyFelipe/IAtiva#1 com merge na `main` (M3).
-- Etapa 2 — Autorização e memória de parâmetros: plano aprovado em 2026-11-10; implementação entregue para validação em 2026-11-10 (T8–T13).
+- Etapa 2 — Autorização e memória de parâmetros: **aprovada** em 2026-11-10 (T8–T13). Migrações aplicadas no PostgreSQL do servidor.
 
 ## Etapa 2 — o que foi entregue
 
@@ -19,22 +19,10 @@
 - Comando `seed_exemplos` (setores e definições fictícios). Admin com aprovação/rejeição de propostas via serviços.
 - 161 testes passando (10 da rotina M4 pulados no Windows), sem rede.
 
-## Checklist de validação da Etapa 2
-
-- [ ] Permissões separadas (consultar, ler memória, alterar, aprovar, administrar) e sem acesso universal.
-- [ ] Visão consolidada só com setores concedidos explicitamente; filiais por política.
-- [ ] Valor da solicitação não vira padrão; memória privada e de setor não vazam.
-- [ ] Afirmações viram proposta; aprovação por quem tem permissão no nível, sem autoaprovação.
-- [ ] Validade, correção com versão e histórico, revogação.
-- [ ] Precedência D12; conflitos e regra obrigatória contrariada voltam para "aguardando parâmetros".
-- [ ] Auditoria sem SQL, valores ou texto; expurgo com prazos D11.
-- [ ] Migrações aplicadas no PostgreSQL do servidor (`docker compose up -d --build`) — não verificado nesta máquina.
-
-## Pendências da Etapa 2
+## Pendências da Etapa 2 (não bloqueiam a Etapa 3)
 
 - [ ] Lista real de setores e perfis; quem aprova em cada nível; quem tem visão consolidada (informações 1 e 2). Hoje: exemplos fictícios.
 - [ ] Agendar `expurgar_retencao` diariamente no servidor.
-- [ ] No servidor: confirmar que a atualização automática aplicou a Etapa 2 (migrações e testes em PostgreSQL).
 - [ ] Solicitações abandonadas (não encerradas) não são expurgadas; definir política.
 - [ ] Interface de usuário para memória/aprovação: hoje só pelo admin (API e telas nas Etapas 4 e 6).
 
@@ -68,7 +56,7 @@ Necessárias para a Etapa 2:
 
 Necessárias a partir da Etapa 3 (equipe do ERP):
 
-3. Versão do Protheus e do SQL Server; collation.
+3. ~~Versão do Protheus e do SQL Server; collation.~~ Recebida em 2026-11-10: Protheus "10.2.1" (confirmar se é a versão do Protheus ou de outro componente, ex.: release 12.1.x); SQL Server 2022 (16.0.4212.1); collation `Latin1_General_BIN` (comparação binária: diferencia maiúsculas/minúsculas e acentos; ordenação por código de caractere).
 4. Forma suportada de acesso ao dicionário (SX2, SX3, SIX, SX9, SX5, SX6 — banco ou arquivos).
 5. Estrutura de empresas/filiais (SM0), sufixo das tabelas e modo de compartilhamento de SA1, SE1, SE5.
 6. Documentação das personalizações do domínio.
@@ -85,4 +73,4 @@ Necessárias antes da Etapa 7 (piloto):
 
 ## Próximo passo
 
-Validar a Etapa 2 pelo checklist acima. Depois da aprovação: commit (conforme D8 ou a decisão de branch) e informações 3–8 para a Etapa 3.
+Aprovar o plano da Etapa 3 (começa só com fontes sintéticas). Informações 4–8 quando disponíveis; o Protheus real só entra com liberação explícita.
