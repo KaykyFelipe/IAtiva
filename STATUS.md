@@ -56,7 +56,7 @@ Necessárias para a Etapa 2:
 
 Necessárias a partir da Etapa 3 (equipe do ERP):
 
-3. ~~Versão do Protheus e do SQL Server; collation.~~ Recebida em 2026-11-10: Protheus "10.2.1" (confirmar se é a versão do Protheus ou de outro componente, ex.: release 12.1.x); SQL Server 2022 (16.0.4212.1); collation `Latin1_General_BIN` (comparação binária: diferencia maiúsculas/minúsculas e acentos; ordenação por código de caractere).
+3. ~~Versão do Protheus e do SQL Server; collation.~~ Recebida em 2026-11-10: Protheus 12.1.2510; SQL Server 2022 (16.0.4212.1); collation `Latin1_General_BIN` (comparação binária: diferencia maiúsculas/minúsculas e acentos; ordenação por código de caractere).
 4. Forma suportada de acesso ao dicionário (SX2, SX3, SIX, SX9, SX5, SX6 — banco ou arquivos).
 5. Estrutura de empresas/filiais (SM0), sufixo das tabelas e modo de compartilhamento de SA1, SE1, SE5.
 6. Documentação das personalizações do domínio.
