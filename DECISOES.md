@@ -13,6 +13,7 @@ Formato: `ID | data | decisão | situação | aprovado por | observações`
 | 2 — Plano de autorização e memória (início autorizado) | 2026-11-10 | Diego (chat: "Aprovo a etapa 2, pode fazer") — com setores de exemplo enquanto a lista real não chega |
 | 2 — Autorização e memória de parâmetros (entrega validada, inclui T8–T13) | 2026-11-10 | Diego (chat: "Aprovo a Etapa 2") — setores reais e agendamento do expurgo seguem como pendências |
 | 3 — Plano de conhecimento e metadados (início autorizado, só fontes sintéticas) | 2026-11-10 | Diego (chat: "Aprovo a Etapa 3") — Protheus real só após liberação explícita e informações 4–8 |
+| 3 — Liberação para conectar na base de **homologação** com o login somente leitura (só metadados) | 2026-11-10 | Diego (chat: "pode tentar conectar") — dados de conexão só no `.env` do servidor |
 
 ## Definidas pelo pedido inicial (`docs/PEDIDO_INICIAL.md`)
 
