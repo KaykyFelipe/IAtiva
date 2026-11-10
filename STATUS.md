@@ -8,7 +8,8 @@
 
 - Administrador pergunta algo desconhecido → busca no dicionário → "Aprender com XXX" → formulário (colunas, período, filtros fixos, setores) → proposta testada no compilador/validador → aprovação por outra pessoa com "aprovar definições" → disponível para os setores escolhidos.
 - `ConsultaModelo` (app agent), objetivos dinâmicos em `contratos.py`, plano `montar_modelo`, telas no chat.
-- Pendências: com um único administrador, a aprovação exige `IATIVA_APRENDIZADO_AUTOAPROVACAO=1` ou um segundo aprovador; tabelas de RH exigem posição do DPO antes de uso real.
+- Autoaprovação liberada no servidor em 2026-11-10 (`IATIVA_APRENDIZADO_AUTOAPROVACAO=1`, pedido de Diego, único administrador); desligar quando houver um segundo aprovador.
+- Pendências: tabelas de RH exigem posição do DPO antes de uso real.
 
 ## Etapa 5 — o que foi entregue
 
