@@ -8,7 +8,8 @@
 
 - `iativa/query`: plano estruturado por objetivo (`plano.py`), compilador para T-SQL com nomes do catálogo (`compilador.py`), validação AST com `sqlglot` (`validador.py`), execução somente leitura com limite de linhas e tempo (`executor.py`), serviço com reconferência, estados e checagem de duplicação (`servico.py`).
 - Chat: botão "Executar consulta" na ficha pronta; resultado em tabela com total e premissas; "Executar de novo" nas conversas reabertas. Resultado nunca é salvo.
-- 303 testes passando (10 da rotina M4 pulados no Windows), inclusive comparação com consulta de referência na base sintética.
+- 305 testes passando (10 da rotina M4 pulados no Windows), inclusive comparação com consulta de referência na base sintética.
+- Homologação (2026-11-10, filial 001001): inadimplência e títulos a vencer executaram em ~1 s (consultas com literais validados, T30). Conferência dos números com o Financeiro pendente.
 
 ## Checklist de validação da Etapa 5
 
