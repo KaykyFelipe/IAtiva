@@ -1,0 +1,70 @@
+<div class="conversa-area" id="conversa">
+  <header class="cabecalho">
+    <button class="icone so-celular" type="button" data-abrir-lateral aria-label="Abrir menu">☰</button>
+    <div class="titulo-conversa">
+      <h1>{% if conversa %}{{ conversa.titulo|default:"Conversa" }}{% else %}Nova conversa{% endif %}</h1>
+      <span class="escopo">
+        {% if not conversa or conversa.tipo == TipoConversa.INDIVIDUAL %}Conversa individual
+        {% elif conversa.tipo == TipoConversa.SETOR %}Conversa do setor {{ conversa.setor.nome }}{% if not pode_escrever %} (somente leitura){% endif %}
+        {% else %}Chat mestre: setores liberados na sua política{% endif %}
+      </span>
+    </div>
+  </header>
+
+  <div class="rolagem" data-rolagem>
+    <div class="mensagens">
+      {% if conversa.tipo == TipoConversa.SETOR %}
+        <p class="aviso-escopo">Todos com acesso ao setor leem esta conversa. Padrões propostos só valem depois de aprovados.</p>
+      {% elif conversa.tipo == TipoConversa.MESTRE %}
+        <p class="aviso-escopo">O chat mestre vê só os setores liberados nas suas políticas de acesso. A visão consolidada completa chega na Etapa 6.</p>
+      {% endif %}
+
+      {% for item in mensagens %}
+        {% with m=item.m %}
+        {% if m.papel == "usuario" %}
+          {% if conversa.tipo == TipoConversa.SETOR and not item.proprio %}
+            <div class="msg pessoa">
+              <span class="avatar pequeno" aria-hidden="true">{{ m.autor.get_username|slice:":2"|upper }}</span>
+              <div><p class="autor">{{ m.autor.get_full_name|default:m.autor.get_username }}</p><p>{{ m.texto|linebreaksbr }}</p></div>
+            </div>
+          {% else %}
+            <div class="msg usuario"><p>{{ m.texto|linebreaksbr }}</p></div>
+          {% endif %}
+        {% else %}
+          {% include "chat/_resposta.html" with m=m editavel=item.editavel %}
+        {% endif %}
+        {% endwith %}
+      {% empty %}
+        {% if not conversa %}
+          <div class="vazio">
+            <h2>Por onde começar</h2>
+            <div class="sugestoes">
+              <button type="button" data-sugestao="Quais clientes estão inadimplentes?">Quais clientes estão inadimplentes?</button>
+              <button type="button" data-sugestao="Títulos a vencer de 01/01/2026 a 31/01/2026">Títulos a vencer em janeiro</button>
+              <button type="button" data-sugestao="Posição do cliente ">Posição de um cliente</button>
+            </div>
+          </div>
+        {% endif %}
+      {% endfor %}
+    </div>
+  </div>
+
+  {% if pode_escrever %}
+    <form class="compositor" method="post"
+          action="{% if conversa %}{% url 'chat:mensagem' conversa.pk %}{% else %}{% url 'chat:nova' %}{% endif %}"
+          hx-post="{% if conversa %}{% url 'chat:mensagem' conversa.pk %}{% else %}{% url 'chat:nova' %}{% endif %}"
+          hx-target="#conversa" hx-swap="outerHTML" hx-disabled-elt="find button">
+      {% csrf_token %}
+      {% if erro %}<p class="erro" role="alert">{{ erro }}</p>{% endif %}
+      {% for e in form.mensagem.errors %}<p class="erro" role="alert">{{ e }}</p>{% endfor %}
+      <label class="sr" for="campo-mensagem">Mensagem</label>
+      <textarea id="campo-mensagem" name="mensagem" rows="1" maxlength="{{ form.fields.mensagem.max_length }}"
+                placeholder="Pergunte sobre contas a receber" required data-campo></textarea>
+      <button type="submit" class="enviar" aria-label="Enviar">↑</button>
+      <p class="rodape-compositor">A conversa fica salva por 90 dias. Não envie CPF ou CNPJ.</p>
+    </form>
+  {% else %}
+    <p class="rodape-compositor somente-leitura">{% if erro %}{{ erro }}{% else %}Você pode ler esta conversa, mas não enviar mensagens.{% endif %}</p>
+  {% endif %}
+</div>
+{% if oob_lateral %}{% include "chat/_lateral.html" %}{% endif %}

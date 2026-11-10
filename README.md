@@ -189,6 +189,20 @@ docker compose exec app python manage.py verificar_erp
 O comando lê só metadados: versão, permissões do próprio login, sufixos do dicionário (SX2) e
 contagens de campos de SA1, SE1 e SE5. Para com erro se o login tiver qualquer permissão de escrita.
 
+## Tela de chat (M8)
+
+Layout de chat de IA com as cores e a logo da Ativa (protótipo aprovado em `docs/prototipo/chat`):
+
+- Lateral: nova conversa, **chat mestre** (só para quem tem "consultar" em mais de um setor),
+  **chat do setor** (lê quem tem "consultar" ou "ler memória" no setor; escreve quem é do setor),
+  conversas individuais agrupadas por data, e nome e setor do usuário no rodapé.
+- Conversa com várias mensagens; a ficha da solicitação mostra critérios, origem de cada um e os
+  campos que faltam. Só a ficha mais recente da sua solicitação é editável.
+- **O histórico fica salvo** (decisão M8): texto e fichas, nunca resultados de consultas. Mensagens
+  com CPF/CNPJ são recusadas. Conversas paradas há mais de 90 dias (`conversa_dias`) são apagadas
+  pelo `expurgar_retencao`. Mensagens não aparecem no admin.
+- O nome exibido vem de "nome" e "sobrenome" do usuário no admin.
+
 ## Agente e esclarecimentos (Etapa 4)
 
 O chat interpreta a pergunta, escolhe um objetivo da lista fechada (`iativa/agent/contratos.py`),

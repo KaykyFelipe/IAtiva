@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>IAtiva — protótipo do chat</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="estilo.css">
+</head>
+<body>
+<div class="app" id="app">
+
+  <!-- Lateral -->
+  <aside class="lateral" id="lateral" aria-label="Conversas">
+    <div class="lateral-topo">
+      <span class="marca"><img src="logo-ativa.png" alt="Ativa Locação"><span class="produto">IAtiva</span></span>
+      <button class="icone so-celular" id="fechar-lateral" aria-label="Fechar menu">✕</button>
+    </div>
+
+    <button class="nova" id="nova-conversa">
+      <span class="mais" aria-hidden="true">+</span> Nova conversa
+    </button>
+
+    <label class="busca">
+      <span class="sr">Buscar conversas</span>
+      <input type="search" placeholder="Buscar conversas">
+    </label>
+
+    <nav class="listas">
+      <section class="grupo grupo-mestre" data-papel="diretoria">
+        <h2>Diretoria</h2>
+        <a href="#" class="conversa compartilhada" data-chat="mestre">
+          <span class="simbolo mestre" aria-hidden="true"></span>
+          <span class="titulo">Chat mestre</span>
+          <span class="dica">todos os setores</span>
+        </a>
+      </section>
+
+      <section class="grupo">
+        <h2>Setor</h2>
+        <a href="#" class="conversa compartilhada" data-chat="setor">
+          <span class="simbolo setor" aria-hidden="true"></span>
+          <span class="titulo">Cobrança</span>
+          <span class="contador" title="Propostas aguardando aprovação">2</span>
+        </a>
+      </section>
+
+      <section class="grupo">
+        <h2>Suas conversas</h2>
+        <p class="periodo">Hoje</p>
+        <a href="#" class="conversa ativa" data-chat="inadimplencia">
+          <span class="titulo">Inadimplência em dezembro</span>
+          <span class="ponto pronta" title="Pronta"></span>
+        </a>
+        <a href="#" class="conversa" data-chat="vencer">
+          <span class="titulo">Títulos a vencer em janeiro</span>
+          <span class="ponto pendente" title="Aguardando informação"></span>
+        </a>
+        <p class="periodo">Últimos 7 dias</p>
+        <a href="#" class="conversa" data-chat="cliente">
+          <span class="titulo">Posição do cliente 000123</span>
+        </a>
+        <a href="#" class="conversa" data-chat="vazia">
+          <span class="titulo">Baixas parciais da Matriz</span>
+        </a>
+        <p class="periodo">Novembro</p>
+        <a href="#" class="conversa" data-chat="vazia">
+          <span class="titulo">Comparativo Ativa x Eficaz</span>
+        </a>
+      </section>
+    </nav>
+
+    <div class="perfil">
+      <span class="avatar" aria-hidden="true">DP</span>
+      <span class="quem">
+        <strong>Diego Pessoa</strong>
+        <span>T.I</span>
+      </span>
+      <button class="icone claro" aria-label="Opções da conta">⋯</button>
+    </div>
+  </aside>
+
+  <!-- Conversa -->
+  <main class="principal">
+    <header class="cabecalho">
+      <button class="icone so-celular" id="abrir-lateral" aria-label="Abrir menu">☰</button>
+      <div class="titulo-conversa">
+        <h1 id="titulo-chat">Inadimplência em dezembro</h1>
+        <span class="escopo" id="escopo-chat">Conversa individual</span>
+      </div>
+      <div class="ver-como" role="group" aria-label="Ver protótipo como">
+        <span class="sutil">Ver como</span>
+        <button class="alternar ativo" data-papel-btn="colaborador">Colaborador</button>
+        <button class="alternar" data-papel-btn="diretoria">Diretoria</button>
+      </div>
+    </header>
+
+    <div class="rolagem" id="rolagem">
+      <div class="mensagens" id="mensagens"></div>
+    </div>
+
+    <form class="compositor" id="compositor">
+      <label class="sr" for="campo">Mensagem</label>
+      <textarea id="campo" rows="1" placeholder="Pergunte sobre contas a receber"></textarea>
+      <button type="submit" class="enviar" aria-label="Enviar">↑</button>
+      <p class="rodape-compositor">Consultas somente leitura no Protheus. Confira os critérios antes de executar.</p>
+    </form>
+  </main>
+</div>
+
+<!-- Modelos das conversas (protótipo: conteúdo fixo, dados fictícios) -->
+<template id="chat-inadimplencia">
+  <div class="msg usuario"><p>Quais clientes estão inadimplentes?</p></div>
+  <div class="msg ia">
+    <p>Para listar a inadimplência preciso de alguns critérios. Já usei sua preferência de tolerância.</p>
+    <article class="ficha pendente">
+      <header><strong>Títulos em atraso</strong><span class="estado">Aguardando informação</span></header>
+      <dl>
+        <div><dt>Tolerância de atraso</dt><dd>5 dias <span class="origem">sua preferência</span></dd></div>
+        <div class="falta"><dt>Data de corte</dt><dd><input type="date" aria-label="Data de corte"></dd></div>
+        <div class="falta"><dt>Baixa parcial</dt><dd>
+          <select aria-label="Baixa parcial"><option>Considerar o saldo</option><option>Considerar o valor original</option><option>Desconsiderar o título</option></select></dd></div>
+        <div class="falta"><dt>Filial</dt><dd>
+          <select aria-label="Filial"><option>001001 · Ativa Matriz</option><option>001007 · Ativa Londrina</option></select></dd></div>
+      </dl>
+      <footer><button class="secundario" type="button">Confirmar critérios</button></footer>
+    </article>
+  </div>
+  <div class="msg usuario"><p>Corte em 31/12/2025, considerar o saldo, filial da Matriz.</p></div>
+  <div class="msg ia">
+    <p>Tudo definido. Confira antes de executar:</p>
+    <article class="ficha pronta">
+      <header><strong>Títulos em atraso</strong><span class="estado">Pronta</span></header>
+      <dl>
+        <div><dt>Data de corte</dt><dd>31/12/2025 <span class="origem">nesta conversa</span></dd></div>
+        <div><dt>Tolerância de atraso</dt><dd>5 dias <span class="origem">sua preferência</span></dd></div>
+        <div><dt>Baixa parcial</dt><dd>Considerar o saldo <span class="origem">nesta conversa</span></dd></div>
+        <div><dt>Filial</dt><dd>001001 <span class="origem">nesta conversa</span></dd></div>
+      </dl>
+      <footer>
+        <button type="button">Executar consulta</button>
+        <button class="texto" type="button">Salvar tolerância como padrão do setor</button>
+      </footer>
+    </article>
+  </div>
+  <div class="msg usuario"><p>Executar.</p></div>
+  <div class="msg ia">
+    <p><strong>12 clientes</strong> com títulos em atraso na Matriz em 31/12/2025, somando <strong>R$ 184.320,55</strong> em saldo.</p>
+    <div class="tabela-rolagem">
+      <table>
+        <thead><tr><th>Cliente</th><th>Títulos</th><th class="num">Saldo em atraso</th><th class="num">Maior atraso</th></tr></thead>
+        <tbody>
+          <tr><td>000123-01 Comercial Exemplo</td><td>4</td><td class="num">R$ 52.810,00</td><td class="num">94 dias</td></tr>
+          <tr><td>000087-02 Indústria Fictícia</td><td>2</td><td class="num">R$ 31.402,90</td><td class="num">61 dias</td></tr>
+          <tr><td>000210-01 Serviços Modelo</td><td>3</td><td class="num">R$ 18.995,10</td><td class="num">33 dias</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="nota">Exemplo com dados fictícios. O resultado não fica salvo: reabrir ou reagrupar faz uma nova consulta.</p>
+  </div>
+</template>
+
+<template id="chat-vencer">
+  <div class="msg usuario"><p>Quais títulos vencem em janeiro?</p></div>
+  <div class="msg ia">
+    <p>Entendi o período como 01/01/2026 a 31/01/2026. Falta só a filial.</p>
+    <article class="ficha pendente">
+      <header><strong>Títulos a vencer</strong><span class="estado">Aguardando informação</span></header>
+      <dl>
+        <div><dt>Período</dt><dd>01/01/2026 a 31/01/2026 <span class="origem">nesta conversa</span></dd></div>
+        <div><dt>Baixa parcial</dt><dd>Considerar o saldo <span class="origem">padrão do setor</span></dd></div>
+        <div class="falta"><dt>Filial</dt><dd><select aria-label="Filial"><option>001001 · Ativa Matriz</option><option>001007 · Ativa Londrina</option></select></dd></div>
+      </dl>
+      <footer><button class="secundario" type="button">Confirmar critérios</button></footer>
+    </article>
+  </div>
+</template>
+
+<template id="chat-cliente">
+  <div class="msg usuario"><p>Como está o cliente 000123?</p></div>
+  <div class="msg ia"><p>O cliente 000123 tem duas lojas. Qual delas?</p>
+    <div class="opcoes"><button type="button">Loja 01</button><button type="button">Loja 02</button><button type="button">As duas</button></div>
+  </div>
+  <div class="msg usuario"><p>Loja 01</p></div>
+  <div class="msg ia"><p>Posição preparada para 000123-01. Abra a conversa para executar de novo: o resultado anterior não fica guardado.</p></div>
+</template>
+
+<template id="chat-setor">
+  <div class="aviso-escopo">Conversa do setor Cobrança. Todos do setor leem; padrões propostos aqui só valem depois de aprovados.</div>
+  <div class="msg pessoa"><span class="avatar pequeno" aria-hidden="true">AS</span><div><p class="autor">Ana Souza</p><p>Proponho tolerância de 5 dias como padrão do setor para inadimplência.</p></div></div>
+  <div class="msg ia">
+    <article class="ficha proposta">
+      <header><strong>Proposta de padrão do setor</strong><span class="estado">Aguardando aprovação</span></header>
+      <dl>
+        <div><dt>Tolerância de atraso</dt><dd>5 dias <span class="origem">proposto por Ana Souza</span></dd></div>
+      </dl>
+      <footer><button type="button">Aprovar</button><button class="texto" type="button">Rejeitar</button></footer>
+    </article>
+  </div>
+  <div class="msg pessoa"><span class="avatar pequeno" aria-hidden="true">RM</span><div><p class="autor">Rafael Melo</p><p>Qual a inadimplência da Londrina em dezembro?</p></div></div>
+  <div class="msg ia"><p>Preparei para a filial 001007 com os padrões aprovados do setor. Rafael, confirme a data de corte para executar.</p></div>
+</template>
+
+<template id="chat-mestre">
+  <div class="aviso-escopo">Chat mestre: vê os setores liberados para você na política de acesso.</div>
+  <div class="filtros" role="group" aria-label="Setores">
+    <button class="filtro ativo" type="button">Todos</button>
+    <button class="filtro" type="button">Cobrança</button>
+    <button class="filtro" type="button">Contas a pagar</button>
+    <button class="filtro" type="button">Faturamento</button>
+  </div>
+  <div class="msg usuario"><p>Compare a inadimplência de dezembro entre Ativa e Eficaz.</p></div>
+  <div class="msg ia">
+    <p>Vou usar as definições aprovadas de cada setor. Há uma diferença: Cobrança usa tolerância de 5 dias e Faturamento não tem padrão. Qual aplicar nas duas empresas?</p>
+    <div class="opcoes"><button type="button">5 dias nas duas</button><button type="button">Sem tolerância</button><button type="button">Cada uma com o seu</button></div>
+  </div>
+</template>
+
+<template id="chat-vazia">
+  <div class="vazio">
+    <h2>Por onde começar</h2>
+    <div class="sugestoes">
+      <button type="button">Quais clientes estão inadimplentes?</button>
+      <button type="button">Títulos a vencer nos próximos 30 dias</button>
+      <button type="button">Posição de um cliente</button>
+    </div>
+  </div>
+</template>
+
+<script src="app.js"></script>
+</body>
+</html>

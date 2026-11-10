@@ -232,7 +232,7 @@ def avaliar(user, s: RequestContext, erros=None) -> Resposta:
                     criterios=criterios, **base)
 
 
-def processar_mensagem(user, texto: str, solicitacao_id=None, provedor=None) -> Resposta:
+def processar_mensagem(user, texto: str, solicitacao_id=None, provedor=None, conversa=None) -> Resposta:
     if not descoberta.setores_do_dominio(user, DOMINIO):
         registrar("acesso_negado", "agente", usuario=user, estado_novo="dominio", resultado="negado")
         return Resposta("sem_acesso", "Seu usuário ainda não tem acesso a consultas. Fale com o administrador.")
@@ -284,7 +284,7 @@ def processar_mensagem(user, texto: str, solicitacao_id=None, provedor=None) -> 
     if atual is None or atual.objetivo != objetivo:
         if atual is not None:
             cancelar(user, atual)  # mudança de assunto: a anterior é encerrada
-        atual = criar_solicitacao(user, DOMINIO, objetivo, conversa=atual.conversa if atual else None)
+        atual = criar_solicitacao(user, DOMINIO, objetivo, conversa=conversa or (atual.conversa if atual else None))
 
     erros = _aplicar_parametros(user, atual, inter.parametros, defs)
     atual.refresh_from_db()

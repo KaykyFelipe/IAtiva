@@ -4,6 +4,13 @@
 **Etapa atual:** 4 — Agente e esclarecimentos
 **Situação:** **implementada com provedor de teste, aguardando validação.** Plano aprovado em 2026-11-10. Provedor escolhido: API da Anthropic (Claude); falta chave e posição do DPO para ligar.
 
+## Mudança M8 — novo chat com histórico (2026-11-10)
+
+- Tela no layout aprovado (cores e logo da Ativa): lateral com nova conversa, chat mestre, chat do setor, conversas individuais e perfil; conversa com várias mensagens e ficha de critérios.
+- Modelos: `ConversationContext` ganhou tipo (individual/setor/mestre) e título; novo `Mensagem` (texto e ficha, nunca resultados).
+- Expurgo: conversas paradas há 90 dias e mensagens antigas do setor.
+- Pendências: posição do DPO sobre guardar o texto das conversas; o chat mestre ainda consulta como o setor do próprio usuário (visão consolidada real é a Etapa 6); preencher nome e sobrenome dos usuários no admin.
+
 ## Etapa 4 — o que foi entregue
 
 - `iativa/agent`: `LLMProvider` com `FakeProvider` e `AnthropicProvider` (saída estruturada); contratos de parâmetros por objetivo; conversão de valores; validação estrita da saída; orquestrador com interpretação → contrato → descoberta de metadados → avaliação de completude → perguntas.

@@ -17,7 +17,7 @@ from django.utils import timezone
 
 from iativa.audit.models import OperationAudit
 from iativa.audit.servicos import registrar
-from iativa.chat.models import ConversationContext, RequestContext
+from iativa.chat.models import ConversationContext, Mensagem, RequestContext, TipoConversa
 from iativa.memory.models import ParameterBinding
 
 
@@ -32,11 +32,20 @@ class Command(BaseCommand):
         agora = timezone.now()
         limite = agora - timedelta(days=int(cfg["solicitacao_dias"]))
 
+        limite_conversa = agora - timedelta(days=int(cfg.get("conversa_dias", cfg["solicitacao_dias"])))
         alvos = {
             "valores_dado_pessoal": ParameterBinding.objects.filter(expira_em__lte=agora),
             "solicitacoes": RequestContext.objects.filter(encerrado_em__lte=limite),
             "conversas": ConversationContext.objects.annotate(n=Count("solicitacoes")).filter(
                 n=0, atualizado_em__lte=limite
+            ),
+            # M8: conversas individuais/mestre paradas além do prazo (com histórico e solicitações).
+            "conversas_paradas": ConversationContext.objects.exclude(tipo=TipoConversa.SETOR).filter(
+                atualizado_em__lte=limite_conversa
+            ),
+            # Conversa do setor é permanente; as mensagens antigas é que expiram.
+            "mensagens_setor": Mensagem.objects.filter(
+                conversa__tipo=TipoConversa.SETOR, criado_em__lte=limite_conversa
             ),
         }
         if cfg.get("auditoria_dias"):
@@ -56,6 +65,7 @@ class Command(BaseCommand):
                         n=0, atualizado_em__lte=limite
                     )
                     qs = ConversationContext.objects.filter(pk__in=list(qs.values_list("pk", flat=True)))
+                    qs = qs.exclude(tipo=TipoConversa.SETOR)
                 contagens[nome] = qs.count()
                 qs.delete()
             if not simular:

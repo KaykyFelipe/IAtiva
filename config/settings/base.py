@@ -123,6 +123,7 @@ IATIVA_RETENCAO = {
     "solicitacao_dias": 90,
     "valor_dado_pessoal_dias": 30,
     "auditoria_dias": None,
+    "conversa_dias": 90,  # M8: histórico de conversas
 }
 
 # Etapa 3 — conhecimento aprovado e fonte de metadados. Só a fonte sintética está liberada (R5);

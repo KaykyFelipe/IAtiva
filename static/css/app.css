@@ -1,8 +1,9 @@
-:root { --fundo: #f5f6f8; --texto: #1d2330; --sutil: #5b6475; --borda: #d7dbe3; --acento: #1f5fbf; --erro: #b3261e; }
+:root { --fundo: #f5f6f8; --texto: #1d2330; --sutil: #5b6475; --borda: #d7dbe3; --acento: #15559F; --erro: #b3261e; }
 * { box-sizing: border-box; }
 body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--fundo); color: var(--texto); }
 .topo { display: flex; align-items: center; gap: 1rem; padding: .75rem 1rem; background: #fff; border-bottom: 1px solid var(--borda); }
-.marca { font-weight: 700; }
+.marca { font-weight: 700; color: #15559F; display: flex; align-items: center; gap: .6rem; }
+.marca img { height: 40px; width: auto; }
 .ambiente { color: var(--sutil); font-size: .85rem; }
 .sair { margin-left: auto; display: flex; align-items: center; gap: .5rem; }
 .conteudo { max-width: 52rem; margin: 1.5rem auto; padding: 0 1rem; }

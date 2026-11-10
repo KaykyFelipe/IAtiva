@@ -1,64 +1,140 @@
-"""Chat (Etapa 4): interpretação, esclarecimentos e situação da solicitação.
+"""Chat com histórico (M8): conversas individuais, do setor e mestre.
 
-A mensagem é TRANSITÓRIA: vai ao orquestrador (e ao provedor de IA) e é descartada ao fim da
-requisição. Não é gravada no banco, sessão, cache, arquivo ou log, nem ecoada na resposta.
-A sessão guarda só o número da solicitação em andamento.
+O acesso é sempre conferido em `conversas.py`. O histórico guarda texto e fichas de critérios,
+nunca resultados de consultas.
 """
-from django.shortcuts import render
-from django.views.decorators.http import require_http_methods, require_POST
+from django.core.exceptions import ValidationError
+from django.http import Http404, HttpResponse
+from django.shortcuts import redirect, render
+from django.urls import reverse
+from django.views.decorators.http import require_GET, require_POST
 
-from iativa.agent import orquestrador
-from iativa.chat.servicos import cancelar
-from iativa.memory.models import TipoValor
+from iativa.accounts.authz import PermissaoNegada, setor_do_usuario
+from iativa.memory.models import ParameterDefinition, TipoValor
 
+from . import conversas
 from .forms import MessageForm
-
-CHAVE_SESSAO = "solicitacao_atual"
-
-
-def _render(request, resposta=None, form=None):
-    if resposta is not None:
-        s = resposta.solicitacao
-        if s is not None and s.estado not in ("cancelada", "concluida"):
-            request.session[CHAVE_SESSAO] = s.pk
-        else:
-            request.session.pop(CHAVE_SESSAO, None)
-    atual = orquestrador.solicitacao_ativa(request.user, request.session.get(CHAVE_SESSAO))
-    context = {"form": form or MessageForm(), "resposta": resposta, "atual": atual, "tipos": TipoValor}
-    if request.headers.get("HX-Request") == "true":
-        return render(request, "chat/_painel.html", context)
-    return render(request, "chat/index.html", context)
+from .models import ConversationContext, TipoConversa
 
 
-@require_http_methods(["GET", "POST"])
+def _obter(request, conversa_id) -> ConversationContext:
+    try:
+        return conversas.obter(request.user, conversa_id)
+    except PermissaoNegada:
+        raise Http404 from None
+
+
+def _contexto(request, c=None, form=None, erro=""):
+    setor = setor_do_usuario(request.user)
+    nome = request.user.get_full_name() or request.user.get_username()
+    iniciais = "".join(p[0] for p in nome.split()[:2]).upper()
+    return {
+        "lateral": conversas.lateral(request.user),
+        "conversa": c,
+        "mensagens": conversas.mensagens_com_interacao(request.user, c) if c else [],
+        "pode_escrever": conversas.pode_escrever(request.user, c) if c else bool(setor),
+        "form": form or MessageForm(),
+        "erro": erro,
+        "tipos": TipoValor,
+        "TipoConversa": TipoConversa,
+        "perfil": {"nome": nome, "iniciais": iniciais or "?", "setor": setor.nome if setor else "Sem setor"},
+    }
+
+
+def _render(request, c=None, **extra):
+    ctx = _contexto(request, c, **extra)
+    htmx = request.headers.get("HX-Request") == "true"
+    ctx["oob_lateral"] = htmx  # atualiza também a lateral (título e estado das conversas)
+    template = "chat/_conversa.html" if htmx else "chat/index.html"
+    return render(request, template, ctx)
+
+
+@require_GET
 def index(request):
-    if request.method == "GET":
-        return _render(request)
+    return _render(request)
+
+
+@require_GET
+def conversa(request, conversa_id):
+    return _render(request, _obter(request, conversa_id))
+
+
+@require_POST
+def nova(request):
+    """Primeira mensagem de uma conversa nova: cria a conversa e envia."""
     form = MessageForm(request.POST)
     if not form.is_valid():
         return _render(request, form=form)
-    resposta = orquestrador.processar_mensagem(
-        request.user, form.cleaned_data["mensagem"], request.session.get(CHAVE_SESSAO)
-    )
-    return _render(request, resposta)
+    try:
+        c = conversas.nova_individual(request.user)
+        conversas.enviar(request.user, c, form.cleaned_data["mensagem"])
+    except PermissaoNegada:
+        return _render(request, erro="Seu usuário ainda não tem setor. Fale com o administrador.")
+    except ValidationError as exc:
+        return _render(request, form=form, erro=exc.messages[0])
+    return _ir(request, c)
+
+
+def _ir(request, c):
+    url = reverse("chat:conversa", args=[c.pk])
+    if request.headers.get("HX-Request") == "true":
+        resposta = HttpResponse(status=204)
+        resposta["HX-Redirect"] = url  # recarrega a página para a lateral mostrar a conversa nova
+        return resposta
+    return redirect(url)
 
 
 @require_POST
-def parametro(request):
+def mensagem(request, conversa_id):
+    c = _obter(request, conversa_id)
+    form = MessageForm(request.POST)
+    if not form.is_valid():
+        return _render(request, c, form=form)
+    try:
+        conversas.enviar(request.user, c, form.cleaned_data["mensagem"])
+    except PermissaoNegada:
+        return _render(request, c, erro="Esta conversa é somente leitura para você.")
+    except ValidationError as exc:
+        return _render(request, c, form=form, erro=exc.messages[0])
+    return _render(request, c)
+
+
+@require_POST
+def parametro(request, conversa_id):
+    c = _obter(request, conversa_id)
     codigo = request.POST.get("codigo", "")[:60]
     if "inicio" in request.POST or "fim" in request.POST:
-        valor = orquestrador.valor_periodo(request.POST.get("inicio", ""), request.POST.get("fim", ""))
+        valor = f"{request.POST.get('inicio', '')}..{request.POST.get('fim', '')}"
     else:
         valor = request.POST.get("valor", "")[:200]
-    resposta = orquestrador.responder_parametro(request.user, request.session.get(CHAVE_SESSAO), codigo, valor)
-    return _render(request, resposta)
+    d = ParameterDefinition.objects.filter(codigo=codigo).first()
+    try:
+        conversas.responder(request.user, c, codigo, d.nome if d else codigo, valor)
+    except (PermissaoNegada, ValidationError) as exc:
+        return _render(request, c, erro=getattr(exc, "messages", ["Não foi possível registrar."])[0])
+    return _render(request, c)
 
 
 @require_POST
-def cancelar_atual(request):
-    s = orquestrador.solicitacao_ativa(request.user, request.session.get(CHAVE_SESSAO))
-    resposta = None
-    if s is not None:
-        resposta = orquestrador.Resposta("cancelada", "Solicitação cancelada.", solicitacao=cancelar(request.user, s))
-    request.session.pop(CHAVE_SESSAO, None)
-    return _render(request, resposta)
+def cancelar(request, conversa_id):
+    c = _obter(request, conversa_id)
+    conversas.cancelar_atual(request.user, c)
+    return _render(request, c)
+
+
+@require_GET
+def setor(request, setor_id):
+    try:
+        c = conversas.do_setor(request.user, setor_id)
+    except PermissaoNegada:
+        raise Http404 from None
+    return redirect("chat:conversa", conversa_id=c.pk)
+
+
+@require_GET
+def mestre(request):
+    try:
+        c = conversas.mestre(request.user)
+    except PermissaoNegada:
+        raise Http404 from None
+    return redirect("chat:conversa", conversa_id=c.pk)

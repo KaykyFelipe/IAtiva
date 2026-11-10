@@ -11,7 +11,7 @@
 </head>
 <body>
   <header class="topo">
-    <span class="marca">IAtiva</span>
+    <span class="marca"><img src="{% static 'img/logo-ativa.png' %}" alt="Ativa Locação" width="55" height="40"> IAtiva</span>
     <span class="ambiente">ambiente local · somente leitura</span>
     {% if user.is_authenticated %}
       <form method="post" action="{% url 'logout' %}" class="sair">

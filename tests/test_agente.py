@@ -274,29 +274,3 @@ def test_anthropic_falhas_viram_falha_modelo(settings, resposta):
     settings.IATIVA_AGENTE = {**settings.IATIVA_AGENTE, "envio_liberado": True}
     with pytest.raises(FalhaModelo):
         AnthropicProvider(cliente=_Cliente(resposta)).interpretar(EntradaModelo("x", "2026-01-01", [], None))
-
-
-# --- Chat (views) e não persistência --------------------------------------------------------
-
-def test_chat_fluxo_pelo_formulario(client, ana):
-    client.force_login(ana)
-    r = client.post(reverse("chat:index"), {"mensagem": INADIMPLENTES}, HTTP_HX_REQUEST="true")
-    html = r.content.decode()
-    assert "Preciso de mais informações" in html and 'name="codigo" value="data-corte"' in html
-    r = client.post(reverse("chat:parametro"), {"codigo": "data-corte", "valor": "2025-12-31"}, HTTP_HX_REQUEST="true")
-    assert 'value="data-corte"' not in r.content.decode()
-    r = client.post(reverse("chat:cancelar"), HTTP_HX_REQUEST="true")
-    assert "Solicitação cancelada" in r.content.decode()
-    assert RequestContext.objects.get().estado == E.CANCELADA
-
-
-def test_mensagem_nao_e_persistida(client, ana):
-    marcador = "MARCADOR-AGENTE-55aa quais clientes estão inadimplentes?"
-    client.force_login(ana)
-    r = client.post(reverse("chat:index"), {"mensagem": marcador})
-    assert "MARCADOR-AGENTE" not in r.content.decode()
-    with connection.cursor() as cursor:
-        for tabela in connection.introspection.table_names(cursor):
-            cursor.execute(f'SELECT * FROM "{tabela}"')
-            assert "MARCADOR-AGENTE" not in repr(cursor.fetchall())
-    assert all("MARCADOR-AGENTE" not in repr(v) for v in client.session.values())

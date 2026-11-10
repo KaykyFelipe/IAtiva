@@ -1,0 +1,64 @@
+{% load static %}
+<aside class="lateral" id="lateral" aria-label="Conversas"{% if oob_lateral %} hx-swap-oob="true"{% endif %}>
+  <div class="lateral-topo">
+    <a class="marca" href="{% url 'chat:index' %}">
+      <img src="{% static 'img/logo-ativa.png' %}" alt="Ativa Locação" width="88" height="64">
+      <span class="produto">IAtiva</span>
+    </a>
+    <button class="icone so-celular" type="button" data-fechar-lateral aria-label="Fechar menu">✕</button>
+  </div>
+
+  <a class="nova" href="{% url 'chat:index' %}"><span class="mais" aria-hidden="true">+</span> Nova conversa</a>
+
+  <nav class="listas">
+    {% if lateral.mestre %}
+      <section class="grupo">
+        <h2>Diretoria</h2>
+        <a href="{% url 'chat:mestre' %}" class="conversa{% if conversa.tipo == TipoConversa.MESTRE %} ativa{% endif %}">
+          <span class="simbolo mestre" aria-hidden="true"></span>
+          <span class="titulo">Chat mestre</span>
+          <span class="dica">seus setores</span>
+        </a>
+      </section>
+    {% endif %}
+
+    {% if lateral.setores %}
+      <section class="grupo">
+        <h2>{% if lateral.setores|length > 1 %}Setores{% else %}Setor{% endif %}</h2>
+        {% for s in lateral.setores %}
+          <a href="{% url 'chat:setor' s.pk %}" class="conversa{% if conversa.tipo == TipoConversa.SETOR and conversa.setor_id == s.pk %} ativa{% endif %}">
+            <span class="simbolo setor" aria-hidden="true"></span>
+            <span class="titulo">{{ s.nome }}</span>
+          </a>
+        {% endfor %}
+      </section>
+    {% endif %}
+
+    <section class="grupo">
+      <h2>Suas conversas</h2>
+      {% for rotulo, itens in lateral.grupos %}
+        <p class="periodo">{{ rotulo }}</p>
+        {% for item in itens %}
+          <a href="{% url 'chat:conversa' item.conversa.pk %}" class="conversa{% if conversa.pk == item.conversa.pk %} ativa{% endif %}">
+            <span class="titulo">{{ item.conversa.titulo|default:"Conversa" }}</span>
+            {% if item.estado %}<span class="ponto {{ item.estado }}" title="{% if item.estado == 'pronta' %}Pronta{% else %}Aguardando informação{% endif %}"></span>{% endif %}
+          </a>
+        {% endfor %}
+      {% empty %}
+        <p class="periodo">Nenhuma conversa ainda.</p>
+      {% endfor %}
+    </section>
+  </nav>
+
+  <div class="perfil">
+    <span class="avatar" aria-hidden="true">{{ perfil.iniciais }}</span>
+    <span class="quem">
+      <strong>{{ perfil.nome }}</strong>
+      <span>{{ perfil.setor }}</span>
+    </span>
+    <form method="post" action="{% url 'logout' %}">
+      {% csrf_token %}
+      <button type="submit" class="icone" title="Sair" aria-label="Sair">⎋</button>
+    </form>
+  </div>
+</aside>

@@ -1,0 +1,21 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "prototipo-chat",
+      "runtimeExecutable": "C:\\Github\\IAtiva\\.venv\\Scripts\\python.exe",
+      "runtimeArgs": ["-m", "http.server", "8765", "--bind", "127.0.0.1", "--directory", "docs/prototipo/chat"],
+      "port": 8765
+    },
+    {
+      "name": "previa-django",
+      "runtimeExecutable": "C:\\Github\\IAtiva\\.venv\\Scripts\\python.exe",
+      "runtimeArgs": ["manage.py", "runserver", "127.0.0.1:8010", "--noreload"],
+      "env": {
+        "DJANGO_SETTINGS_MODULE": "previa_settings",
+        "PYTHONPATH": "C:\\Users\\Diego\\AppData\\Local\\Temp\\claude\\9809d147058f3a17\\25eecbf6-ada4-432a-8d65-1b06f95b0f2b\\scratchpad\\previa"
+      },
+      "port": 8010
+    }
+  ]
+}

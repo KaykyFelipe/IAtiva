@@ -29,7 +29,10 @@ def criar_solicitacao(ator, dominio: str, objetivo: str, conversa: ConversationC
         raise ValidationError("Domínio desconhecido.")
     if conversa is None:
         conversa = ConversationContext.objects.create(usuario=ator, setor=setor)
-    elif conversa.usuario_id != ator.pk or conversa.encerrada_em is not None:
+    elif conversa.encerrada_em is not None or (
+        conversa.usuario_id != ator.pk if conversa.usuario_id else conversa.setor_id != setor.pk
+    ):
+        # Individual/mestre: só o dono. Conversa do setor: quem é do setor (M8).
         raise PermissaoNegada("Conversa indisponível.")
     solicitacao = RequestContext(conversa=conversa, usuario=ator, setor=setor, dominio=dominio, objetivo=objetivo)
     solicitacao.full_clean()

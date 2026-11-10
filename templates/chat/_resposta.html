@@ -1,0 +1,63 @@
+{% with f=m.ficha %}
+<div class="msg ia">
+  {% for linha in m.texto.splitlines %}{% if linha %}<p>{{ linha }}</p>{% endif %}{% endfor %}
+  {% for e in f.erros %}<p class="erro">{{ e }}</p>{% endfor %}
+
+  {% if f.ambiguidade %}
+    <p><strong>{{ f.ambiguidade }}</strong></p>
+    {% if f.opcoes and editavel %}
+      <div class="opcoes">
+        {% for o in f.opcoes %}
+          <form method="post" action="{% url 'chat:mensagem' conversa.pk %}"
+                hx-post="{% url 'chat:mensagem' conversa.pk %}" hx-target="#conversa" hx-swap="outerHTML">
+            {% csrf_token %}<input type="hidden" name="mensagem" value="{{ o }}"><button type="submit">{{ o }}</button>
+          </form>
+        {% endfor %}
+      </div>
+    {% endif %}
+  {% endif %}
+
+  {% if f.perguntas or f.criterios %}
+    <article class="ficha {% if f.estado == 'pronta' %}pronta{% elif f.estado == 'bloqueada' %}bloqueada{% else %}pendente{% endif %}">
+      <header><strong>{{ f.objetivo|default:"Solicitação" }}</strong><span class="estado">{{ f.estado_nome }}</span></header>
+      <dl>
+        {% for c in f.criterios %}
+          <div><dt>{{ c.nome }}</dt><dd>{{ c.valor }} <span class="origem">{{ c.origem }}</span></dd></div>
+        {% endfor %}
+        {% for p in f.perguntas %}
+          <div class="falta">
+            <dt>{{ p.nome }}{% if p.conflito %} (em conflito){% endif %}</dt>
+            <dd>
+              {% if editavel %}
+                <form class="linha" method="post" action="{% url 'chat:parametro' conversa.pk %}"
+                      hx-post="{% url 'chat:parametro' conversa.pk %}" hx-target="#conversa" hx-swap="outerHTML">
+                  {% csrf_token %}<input type="hidden" name="codigo" value="{{ p.codigo }}">
+                  {% if p.tipo == tipos.DATA %}<input type="date" name="valor" required aria-label="{{ p.nome }}">
+                  {% elif p.tipo == tipos.PERIODO %}<input type="date" name="inicio" required aria-label="Início"> a <input type="date" name="fim" required aria-label="Fim">
+                  {% elif p.tipo == tipos.ESCOLHA or p.tipo == tipos.FILIAL %}<select name="valor" required aria-label="{{ p.nome }}">{% for o in p.opcoes %}<option value="{{ o }}">{{ o }}</option>{% endfor %}</select>
+                  {% elif p.tipo == tipos.BOOLEANO %}<select name="valor" aria-label="{{ p.nome }}"><option value="sim">sim</option><option value="nao">não</option></select>
+                  {% elif p.tipo == tipos.NUMERO %}<input type="number" name="valor" step="any" required aria-label="{{ p.nome }}">
+                  {% else %}<input type="text" name="valor" maxlength="200" autocomplete="off" required aria-label="{{ p.nome }}">{% endif %}
+                  <button type="submit" class="secundario">Confirmar</button>
+                </form>
+              {% else %}<span class="sutil">pendente</span>{% endif %}
+            </dd>
+          </div>
+        {% endfor %}
+      </dl>
+      {% if editavel or f.estado == 'pronta' %}
+        <footer>
+          {% if f.estado == 'pronta' %}<button type="button" disabled title="Chega na Etapa 5">Executar consulta</button>{% endif %}
+          {% if m.solicitacao and m.solicitacao.estado != 'cancelada' and m.solicitacao.estado != 'concluida' %}
+            <form method="post" action="{% url 'chat:cancelar' conversa.pk %}"
+                  hx-post="{% url 'chat:cancelar' conversa.pk %}" hx-target="#conversa" hx-swap="outerHTML">
+              {% csrf_token %}<button type="submit" class="texto">Cancelar solicitação</button>
+            </form>
+          {% endif %}
+        </footer>
+      {% endif %}
+    </article>
+  {% endif %}
+  {% if f.provedor == "teste" %}<p class="nota">Interpretado pelo provedor de teste (sem IA).</p>{% endif %}
+</div>
+{% endwith %}

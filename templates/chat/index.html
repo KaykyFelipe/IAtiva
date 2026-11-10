@@ -1,10 +1,21 @@
-{% extends "base.html" %}
-{% block title %}Chat · IAtiva{% endblock %}
-{% block content %}
-<section class="cartao">
-  <h1>Chat</h1>
-  <p class="aviso">Pergunte sobre contas a receber. O sistema entende a pergunta, pede o que faltar e
-    prepara a consulta. A execução no ERP chega na Etapa 5. Sua mensagem não é armazenada.</p>
-  {% include "chat/_painel.html" %}
-</section>
-{% endblock %}
+{% load static %}<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  {# Histórico do htmx desativado: ele guardaria cópias das páginas no armazenamento do navegador. #}
+  <meta name="htmx-config" content='{"historyEnabled":false,"historyCacheSize":0,"refreshOnHistoryMiss":true,"includeIndicatorStyles":false,"allowEval":false,"allowScriptTags":false,"selfRequestsOnly":true}'>
+  <title>{% if conversa %}{{ conversa.titulo|default:"Conversa" }} · {% endif %}IAtiva</title>
+  <link rel="stylesheet" href="{% static 'css/chat.css' %}">
+  <script src="{% static 'vendor/htmx-2.0.4.min.js' %}" defer></script>
+  <script src="{% static 'js/chat.js' %}" defer></script>
+</head>
+<body>
+<div class="app" id="app">
+  {% include "chat/_lateral.html" %}
+  <main class="principal">
+    {% include "chat/_conversa.html" %}
+  </main>
+</div>
+</body>
+</html>
