@@ -25,7 +25,7 @@ from iativa.memory.resolucao import RESOLVIDO, resolver
 from iativa.metadata.catalogo import abrir_catalogo
 
 from .compilador import PlanoInvalido, compilar
-from .executor import executar
+from .executor import ValorRecusado, executar
 from .plano import montar
 from .validador import ConsultaRecusada, validar
 
@@ -112,8 +112,11 @@ def executar_solicitacao(user, s: RequestContext) -> Resultado:
             comp = compilar(plano, cat, cfg["limite_linhas"])
             permitidas = {t.fisica for t in cat.tabelas([plano.base] + [j.tabela for j in plano.juncoes]).values()}
             validar(comp.sql, permitidas, cfg["limite_linhas"] + 1)
-            linhas, truncado = executar(cat, comp.sql, comp.params, cfg["limite_linhas"], cfg["timeout_s"])
-    except (ConsultaRecusada, PlanoInvalido) as exc:
+            linhas, truncado = executar(
+                cat, comp.sql, comp.params, cfg["limite_linhas"], cfg["timeout_s"],
+                validar_final=lambda sql: validar(sql, permitidas, cfg["limite_linhas"] + 1),
+            )
+    except (ConsultaRecusada, PlanoInvalido, ValorRecusado) as exc:
         return _encerrar(user, s, E.FALHOU, inicio, 0, f"Consulta recusada pelo validador: {exc}")
     except Exception as exc:  # rede, tempo, banco: sem detalhes (podem conter dados)
         return _encerrar(user, s, E.FALHOU, inicio, 0,

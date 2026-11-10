@@ -103,6 +103,7 @@ Aprovadas em 2026-11-09 por Kayky Felipe (chat), com as opções recomendadas na
 | T26 | 2026-11-10 | Validação por AST com `sqlglot` (T-SQL): um SELECT, sem INTO/UNION/subconsulta/comandos/OPENROWSET, só tabelas permitidas sem banco/servidor no nome, D_E_L_E_T_ e filial em cada tabela, TOP obrigatório. | Em validação |
 | T27 | 2026-11-10 | Execução na mesma conexão somente leitura do catálogo (login conferido a cada abertura), até 500 linhas e 30 s. Antes de executar, reconfere permissões, filiais, parâmetros e metadados. Chave repetida no resultado → "não validada". | Em validação |
 | T28 | 2026-11-10 | Resultado só em memória na resposta; o histórico guarda "consulta executada, N linhas"; reabrir = "Executar de novo" (nova solicitação com os mesmos valores). Auditoria: duração e número de linhas. | Em validação |
+| T30 | 2026-11-10 | No SQL Server os valores vão como literais (não parâmetros): na homologação a mesma consulta parametrizada estourava o tempo (HYT00) e com literais rodava em 0,0 s. Só valores do plano, restritos a `[0-9A-Za-z %-]` (até 40 caracteres, sem aspas); o SQL final é revalidado pela árvore sintática antes de executar. Na base sintética continuam parâmetros. | Em validação |
 | T29 | 2026-11-10 | **Premissas a confirmar com o Financeiro (informação 8):** excluídos tipos RA, NCC, PR e abatimentos (tipo terminado em "-"); usa o saldo atual (pagamentos após a data de corte já descontados); atraso = vencimento real antes de (corte − tolerância). Mostradas ao usuário em cada resultado. | Em validação |
 
 ## Organização do trabalho

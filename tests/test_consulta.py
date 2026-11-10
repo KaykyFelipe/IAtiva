@@ -82,6 +82,38 @@ def test_validador_recusa(sql):
         validar(sql, PERMITIDAS, 10)
 
 
+def test_embutir_literais_so_valores_seguros():
+    from iativa.query.executor import ValorRecusado, embutir_literais
+
+    sql = embutir_literais("SELECT TOP 2 a FROM T WHERE x = ? AND y > ? AND z NOT LIKE ?", ("001001", 0, "%-"))
+    assert sql == "SELECT TOP 2 a FROM T WHERE x = '001001' AND y > 0 AND z NOT LIKE '%-'"
+    for ruim in ("a'; DROP TABLE x --", "x'", "a;b", "a" * 41, True, None):
+        with pytest.raises(ValorRecusado):
+            embutir_literais("SELECT ?", (ruim,))
+    with pytest.raises(ValorRecusado):
+        embutir_literais("SELECT ?, ?", ("a",))
+
+
+def test_caminho_sql_server_usa_literais_e_revalida(ana, monkeypatch):
+    from iativa.query import executor
+
+    class Cursor:
+        def execute(self, sql, *params):
+            self.sql, self.params = sql, params
+
+        def fetchmany(self, n):
+            return []
+
+        def close(self):
+            pass
+
+    cursor = Cursor()
+    cat = type("C", (), {"dialeto": "tsql", "conn": type("K", (), {"cursor": lambda self: cursor})()})()
+    validados = []
+    executor.executar(cat, BOM, ("  ", "001001"), 10, 5, validar_final=validados.append)
+    assert cursor.params == () and "'001001'" in cursor.sql and validados == [cursor.sql]
+
+
 # --- Compilador -----------------------------------------------------------------------------
 
 def test_compilador_usa_nomes_do_catalogo_e_parametros():
