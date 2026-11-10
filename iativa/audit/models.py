@@ -25,6 +25,8 @@ class Acao(models.TextChoices):
     PARAMETRO_REVOGADO = "parametro_revogado", "Parâmetro revogado"
     ACESSO_NEGADO = "acesso_negado", "Acesso negado"
     EXPURGO = "expurgo", "Expurgo por retenção"
+    METADADO_CONSULTADO = "metadado_consultado", "Metadado consultado"
+    CONHECIMENTO_CONSULTADO = "conhecimento_consultado", "Conhecimento consultado"
 
 
 class Entidade(models.TextChoices):
@@ -32,6 +34,8 @@ class Entidade(models.TextChoices):
     PARAMETRO = "parametro", "Valor de parâmetro"
     PERMISSAO = "permissao", "Permissão"
     RETENCAO = "retencao", "Retenção"
+    METADADO = "metadado", "Metadado"
+    CONHECIMENTO = "conhecimento", "Conhecimento"
 
 
 class Resultado(models.TextChoices):

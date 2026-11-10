@@ -16,6 +16,8 @@ MODELOS = [
     "iativa_chat_conversationcontext",
     "iativa_chat_requestcontext",
     "iativa_audit_operationaudit",
+    "iativa_metadata_dominiosetor",
+    "iativa_metadata_restricaometadado",
 ]
 
 

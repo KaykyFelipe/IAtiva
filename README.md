@@ -2,10 +2,10 @@
 
 Chat corporativo para consultas de leitura ao TOTVS Protheus em linguagem natural.
 
-> **Fase atual: Etapa 2, autorização e memória de parâmetros (em validação).** Ainda não existe
-> interpretação de perguntas nem consulta ao ERP. O chat apenas confirma o recebimento da mensagem,
-> sem armazená-la. Setores, permissões, solicitações e memória de parâmetros já existem no backend
-> e no admin.
+> **Fase atual: Etapa 3, conhecimento e metadados (em validação, só fontes sintéticas).** Ainda não
+> existe interpretação de perguntas nem consulta de dados ao ERP. O chat apenas confirma o
+> recebimento da mensagem, sem armazená-la. Setores, permissões, memória de parâmetros, documentos
+> de conhecimento aprovados e descoberta de metadados já existem no backend e no admin.
 > Acompanhamento: [`STATUS.md`](STATUS.md) · decisões: [`DECISOES.md`](DECISOES.md) ·
 > plano: [`PLANO.md`](PLANO.md) · requisitos: [`docs/PEDIDO_INICIAL.md`](docs/PEDIDO_INICIAL.md).
 
@@ -141,6 +141,42 @@ conversas vazias. A auditoria só é removida quando `IATIVA_RETENCAO["auditoria
 (prazo ainda "a definir"). Imprime só contagens. Agende uma execução diária no servidor; com Docker:
 `docker compose exec app python manage.py expurgar_retencao`.
 
+## Conhecimento e metadados (Etapa 3)
+
+Só fontes sintéticas (`IATIVA_METADADOS = {"fonte": "sintetico"}`). O Protheus real exige liberação
+explícita e as informações 4–8 do `STATUS.md`.
+
+- **Conhecimento:** documentos `.md` em `knowledge/` com cabeçalho (origem, versão, responsável,
+  situação, aprovação). Só os aprovados e sem conteúdo proibido (CPF, CNPJ, credenciais) são
+  recuperados, e só os trechos relevantes. Formato em [`knowledge/README.md`](knowledge/README.md).
+- **Metadados:** dicionário no formato SX2/SX3/SIX/SX9 combinado com a estrutura física. Campo
+  virtual, campo sem coluna física e coluna fora do dicionário não são consultáveis.
+- **Acesso:** no admin, **Domínios por setor** habilita um domínio para um setor; o usuário precisa
+  de "consultar" nesse setor. **Restrições de metadados** escondem tabelas ou campos, exceto para os
+  setores permitidos.
+
+Depois de atualizar, gere de novo a base sintética (agora inclui o dicionário) e os exemplos:
+
+```bash
+python manage.py seed_synthetic --substituir
+```
+
+```bash
+python manage.py seed_exemplos
+```
+
+Conferência:
+
+```bash
+python manage.py validar_conhecimento
+```
+
+```bash
+python manage.py descobrir_metadados USUARIO --tabelas SE1 SA1 --buscar "baixa parcial"
+```
+
+`descobrir_metadados` mostra só metadados e trechos aprovados, com as permissões do usuário.
+
 ## Execução com Docker (banco e aplicação)
 
 Este é o ambiente de **desenvolvimento** em containers Linux (imagem Ubuntu 24.04), pensado para o
@@ -274,6 +310,8 @@ qualquer tentativa de conexão de rede faz o teste falhar. Os testes cobrem:
 | `tests/test_solicitacoes.py` | máquina de estados, dono, cancelamento, visibilidade, liberação determinística |
 | `tests/test_auditoria_retencao.py` | auditoria imutável e sem valores, expurgo por retenção |
 | `tests/test_admin_etapa2.py` | páginas do admin e aprovação pelo admin respeitando políticas |
+| `tests/test_conhecimento.py` | cabeçalho, aprovação, conteúdo proibido e busca de documentos |
+| `tests/test_metadados.py` | adaptadores, catálogo, descoberta progressiva e restrições de acesso |
 
 ## Estrutura
 
@@ -284,11 +322,13 @@ iativa/accounts/        setores, perfis, políticas de acesso e autorização (a
 iativa/chat/            chat mínimo (mensagem transitória), contextos e estados da solicitação
 iativa/memory/          definições e valores de parâmetros, revisões, resolução por precedência
 iativa/audit/           auditoria sanitizada e expurgo por retenção
-iativa/synthetic_erp/   esquema, gerador e conexão somente leitura da base sintética
+iativa/knowledge/       carga, validação e busca de documentos aprovados
+iativa/metadata/        adaptadores (dicionário SX, físico SQLite, INFORMATION_SCHEMA), catálogo, descoberta
+iativa/synthetic_erp/   esquema, dicionário, gerador e conexão somente leitura da base sintética
+knowledge/              documentos de conhecimento (hoje só sintéticos)
 templates/, static/     interface (templates Django + htmx 2.0.4 servido localmente)
 tests/                  testes automatizados
 docs/                   pedido inicial (requisitos)
 ```
 
-As demais apps da arquitetura (conhecimento, metadados, agente e consulta) serão criadas nas etapas
-correspondentes.
+As apps de agente e consulta serão criadas nas etapas correspondentes.

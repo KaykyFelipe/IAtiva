@@ -70,4 +70,10 @@ class Command(BaseCommand):
                 definicao.full_clean()
                 definicao.save()
                 criados += 1
+        # Etapa 3: o setor de cobrança (exemplo) usa o domínio de contas a receber.
+        from iativa.metadata.models import DominioSetor
+
+        cobranca = Department.objects.get(codigo="financeiro-cobranca")
+        _, novo = DominioSetor.objects.get_or_create(dominio="financeiro_receber", setor=cobranca)
+        criados += novo
         self.stdout.write(f"Exemplos prontos ({criados} registro(s) novo(s)).")

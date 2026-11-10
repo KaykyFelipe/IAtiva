@@ -11,7 +11,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 from pathlib import Path
 
-from . import schema
+from . import dicionario, schema
 
 DEFAULT_SEED = 20260101
 REFERENCE_DATE = date(2026, 1, 1)
@@ -131,6 +131,10 @@ def _populate(conn: sqlite3.Connection, seed: int) -> dict:
                 })
                 counts["SE5010"] += 1
 
+    for tabela, linhas in dicionario.linhas().items():
+        for linha in linhas:
+            _insert(conn, dicionario.nome_fisico(tabela), {"D_E_L_E_T_": " ", **linha})
+
     for chave, valor in (
         ("origem", "sintetico"),
         ("versao_esquema", schema.SCHEMA_VERSION),
@@ -153,7 +157,7 @@ def generate(path: Path, seed: int = DEFAULT_SEED, replace: bool = False) -> dic
     try:
         conn = sqlite3.connect(tmp_path)
         try:
-            for statement in schema.ddl():
+            for statement in schema.ddl() + dicionario.ddl():
                 conn.execute(statement)
             counts = _populate(conn, seed)
             conn.commit()

@@ -2,7 +2,7 @@
 
 **Atualizado em:** 2026-11-10
 **Etapa atual:** 3 — Conhecimento e metadados
-**Situação:** **aguardando aprovação do plano.** Etapa 2 aprovada em 2026-11-10. Informação 3 (versões e collation) recebida; informações 4–8 pendentes.
+**Situação:** **implementada com fontes sintéticas, aguardando validação.** Plano aprovado em 2026-11-10. Informação 3 recebida; informações 4–8 pendentes para ligar o Protheus real.
 
 ## Histórico
 
@@ -18,6 +18,32 @@
 - `iativa/audit`: `OperationAudit` imutável, só códigos e contagens; comando `expurgar_retencao`.
 - Comando `seed_exemplos` (setores e definições fictícios). Admin com aprovação/rejeição de propostas via serviços.
 - 161 testes passando (10 da rotina M4 pulados no Windows), sem rede.
+
+- Etapa 3 — Conhecimento e metadados: plano aprovado em 2026-11-10; implementação com fontes sintéticas entregue para validação em 2026-11-10 (T14–T18).
+
+## Etapa 3 — o que foi entregue
+
+- `iativa/knowledge`: documentos `knowledge/**/*.md` com cabeçalho (origem, versão, responsável, situação, aprovação); só aprovados e sem CPF/CNPJ/credenciais são recuperáveis; busca local (BM25) com limite de trechos e tamanho; comando `validar_conhecimento`. Quatro documentos sintéticos de exemplo.
+- `iativa/metadata`: adaptadores `DicionarioProtheus` (SX2/SX3/SIX/SX9), `FisicoSqlite` e `InformationSchemaSqlServer` (consultas fixas e parametrizadas); `Catalogo` junta dicionário e estrutura física; descoberta progressiva (domínios → entidades → campos → relacionamentos → conhecimento), auditada só com etapa e contagem; `DominioSetor` e `RestricaoMetadado` no admin; comando `descobrir_metadados`.
+- Base sintética versão 2: inclui dicionário SX sintético (com campo virtual, campo sem coluna física e linha excluída para teste).
+- 201 testes passando (10 da rotina M4 pulados no Windows), sem rede.
+
+## Checklist de validação da Etapa 3
+
+- [ ] Só documentos aprovados são recuperados, com origem, versão e aprovação; conteúdo proibido recusa o documento.
+- [ ] Busca devolve poucos trechos relevantes, nunca a base inteira.
+- [ ] Descoberta em camadas; detalhe de no máximo 3 tabelas por vez; domínio com lista fechada de tabelas.
+- [ ] Sem acesso ao domínio (setor não habilitado ou sem "consultar"), nada é descoberto; superusuário não tem acesso automático.
+- [ ] Restrições escondem tabelas/campos, relacionamentos que os usam e documentos que citam tabela oculta.
+- [ ] Campo virtual, sem coluna física ou fora do dicionário não é consultável; personalização vem do dicionário, não do prefixo.
+- [ ] Conhecimento sintético nunca é usado com fonte real; fonte real recusada até liberação.
+- [ ] No servidor: `seed_synthetic --substituir` e `seed_exemplos` executados; `descobrir_metadados` conferido.
+
+## Pendências da Etapa 3
+
+- [ ] Informação 4: forma de acesso ao dicionário real (o adaptador assume tabelas SX no banco).
+- [ ] Informações 5–8 e liberação explícita para ler metadados da base de homologação.
+- [ ] Documentos de conhecimento reais, aprovados pelo responsável do Financeiro.
 
 ## Pendências da Etapa 2 (não bloqueiam a Etapa 3)
 
@@ -73,4 +99,4 @@ Necessárias antes da Etapa 7 (piloto):
 
 ## Próximo passo
 
-Aprovar o plano da Etapa 3 (começa só com fontes sintéticas). Informações 4–8 quando disponíveis; o Protheus real só entra com liberação explícita.
+Validar a Etapa 3 pelo checklist acima. Informações 4–8 quando disponíveis; o Protheus real só entra com liberação explícita.

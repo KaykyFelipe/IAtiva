@@ -29,6 +29,8 @@ INSTALLED_APPS = [
     "iativa.chat",
     "iativa.memory",
     "iativa.audit",
+    "iativa.knowledge",
+    "iativa.metadata",
     "iativa.synthetic_erp",
 ]
 
@@ -121,6 +123,11 @@ IATIVA_RETENCAO = {
     "valor_dado_pessoal_dias": 30,
     "auditoria_dias": None,
 }
+
+# Etapa 3 — conhecimento aprovado e fonte de metadados. Só a fonte sintética está liberada (R5);
+# o Protheus real exige liberação explícita (DECISOES.md) e as informações 4–8 do STATUS.md.
+IATIVA_CONHECIMENTO_DIR = BASE_DIR / "knowledge"
+IATIVA_METADADOS = {"fonte": "sintetico"}
 
 LOGGING = {
     "version": 1,

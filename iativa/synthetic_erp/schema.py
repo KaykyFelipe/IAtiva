@@ -10,7 +10,7 @@ e não inferidos pelo prefixo do nome.
 """
 
 MARKER_TABLE = "IATIVA_SINTETICO"
-SCHEMA_VERSION = "1"
+SCHEMA_VERSION = "2"  # 2: inclui dicionário sintético (SX2, SX3, SIX, SX9) — ver dicionario.py
 
 # Descrição das tabelas: usada pelos testes e, futuramente, pelo adaptador de metadados sintético.
 TABLES = {
