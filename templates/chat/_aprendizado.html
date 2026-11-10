@@ -16,13 +16,15 @@
           <option value="">Sem período</option>
           {% for c in aprendizado.datas %}<option value="{{ c.nome }}">{{ c.nome }} · {{ c.titulo }}</option>{% endfor %}
         </select></dd></div>
+      <div><dt></dt><dd class="sutil">Filtros fixos são opcionais e restringem <strong>todas</strong> as execuções a um valor exato
+        (ex.: <code>RA_SITFOLH</code> = <code>D</code> para só demitidos). Deixe em branco se não precisar. Não use para escolher colunas.</dd></div>
       {% for n in faixa_filtros %}
         <div><dt>Filtro fixo {{ forloop.counter }} (opcional)</dt>
           <dd class="linha">
             <select name="filtro_campo_{{ n }}" aria-label="Campo do filtro {{ forloop.counter }}"><option value="">—</option>
               {% for c in aprendizado.campos %}<option value="{{ c.nome }}">{{ c.nome }} · {{ c.titulo }}</option>{% endfor %}
             </select>
-            = <input name="filtro_valor_{{ n }}" maxlength="40" aria-label="Valor do filtro {{ forloop.counter }}">
+            = <input name="filtro_valor_{{ n }}" maxlength="40" placeholder="valor exato, ex.: D" aria-label="Valor do filtro {{ forloop.counter }}">
           </dd></div>
       {% endfor %}
       <div><dt>Setores que podem usar</dt>

@@ -172,6 +172,11 @@ def salvar_proposta(user, alias: str, dados) -> ConsultaModelo:
             continue
         if campo not in por_nome or not CAMPO_RE.match(campo) or not VALOR_FIXO_RE.match(valor):
             raise ValidationError("Filtro fixo inválido (use só letras, números, espaço e hífen).")
+        titulo = (por_nome[campo].titulo or "").strip().lower()
+        if valor.lower() in (titulo, campo.lower()):
+            # Ex.: RA_NOME = "Nome": parece engano (quis escolher a coluna), e zeraria o resultado.
+            raise ValidationError(f"O filtro {campo} = “{valor}” parece o nome do campo, não um valor. "
+                                  "Deixe o filtro em branco para mostrar o campo como coluna.")
         filtros.append({"campo": campo, "valor": valor})
     setores = list(Department.objects.filter(pk__in=[s for s in lista("setores") if str(s).isdigit()], ativo=True))
     if not setores:

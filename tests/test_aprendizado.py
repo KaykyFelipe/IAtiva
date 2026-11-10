@@ -88,6 +88,8 @@ def test_proposta_valida_contra_catalogo(admin_ti, ti):
     assert "E1_SALDO" in cm.spec["ocultos"]  # não marcado = oculto
     with pytest.raises(ValidationError):
         aprendizado.salvar_proposta(admin_ti, "SE1", _dados(ti, filtro_campo_0="E1_TIPO", filtro_valor_0="NF'; DROP"))
+    with pytest.raises(ValidationError):  # valor igual ao título do campo: engano comum
+        aprendizado.salvar_proposta(admin_ti, "SE1", _dados(ti, filtro_campo_0="E1_TIPO", filtro_valor_0="Tipo"))
     ruim = _dados(ti)
     ruim.setlist("colunas", ["E1_XNOMCLI"])  # virtual
     with pytest.raises(ValidationError):
