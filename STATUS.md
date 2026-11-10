@@ -4,6 +4,12 @@
 **Etapa atual:** 5 — Consulta de leitura
 **Situação:** **implementada, aguardando validação.** Etapa 4 aprovada em 2026-11-10. Execução na homologação, somente leitura.
 
+## Mudança M9 — aprendizado de novas consultas (2026-11-10)
+
+- Administrador pergunta algo desconhecido → busca no dicionário → "Aprender com XXX" → formulário (colunas, período, filtros fixos, setores) → proposta testada no compilador/validador → aprovação por outra pessoa com "aprovar definições" → disponível para os setores escolhidos.
+- `ConsultaModelo` (app agent), objetivos dinâmicos em `contratos.py`, plano `montar_modelo`, telas no chat.
+- Pendências: com um único administrador, a aprovação exige `IATIVA_APRENDIZADO_AUTOAPROVACAO=1` ou um segundo aprovador; tabelas de RH exigem posição do DPO antes de uso real.
+
 ## Etapa 5 — o que foi entregue
 
 - `iativa/query`: plano estruturado por objetivo (`plano.py`), compilador para T-SQL com nomes do catálogo (`compilador.py`), validação AST com `sqlglot` (`validador.py`), execução somente leitura com limite de linhas e tempo (`executor.py`), serviço com reconferência, estados e checagem de duplicação (`servico.py`).

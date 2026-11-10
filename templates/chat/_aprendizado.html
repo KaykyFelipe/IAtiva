@@ -1,0 +1,41 @@
+{# Formulário de aprendizado (M9). Transitório: some ao recarregar. Só estrutura, nenhum dado. #}
+<div class="msg ia">
+  <p>Vou aprender a consultar <strong>{{ aprendizado.alias }} · {{ aprendizado.nome }}</strong>. Escolha o que a consulta deve mostrar.
+    A filial ({{ aprendizado.campo_filial }}) é sempre pedida e filtrada.</p>
+  <form class="ficha pendente aprender" method="post" action="{% url 'chat:aprender_salvar' conversa.pk %}"
+        hx-post="{% url 'chat:aprender_salvar' conversa.pk %}" hx-target="#conversa" hx-swap="outerHTML" hx-disabled-elt="find button">
+    {% csrf_token %}
+    <input type="hidden" name="tabela" value="{{ aprendizado.alias }}">
+    <dl>
+      <div><dt><label for="ap-nome">Nome da consulta</label></dt>
+        <dd><input id="ap-nome" name="nome" maxlength="120" required placeholder="Ex.: Funcionários demitidos no período"></dd></div>
+      <div><dt><label for="ap-desc">Descrição</label></dt>
+        <dd><input id="ap-desc" name="descricao" maxlength="300" placeholder="O que a consulta responde"></dd></div>
+      <div><dt><label for="ap-data">Período sobre o campo</label></dt>
+        <dd><select id="ap-data" name="campo_data">
+          <option value="">Sem período</option>
+          {% for c in aprendizado.datas %}<option value="{{ c.nome }}">{{ c.nome }} · {{ c.titulo }}</option>{% endfor %}
+        </select></dd></div>
+      {% for n in faixa_filtros %}
+        <div><dt>Filtro fixo {{ forloop.counter }} (opcional)</dt>
+          <dd class="linha">
+            <select name="filtro_campo_{{ n }}" aria-label="Campo do filtro {{ forloop.counter }}"><option value="">—</option>
+              {% for c in aprendizado.campos %}<option value="{{ c.nome }}">{{ c.nome }} · {{ c.titulo }}</option>{% endfor %}
+            </select>
+            = <input name="filtro_valor_{{ n }}" maxlength="40" aria-label="Valor do filtro {{ forloop.counter }}">
+          </dd></div>
+      {% endfor %}
+      <div><dt>Setores que podem usar</dt>
+        <dd class="opcoes-marcar">{% for s in aprendizado.setores %}<label><input type="checkbox" name="setores" value="{{ s.pk }}"> {{ s.nome }}</label>{% endfor %}</dd></div>
+    </dl>
+    <fieldset class="colunas">
+      <legend>Colunas a mostrar (até 15). Campos não marcados ficam ocultos — deixe de fora CPF, salário e outros dados sensíveis.</legend>
+      <div class="lista-campos">
+        {% for c in aprendizado.campos %}
+          <label><input type="checkbox" name="colunas" value="{{ c.nome }}"> <code>{{ c.nome }}</code> {{ c.titulo }}{% if c.personalizado %} <span class="origem">personalizado</span>{% endif %}</label>
+        {% endfor %}
+      </div>
+    </fieldset>
+    <footer><button type="submit">Salvar proposta</button></footer>
+  </form>
+</div>

@@ -127,6 +127,7 @@ def _ficha(r: orquestrador.Resposta) -> dict:
         "opcoes": r.opcoes,
         "erros": r.erros,
         "provedor": r.provedor,
+        "candidatos": r.candidatos,  # só metadados do dicionário (M9)
     }
 
 
@@ -235,10 +236,66 @@ def executar_de_novo(user, c: ConversationContext, solicitacao_id):
     return _executar_e_registrar(user, c, nova)
 
 
+def formulario_aprendizado(user, c: ConversationContext, alias: str) -> dict:
+    from iativa.agent import aprendizado
+
+    if not pode_escrever(user, c):
+        raise PermissaoNegada("Somente leitura nesta conversa.")
+    return aprendizado.campos_da_tabela(user, alias)
+
+
+@transaction.atomic
+def salvar_aprendizado(user, c: ConversationContext, alias: str, dados):
+    from iativa.agent import aprendizado
+
+    if not pode_escrever(user, c):
+        raise PermissaoNegada("Somente leitura nesta conversa.")
+    cm = aprendizado.salvar_proposta(user, alias, dados)
+    Mensagem.objects.create(conversa=c, papel=Papel.USUARIO, autor=user, texto=f"Ensinar a consulta “{cm.nome}”.")
+    _mensagem_modelo(c, cm, "Proposta criada. A consulta só passa a valer depois de aprovada por quem aprova definições.")
+    _tocar(c, "")
+    return cm
+
+
+def _mensagem_modelo(c, cm, texto):
+    ficha = {"tipo": "modelo", "modelo": cm.pk, "nome": cm.nome, "tabela": cm.tabela,
+             "colunas": [x["rotulo"] for x in cm.spec["colunas"]], "campo_data": cm.spec.get("campo_data", ""),
+             "filtros": cm.spec.get("filtros_fixos", []), "setores": [s.nome for s in cm.setores.all()],
+             "situacao": cm.get_situacao_display()}
+    return Mensagem.objects.create(conversa=c, papel=Papel.IA, texto=texto, ficha=ficha)
+
+
+@transaction.atomic
+def decidir_aprendizado(user, c: ConversationContext, modelo_id: int, aprovar: bool):
+    from iativa.agent import aprendizado
+    from iativa.agent.models import ConsultaModelo
+
+    if not pode_ver(user, c):
+        raise PermissaoNegada("Conversa indisponível.")
+    cm = ConsultaModelo.objects.filter(pk=modelo_id).first()
+    if cm is None or not c.mensagens.filter(ficha__modelo=modelo_id).exists():
+        raise PermissaoNegada("Consulta indisponível.")
+    cm = aprendizado.aprovar(user, cm) if aprovar else aprendizado.rejeitar(user, cm)
+    texto = (f"Consulta “{cm.nome}” aprovada. Já pode perguntar por ela." if aprovar
+             else f"Consulta “{cm.nome}” rejeitada.")
+    _mensagem_modelo(c, cm, texto)
+    _tocar(c, "")
+
+
 def mensagens_com_interacao(user, c: ConversationContext) -> list[dict]:
     """Histórico para a tela. Só a última ficha de cada solicitação em andamento do próprio
     usuário fica editável; as anteriores aparecem como registro."""
+    from iativa.agent.aprendizado import pode_aprender, pode_aprovar
+    from iativa.agent.models import ConsultaModelo
+
     msgs = list(c.mensagens.select_related("autor", "solicitacao"))
+    modelos = {cm.pk: cm for cm in ConsultaModelo.objects.filter(
+        pk__in=[m.ficha.get("modelo") for m in msgs if m.ficha.get("modelo")])}
+    ultima_modelo = {}
+    for m in msgs:
+        if m.ficha.get("modelo"):
+            ultima_modelo[m.ficha["modelo"]] = m.pk
+    administrador = pode_aprender(user)
     ultima_por_solicitacao = {}
     for m in msgs:
         if m.solicitacao_id and m.ficha:
@@ -253,6 +310,9 @@ def mensagens_com_interacao(user, c: ConversationContext) -> list[dict]:
             "editavel": ultima_dono and s.estado == "aguardando_parametros",
             "executavel": ultima_dono and s.estado == "pronta",
             "repetivel": ultima_dono and m.ficha.get("tipo") in ("executada", "falha_execucao"),
+            "aprendivel": administrador and m.ficha.get("tipo") == "aprendizado" and m.pk == msgs[-1].pk,
+            "aprovavel": bool(m.ficha.get("modelo") and ultima_modelo.get(m.ficha["modelo"]) == m.pk
+                              and m.ficha["modelo"] in modelos and pode_aprovar(user, modelos[m.ficha["modelo"]])),
         })
     return out
 

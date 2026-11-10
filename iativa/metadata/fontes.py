@@ -147,6 +147,17 @@ class DicionarioProtheus:
             for r in rows
         ]
 
+    def indice(self) -> tuple[list[tuple], list[tuple]]:
+        """Nomes de todas as tabelas (SX2) e títulos/descrições dos campos reais (SX3), para a
+        busca do aprendizado (M9). Só estrutura; nenhum dado. A comparação (sem acento, por
+        radical) é feita em Python porque o LIKE com collation binária não ignora acentos."""
+        tabelas = self._consultar(f"SELECT X2_CHAVE, X2_NOME FROM {self.sx2} WHERE D_E_L_E_T_ = ' '", ())
+        campos = self._consultar(
+            f"SELECT X3_ARQUIVO, X3_CAMPO, X3_TITULO, X3_DESCRIC FROM {self.sx3} "
+            "WHERE D_E_L_E_T_ = ' ' AND X3_CONTEXT <> 'V'", ()
+        )
+        return tabelas, campos
+
     def chave_primaria(self, alias: str) -> tuple[str, ...]:
         validar_alias(alias)
         rows = self._consultar(

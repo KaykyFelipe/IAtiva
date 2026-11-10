@@ -9,6 +9,7 @@ from django.db import models
 
 class Dominio(models.TextChoices):
     FINANCEIRO_RECEBER = "financeiro_receber", "Financeiro — Contas a Receber"
+    APRENDIDO = "aprendido", "Consulta aprendida (M9)"
 
 
 class EstadoSolicitacao(models.TextChoices):

@@ -137,6 +137,9 @@ IATIVA_ERP_SUFIXO = "010"
 # Etapa 4 — agente. "teste" = FakeProvider (regras, sem rede). "anthropic" exige chave e
 # envio liberado (posição do DPO/LGPD, D5/D6). Só pergunta, catálogo, parâmetros e trechos
 # aprovados vão ao modelo; nunca linhas de resultado.
+# M9 — consultas aprendidas: quem propõe não aprova, salvo se liberado aqui.
+IATIVA_APRENDIZADO_AUTOAPROVACAO = False
+
 # Etapa 5 — execução somente leitura: linhas e tempo máximos por consulta.
 IATIVA_CONSULTA = {"limite_linhas": 500, "timeout_s": 30}
 

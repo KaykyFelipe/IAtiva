@@ -140,6 +140,22 @@ class FakeProvider(LLMProvider):
 _DATA = r"(\d{2}/\d{2}/\d{4}|\d{4}-\d{2}-\d{2})"
 
 
+def _radicais(texto: str) -> set[str]:
+    import unicodedata
+
+    sem = unicodedata.normalize("NFKD", texto.lower()).encode("ascii", "ignore").decode()
+    return {p[:5] for p in re.findall(r"[a-z]{5,}", sem)}
+
+
+def _aprendido(entrada: EntradaModelo, t: str) -> str:
+    """Consulta aprendida cujo nome compartilha um radical com a mensagem (só no provedor de teste)."""
+    radicais = _radicais(t)
+    for o in entrada.objetivos:
+        if o["codigo"].startswith("aprendido-") and _radicais(o["nome"]) & radicais:
+            return o["codigo"]
+    return ""
+
+
 def _regras(entrada: EntradaModelo) -> dict:
     t = entrada.mensagem.lower()
     atual = entrada.solicitacao_atual or {}
@@ -150,6 +166,8 @@ def _regras(entrada: EntradaModelo) -> dict:
         objetivo = "titulos-a-vencer"
     elif re.search(r"posi[cç][aã]o|situa[cç][aã]o do cliente", t):
         objetivo = "posicao-cliente"
+    else:
+        objetivo = _aprendido(entrada, t)
 
     params = []
     datas = re.findall(_DATA, t)

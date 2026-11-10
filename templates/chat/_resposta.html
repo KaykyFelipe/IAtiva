@@ -63,6 +63,52 @@
       {% endif %}
     </article>
   {% endif %}
+  {% if f.candidatos %}
+    <div class="candidatos">
+      {% for t in f.candidatos %}
+        <article class="ficha proposta">
+          <header><strong>{{ t.alias }} · {{ t.nome }}</strong>
+            {% if aprendivel %}
+              <form method="post" action="{% url 'chat:aprender' conversa.pk %}"
+                    hx-post="{% url 'chat:aprender' conversa.pk %}" hx-target="#conversa" hx-swap="outerHTML">
+                {% csrf_token %}<input type="hidden" name="tabela" value="{{ t.alias }}">
+                <button type="submit" class="secundario">Aprender com {{ t.alias }}</button>
+              </form>
+            {% endif %}
+          </header>
+          {% if t.campos %}
+            <dl>{% for c in t.campos %}<div><dt>{{ c.campo }}</dt><dd>{{ c.titulo }}</dd></div>{% endfor %}</dl>
+          {% endif %}
+        </article>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  {% if f.tipo == "modelo" %}
+    <article class="ficha {% if f.situacao == 'Aprovada' %}pronta{% elif f.situacao == 'Rejeitada' %}bloqueada{% else %}proposta{% endif %}">
+      <header><strong>{{ f.nome }}</strong><span class="estado">{{ f.situacao }}</span></header>
+      <dl>
+        <div><dt>Tabela</dt><dd>{{ f.tabela }}</dd></div>
+        <div><dt>Colunas</dt><dd>{{ f.colunas|join:", " }}</dd></div>
+        <div><dt>Período sobre</dt><dd>{{ f.campo_data|default:"sem período" }}</dd></div>
+        {% for x in f.filtros %}<div><dt>Filtro fixo</dt><dd>{{ x.campo }} = {{ x.valor }}</dd></div>{% endfor %}
+        <div><dt>Setores</dt><dd>{{ f.setores|join:", " }}</dd></div>
+      </dl>
+      {% if aprovavel %}
+        <footer>
+          <form method="post" action="{% url 'chat:aprender_decidir' conversa.pk f.modelo %}"
+                hx-post="{% url 'chat:aprender_decidir' conversa.pk f.modelo %}" hx-target="#conversa" hx-swap="outerHTML">
+            {% csrf_token %}<input type="hidden" name="decisao" value="aprovar"><button type="submit">Aprovar</button>
+          </form>
+          <form method="post" action="{% url 'chat:aprender_decidir' conversa.pk f.modelo %}"
+                hx-post="{% url 'chat:aprender_decidir' conversa.pk f.modelo %}" hx-target="#conversa" hx-swap="outerHTML">
+            {% csrf_token %}<input type="hidden" name="decisao" value="rejeitar"><button type="submit" class="texto">Rejeitar</button>
+          </form>
+        </footer>
+      {% endif %}
+    </article>
+  {% endif %}
+
   {% if repetivel %}
     <form class="opcoes" method="post" action="{% url 'chat:executar_de_novo' conversa.pk m.solicitacao_id %}"
           hx-post="{% url 'chat:executar_de_novo' conversa.pk m.solicitacao_id %}" hx-target="#conversa" hx-swap="outerHTML" hx-disabled-elt="find button">

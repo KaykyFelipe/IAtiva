@@ -231,6 +231,19 @@ valida a árvore sintática (`sqlglot`) e executa com até 500 linhas e 30 segun
 reabrir a conversa, use "Executar de novo". As premissas de negócio (tipos excluídos, saldo atual,
 regra de atraso) estão na decisão T29 e precisam da aprovação do Financeiro.
 
+## Aprendizado de novas consultas (M9)
+
+Quando um **administrador** pergunta algo que o sistema ainda não sabe consultar, ele busca no
+dicionário (SX2/SX3, sem acento e por radical) as tabelas relacionadas e oferece "Aprender com
+XXX". No formulário, o administrador escolhe nome, colunas (as não marcadas ficam ocultas), campo
+de data do período, até 3 filtros fixos e os setores que podem usar. A filial é sempre pedida.
+
+A proposta vira uma consulta-modelo (estrutura, não SQL), testada no compilador e no validador.
+Ela só vale depois de aprovada no chat por quem tem "aprovar definições" e não foi o autor
+(`IATIVA_APRENDIZADO_AUTOAPROVACAO=1` libera o autor). Depois disso, usuários dos setores
+escolhidos perguntam por ela normalmente. As consultas aprendidas aparecem, só para leitura, no
+admin em **Consultas aprendidas**.
+
 ## Execução com Docker (banco e aplicação)
 
 Este é o ambiente de **desenvolvimento** em containers Linux (imagem Ubuntu 24.04), pensado para o

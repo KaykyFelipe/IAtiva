@@ -1,10 +1,16 @@
 """Contratos de parâmetros: o que cada objetivo de consulta exige antes de executar.
 
-Lista fechada. O modelo só escolhe entre estes objetivos; os parâmetros obrigatórios vêm daqui,
-não do modelo. Cada código precisa existir como `ParameterDefinition` ativa; se faltar, a
-solicitação é bloqueada ("regra de negócio desconhecida").
+Duas origens:
+- objetivos fixos do Financeiro (abaixo), liberados pelo domínio `financeiro_receber`;
+- consultas aprendidas e **aprovadas** (M9, `ConsultaModelo`), liberadas aos setores escolhidos.
+
+O modelo só escolhe entre os objetivos que o usuário pode usar; os parâmetros obrigatórios vêm
+daqui. Cada código precisa existir como `ParameterDefinition` ativa.
 """
 from dataclasses import dataclass
+
+PREFIXO_APRENDIDO = "aprendido-"
+DOMINIO_APRENDIDO = "aprendido"
 
 
 @dataclass(frozen=True)
@@ -15,9 +21,10 @@ class Objetivo:
     descricao: str
     tabelas: tuple[str, ...]
     obrigatorios: tuple[str, ...]
+    modelo_id: int | None = None
 
 
-OBJETIVOS = {
+FIXOS = {
     o.codigo: o
     for o in (
         Objetivo(
@@ -48,5 +55,55 @@ OBJETIVOS = {
 }
 
 
+def de_modelo(cm) -> Objetivo:
+    obrig = ["filial-analise"] + (["periodo-analise"] if cm.spec.get("campo_data") else [])
+    return Objetivo(
+        codigo=cm.codigo, dominio=DOMINIO_APRENDIDO, nome=cm.nome, descricao=cm.descricao,
+        tabelas=(cm.tabela,), obrigatorios=tuple(obrig), modelo_id=cm.pk,
+    )
+
+
+class _Objetivos(dict):
+    """Fixos + aprendidos aprovados, com a mesma interface de dicionário."""
+
+    def _modelo(self, codigo):
+        from .models import ConsultaModelo, SituacaoModelo
+
+        if not str(codigo).startswith(PREFIXO_APRENDIDO):
+            return None
+        cm = ConsultaModelo.objects.filter(codigo=codigo, situacao=SituacaoModelo.APROVADA).first()
+        return de_modelo(cm) if cm else None
+
+    def __getitem__(self, codigo):
+        if dict.__contains__(self, codigo):
+            return dict.__getitem__(self, codigo)
+        obj = self._modelo(codigo)
+        if obj is None:
+            raise KeyError(codigo)
+        return obj
+
+    def __contains__(self, codigo):
+        return dict.__contains__(self, codigo) or self._modelo(codigo) is not None
+
+
+OBJETIVOS = _Objetivos(FIXOS)
+
+
 def objetivos_do_dominio(dominio: str) -> list[Objetivo]:
-    return [o for o in OBJETIVOS.values() if o.dominio == dominio]
+    return [o for o in FIXOS.values() if o.dominio == dominio]
+
+
+def objetivos_para(user) -> list[Objetivo]:
+    """Objetivos que o usuário pode usar: fixos (domínio liberado ao setor) + aprendidos aprovados
+    para algum setor em que ele tem "consultar"."""
+    from iativa.accounts.authz import Permissao, setores_autorizados
+    from iativa.metadata.descoberta import setores_do_dominio
+
+    from .models import ConsultaModelo, SituacaoModelo
+
+    out = list(FIXOS.values()) if setores_do_dominio(user, "financeiro_receber") else []
+    setores = setores_autorizados(user, Permissao.CONSULTAR)
+    if setores:
+        modelos = ConsultaModelo.objects.filter(situacao=SituacaoModelo.APROVADA, setores__in=setores).distinct()
+        out += [de_modelo(cm) for cm in modelos]
+    return out

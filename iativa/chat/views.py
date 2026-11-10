@@ -25,7 +25,7 @@ def _obter(request, conversa_id) -> ConversationContext:
         raise Http404 from None
 
 
-def _contexto(request, c=None, form=None, erro="", resultado=None, resultado_msg=None):
+def _contexto(request, c=None, form=None, erro="", resultado=None, resultado_msg=None, aprendizado=None):
     setor = setor_do_usuario(request.user)
     nome = request.user.get_full_name() or request.user.get_username()
     iniciais = "".join(p[0] for p in nome.split()[:2]).upper()
@@ -39,6 +39,8 @@ def _contexto(request, c=None, form=None, erro="", resultado=None, resultado_msg
         # Resultado só existe nesta resposta (memória); não vai para o banco nem para a sessão.
         "resultado": resultado,
         "resultado_msg": resultado_msg,
+        "aprendizado": aprendizado,
+        "faixa_filtros": range(3),
         "tipos": TipoValor,
         "TipoConversa": TipoConversa,
         "perfil": {"nome": nome, "iniciais": iniciais or "?", "setor": setor.nome if setor else "Sem setor"},
@@ -137,6 +139,46 @@ def executar_de_novo(request, conversa_id, solicitacao_id):
     except (PermissaoNegada, ValidationError, TransicaoInvalida) as exc:
         return _render(request, c, erro=getattr(exc, "messages", ["Não foi possível executar."])[0])
     return _render(request, c, resultado=resultado, resultado_msg=msg.pk)
+
+
+@require_POST
+def aprender(request, conversa_id):
+    """Abre o formulário de aprendizado para a tabela escolhida (M9). O formulário é transitório."""
+    c = _obter(request, conversa_id)
+    alias = request.POST.get("tabela", "")[:3].upper()
+    try:
+        info = conversas.formulario_aprendizado(request.user, c, alias)
+    except (PermissaoNegada, ValidationError) as exc:
+        return _render(request, c, erro=getattr(exc, "messages", ["Não foi possível abrir esta tabela."])[0])
+    except Exception:
+        return _render(request, c, erro="Não foi possível ler o dicionário agora. Tente de novo.")
+    return _render(request, c, aprendizado=info)
+
+
+@require_POST
+def aprender_salvar(request, conversa_id):
+    c = _obter(request, conversa_id)
+    alias = request.POST.get("tabela", "")[:3].upper()
+    try:
+        conversas.salvar_aprendizado(request.user, c, alias, request.POST)
+    except (PermissaoNegada, ValidationError) as exc:
+        erro = getattr(exc, "messages", ["Não foi possível salvar."])[0]
+        try:
+            info = conversas.formulario_aprendizado(request.user, c, alias)
+        except Exception:
+            info = None
+        return _render(request, c, erro=erro, aprendizado=info)
+    return _render(request, c)
+
+
+@require_POST
+def aprender_decidir(request, conversa_id, modelo_id):
+    c = _obter(request, conversa_id)
+    try:
+        conversas.decidir_aprendizado(request.user, c, modelo_id, request.POST.get("decisao") == "aprovar")
+    except (PermissaoNegada, ValidationError) as exc:
+        return _render(request, c, erro=getattr(exc, "messages", ["Não foi possível registrar."])[0])
+    return _render(request, c)
 
 
 @require_POST

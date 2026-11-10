@@ -232,3 +232,15 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 .htmx-request .enviar { opacity: .5; }.resultado table td.num, .resultado table th.num { text-align: right; }
 .premissas { margin: 8px 0; font-size: 14px; color: var(--sutil); }
 .premissas summary { cursor: pointer; color: var(--azul); }
+
+.candidatos { display: grid; gap: 8px; }
+.candidatos .ficha header form { margin: 0; }
+.aprender dd input, .aprender dd select { min-width: 260px; }
+.opcoes-marcar { display: flex; flex-wrap: wrap; gap: 12px; }
+.opcoes-marcar label { font-weight: 400; display: flex; gap: 6px; align-items: center; }
+.colunas { border: 0; padding: 8px 16px; margin: 0; }
+.colunas legend { font-size: 14px; color: var(--sutil); padding: 0; margin-bottom: 6px; }
+.lista-campos { max-height: 320px; overflow-y: auto; border: 1px solid var(--linha); border-radius: var(--raio-p); padding: 6px 10px; columns: 2; }
+.lista-campos label { display: block; font-weight: 400; font-size: 14px; break-inside: avoid; padding: 2px 0; }
+.lista-campos input { width: auto; }
+@media (max-width: 860px) { .lista-campos { columns: 1; } }

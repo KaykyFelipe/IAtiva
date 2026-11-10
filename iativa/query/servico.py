@@ -81,6 +81,9 @@ def _fmt(valor, tipo):
         return f"{t[6:8]}/{t[4:6]}/{t[0:4]}" if len(t) == 8 else ""
     if tipo == "inteiro":
         return str(int(valor))
+    if tipo == "numero":
+        d = Decimal(str(valor)).normalize()
+        return format(d, "f").replace(".", ",")
     return str(valor).strip()
 
 
@@ -125,7 +128,7 @@ def executar_solicitacao(user, s: RequestContext) -> Resultado:
     # 2. Checagem pós-execução: chave repetida indica junção que duplica valores.
     idx = [comp.rotulos.index(r) for r in plano.chave_unica]
     chaves = [tuple(str(l[i]).strip() for i in idx) for l in linhas]
-    if len(chaves) != len(set(chaves)):
+    if idx and len(chaves) != len(set(chaves)):
         return _encerrar(user, s, E.NAO_VALIDADA, inicio, len(linhas),
                          "O resultado tem registros repetidos e não foi validado. Os critérios precisam ser revistos.")
 
@@ -155,7 +158,8 @@ def executar_solicitacao(user, s: RequestContext) -> Resultado:
 def _resumo(objetivo, n, total, truncado) -> str:
     if n == 0:
         return "Nenhum registro encontrado com esses critérios."
-    unidade = "clientes" if objetivo == "titulos-em-atraso" else "títulos"
+    unidade = {"titulos-em-atraso": "clientes", "titulos-a-vencer": "títulos", "posicao-cliente": "títulos"}.get(
+        objetivo, "registros")
     texto = f"{n} {unidade}" + (f", somando {total}" if total else "") + "."
     if truncado:
         texto += f" Mostrando só os primeiros {n}: o total é parcial."

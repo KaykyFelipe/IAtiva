@@ -49,4 +49,6 @@ IATIVA_AGENTE = {
     "envio_liberado": env("IATIVA_AGENTE_ENVIO_LIBERADO", "0") == "1",
 }
 
+IATIVA_APRENDIZADO_AUTOAPROVACAO = env("IATIVA_APRENDIZADO_AUTOAPROVACAO", "0") == "1"
+
 SYNTHETIC_ERP_PATH = Path(env("IATIVA_SYNTHETIC_ERP_PATH", str(BASE_DIR / "var" / "erp_sintetico.sqlite3")))

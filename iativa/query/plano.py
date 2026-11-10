@@ -87,8 +87,44 @@ def _comuns(plano, filial):
     plano.premissas += [PREMISSA_TIPOS, PREMISSA_SALDO, "Registros excluídos (D_E_L_E_T_) ignorados."]
 
 
+def montar_modelo(tabela: str, spec: dict, valores: dict, codigo: str) -> Plano:
+    """Plano de uma consulta aprendida (M9): uma tabela, colunas e filtros escolhidos pelo
+    administrador, filial obrigatória e período opcional sobre um campo de data."""
+    e1 = "e1"
+    filial_campo = f"{tabela[1:]}_FILIAL" if tabela.startswith("S") else f"{tabela}_FILIAL"
+    plano = Plano(objetivo=codigo, base=tabela, filial=valores["filial-analise"])
+    plano.filtros.append(Filtro(Campo(e1, filial_campo), "=", valores["filial-analise"]))
+    for f in spec.get("filtros_fixos", []):
+        plano.filtros.append(Filtro(Campo(e1, f["campo"]), "=", f["valor"]))
+    campo_data = spec.get("campo_data")
+    if campo_data:
+        periodo = valores["periodo-analise"]
+        plano.filtros += [
+            Filtro(Campo(e1, campo_data), ">=", _aaaammdd(periodo["inicio"])),
+            Filtro(Campo(e1, campo_data), "<=", _aaaammdd(periodo["fim"])),
+        ]
+        plano.premissas.append(f"Período aplicado ao campo {campo_data}.")
+    for f in spec.get("filtros_fixos", []):
+        plano.premissas.append(f"Filtro fixo: {f['campo']} = {f['valor']}.")
+    tipos = {"data": "data", "numero": "numero", "texto": "texto"}
+    plano.colunas = [Coluna(c["rotulo"], Campo(e1, c["campo"]), tipo=tipos.get(c["tipo"], "texto"))
+                     for c in spec["colunas"]]
+    rotulos = [c.rotulo for c in plano.colunas]
+    ordem = next((c["rotulo"] for c in spec["colunas"] if c["campo"] == campo_data), rotulos[0])
+    plano.ordenar = [(ordem, bool(campo_data))]
+    plano.premissas += ["Consulta aprendida e aprovada (M9).", "Registros excluídos (D_E_L_E_T_) ignorados."]
+    return plano
+
+
 def montar(objetivo: str, valores: dict) -> Plano:
     """`valores`: código do parâmetro → valor já validado (resolução da memória)."""
+    from iativa.agent.contratos import PREFIXO_APRENDIDO
+
+    if objetivo.startswith(PREFIXO_APRENDIDO):
+        from iativa.agent.models import ConsultaModelo, SituacaoModelo
+
+        cm = ConsultaModelo.objects.get(codigo=objetivo, situacao=SituacaoModelo.APROVADA)
+        return montar_modelo(cm.tabela, cm.spec, valores, cm.codigo)
     plano = Plano(objetivo=objetivo)
     e1, a1 = "e1", "a1"
     if objetivo == "titulos-em-atraso":

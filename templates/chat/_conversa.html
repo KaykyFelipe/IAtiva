@@ -31,12 +31,12 @@
             <div class="msg usuario"><p>{{ m.texto|linebreaksbr }}</p></div>
           {% endif %}
         {% else %}
-          {% include "chat/_resposta.html" with m=m editavel=item.editavel executavel=item.executavel repetivel=item.repetivel %}
+          {% include "chat/_resposta.html" with m=m editavel=item.editavel executavel=item.executavel repetivel=item.repetivel aprendivel=item.aprendivel aprovavel=item.aprovavel %}
           {% if resultado and resultado_msg == m.pk %}{% include "chat/_resultado.html" %}{% endif %}
         {% endif %}
         {% endwith %}
       {% empty %}
-        {% if not conversa %}
+        {% if not conversa and not aprendizado %}
           <div class="vazio">
             <h2>Por onde começar</h2>
             <div class="sugestoes">
@@ -47,6 +47,7 @@
           </div>
         {% endif %}
       {% endfor %}
+      {% if aprendizado %}{% include "chat/_aprendizado.html" %}{% endif %}
     </div>
   </div>
 

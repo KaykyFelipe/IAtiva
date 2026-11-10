@@ -24,7 +24,7 @@ from iativa.memory.models import Escopo, ParameterBinding, ParameterDefinition, 
 from iativa.memory.resolucao import CONFLITO, resolver
 from iativa.metadata import descoberta
 
-from .contratos import OBJETIVOS, objetivos_do_dominio
+from .contratos import DOMINIO_APRENDIDO, OBJETIVOS, objetivos_para
 from .conversao import SEPARADOR_PERIODO, converter, exibir
 from .esquema import EntradaModelo, SaidaInvalida, validar
 from .provedores import FalhaModelo, obter_provedor
@@ -63,6 +63,7 @@ class Resposta:
     erros: list[str] = field(default_factory=list)
     observacao: str = ""
     provedor: str = ""
+    candidatos: list[dict] = field(default_factory=list)
 
 
 ORIGENS = {
@@ -85,9 +86,9 @@ def solicitacao_ativa(user, solicitacao_id) -> RequestContext | None:
     ).first()
 
 
-def _catalogo(defs: dict) -> list[dict]:
+def _catalogo(objetivos, defs: dict) -> list[dict]:
     out = []
-    for o in objetivos_do_dominio(DOMINIO):
+    for o in objetivos:
         params = []
         for codigo in o.obrigatorios:
             d = defs.get(codigo)
@@ -171,6 +172,8 @@ def _bloquear(user, s, motivo) -> RequestContext:
 
 
 def _verificar_entidades(user, objetivo) -> str | None:
+    if objetivo.dominio == DOMINIO_APRENDIDO:
+        return _verificar_tabela_aprendida(user, objetivo)
     try:
         visiveis = {t.alias for t in descoberta.entidades(user, objetivo.dominio)}
     except PermissaoNegada:
@@ -180,6 +183,37 @@ def _verificar_entidades(user, objetivo) -> str | None:
     if not set(objetivo.tabelas) <= visiveis:
         return "sem_acesso_entidade"
     return None
+
+
+def _verificar_tabela_aprendida(user, objetivo) -> str | None:
+    from iativa.metadata.catalogo import abrir_catalogo
+
+    from .aprendizado import _restritas
+
+    if set(objetivo.tabelas) & _restritas(user):
+        return "sem_acesso_entidade"
+    try:
+        with abrir_catalogo() as cat:
+            existentes = cat.tabelas(list(objetivo.tabelas))
+    except Exception:
+        return "metadados_indisponiveis"
+    return None if set(objetivo.tabelas) <= set(existentes) else "metadados_indisponiveis"
+
+
+def _oferecer_aprendizado(user, texto, atual, extra) -> "Resposta":
+    from .aprendizado import candidatos
+
+    try:
+        lista = candidatos(user, texto)
+    except Exception:
+        return Resposta("fora_do_escopo", "Ainda não sei consultar isso e não consegui ler o dicionário agora.",
+                        solicitacao=atual, **extra)
+    if not lista:
+        return Resposta("fora_do_escopo", "Ainda não sei consultar isso e não achei tabelas relacionadas no "
+                        "dicionário. Tente usar outras palavras ou o nome da tabela (ex.: SRA).",
+                        solicitacao=atual, **extra)
+    return Resposta("aprendizado", "Ainda não sei consultar isso. Encontrei estas tabelas no dicionário do "
+                    "Protheus. Escolha uma para eu aprender:", solicitacao=atual, candidatos=lista, **extra)
 
 
 MOTIVOS = {
@@ -218,7 +252,7 @@ def avaliar(user, s: RequestContext, erros=None) -> Resposta:
     if avaliacao.estado == E.PRONTA:
         return Resposta(
             "pronta",
-            "Todos os critérios estão definidos. A execução da consulta chega na Etapa 5.",
+            "Todos os critérios estão definidos. Confira e clique em Executar consulta.",
             criterios=criterios, **base,
         )
     perguntas = []
@@ -233,12 +267,16 @@ def avaliar(user, s: RequestContext, erros=None) -> Resposta:
 
 
 def processar_mensagem(user, texto: str, solicitacao_id=None, provedor=None, conversa=None) -> Resposta:
-    if not descoberta.setores_do_dominio(user, DOMINIO):
+    from .aprendizado import pode_aprender
+
+    objetivos = objetivos_para(user)
+    administrador = pode_aprender(user)
+    if not objetivos and not administrador:
         registrar("acesso_negado", "agente", usuario=user, estado_novo="dominio", resultado="negado")
         return Resposta("sem_acesso", "Seu usuário ainda não tem acesso a consultas. Fale com o administrador.")
 
     atual = solicitacao_ativa(user, solicitacao_id)
-    todos_codigos = sorted({c for o in objetivos_do_dominio(DOMINIO) for c in o.obrigatorios})
+    todos_codigos = sorted({c for o in objetivos for c in o.obrigatorios} | {"filial-analise"})
     defs = _definicoes(todos_codigos)
     try:
         trechos = [
@@ -248,11 +286,11 @@ def processar_mensagem(user, texto: str, solicitacao_id=None, provedor=None, con
     except Exception:
         trechos = []
     entrada = EntradaModelo(
-        mensagem=texto, hoje=timezone.localdate().isoformat(), objetivos=_catalogo(defs),
+        mensagem=texto, hoje=timezone.localdate().isoformat(), objetivos=_catalogo(objetivos, defs),
         solicitacao_atual=_resumo(user, atual, defs), trechos=trechos,
     )
     provedor = provedor or obter_provedor()
-    codigos_obj = [o.codigo for o in objetivos_do_dominio(DOMINIO)]
+    codigos_obj = [o.codigo for o in objetivos]
     try:
         inter = _interpretar(provedor, entrada, codigos_obj, todos_codigos)
     except FalhaModelo:
@@ -263,8 +301,10 @@ def processar_mensagem(user, texto: str, solicitacao_id=None, provedor=None, con
               entidade_id=atual.pk if atual else None, linhas=len(inter.parametros))
     extra = {"observacao": inter.observacao, "provedor": provedor.nome}
 
+    if inter.intencao == "fora_do_escopo" and administrador:
+        return _oferecer_aprendizado(user, texto, atual, extra)
     if inter.intencao in ("ajuda", "fora_do_escopo"):
-        nomes = "; ".join(o.nome for o in objetivos_do_dominio(DOMINIO))
+        nomes = "; ".join(o.nome for o in objetivos) or "nenhuma consulta liberada ainda"
         msg = "Posso ajudar com: " + nomes + "."
         if inter.intencao == "fora_do_escopo":
             msg = "Essa pergunta está fora do que consigo responder por enquanto. " + msg
@@ -278,13 +318,14 @@ def processar_mensagem(user, texto: str, solicitacao_id=None, provedor=None, con
 
     objetivo = inter.objetivo or (atual.objetivo if atual else "")
     if not objetivo:
-        nomes = "; ".join(o.nome for o in objetivos_do_dominio(DOMINIO))
+        nomes = "; ".join(o.nome for o in objetivos)
         return Resposta("ajuda", "Qual destas informações você procura? " + nomes + ".", **extra)
 
     if atual is None or atual.objetivo != objetivo:
         if atual is not None:
             cancelar(user, atual)  # mudança de assunto: a anterior é encerrada
-        atual = criar_solicitacao(user, DOMINIO, objetivo, conversa=conversa or (atual.conversa if atual else None))
+        atual = criar_solicitacao(user, OBJETIVOS[objetivo].dominio, objetivo,
+                                  conversa=conversa or (atual.conversa if atual else None))
 
     erros = _aplicar_parametros(user, atual, inter.parametros, defs)
     atual.refresh_from_db()
