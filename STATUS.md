@@ -86,7 +86,12 @@ Necessárias a partir da Etapa 3 (equipe do ERP):
 4. ~~Forma suportada de acesso ao dicionário (SX2, SX3, SIX, SX9, SX5, SX6 — banco ou arquivos).~~ Recebida em 2026-11-10: dicionário no banco (compatível com o adaptador `DicionarioProtheus`, T16).
 5. Estrutura de empresas/filiais (SM0), sufixo das tabelas e modo de compartilhamento de SA1, SE1, SE5. Parcial (2026-11-10): todas as tabelas compartilhadas entre filiais e com campo de filial; o nome da tabela não indica filial (a conferir com X2_MODO no dicionário). Faltam: empresas/filiais (SM0) e sufixo das tabelas (será lido do próprio banco).
 
-**Bloqueio de rede (2026-11-10):** o servidor (192.168.80.237) não alcança a porta do SQL Server de homologação (timeout; rota via 192.168.80.1). O PC de desenvolvimento alcança. Pedir à equipe de rede liberação do servidor para essa porta.
+**Conexão com a homologação (2026-11-10):** rede liberada; `verificar_erp` conectou com o login somente leitura (confirmado: sem papéis ou permissões de escrita). Achados (só metadados):
+- Dicionário no banco com sufixos 010, 020 (incompleto: só SX2) e 990. Tabela `SYS_COMPANY` existe.
+- Empresa 010: SA1, SE1 e SE5 presentes; campos personalizados marcados no SX3; 4 relacionamentos SX9 entre elas.
+- **Divergência a confirmar:** o X2_MODO marca SE1 e SE5 como **exclusivas** (SA1 compartilhada), mas foi informado que todas são compartilhadas.
+- O índice 1 do SE5 é por data/banco, não pela chave do título; a ligação SE1–SE5 deve vir do SX9.
+- A confirmar: qual empresa usar (010? 990 parece base de teste/padrão).
 6. Documentação das personalizações do domínio.
 7. Base de homologação disponível e responsável pelo login somente leitura. Parcial (2026-11-10): login dedicado somente leitura informado (nome registrado só no `.env` do servidor quando liberado; senha nunca no chat ou no repositório). Base: homologação. Endereço e nome do banco recebidos em 2026-11-10 (ficam só no `.env` do servidor, não no repositório). Faltam, confirmação das permissões do login e liberação explícita.
 8. Responsável de negócio no Financeiro para aprovar definições (ex.: "inadimplente").
