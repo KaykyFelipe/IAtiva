@@ -86,7 +86,7 @@ Necessárias a partir da Etapa 3 (equipe do ERP):
 4. Forma suportada de acesso ao dicionário (SX2, SX3, SIX, SX9, SX5, SX6 — banco ou arquivos).
 5. Estrutura de empresas/filiais (SM0), sufixo das tabelas e modo de compartilhamento de SA1, SE1, SE5.
 6. Documentação das personalizações do domínio.
-7. Base de homologação disponível e responsável pelo login somente leitura. Parcial (2026-11-10): login dedicado somente leitura informado (nome registrado só no `.env` do servidor quando liberado; senha nunca no chat ou no repositório). Base: homologação. Faltam: servidor/instância e nome do banco, confirmação das permissões do login e liberação explícita.
+7. Base de homologação disponível e responsável pelo login somente leitura. Parcial (2026-11-10): login dedicado somente leitura informado (nome registrado só no `.env` do servidor quando liberado; senha nunca no chat ou no repositório). Base: homologação. Endereço e nome do banco recebidos em 2026-11-10 (ficam só no `.env` do servidor, não no repositório). Faltam, confirmação das permissões do login e liberação explícita.
 8. Responsável de negócio no Financeiro para aprovar definições (ex.: "inadimplente").
 
 Necessárias antes da Etapa 4:
