@@ -4,7 +4,9 @@ dominio: financeiro_receber
 origem: erp
 versao: 1
 responsavel: TI / equipe do ERP
-situacao: rascunho
+situacao: aprovado
+aprovado_por: Diego
+aprovado_em: 2026-11-10
 tabelas: SA1, SE1, SE5
 ---
 
