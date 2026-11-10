@@ -14,6 +14,7 @@ Formato: `ID | data | decisão | situação | aprovado por | observações`
 | 2 — Autorização e memória de parâmetros (entrega validada, inclui T8–T13) | 2026-11-10 | Diego (chat: "Aprovo a Etapa 2") — setores reais e agendamento do expurgo seguem como pendências |
 | 3 — Plano de conhecimento e metadados (início autorizado, só fontes sintéticas) | 2026-11-10 | Diego (chat: "Aprovo a Etapa 3") — Protheus real só após liberação explícita e informações 4–8 |
 | 3 — Conhecimento e metadados (entrega validada, inclui T14–T19; fonte real de homologação) | 2026-11-10 | Diego (chat: "Aprovo a Etapa 3") |
+| 4 — Plano de agente e esclarecimentos (início autorizado; provedor falso até a chave da API da Anthropic e a posição do DPO) | 2026-11-10 | Diego (chat: "Aprovo a Etapa 4") |
 | 3 — Liberação para conectar na base de **homologação** com o login somente leitura (só metadados) | 2026-11-10 | Diego (chat: "pode tentar conectar") — dados de conexão só no `.env` do servidor |
 
 ## Definidas pelo pedido inicial (`docs/PEDIDO_INICIAL.md`)
@@ -81,6 +82,16 @@ Aprovadas em 2026-11-09 por Kayky Felipe (chat), com as opções recomendadas na
 | T17 | 2026-11-10 | Acesso à descoberta: domínio habilitado por setor (`DominioSetor`) + "consultar" no setor; `RestricaoMetadado` esconde tabela ou campo exceto para setores listados. Domínio tem lista fechada de tabelas. | Aprovada com a Etapa 3 |
 | T19 | 2026-11-10 | Fonte de metadados passa a ser o Protheus real (homologação, empresa 010) quando `IATIVA_ERP_*` está configurado; a base sintética fica só para testes automatizados e máquinas sem ERP. Cada abertura do catálogo real confere que o login segue somente leitura e bloqueia se não estiver. Somente metadados; leitura de dados continua na Etapa 5. Pedido por Diego (chat: "Pare de usar fonte sintetica e comece a usar o banco de dados real"). | Aprovada com a Etapa 3 |
 | T18 | 2026-11-10 | Conhecimento com `origem: sintetico` só é usado com a fonte sintética, e o real só com a fonte real. Base sintética passa à versão 2 (com dicionário SX); é preciso regerar com `seed_synthetic --substituir`. | Aprovada com a Etapa 3 |
+
+## Decisões técnicas de implementação (Etapa 4 — sujeitas à validação da etapa)
+
+| ID | Data | Decisão | Situação |
+|----|------|---------|----------|
+| T20 | 2026-11-10 | Interface `LLMProvider` com `FakeProvider` (regras por palavras-chave, sem rede) e `AnthropicProvider` (SDK `anthropic`, modelo `claude-opus-5-5`, esforço `low`, saída estruturada por JSON Schema, fallback de recusa no servidor `fallbacks: "default"`). Provedor padrão: teste. | Em validação |
+| T21 | 2026-11-10 | O modelo só interpreta: devolve intenção, objetivo (lista fechada), parâmetros como texto e uma pergunta de ambiguidade. Saída validada estritamente (campos, enums, tamanhos); inválida = falha do modelo, com uma nova tentativa. | Em validação |
+| T22 | 2026-11-10 | Contratos de parâmetros por objetivo (`agent/contratos.py`): titulos-em-atraso, titulos-a-vencer, posicao-cliente. Parâmetros obrigatórios vêm do contrato; perguntas geradas pelo backend a partir das definições; filial só entre as autorizadas. | Em validação |
+| T23 | 2026-11-10 | Ao modelo vão só: mensagem, data de hoje, catálogo de objetivos/parâmetros, parâmetros já definidos (dado pessoal como "[informado]") e trechos de conhecimento aprovados. Nunca linhas do ERP. A mensagem não é persistida nem ecoada. | Em validação |
+| T24 | 2026-11-10 | `AnthropicProvider` só funciona com `IATIVA_AGENTE_ENVIO_LIBERADO=1`, que depende da posição do DPO/LGPD (D5/D6). Mudança de assunto cancela a solicitação anterior em preparação. | Em validação |
 
 ## Organização do trabalho
 

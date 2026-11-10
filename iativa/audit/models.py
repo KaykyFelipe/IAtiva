@@ -27,6 +27,8 @@ class Acao(models.TextChoices):
     EXPURGO = "expurgo", "Expurgo por retenção"
     METADADO_CONSULTADO = "metadado_consultado", "Metadado consultado"
     CONHECIMENTO_CONSULTADO = "conhecimento_consultado", "Conhecimento consultado"
+    INTERPRETACAO = "interpretacao", "Mensagem interpretada"
+    MODELO_FALHOU = "modelo_falhou", "Falha do modelo de IA"
 
 
 class Entidade(models.TextChoices):
@@ -36,6 +38,7 @@ class Entidade(models.TextChoices):
     RETENCAO = "retencao", "Retenção"
     METADADO = "metadado", "Metadado"
     CONHECIMENTO = "conhecimento", "Conhecimento"
+    AGENTE = "agente", "Agente"
 
 
 class Resultado(models.TextChoices):

@@ -43,6 +43,12 @@ DEFINICOES = (
         "tipo": TipoValor.NUMERO,
     },
     {
+        "codigo": "periodo-analise",
+        "nome": "Período da análise",
+        "descricao": "Início e fim do período de vencimento considerado.",
+        "tipo": TipoValor.PERIODO,
+    },
+    {
         "codigo": "cliente-especifico",
         "nome": "Cliente específico",
         "descricao": "Código e loja do cliente. Dado cadastral: só vale na solicitação.",

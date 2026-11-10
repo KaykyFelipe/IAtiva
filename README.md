@@ -2,10 +2,9 @@
 
 Chat corporativo para consultas de leitura ao TOTVS Protheus em linguagem natural.
 
-> **Fase atual: Etapa 3, conhecimento e metadados (em validação, só fontes sintéticas).** Ainda não
-> existe interpretação de perguntas nem consulta de dados ao ERP. O chat apenas confirma o
-> recebimento da mensagem, sem armazená-la. Setores, permissões, memória de parâmetros, documentos
-> de conhecimento aprovados e descoberta de metadados já existem no backend e no admin.
+> **Fase atual: Etapa 4, agente e esclarecimentos (em validação, provedor de teste).** O chat
+> interpreta a pergunta, pede os parâmetros que faltam e deixa a solicitação pronta. Ainda não há
+> consulta de dados ao ERP (Etapa 5). A mensagem não é armazenada.
 > Acompanhamento: [`STATUS.md`](STATUS.md) · decisões: [`DECISOES.md`](DECISOES.md) ·
 > plano: [`PLANO.md`](PLANO.md) · requisitos: [`docs/PEDIDO_INICIAL.md`](docs/PEDIDO_INICIAL.md).
 
@@ -190,6 +189,25 @@ docker compose exec app python manage.py verificar_erp
 O comando lê só metadados: versão, permissões do próprio login, sufixos do dicionário (SX2) e
 contagens de campos de SA1, SE1 e SE5. Para com erro se o login tiver qualquer permissão de escrita.
 
+## Agente e esclarecimentos (Etapa 4)
+
+O chat interpreta a pergunta, escolhe um objetivo da lista fechada (`iativa/agent/contratos.py`),
+confere as tabelas na descoberta de metadados e pergunta só os parâmetros que faltam. Quando tudo
+está definido, a solicitação fica **pronta** (a execução no ERP é a Etapa 5).
+
+- `IATIVA_AGENTE_PROVEDOR=teste` (padrão): provedor falso, por palavras-chave. Exemplos que ele
+  entende: "quais clientes estão inadimplentes?", "corte 31/12/2025, 5 dias, considerar saldo,
+  filial 001001", "na verdade 10 dias", "títulos a vencer de 01/01/2026 a 31/01/2026", "cancela".
+- `IATIVA_AGENTE_PROVEDOR=anthropic`: Claude (`claude-opus-5-5`) com saída estruturada. Exige
+  `ANTHROPIC_API_KEY` e `IATIVA_AGENTE_ENVIO_LIBERADO=1` (só após a posição do DPO/LGPD).
+
+Ao modelo vão só a mensagem, o catálogo de objetivos e parâmetros, os parâmetros já definidos e
+trechos de conhecimento aprovados; nunca linhas do ERP. A mensagem não é armazenada.
+
+Para usar o chat, o usuário precisa de perfil num setor habilitado em **Domínios por setor** e de
+política com "consultar" e filiais. Depois de atualizar, rode `python manage.py seed_exemplos`
+(cria a definição "periodo-analise").
+
 ## Execução com Docker (banco e aplicação)
 
 Este é o ambiente de **desenvolvimento** em containers Linux (imagem Ubuntu 24.04), pensado para o
@@ -324,6 +342,7 @@ qualquer tentativa de conexão de rede faz o teste falhar. Os testes cobrem:
 | `tests/test_auditoria_retencao.py` | auditoria imutável e sem valores, expurgo por retenção |
 | `tests/test_admin_etapa2.py` | páginas do admin e aprovação pelo admin respeitando políticas |
 | `tests/test_conhecimento.py` | cabeçalho, aprovação, conteúdo proibido e busca de documentos |
+| `tests/test_agente.py` | interpretação, contratos, esclarecimentos, falhas do modelo, provedor Claude simulado |
 | `tests/test_metadados.py` | adaptadores, catálogo, descoberta progressiva e restrições de acesso |
 
 ## Estrutura
@@ -337,6 +356,7 @@ iativa/memory/          definições e valores de parâmetros, revisões, resolu
 iativa/audit/           auditoria sanitizada e expurgo por retenção
 iativa/knowledge/       carga, validação e busca de documentos aprovados
 iativa/metadata/        adaptadores (dicionário SX, físico SQLite, INFORMATION_SCHEMA), catálogo, descoberta
+iativa/agent/           provedores de IA, contratos de parâmetros, esquema de saída e orquestrador
 iativa/synthetic_erp/   esquema, dicionário, gerador e conexão somente leitura da base sintética
 knowledge/              documentos de conhecimento (hoje só sintéticos)
 templates/, static/     interface (templates Django + htmx 2.0.4 servido localmente)
@@ -344,4 +364,4 @@ tests/                  testes automatizados
 docs/                   pedido inicial (requisitos)
 ```
 
-As apps de agente e consulta serão criadas nas etapas correspondentes.
+A app de consulta (execução no ERP) será criada na Etapa 5.

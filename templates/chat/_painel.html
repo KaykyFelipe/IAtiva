@@ -1,11 +1,63 @@
 <div id="painel-chat">
   {% if resposta %}
     <div class="resposta" role="status">
-      <span class="estado estado-{{ resposta.estado }}">{{ resposta.estado }}</span>
-      Mensagem recebida às {{ resposta.recebida_em|time:"H:i:s" }} ({{ resposta.caracteres }} caracteres).
-      Nada foi armazenado.
+      <p>
+        <span class="estado estado-{{ resposta.tipo }}">{{ resposta.solicitacao.get_estado_display|default:resposta.tipo }}</span>
+        {% if resposta.objetivo %}<strong>{{ resposta.objetivo }}</strong>{% endif %}
+        {% if resposta.provedor == "teste" %}<span class="sutil">(provedor de teste)</span>{% endif %}
+      </p>
+      <p>{{ resposta.mensagem }}</p>
+      {% if resposta.observacao %}<p class="sutil">{{ resposta.observacao }}</p>{% endif %}
+      {% for erro in resposta.erros %}<p class="erro">{{ erro }}</p>{% endfor %}
+
+      {% if resposta.ambiguidade %}
+        <p><strong>{{ resposta.ambiguidade }}</strong></p>
+        {% if resposta.opcoes %}<ul>{% for o in resposta.opcoes %}<li>{{ o }}</li>{% endfor %}</ul>{% endif %}
+        <p class="sutil">Responda na caixa de mensagem abaixo.</p>
+      {% endif %}
+
+      {% for p in resposta.perguntas %}
+        <form class="pergunta" method="post" action="{% url 'chat:parametro' %}"
+              hx-post="{% url 'chat:parametro' %}" hx-target="#painel-chat" hx-swap="outerHTML">
+          {% csrf_token %}
+          <input type="hidden" name="codigo" value="{{ p.codigo }}">
+          <label>{{ p.nome }}{% if p.conflito %} <span class="erro">(valores em conflito: escolha um)</span>{% endif %}</label>
+          {% if p.descricao %}<p class="sutil">{{ p.descricao }}</p>{% endif %}
+          {% if p.tipo == tipos.DATA %}
+            <input type="date" name="valor" required>
+          {% elif p.tipo == tipos.PERIODO %}
+            <span class="linha"><input type="date" name="inicio" required> a <input type="date" name="fim" required></span>
+          {% elif p.tipo == tipos.ESCOLHA or p.tipo == tipos.FILIAL %}
+            <select name="valor" required>{% for o in p.opcoes %}<option value="{{ o }}">{{ o }}</option>{% endfor %}</select>
+          {% elif p.tipo == tipos.BOOLEANO %}
+            <select name="valor"><option value="sim">sim</option><option value="nao">não</option></select>
+          {% elif p.tipo == tipos.NUMERO %}
+            <input type="number" name="valor" step="any" required>
+          {% else %}
+            <input type="text" name="valor" maxlength="200" autocomplete="off" required>
+          {% endif %}
+          <button type="submit">Confirmar</button>
+        </form>
+      {% endfor %}
+
+      {% if resposta.criterios %}
+        <p><strong>Critérios definidos</strong></p>
+        <ul class="criterios">
+          {% for c in resposta.criterios %}<li>{{ c.nome }}: <strong>{{ c.valor }}</strong> <span class="sutil">— {{ c.origem }}</span></li>{% endfor %}
+        </ul>
+      {% endif %}
     </div>
   {% endif %}
+
+  {% if atual %}
+    <form class="linha" method="post" action="{% url 'chat:cancelar' %}"
+          hx-post="{% url 'chat:cancelar' %}" hx-target="#painel-chat" hx-swap="outerHTML">
+      {% csrf_token %}
+      <span class="sutil">Solicitação #{{ atual.pk }} em andamento ({{ atual.get_estado_display }}).</span>
+      <button type="submit" class="secundario">Cancelar solicitação</button>
+    </form>
+  {% endif %}
+
   <form method="post" action="{% url 'chat:index' %}"
         hx-post="{% url 'chat:index' %}" hx-target="#painel-chat" hx-swap="outerHTML">
     {% csrf_token %}

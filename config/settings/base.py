@@ -31,6 +31,7 @@ INSTALLED_APPS = [
     "iativa.audit",
     "iativa.knowledge",
     "iativa.metadata",
+    "iativa.agent",
     "iativa.synthetic_erp",
 ]
 
@@ -130,6 +131,18 @@ IATIVA_CONHECIMENTO_DIR = BASE_DIR / "knowledge"
 IATIVA_METADADOS = {"fonte": "sintetico"}
 # Empresa do ERP real (sufixo das tabelas: SE1010, SX2010...). Confirmada em 2026-11-10.
 IATIVA_ERP_SUFIXO = "010"
+
+# Etapa 4 — agente. "teste" = FakeProvider (regras, sem rede). "anthropic" exige chave e
+# envio liberado (posição do DPO/LGPD, D5/D6). Só pergunta, catálogo, parâmetros e trechos
+# aprovados vão ao modelo; nunca linhas de resultado.
+IATIVA_AGENTE = {
+    "provedor": "teste",
+    "modelo": "claude-opus-5-5",
+    "esforco": "low",
+    "timeout_s": 30,
+    "api_key": "",
+    "envio_liberado": False,
+}
 
 LOGGING = {
     "version": 1,

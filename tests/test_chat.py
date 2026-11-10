@@ -27,12 +27,11 @@ def test_get_exibe_formulario(cliente_logado):
     assert 'name="mensagem"' in resposta.content.decode()
 
 
-def test_post_confirma_recebimento(cliente_logado):
+def test_post_sem_acesso_responde_sem_interpretar(cliente_logado):
     resposta = cliente_logado.post(reverse("chat:index"), {"mensagem": "Olá"})
     conteudo = resposta.content.decode()
     assert resposta.status_code == 200
-    assert "recebida" in conteudo
-    assert "Nada foi armazenado" in conteudo
+    assert "ainda não tem acesso a consultas" in conteudo
 
 
 def test_post_htmx_retorna_somente_o_painel(cliente_logado):
@@ -44,9 +43,9 @@ def test_post_htmx_retorna_somente_o_painel(cliente_logado):
 
 def test_mensagem_vazia_ou_longa_e_rejeitada(cliente_logado):
     vazia = cliente_logado.post(reverse("chat:index"), {"mensagem": "   "})
-    assert "recebida às" not in vazia.content.decode()
+    assert 'role="status"' not in vazia.content.decode()
     longa = cliente_logado.post(reverse("chat:index"), {"mensagem": "x" * (settings.IATIVA_CHAT_MAX_CHARS + 1)})
-    assert "recebida às" not in longa.content.decode()
+    assert 'role="status"' not in longa.content.decode()
 
 
 def test_mensagem_nao_e_ecoada(cliente_logado):

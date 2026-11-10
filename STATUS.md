@@ -2,7 +2,30 @@
 
 **Atualizado em:** 2026-11-10
 **Etapa atual:** 4 — Agente e esclarecimentos
-**Situação:** **aguardando aprovação do plano.** Etapa 3 aprovada em 2026-11-10 (fonte real de homologação). Provedor escolhido: API da Anthropic (Claude), ainda sem chave/contrato; até lá, testes com provedor falso.
+**Situação:** **implementada com provedor de teste, aguardando validação.** Plano aprovado em 2026-11-10. Provedor escolhido: API da Anthropic (Claude); falta chave e posição do DPO para ligar.
+
+## Etapa 4 — o que foi entregue
+
+- `iativa/agent`: `LLMProvider` com `FakeProvider` e `AnthropicProvider` (saída estruturada); contratos de parâmetros por objetivo; conversão de valores; validação estrita da saída; orquestrador com interpretação → contrato → descoberta de metadados → avaliação de completude → perguntas.
+- Chat com perguntas pendentes em formulário (data, período, escolha, filial autorizada, número), critérios com origem, ambiguidade, cancelamento e mudança de assunto.
+- Falhas do modelo: uma nova tentativa; depois mensagem ao usuário, sem mudar a solicitação; auditado como `modelo_falhou`.
+- 263 testes passando (10 da rotina M4 pulados no Windows).
+
+## Checklist de validação da Etapa 4
+
+- [ ] Pergunta vaga ou fora do escopo não cria solicitação.
+- [ ] "Quais clientes estão inadimplentes?" pede só o que falta (data de corte, tolerância, baixa parcial, filial) e reaproveita preferências salvas.
+- [ ] Correção ("na verdade 10 dias") troca o valor; mudança de assunto encerra a anterior; cancelamento funciona.
+- [ ] Filial fora das autorizadas e CPF/CNPJ são recusados.
+- [ ] Sem domínio, definição ausente, tabela restrita ou ERP fora do ar: bloqueia com motivo claro.
+- [ ] Mensagem não é gravada nem ecoada; ao modelo não vão linhas do ERP.
+- [ ] Avaliação com o modelo real (Claude) quando houver chave e liberação do DPO.
+
+## Pendências da Etapa 4
+
+- [ ] Chave da API da Anthropic (no `.env` do servidor) e posição do DPO/LGPD (`IATIVA_AGENTE_ENVIO_LIBERADO=1`).
+- [ ] Avaliação de interpretação com o modelo real (perguntas reais, referências ao contexto, negações).
+- [ ] Definições reais (o que é "inadimplente", tipos de título considerados) aprovadas pelo Financeiro (informação 8).
 
 ## Histórico
 
@@ -20,6 +43,7 @@
 - 161 testes passando (10 da rotina M4 pulados no Windows), sem rede.
 
 - Etapa 3 — Conhecimento e metadados: **aprovada** em 2026-11-10 (T14–T19), com fonte real de homologação.
+- Etapa 4 — Agente e esclarecimentos: plano aprovado em 2026-11-10; entregue para validação com provedor de teste (T20–T24).
 
 ## Etapa 3 — o que foi entregue
 

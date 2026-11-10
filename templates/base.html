@@ -12,7 +12,7 @@
 <body>
   <header class="topo">
     <span class="marca">IAtiva</span>
-    <span class="ambiente">ambiente local · dados sintéticos</span>
+    <span class="ambiente">ambiente local · somente leitura</span>
     {% if user.is_authenticated %}
       <form method="post" action="{% url 'logout' %}" class="sair">
         {% csrf_token %}

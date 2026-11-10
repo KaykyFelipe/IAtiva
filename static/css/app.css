@@ -15,4 +15,14 @@ button { margin-top: .75rem; padding: .5rem 1rem; border: 0; border-radius: 6px;
 .aviso { color: var(--sutil); }
 .erro { color: var(--erro); }
 .resposta { padding: .75rem; border: 1px solid var(--borda); border-radius: 6px; margin-bottom: .5rem; }
+.sutil { color: var(--sutil); font-size: .9rem; }
+select { padding: .5rem; border: 1px solid var(--borda); border-radius: 6px; font: inherit; }
+.pergunta { border-top: 1px solid var(--borda); padding-top: .5rem; margin-top: .5rem; }
+.linha { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; }
+.linha input { width: auto; }
+.linha button { margin-top: 0; }
+button.secundario { background: transparent; color: var(--acento); border: 1px solid var(--borda); }
+.criterios { margin: .25rem 0; }
+.estado-pronta { background: #e5f4ea; color: #1b6b35; }
+.estado-bloqueada, .estado-falha_modelo, .estado-sem_acesso { background: #fbe9e7; color: var(--erro); }
 .estado { display: inline-block; padding: .1rem .5rem; border-radius: 999px; background: #e7eefb; color: var(--acento); font-size: .8rem; margin-right: .5rem; }

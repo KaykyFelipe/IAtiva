@@ -41,4 +41,12 @@ IATIVA_ERP = (
 # IATIVA_METADADOS_FONTE no .env força uma das duas (sintetico | protheus).
 IATIVA_METADADOS = {"fonte": env("IATIVA_METADADOS_FONTE", "protheus" if IATIVA_ERP else "sintetico")}
 
+IATIVA_AGENTE = {
+    **IATIVA_AGENTE,  # noqa: F405
+    "provedor": env("IATIVA_AGENTE_PROVEDOR", "teste"),
+    "modelo": env("IATIVA_AGENTE_MODELO", "claude-opus-5-5"),
+    "api_key": env("ANTHROPIC_API_KEY"),
+    "envio_liberado": env("IATIVA_AGENTE_ENVIO_LIBERADO", "0") == "1",
+}
+
 SYNTHETIC_ERP_PATH = Path(env("IATIVA_SYNTHETIC_ERP_PATH", str(BASE_DIR / "var" / "erp_sintetico.sqlite3")))
