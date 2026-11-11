@@ -46,7 +46,7 @@ class Consolidado:
 
 
 def _valores(user, s) -> dict:
-    defs = orq._definicoes(OBJETIVOS[s.objetivo].obrigatorios)
+    defs = orq._definicoes(OBJETIVOS[s.objetivo].parametros)
     out = {}
     for codigo, d in defs.items():
         r = resolver(d, user, s)

@@ -26,7 +26,7 @@ from iativa.memory.resolucao import RESOLVIDO, resolver
 from . import memoria
 from . import orquestrador as orq
 from .aprendizado import candidatos, pode_aprender
-from .contratos import OBJETIVOS, objetivos_para
+from .contratos import BUSCA, OBJETIVOS, objetivos_para
 from .conversao import exibir
 from .decisao import DecisaoInvalida, EntradaAgente, validar
 from .models import ConsultaModelo, SituacaoModelo
@@ -66,14 +66,16 @@ def _estado(user, s, defs) -> dict | None:
         return None
     obj = OBJETIVOS[s.objetivo]
     definidos, faltando = {}, []
-    for codigo in obj.obrigatorios:
+    for codigo in obj.parametros:
         d = defs.get(codigo)
         if d is None:
             continue
         r = resolver(d, user, s)
         if r.situacao == RESOLVIDO:
-            definidos[d.nome] = "[informado]" if d.contem_dado_pessoal else exibir(r.valor)
-        else:
+            # A busca veio da própria mensagem (o modelo já a viu); os demais dados pessoais ficam ocultos.
+            mostrar = codigo == BUSCA or not d.contem_dado_pessoal
+            definidos[d.nome] = exibir(r.valor) if mostrar else "[informado]"
+        elif codigo in obj.obrigatorios:
             faltando.append(d.nome)
     return {"objetivo": s.objetivo, "nome": obj.nome, "estado": s.get_estado_display(),
             "ja_definido": definidos, "faltando": faltando, "completa": not faltando}
@@ -124,7 +126,7 @@ def conversar(user, c, texto: str, provedor=None, mensagem_usuario_id=None) -> S
         registrar("acesso_negado", "agente", usuario=user, estado_novo="dominio", resultado="negado")
         return Saida("Seu usuário ainda não tem acesso a consultas. Fale com o administrador.")
 
-    codigos_par = sorted({cod for o in objetivos for cod in o.obrigatorios} | {"filial-analise"})
+    codigos_par = sorted({cod for o in objetivos for cod in o.parametros} | {"filial-analise"})
     defs = orq._definicoes(codigos_par)
     atual = _ativa(user, c)
     try:

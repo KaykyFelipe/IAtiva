@@ -8,6 +8,7 @@
 
 - Memória do setor: notas do agente por setor, com proposta → aprovação; valores e notas em conflito substituem o aprovado só quando aprovados (T31, T32).
 - Fila única de aprovação (valores, notas, consultas aprendidas) na tela "Memória e aprovações" e pelo chat ("quais propostas estão pendentes?", "aprovar nota-3") (T33).
+- Busca por nome em todas as consultas ("a Alcans lançou conta mês passado?"): filtro opcional pelo nome, sem precisar procurar na lista (T35).
 - Chat mestre consolidado: um bloco por setor autorizado, cada um com a sua memória e filiais; soma só com premissas iguais e filiais diferentes (T34).
 - 350 testes passando (10 da rotina M4 pulados no Windows).
 

@@ -60,11 +60,14 @@ def _cfg():
 
 
 def _valores(user, s) -> dict:
-    defs = ParameterDefinition.objects.filter(codigo__in=OBJETIVOS[s.objetivo].obrigatorios, ativo=True)
+    objetivo = OBJETIVOS[s.objetivo]
+    defs = ParameterDefinition.objects.filter(codigo__in=objetivo.parametros, ativo=True)
     out = {}
     for d in defs:
         r = resolver(d, user, s)
         if r.situacao != RESOLVIDO:
+            if d.codigo in objetivo.opcionais:
+                continue
             raise TransicaoInvalida("Parâmetro deixou de estar definido.")
         out[d.codigo] = r.valor
     return out

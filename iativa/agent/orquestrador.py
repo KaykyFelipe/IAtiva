@@ -90,11 +90,11 @@ def _catalogo(objetivos, defs: dict) -> list[dict]:
     out = []
     for o in objetivos:
         params = []
-        for codigo in o.obrigatorios:
+        for codigo in o.parametros:
             d = defs.get(codigo)
             if d is not None:
                 params.append({"codigo": codigo, "nome": d.nome, "descricao": d.descricao, "tipo": d.tipo,
-                               "opcoes": list(d.opcoes or [])})
+                               "opcoes": list(d.opcoes or []), "opcional": codigo in o.opcionais})
         out.append({"codigo": o.codigo, "nome": o.nome, "descricao": o.descricao, "parametros": params})
     return out
 
@@ -103,7 +103,7 @@ def _resumo(user, s: RequestContext | None, defs: dict) -> dict | None:
     if s is None:
         return None
     informados = {}
-    for codigo in OBJETIVOS[s.objetivo].obrigatorios:
+    for codigo in OBJETIVOS[s.objetivo].parametros:
         d = defs.get(codigo)
         if d is None:
             continue
@@ -142,10 +142,10 @@ def _registrar_parametro(user, s: RequestContext, definicao, texto: str):
 
 def _aplicar_parametros(user, s, pares, defs) -> list[str]:
     erros = []
-    obrigatorios = OBJETIVOS[s.objetivo].obrigatorios
+    aceitos = OBJETIVOS[s.objetivo].parametros
     for codigo, texto in pares:
         d = defs.get(codigo)
-        if codigo not in obrigatorios or d is None:
+        if codigo not in aceitos or d is None:
             continue  # parâmetro que o objetivo não usa é ignorado
         try:
             _registrar_parametro(user, s, d, texto)
@@ -249,6 +249,10 @@ def avaliar(user, s: RequestContext, erros=None) -> Resposta:
         Criterio(defs[r.definicao].nome, exibir(r.valor), ORIGENS.get(r.escopo, r.escopo))
         for r in avaliacao.resolucoes if r.situacao == "resolvido"
     ]
+    for d in _definicoes(objetivo.opcionais).values():  # opcionais informados (ex.: busca por nome)
+        r = resolver(d, user, s)
+        if r.situacao == "resolvido":
+            criterios.append(Criterio(d.nome, exibir(r.valor), ORIGENS.get(r.escopo, r.escopo)))
     if avaliacao.estado == E.PRONTA:
         return Resposta(
             "pronta",
@@ -276,7 +280,7 @@ def processar_mensagem(user, texto: str, solicitacao_id=None, provedor=None, con
         return Resposta("sem_acesso", "Seu usuário ainda não tem acesso a consultas. Fale com o administrador.")
 
     atual = solicitacao_ativa(user, solicitacao_id)
-    todos_codigos = sorted({c for o in objetivos for c in o.obrigatorios} | {"filial-analise"})
+    todos_codigos = sorted({c for o in objetivos for c in o.parametros} | {"filial-analise"})
     defs = _definicoes(todos_codigos)
     try:
         trechos = [
@@ -344,7 +348,7 @@ def responder_parametro(user, solicitacao_id, codigo: str, valor: str) -> Respos
     s = solicitacao_ativa(user, solicitacao_id)
     if s is None:
         return Resposta("ajuda", "Não há solicitação em andamento.")
-    if codigo not in OBJETIVOS[s.objetivo].obrigatorios:
+    if codigo not in OBJETIVOS[s.objetivo].parametros:
         return Resposta("ajuda", "Parâmetro não pertence a esta solicitação.", solicitacao=s)
     defs = _definicoes([codigo])
     erros = _aplicar_parametros(user, s, [(codigo, valor)], defs)

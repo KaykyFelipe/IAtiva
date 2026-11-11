@@ -84,6 +84,9 @@ class _Montador:
             itens = [self.valor(f.campo, v) for v in f.valor]
             params.extend(itens)
             return f"{esquerda} NOT IN ({', '.join('?' for _ in itens)})"
+        if f.op == "LIKE":  # busca por nome: padrão montado por `plano.padrao_busca`
+            params.append(f.valor)
+            return f"{esquerda} LIKE ?"
         if f.op == "NOT_LIKE":
             params.append(f.valor)
             return f"{esquerda} NOT LIKE ?"

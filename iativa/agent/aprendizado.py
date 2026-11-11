@@ -139,6 +139,7 @@ def campos_da_tabela(user, alias: str) -> dict:
     return {
         "alias": t.alias, "nome": t.nome, "fisica": t.fisica, "campo_filial": t.campo_filial,
         "campos": campos, "datas": [c for c in campos if c.tipo == "D"],
+        "textos": [c for c in campos if c.tipo == "C"],
         "setores": Department.objects.filter(ativo=True).order_by("nome"),
     }
 
@@ -165,6 +166,9 @@ def salvar_proposta(user, alias: str, dados) -> ConsultaModelo:
     campo_data = dados.get("campo_data") or ""
     if campo_data and (campo_data not in por_nome or por_nome[campo_data].tipo != "D"):
         raise ValidationError("Campo de data inválido.")
+    busca = dados.get("campo_busca") or ""
+    if busca and (busca not in colunas or por_nome[busca].tipo != "C"):
+        raise ValidationError("O campo de busca por nome precisa ser uma das colunas escolhidas, do tipo texto.")
     filtros = []
     for n in range(MAX_FILTROS):
         campo, valor = dados.get(f"filtro_campo_{n}") or "", (dados.get(f"filtro_valor_{n}") or "").strip()
@@ -185,6 +189,7 @@ def salvar_proposta(user, alias: str, dados) -> ConsultaModelo:
     spec = {
         "colunas": [{"campo": c, "rotulo": por_nome[c].titulo or c, "tipo": _tipo(por_nome[c])} for c in colunas],
         "campo_data": campo_data,
+        "campo_busca": busca,  # vazio: escolhido automaticamente (contratos.campo_busca)
         "filtros_fixos": filtros,
         "ocultos": sorted(set(por_nome) - set(colunas)),
     }

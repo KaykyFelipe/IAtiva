@@ -7,9 +7,11 @@ Duas origens:
 O modelo só escolhe entre os objetivos que o usuário pode usar; os parâmetros obrigatórios vêm
 daqui. Cada código precisa existir como `ParameterDefinition` ativa.
 """
+import re
 from dataclasses import dataclass
 
 PREFIXO_APRENDIDO = "aprendido-"
+BUSCA = "texto-busca"  # opcional: filtra pelo nome (cliente, fornecedor, funcionário...)
 DOMINIO_APRENDIDO = "aprendido"
 
 
@@ -22,6 +24,12 @@ class Objetivo:
     tabelas: tuple[str, ...]
     obrigatorios: tuple[str, ...]
     modelo_id: int | None = None
+    # Opcionais: usados se a pessoa informar; nunca perguntados (ex.: busca por nome).
+    opcionais: tuple[str, ...] = ()
+
+    @property
+    def parametros(self) -> tuple[str, ...]:
+        return self.obrigatorios + self.opcionais
 
 
 FIXOS = {
@@ -34,6 +42,7 @@ FIXOS = {
             descricao="Títulos a receber vencidos e não pagos até uma data de corte, por cliente.",
             tabelas=("SE1", "SA1", "SE5"),
             obrigatorios=("data-corte", "dias-tolerancia-atraso", "tratamento-baixa-parcial", "filial-analise"),
+            opcionais=(BUSCA,),
         ),
         Objetivo(
             codigo="titulos-a-vencer",
@@ -42,6 +51,7 @@ FIXOS = {
             descricao="Títulos a receber em aberto com vencimento dentro de um período.",
             tabelas=("SE1", "SA1"),
             obrigatorios=("periodo-analise", "tratamento-baixa-parcial", "filial-analise"),
+            opcionais=(BUSCA,),
         ),
         Objetivo(
             codigo="posicao-cliente",
@@ -55,11 +65,25 @@ FIXOS = {
 }
 
 
+def campo_busca(spec: dict) -> str:
+    """Campo de texto usado na busca por nome de uma consulta aprendida: o escolhido no formulário
+    ou, nas antigas, a primeira coluna de texto que pareça nome (ex.: E2_NOMFOR, RA_NOME, A2_NOME)."""
+    colunas = [c for c in spec.get("colunas", []) if c.get("tipo") == "texto"]
+    escolhido = spec.get("campo_busca") or ""
+    if escolhido and any(c["campo"] == escolhido for c in colunas):
+        return escolhido
+    for c in colunas:
+        if re.search(r"_(NOME|NOM[A-Z]{0,4}|NREDUZ|RAZAO|DESC)$", c["campo"]):
+            return c["campo"]
+    return ""
+
+
 def de_modelo(cm) -> Objetivo:
     obrig = ["filial-analise"] + (["periodo-analise"] if cm.spec.get("campo_data") else [])
     return Objetivo(
         codigo=cm.codigo, dominio=DOMINIO_APRENDIDO, nome=cm.nome, descricao=cm.descricao,
         tabelas=(cm.tabela,), obrigatorios=tuple(obrig), modelo_id=cm.pk,
+        opcionais=(BUSCA,) if campo_busca(cm.spec) else (),
     )
 
 

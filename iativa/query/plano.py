@@ -4,6 +4,8 @@ O modelo de IA não participa: ele só escolheu o objetivo e ajudou a coletar os
 cada objetivo vira um plano com tabelas, junções, filtros, colunas e agrupamento. Nada de texto
 livre: o compilador só aceita campos que o catálogo marca como consultáveis.
 """
+import re
+import unicodedata
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 
@@ -22,7 +24,7 @@ class Campo:
 @dataclass(frozen=True)
 class Filtro:
     campo: Campo
-    op: str  # = <> < <= > >= IN NOT_IN NOT_LIKE
+    op: str  # = <> < <= > >= IN NOT_IN LIKE NOT_LIKE
     valor: object  # valor literal (vira parâmetro) ou Campo
 
 
@@ -74,6 +76,25 @@ def _tratamento(valores, plano) -> Campo:
     return Campo(e1, "E1_VALOR")
 
 
+BUSCA = "texto-busca"
+
+
+def padrao_busca(texto: str) -> str:
+    """"Alcans Ltda." → "%ALCANS%LTDA%". Sem acento, maiúsculas (a base usa collation binária e o
+    Protheus grava nomes em maiúsculas), só letras/números; curingas do usuário são descartados."""
+    t = unicodedata.normalize("NFKD", texto or "").encode("ascii", "ignore").decode().upper()
+    palavras = re.sub(r"[^A-Z0-9]+", " ", t).split()
+    miolo = "%".join(palavras)[:38].strip("%")
+    return f"%{miolo}%" if miolo else ""
+
+
+def _aplicar_busca(plano, campo: Campo, valores: dict):
+    padrao = padrao_busca(valores.get(BUSCA) or "")
+    if padrao:
+        plano.filtros.append(Filtro(campo, "LIKE", padrao))
+        plano.premissas.append(f"Busca por nome: {campo.nome} contendo “{padrao.strip('%').replace('%', ' ')}”.")
+
+
 def _comuns(plano, filial):
     e1 = "e1"
     plano.filial = filial
@@ -106,6 +127,10 @@ def montar_modelo(tabela: str, spec: dict, valores: dict, codigo: str) -> Plano:
         plano.premissas.append(f"Período aplicado ao campo {campo_data}.")
     for f in spec.get("filtros_fixos", []):
         plano.premissas.append(f"Filtro fixo: {f['campo']} = {f['valor']}.")
+    from iativa.agent.contratos import campo_busca
+
+    if campo_busca(spec):
+        _aplicar_busca(plano, Campo(e1, campo_busca(spec)), valores)
     tipos = {"data": "data", "numero": "numero", "texto": "texto"}
     plano.colunas = [Coluna(c["rotulo"], Campo(e1, c["campo"]), tipo=tipos.get(c["tipo"], "texto"))
                      for c in spec["colunas"]]
@@ -131,6 +156,7 @@ def montar(objetivo: str, valores: dict) -> Plano:
         corte = date.fromisoformat(valores["data-corte"])
         limite = corte - timedelta(days=int(valores["dias-tolerancia-atraso"]))
         _comuns(plano, valores["filial-analise"])
+        _aplicar_busca(plano, Campo(a1, "A1_NOME"), valores)
         valor = _tratamento(valores, plano)
         plano.filtros += [
             Filtro(Campo(e1, "E1_EMISSAO"), "<=", corte.strftime("%Y%m%d")),
@@ -156,6 +182,7 @@ def montar(objetivo: str, valores: dict) -> Plano:
     if objetivo == "titulos-a-vencer":
         periodo = valores["periodo-analise"]
         _comuns(plano, valores["filial-analise"])
+        _aplicar_busca(plano, Campo(a1, "A1_NOME"), valores)
         valor = _tratamento(valores, plano)
         plano.filtros += [
             Filtro(Campo(e1, "E1_VENCREA"), ">=", _aaaammdd(periodo["inicio"])),

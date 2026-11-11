@@ -16,6 +16,12 @@
           <option value="">Sem período</option>
           {% for c in aprendizado.datas %}<option value="{{ c.nome }}">{{ c.nome }} · {{ c.titulo }}</option>{% endfor %}
         </select></dd></div>
+      <div><dt><label for="ap-busca">Busca por nome no campo</label></dt>
+        <dd><select id="ap-busca" name="campo_busca">
+          <option value="">Automático (coluna de nome)</option>
+          {% for c in aprendizado.textos %}<option value="{{ c.nome }}">{{ c.nome }} · {{ c.titulo }}</option>{% endfor %}
+        </select>
+        <span class="sutil">Permite perguntas como “a Alcans lançou conta?”. Precisa estar entre as colunas.</span></dd></div>
       <div><dt></dt><dd class="sutil">Filtros fixos são opcionais e restringem <strong>todas</strong> as execuções a um valor exato
         (ex.: <code>RA_SITFOLH</code> = <code>D</code> para só demitidos). Deixe em branco se não precisar. Não use para escolher colunas.</dd></div>
       {% for n in faixa_filtros %}
