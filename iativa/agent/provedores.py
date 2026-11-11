@@ -10,6 +10,7 @@ O provedor devolve um dicionário bruto; quem valida é `esquema.validar`.
 """
 import json
 import re
+import logging
 import time
 
 from django.conf import settings
@@ -17,6 +18,9 @@ from django.core.exceptions import ImproperlyConfigured
 
 from .decisao import esquema as esquema_decisao
 from .esquema import EntradaModelo, esquema_json
+
+
+logger = logging.getLogger(__name__)
 
 
 class FalhaModelo(RuntimeError):
@@ -446,9 +450,12 @@ class OpenRouterProvider(LLMProvider):
                 except (KeyError, IndexError, TypeError):
                     raise FalhaModelo("resposta sem conteúdo") from None
                 return self._extrair_json(msg.get("content") or "")
-            ultimo = status
+            erro = dados.get("error") if isinstance(dados, dict) else None
+            detalhe = str((erro or {}).get("message", ""))[:200] if isinstance(erro, dict) else ""
+            ultimo = f"{status}: {detalhe}" if detalhe else status
+            logger.warning("OpenRouter %s respondeu %s", modelo, ultimo)
             if status not in self.TEMPORARIOS:
-                raise FalhaModelo(f"erro do provedor ({status})")
+                raise FalhaModelo(f"erro do provedor ({ultimo})")
         raise FalhaModelo(f"provedor indisponível ({ultimo})", temporaria=True)
 
 
