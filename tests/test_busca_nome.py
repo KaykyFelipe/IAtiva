@@ -210,3 +210,29 @@ def test_resposta_curta_com_a_filial_aplica_sem_modelo(admin):
 
     msg, res = conversas.enviar(admin, c, "01", Proibido())
     assert res is not None and res.ok
+
+
+def test_renomear_conversa(client, admin, novo_usuario):
+    from django.urls import reverse
+
+    c = conversas.nova_individual(admin)
+    conversas.enviar(admin, c, ATRASO)
+    client.force_login(admin)
+    url = reverse("chat:renomear", args=[c.pk])
+    r = client.post(url, {"titulo": "  Atrasos   de janeiro "})
+    assert r.status_code == 200 and r.content.decode() == "Atrasos de janeiro"
+    c.refresh_from_db()
+    assert c.titulo == "Atrasos de janeiro"
+    assert client.post(url, {"titulo": "   "}).status_code == 400
+    outro = novo_usuario("outro", Department.objects.get(codigo="financeiro-cobranca"))
+    client.force_login(outro)
+    assert client.post(url, {"titulo": "x"}).status_code == 404
+
+
+def test_layout_lembrado_entre_conversas(client, admin):
+    from django.urls import reverse
+
+    client.force_login(admin)
+    assert client.post(reverse("chat:layout"), {"largura": "999", "ampla": "1"}).status_code == 204
+    html = client.get(reverse("chat:index")).content.decode()
+    assert "leitura-ampla" in html and "--largura-lateral: 430px" in html and "lateral-recolhida" not in html

@@ -7,6 +7,7 @@ urlpatterns = [
     path("", views.index, name="index"),
     path("nova/", views.nova, name="nova"),
     path("c/<int:conversa_id>/", views.conversa, name="conversa"),
+    path("c/<int:conversa_id>/renomear/", views.renomear, name="renomear"),
     path("c/<int:conversa_id>/mensagem/", views.mensagem, name="mensagem"),
     path("c/<int:conversa_id>/parametro/", views.parametro, name="parametro"),
     path("c/<int:conversa_id>/cancelar/", views.cancelar, name="cancelar"),
@@ -18,6 +19,7 @@ urlpatterns = [
     path("setor/<int:setor_id>/", views.setor, name="setor"),
     path("mestre/", views.mestre, name="mestre"),
     path("memoria/", views.memoria, name="memoria"),
+    path("layout/", views.layout, name="layout"),
     path("parar/", views.parar, name="parar"),
     path("memoria/decidir/", views.memoria_decidir, name="memoria_decidir"),
 ]

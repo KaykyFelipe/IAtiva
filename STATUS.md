@@ -4,6 +4,15 @@
 **Etapa atual:** 6 — Memórias setoriais e chat consolidado
 **Situação:** **implementada, aguardando validação.** Plano aprovado em 2026-11-11. Etapa 5 aprovada em 2026-11-11 por Diego; conferência dos números com o Financeiro e premissas T29 seguem pendentes.
 
+## Mudança M15 — ajustes do chat e da conexão Claude (2026-11-11)
+
+- Layout (largura da lateral, leitura expandida, lateral recolhida) lembrado na sessão
+  do servidor ao trocar de conversa; nada no navegador.
+- Títulos das conversas maiores; lápis ao passar o mouse renomeia a conversa (só o dono).
+- Conectar Claude: só usuários com função TI no perfil (superusuário sozinho não basta);
+  escolha de modelo (Opus/Sonnet/Haiku) e esforço (`--effort`) salva por usuário.
+- Testes: 456 aprovados e 10 pulados no Windows.
+
 ## Mudança M14 — CLI Claude no Docker (2026-11-11)
 
 - Corrigida a dependência ausente na imagem: instalação nativa oficial 2.1.321,

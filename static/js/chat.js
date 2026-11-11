@@ -3,7 +3,23 @@
   const app = document.getElementById("app");
   const grupos = new Map();
   let busca = "";
-  let larguraLateral = 278;
+  let larguraLateral = parseInt(app.dataset.largura, 10) || 278;
+
+  let salvarTimer = null;
+  function salvarLayout() {
+    // Lembrado na sessão do servidor (só layout, nenhum dado), para valer ao trocar de conversa.
+    clearTimeout(salvarTimer);
+    salvarTimer = setTimeout(() => {
+      fetch(app.dataset.layoutUrl, {
+        method: "POST", headers: {"X-CSRFToken": csrf(), "Content-Type": "application/x-www-form-urlencoded"},
+        body: new URLSearchParams({
+          largura: larguraLateral,
+          ampla: app.classList.contains("leitura-ampla") ? "1" : "",
+          recolhida: app.classList.contains("lateral-recolhida") ? "1" : "",
+        }),
+      }).catch(() => {});
+    }, 300);
+  }
 
   function saudacao(hora) {
     return hora >= 5 && hora < 12 ? "Bom dia" : hora >= 12 && hora < 18 ? "Boa tarde" : "Boa noite";
@@ -41,6 +57,58 @@
     app.style.setProperty("--largura-lateral", larguraLateral + "px");
     const divisor = document.querySelector("[data-redimensionar]");
     if (divisor) divisor.setAttribute("aria-valuenow", larguraLateral);
+    salvarLayout();
+  }
+
+
+  function csrf() {
+    const campo = document.querySelector("input[name=csrfmiddlewaretoken]");
+    return campo ? campo.value : "";
+  }
+
+  function renomear(botao) {
+    const link = botao.closest("a");
+    const titulo = link.querySelector("[data-titulo]");
+    if (!titulo || link.querySelector("input.renomeando")) return;
+    const original = titulo.textContent;
+    const campo = document.createElement("input");
+    campo.className = "renomeando";
+    campo.maxLength = 80;
+    campo.value = original;
+    campo.setAttribute("aria-label", "Novo nome da conversa");
+    titulo.hidden = true;
+    titulo.after(campo);
+    campo.focus();
+    campo.select();
+    let feito = false;
+    const fechar = (novo) => {
+      if (feito) return;
+      feito = true;
+      titulo.textContent = novo;
+      titulo.hidden = false;
+      campo.remove();
+    };
+    const salvar = () => {
+      const novo = campo.value.trim();
+      if (!novo || novo === original) return fechar(original);
+      fetch(botao.dataset.renomear, {
+        method: "POST", headers: {"X-CSRFToken": csrf(), "Content-Type": "application/x-www-form-urlencoded"},
+        body: new URLSearchParams({titulo: novo}),
+      }).then((r) => r.ok ? r.text() : Promise.reject()).then((t) => {
+        fechar(t);
+        if (link.classList.contains("ativa")) {
+          const h1 = document.querySelector(".titulo-conversa h1");
+          if (h1) h1.textContent = t;
+        }
+      }).catch(() => fechar(original));
+    };
+    ["click", "mousedown"].forEach((ev) => campo.addEventListener(ev, (e) => { e.preventDefault(); e.stopPropagation(); }));
+    campo.addEventListener("keydown", (e) => {
+      e.stopPropagation();
+      if (e.key === "Enter") { e.preventDefault(); salvar(); }
+      if (e.key === "Escape") { e.preventDefault(); fechar(original); }
+    });
+    campo.addEventListener("blur", salvar);
   }
 
   document.addEventListener("toggle", (e) => {
@@ -115,21 +183,27 @@
   }
 
   document.addEventListener("click", (e) => {
+    const lapis = e.target.closest("[data-renomear]");
+    if (lapis) { e.preventDefault(); e.stopPropagation(); renomear(lapis); return; }
+    if (e.target.closest("input.renomeando")) { e.preventDefault(); return; }
     const alvo = e.target.closest("[data-sugestao], [data-abrir-lateral], [data-fechar-lateral], [data-recolher-lateral], [data-expandir-leitura]");
     if (!alvo) return;
     if (alvo.hasAttribute("data-abrir-lateral")) {
       if (innerWidth <= 680) app.classList.add("menu-aberto");
       else app.classList.remove("lateral-recolhida");
+      salvarLayout();
     }
     if (alvo.hasAttribute("data-fechar-lateral")) app.classList.remove("menu-aberto");
     if (alvo.hasAttribute("data-recolher-lateral")) {
       if (innerWidth <= 680) app.classList.remove("menu-aberto");
       else app.classList.add("lateral-recolhida");
+      salvarLayout();
     }
     if (alvo.hasAttribute("data-expandir-leitura")) {
       const ampla = app.classList.toggle("leitura-ampla");
       alvo.setAttribute("aria-pressed", String(ampla));
       alvo.title = ampla ? "Restaurar largura de leitura" : "Expandir área de leitura";
+      salvarLayout();
     }
     if (alvo.hasAttribute("data-sugestao")) {
       const campo = document.querySelector("[data-campo]");

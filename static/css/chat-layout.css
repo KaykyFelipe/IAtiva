@@ -35,11 +35,11 @@ body { font-family: "Segoe UI Variable Text", "Segoe UI", Arial, sans-serif; fon
 .grupo > summary::-webkit-details-marker { display: none; }
 .grupo > summary .simbolo-svg { height: 11px; width: 11px; transition: transform .15s; }
 .grupo:not([open]) > summary .simbolo-svg { transform: rotate(-90deg); }
-.conversa { width: 100%; min-height: 37px; padding: 8px 11px; margin: 2px 0; border-radius: 7px; gap: 10px; font-size: 12.5px; white-space: nowrap; }
+.conversa { width: 100%; min-height: 37px; padding: 8px 11px; margin: 2px 0; border-radius: 7px; gap: 10px; font-size: 13.5px; white-space: nowrap; }
 .conversa .simbolo-svg { color: #76877c; height: 16px; width: 16px; }
 .conversa.ativa { background: #e4ece8; color: #244c3a; box-shadow: none; font-weight: 560; }
 .conversa.ativa .simbolo-svg { color: #34784c; }
-.recentes .conversa { min-height: 34px; font-size: 12px; }
+.recentes .conversa { min-height: 34px; font-size: 13.5px; }
 .recentes .simbolo-svg { width: 14px; height: 14px; color: #93a197; }
 .periodo { margin: 8px 11px 4px; font-size: 10px; color: #8c9a91; }
 .contador { border-radius: 5px; min-width: 18px; background: #e0e9e2; color: #5d7664; font-size: 10px; font-weight: 400; }
@@ -62,7 +62,7 @@ body { font-family: "Segoe UI Variable Text", "Segoe UI", Arial, sans-serif; fon
 .principal { min-width: 0; }
 .conversa-area { overflow: hidden; }
 .cabecalho { min-height: 69px; flex: none; padding: 10px 31px; gap: 11px; border-bottom: 0; background: var(--papel); }
-.titulo-conversa h1 { font-size: 14px; font-weight: 560; letter-spacing: -.15px; }
+.titulo-conversa h1 { font-size: 16px; font-weight: 560; letter-spacing: -.15px; }
 .escopo { font-size: 10px; color: #84928a; }
 .inicio .escopo { display: none; }
 .abrir-lateral { display: none; }
@@ -146,7 +146,7 @@ button.secundario:hover { background: #f0f5f1; }
   .abrir-lateral { display: inline-grid; }
   .divisoria-lateral, .expandir-leitura { display: none; }
   .cabecalho { min-height: 62px; padding: 8px 13px; gap: 7px; }
-  .titulo-conversa h1 { font-size: 12px; }
+  .titulo-conversa h1 { font-size: 14px; }
   .escopo { font-size: 9px; }
   .mensagens { padding: 15px 20px 25px; gap: 22px; }
   .msg { font-size: 13px; }
@@ -172,3 +172,11 @@ button.secundario:hover { background: #f0f5f1; }
   th { font-size: 10px; }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }
+
+/* Renomear conversa: lápis aparece ao passar o mouse. */
+.conversa .renomear { display: none; flex: none; border: 0; background: none; padding: 2px; margin: -2px 0; border-radius: 5px; color: #76877c; cursor: pointer; line-height: 0; }
+.conversa .renomear .simbolo-svg { width: 14px; height: 14px; }
+.conversa:hover .renomear, .conversa:focus-within .renomear { display: inline-flex; }
+.conversa .renomear:hover { background: #dfe8e3; color: #244c3a; }
+.conversa input.renomeando { flex: 1; min-width: 0; font: inherit; padding: 2px 6px; border: 1px solid #9db8a8; border-radius: 5px; background: #fff; }
+@media (hover: none) { .conversa.ativa .renomear { display: inline-flex; } }

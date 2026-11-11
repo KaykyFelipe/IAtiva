@@ -67,6 +67,7 @@ def _contexto(request, c=None, form=None, erro="", resultado=None, resultado_msg
         "TipoConversa": TipoConversa,
         "perfil": {"nome": nome, "primeiro_nome": (request.user.first_name.strip() or request.user.get_username()).split()[0],
                    "iniciais": iniciais or "?", "setor": setor.nome if setor else "Sem setor"},
+        "layout": _layout(request),
         "frase_inicio": FRASES_INICIO[request.session.get("inicio_frase", 0) % len(FRASES_INICIO)],
     }
 
@@ -89,6 +90,36 @@ def index(request):
 @require_GET
 def conversa(request, conversa_id):
     return _render(request, _obter(request, conversa_id))
+
+
+def _layout(request):
+    l = request.session.get("layout", {})
+    largura = l.get("largura", 278)
+    return {"largura": largura if isinstance(largura, int) and 224 <= largura <= 430 else 278,
+            "ampla": bool(l.get("ampla")), "recolhida": bool(l.get("recolhida"))}
+
+
+@require_POST
+def layout(request):
+    """Lembra só o layout da tela (largura da lateral, leitura expandida, lateral recolhida)."""
+    try:
+        largura = max(224, min(430, int(request.POST.get("largura", 278))))
+    except ValueError:
+        largura = 278
+    request.session["layout"] = {"largura": largura, "ampla": bool(request.POST.get("ampla")),
+                                 "recolhida": bool(request.POST.get("recolhida"))}
+    return HttpResponse(status=204)
+
+
+@require_POST
+def renomear(request, conversa_id):
+    try:
+        c = conversas.renomear(request.user, conversa_id, request.POST.get("titulo", ""))
+    except ConversationContext.DoesNotExist:
+        raise Http404 from None
+    except ValidationError as exc:
+        return HttpResponse(exc.messages[0], status=400)
+    return HttpResponse(c.titulo)
 
 
 @require_POST

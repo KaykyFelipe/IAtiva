@@ -104,7 +104,21 @@ def lateral(user) -> dict:
     from iativa.agent import memoria
 
     pendentes = sum(1 for p in memoria.pendencias(user) if p.pode_decidir)
-    return {"grupos": grupos, "setores": setores, "mestre": pode_mestre(user), "pendentes": pendentes}
+    from iativa.agent.claude_login import permitido
+
+    return {"grupos": grupos, "setores": setores, "mestre": pode_mestre(user), "pendentes": pendentes,
+            "claude": permitido(user)}
+
+
+def renomear(user, conversa_id, titulo: str) -> ConversationContext:
+    """Só o dono renomeia a própria conversa individual."""
+    c = ConversationContext.objects.get(pk=conversa_id, tipo=T.INDIVIDUAL, usuario=user)
+    titulo = " ".join(titulo.split())[:80]
+    if not titulo:
+        raise ValidationError("Informe um nome para a conversa.")
+    c.titulo = titulo
+    c.save(update_fields=["titulo"])
+    return c
 
 
 def _estado_lateral(c) -> str:

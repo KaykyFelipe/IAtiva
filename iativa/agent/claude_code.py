@@ -163,6 +163,7 @@ class ClaudeCodeProvider(LLMProvider):
         if not 1 <= self.timeout <= 600:
             raise ImproperlyConfigured("Timeout Claude deve estar entre 1 e 600 segundos.")
         self.modelo = cfg.get("claude_modelo", "sonnet")
+        self.esforco = cfg.get("claude_esforco", "")
 
     def _executar(self, args, prompt="", timeout=None):
         return executar_cli([self.cli, *args], prompt, env=self.env, timeout=timeout or self.timeout)
@@ -186,7 +187,7 @@ class ClaudeCodeProvider(LLMProvider):
         if len(prompt.encode("utf-8")) > 200_000:
             raise FalhaModelo("Contexto do Claude excedeu o limite permitido.")
         self.verificar()
-        args = ["--safe-mode", "-p", "--model", self.modelo,
+        args = ["--safe-mode", "-p", "--model", self.modelo, *(["--effort", self.esforco] if self.esforco else []),
                 "--tools", "", "--disallowedTools", "mcp__*",
                 "--strict-mcp-config", "--mcp-config", '{"mcpServers":{}}',
                 "--no-session-persistence", "--output-format", "json",

@@ -30,9 +30,17 @@ def esperar(check):
     pytest.fail("O processo de login não chegou ao estado esperado.")
 
 
+def _ti(user):
+    from iativa.accounts.models import Department, Funcao, UserProfile
+
+    setor, _ = Department.objects.get_or_create(codigo="ti", defaults={"nome": "TI"})
+    UserProfile.objects.create(user=user, department=setor, funcao=Funcao.TI)
+    return user
+
+
 @pytest.fixture
 def admin(django_user_model):
-    return django_user_model.objects.create_superuser("dono-claude", password="senha-ficticia")
+    return _ti(django_user_model.objects.create_user("dono-claude", password="senha-ficticia"))
 
 
 @pytest.fixture
@@ -146,7 +154,7 @@ def test_nao_reutiliza_codigo_e_nao_ecoar(admin, fake, client):
 
 
 def test_outro_usuario_ou_sessao_nao_acessa_fluxo(admin, fake, django_user_model):
-    outro = django_user_model.objects.create_superuser("outro-admin", password="senha-ficticia")
+    outro = _ti(django_user_model.objects.create_user("outro-admin", password="senha-ficticia"))
     fluxo = pronto(fake, admin)
     with pytest.raises(FalhaModelo):
         fake.manager.obter(outro, "sessao-a", fluxo.id)
@@ -249,3 +257,40 @@ def test_login_desconhecido_ou_api_nao_ativa(resposta):
     provider = SimpleNamespace(_executar=lambda *a, **kw: resposta)
     with pytest.raises(FalhaModelo):
         cl.conectado(provider)
+
+
+def test_superusuario_sem_funcao_ti_nao_acessa(fake, client, django_user_model):
+    su = django_user_model.objects.create_superuser("super", password="senha-ficticia")
+    assert not cl.permitido(su)
+    client.force_login(su)
+    assert client.get(reverse("claude-conta")).status_code == 403
+    assert "Conectar Claude" not in client.get(reverse("chat:index")).content.decode()
+
+
+def test_ti_ve_conectar_e_salva_modelo_e_esforco(admin, fake, client):
+    client.force_login(admin)
+    assert "Conectar Claude" in client.get(reverse("chat:index")).content.decode()
+    r = client.post(reverse("claude-conta"), {"acao": "preferencias", "modelo": "opus", "esforco": "high"})
+    assert r.status_code == 200 and "salvos" in r.content.decode()
+    cfg = cl.config_usuario(admin)
+    assert cfg["claude_modelo"] == "opus" and cfg["claude_esforco"] == "high"
+    assert "invalido" not in cfg
+    r = client.post(reverse("claude-conta"), {"acao": "preferencias", "modelo": "gpt", "esforco": "high"})
+    assert "inválido" in r.content.decode() and cl.config_usuario(admin)["claude_modelo"] == "opus"
+
+
+def test_esforco_vai_para_a_cli(admin, fake, monkeypatch, settings):
+    monkeypatch.setattr("iativa.agent.claude_code.resolver_cli", lambda _: sys.executable)
+    cfg = {**cl.config_usuario(admin), "envio_liberado": True, "claude_esforco": "max"}
+    chamado = {}
+    p = ClaudeCodeProvider(cfg)
+    monkeypatch.setattr(p, "verificar", lambda: None)
+
+    def executar(args, prompt="", timeout=None):
+        chamado["args"] = args
+        return 1, "{}", "boom"
+    monkeypatch.setattr(p, "_executar", executar)
+    with pytest.raises(FalhaModelo):
+        p._gerar("x", {}, lambda *a: None, [], [])
+    i = chamado["args"].index("--effort")
+    assert chamado["args"][i + 1] == "max"

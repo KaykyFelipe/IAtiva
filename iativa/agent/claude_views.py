@@ -4,7 +4,8 @@ from django.views.decorators.debug import sensitive_post_parameters
 from django.views.decorators.http import require_GET, require_http_methods
 
 from .claude_login import (
-    ativa, chave_sessao, conectado, login, permitido, provedor_login,
+    ESFORCOS, MODELOS, ativa, chave_sessao, conectado, config_usuario, login, permitido, provedor_login,
+    salvar_preferencias,
 )
 from .provedores import FalhaModelo
 
@@ -15,14 +16,16 @@ def _autorizar(request):
 
 
 def _contexto(request, estado=None, erro=""):
-    return {"estado": estado, "erro": erro, "claude_ativo": ativa(request.user)}
+    cfg = config_usuario(request.user)
+    return {"estado": estado, "erro": erro, "claude_ativo": ativa(request.user), "modelos": MODELOS,
+            "esforcos": ESFORCOS, "modelo_atual": cfg["claude_modelo"], "esforco_atual": cfg["claude_esforco"]}
 
 
 @require_http_methods(["GET", "POST"])
 @sensitive_post_parameters("codigo")
 def conta(request):
     _autorizar(request)
-    estado, erro = None, ""
+    estado, erro, sessao = None, "", ""
     if request.method == "POST":
         try:
             sessao = chave_sessao(request)
@@ -36,6 +39,9 @@ def conta(request):
             elif acao == "desconectar":
                 login.desconectar(request.user, sessao)
                 estado = {"fase": "desconectado", "mensagem": "Claude desconectado deste IAtiva."}
+            elif acao == "preferencias":
+                salvar_preferencias(request.user, request.POST.get("modelo", ""), request.POST.get("esforco", ""))
+                estado = {"fase": "preferencias", "mensagem": "Modelo e esforço salvos. Valem a partir da próxima mensagem."}
             elif acao == "verificar":
                 provider = provedor_login(request.user)
                 provider.checar_cli()

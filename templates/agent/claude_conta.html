@@ -7,6 +7,17 @@
   <p>Conecte sua assinatura pelo login oficial do Claude. A conexão fica disponível somente para suas conversas pessoais neste IAtiva.</p>
   {% include "agent/_claude_estado.html" %}
   <hr>
+  <h2>Modelo e esforço</h2>
+  <form method="post" action="{% url 'claude-conta' %}" class="preferencias-claude">
+    {% csrf_token %}<input type="hidden" name="acao" value="preferencias">
+    <label for="claude-modelo">Modelo</label>
+    <select id="claude-modelo" name="modelo">{% for v, r in modelos %}<option value="{{ v }}"{% if v == modelo_atual %} selected{% endif %}>{{ r }}</option>{% endfor %}</select>
+    <label for="claude-esforco">Esforço de raciocínio</label>
+    <select id="claude-esforco" name="esforco">{% for v, r in esforcos %}<option value="{{ v }}"{% if v == esforco_atual %} selected{% endif %}>{{ r }}</option>{% endfor %}</select>
+    <p class="sutil">Mais esforço pensa mais antes de responder: fica mais lento e gasta mais do limite da assinatura.</p>
+    <button type="submit">Salvar</button>
+  </form>
+  <hr>
   <p class="sutil">Seu histórico continua no IAtiva. Resultados do banco não são enviados ao Claude.</p>
   <p class="sutil">A assinatura tem limites. Confira na sua conta Claude se o uso extra pago está desativado.</p>
   <p class="sutil">O envio de perguntas pelo chat também depende da liberação de privacidade configurada no IAtiva.</p>

@@ -30,9 +30,23 @@ MAX_OUTPUT = 32_768
 TEMPO_LOGIN = 900
 
 
+MODELOS = (("opus", "Opus (mais capaz)"), ("sonnet", "Sonnet (equilibrado)"), ("haiku", "Haiku (mais rápido)"))
+ESFORCOS = (("", "Padrão da CLI"), ("low", "Baixo"), ("medium", "Médio"), ("high", "Alto"),
+            ("xhigh", "Muito alto"), ("max", "Máximo"))
+PREFERENCIAS = "iativa-preferencias.json"
+
+
+def eh_ti(user):
+    """Só quem tem a função TI no perfil vê e usa a conexão Claude."""
+    from iativa.accounts.models import Funcao
+
+    perfil = getattr(user, "perfil_iativa", None) if user.is_authenticated else None
+    return bool(perfil and perfil.funcao == Funcao.TI)
+
+
 def permitido(user):
     dono = settings.IATIVA_AGENTE.get("claude_usuario", "")
-    return bool(user.is_authenticated and user.is_active and user.is_superuser
+    return bool(user.is_authenticated and user.is_active and eh_ti(user)
                 and (not dono or user.get_username() == dono))
 
 
@@ -44,7 +58,31 @@ def config_usuario(user):
     if not root.is_absolute():
         raise FalhaModelo("O diretório das contas Claude deve ser absoluto.")
     cfg["claude_config_dir"] = str(root / f"usuario-{user.pk}")
+    cfg.update(preferencias(cfg))
     return cfg
+
+
+def preferencias(cfg):
+    """Modelo e esforço escolhidos pelo usuário; padrão do settings quando não há escolha válida."""
+    atual = {"claude_modelo": cfg.get("claude_modelo", "sonnet"), "claude_esforco": cfg.get("claude_esforco", "")}
+    try:
+        dados = json.loads((Path(cfg["claude_config_dir"]) / PREFERENCIAS).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return atual
+    if isinstance(dados, dict):
+        if dados.get("modelo") in dict(MODELOS):
+            atual["claude_modelo"] = dados["modelo"]
+        if dados.get("esforco") in dict(ESFORCOS):
+            atual["claude_esforco"] = dados["esforco"]
+    return atual
+
+
+def salvar_preferencias(user, modelo, esforco):
+    if modelo not in dict(MODELOS) or esforco not in dict(ESFORCOS):
+        raise FalhaModelo("Modelo ou esforço inválido.")
+    pasta = Path(config_usuario(user)["claude_config_dir"])
+    pasta.mkdir(parents=True, exist_ok=True, mode=0o700)
+    (pasta / PREFERENCIAS).write_text(json.dumps({"modelo": modelo, "esforco": esforco}), encoding="utf-8")
 
 
 def ativa(user):

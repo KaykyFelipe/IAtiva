@@ -13,7 +13,7 @@
 </head>
 <body>
 {% include "chat/_icones.html" %}
-<div class="app" id="app">
+<div class="app{% if layout.ampla %} leitura-ampla{% endif %}{% if layout.recolhida %} lateral-recolhida{% endif %}" id="app" data-layout-url="{% url 'chat:layout' %}" data-largura="{{ layout.largura }}" style="--largura-lateral: {{ layout.largura }}px">
   <button class="fundo-menu" type="button" data-fechar-lateral aria-label="Fechar navegação"></button>
   {% include "chat/_lateral.html" %}
   <main class="principal">
