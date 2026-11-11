@@ -111,3 +111,16 @@ class RequestContext(models.Model):
 
     def __str__(self):
         return f"Solicitação #{self.pk} ({self.objetivo}, {self.estado})"
+
+
+class PedidoInterrompido(models.Model):
+    """Botão "parar" do chat: marca o envio (id gerado no navegador) que a pessoa interrompeu.
+    O envio confere a marca depois da resposta da IA e, se houver, descarta tudo o que faria.
+    Guarda só o id e o dono; apagado ao ser usado ou depois de um dia."""
+
+    pedido = models.UUIDField()
+    usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="+")
+    criado_em = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["pedido", "usuario"], name="pedido_interrompido_unico")]

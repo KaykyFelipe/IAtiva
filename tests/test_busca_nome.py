@@ -92,3 +92,34 @@ def test_campo_busca_invalido_e_recusado(admin):
 
     with pytest.raises(ValidationError, match="busca por nome"):
         _modelo_sa1(admin, campo_busca="A1_LOJA")
+
+
+def _decisao(**kw):
+    base = {"resposta": "", "acao": "conversar", "objetivo": "", "parametros": [], "alvo": "", "nota": "",
+            "confirmado": False, "opcoes": []}
+    return {**base, **kw}
+
+
+def test_continuacao_herda_criterios_e_executa(admin):
+    from iativa.agent.provedores import FakeProvider
+
+    c = conversas.nova_individual(admin)
+    _, primeira = conversas.enviar(admin, c, ATRASO)
+    # "e do cliente sintetico 001?": o modelo manda só a busca, sem os outros critérios.
+    p = FakeProvider([_decisao(acao="preparar_consulta", objetivo="titulos-em-atraso",
+                               parametros=[{"codigo": "texto-busca", "valor": "sintetico 001"}])])
+    _, res = conversas.enviar(admin, c, "e do cliente sintetico 001?", p)
+    assert res is not None and res.ok and 0 < len(res.linhas) < len(primeira.linhas)
+
+
+def test_executar_sem_consulta_aberta_roda_de_novo(admin):
+    from iativa.agent.provedores import FakeProvider
+
+    c = conversas.nova_individual(admin)
+    conversas.enviar(admin, c, ATRASO)
+    # Caso real: o Gemini respondeu "Processando agora" com executar_consulta depois da anterior concluída.
+    p = FakeProvider([_decisao(acao="executar_consulta", resposta="Processando agora.",
+                               parametros=[{"codigo": "texto-busca", "valor": "sintetico 002"}])])
+    msg, res = conversas.enviar(admin, c, "procure se tem do sintetico 002", p)
+    assert res is not None and res.ok and "Consulta executada" in msg.texto
+    assert RequestContext.objects.filter(estado=E.CONCLUIDA).count() == 2

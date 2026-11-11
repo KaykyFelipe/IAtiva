@@ -280,3 +280,45 @@ def test_falha_temporaria_explica_ao_usuario(ana):
     c = conversas.nova_individual(ana)
     msg, _ = _falar(ana, c, "x", FakeProvider([FalhaModelo("503", temporaria=True)]))
     assert "sobrecarregada ou no limite" in msg.texto
+
+
+def test_parar_descarta_o_envio(ana):
+    import uuid
+
+    from iativa.agent.agente import Interrompido
+    from iativa.chat.models import Mensagem
+
+    c = conversas.nova_individual(ana)
+    pedido = uuid.uuid4()
+    conversas.interromper(ana, pedido)
+    with pytest.raises(Interrompido):
+        conversas.enviar(ana, c, ATRASO, pedido=pedido)
+    assert not Mensagem.objects.filter(conversa=c).exists() and not RequestContext.objects.exists()
+
+
+def test_parar_de_outro_usuario_nao_afeta(ana, admin):
+    import uuid
+
+    pedido = uuid.uuid4()
+    conversas.interromper(admin, pedido)
+    c = conversas.nova_individual(ana)
+    msg, res = conversas.enviar(ana, c, ATRASO, pedido=pedido)
+    assert res is not None and res.ok
+
+
+def test_views_parar_e_mensagem_interrompida(client, ana):
+    import uuid
+
+    from django.urls import reverse
+
+    from iativa.chat.models import Mensagem
+
+    c = conversas.nova_individual(ana)
+    client.force_login(ana)
+    pedido = str(uuid.uuid4())
+    assert client.post(reverse("chat:parar"), {"pedido": pedido}).status_code == 204
+    assert client.post(reverse("chat:parar"), {"pedido": "x"}).status_code == 400
+    r = client.post(reverse("chat:mensagem", args=[c.pk]), {"mensagem": ATRASO, "pedido": pedido})
+    assert r.status_code == 204 and not Mensagem.objects.filter(conversa=c).exists()
+    r = client.post(reverse("chat:mensagem", args=[c.pk]), {"mensagem": ATRASO, "pedido": pedido})
+    assert r.status_code == 200 and Mensagem.objects.filter(conversa=c).exists()  # marca usada e apagada

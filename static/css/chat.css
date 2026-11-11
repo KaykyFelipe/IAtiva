@@ -263,3 +263,13 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 .contador { margin-left: auto; font-size: 12px; min-width: 20px; text-align: center; padding: 0 6px; border-radius: 999px; background: var(--acento); color: #fff; }
 .consolidado { display: flex; flex-direction: column; gap: 12px; }
 .bloco-setor h3 { font-size: 14px; margin: 0 0 6px; }
+
+/* Envio em andamento: "pensando" e botão de parar */
+.msg.pensando { display: flex; align-items: center; gap: 10px; color: var(--sutil); font-size: 14px; }
+.pontos { display: inline-flex; gap: 4px; }
+.pontos i { width: 7px; height: 7px; border-radius: 50%; background: var(--acento); opacity: .35; animation: pulsar 1.2s infinite ease-in-out; }
+.pontos i:nth-child(2) { animation-delay: .15s; }
+.pontos i:nth-child(3) { animation-delay: .3s; }
+@keyframes pulsar { 0%, 80%, 100% { opacity: .25; transform: translateY(0); } 40% { opacity: 1; transform: translateY(-4px); } }
+.enviar.parar { background: var(--texto, #1f2a37); font-size: 12px; }
+@media (prefers-reduced-motion: reduce) { .pontos i { animation: none; opacity: .7; } }

@@ -156,15 +156,43 @@ def _tocar(c, texto):
     c.save(update_fields=["titulo", "atualizado_em"])
 
 
+def _verificador(user, pedido):
+    if not pedido:
+        return None
+    from .models import PedidoInterrompido
+
+    return lambda: PedidoInterrompido.objects.filter(pedido=pedido, usuario=user).exists()
+
+
+def interromper(user, pedido) -> None:
+    """Botão "parar": marca o envio; `enviar` desiste se ainda não agiu."""
+    from datetime import timedelta
+
+    from .models import PedidoInterrompido
+
+    PedidoInterrompido.objects.filter(criado_em__lt=timezone.now() - timedelta(days=1)).delete()
+    PedidoInterrompido.objects.get_or_create(pedido=pedido, usuario=user)
+
+
+def limpar_interrupcao(user, pedido) -> None:
+    from .models import PedidoInterrompido
+
+    if pedido:
+        PedidoInterrompido.objects.filter(pedido=pedido, usuario=user).delete()
+
+
 @transaction.atomic
-def enviar(user, c: ConversationContext, texto: str, provedor=None) -> None:
+def enviar(user, c: ConversationContext, texto: str, provedor=None, pedido=None) -> None:
+    """`pedido`: id do envio gerado no navegador; se a pessoa clicar em "parar" antes da IA agir,
+    `agente.Interrompido` é lançado e a transação desfaz tudo (inclusive a mensagem dela)."""
     if not pode_escrever(user, c):
         raise PermissaoNegada("Somente leitura nesta conversa.")
     from iativa.agent import agente
 
     texto = _validar_texto(texto)
     m = Mensagem.objects.create(conversa=c, papel=Papel.USUARIO, autor=user, texto=texto)
-    saida = agente.conversar(user, c, texto, provedor=provedor, mensagem_usuario_id=m.pk)
+    saida = agente.conversar(user, c, texto, provedor=provedor, mensagem_usuario_id=m.pk,
+                             interrompido=_verificador(user, pedido))
     msg = Mensagem.objects.create(conversa=c, papel=Papel.IA, texto=saida.texto[:MAX_TEXTO], ficha=saida.ficha,
                                   solicitacao=saida.solicitacao)
     _tocar(c, texto)

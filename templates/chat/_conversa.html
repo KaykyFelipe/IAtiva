@@ -55,14 +55,16 @@
     <form class="compositor" method="post"
           action="{% if conversa %}{% url 'chat:mensagem' conversa.pk %}{% else %}{% url 'chat:nova' %}{% endif %}"
           hx-post="{% if conversa %}{% url 'chat:mensagem' conversa.pk %}{% else %}{% url 'chat:nova' %}{% endif %}"
-          hx-target="#conversa" hx-swap="outerHTML" hx-disabled-elt="find button">
+          hx-target="#conversa" hx-swap="outerHTML"
+          data-compositor data-parar-url="{% url 'chat:parar' %}">
       {% csrf_token %}
+      <input type="hidden" name="pedido" value="" data-pedido>
       {% if erro %}<p class="erro" role="alert">{{ erro }}</p>{% endif %}
       {% for e in form.mensagem.errors %}<p class="erro" role="alert">{{ e }}</p>{% endfor %}
       <label class="sr" for="campo-mensagem">Mensagem</label>
       <textarea id="campo-mensagem" name="mensagem" rows="1" maxlength="{{ form.fields.mensagem.max_length }}"
                 placeholder="Pergunte o que precisar" required data-campo></textarea>
-      <button type="submit" class="enviar" aria-label="Enviar">↑</button>
+      <button type="submit" class="enviar" aria-label="Enviar" data-botao-enviar>↑</button>
       <p class="rodape-compositor">A conversa fica salva por 90 dias. Não envie CPF ou CNPJ.</p>
     </form>
   {% else %}

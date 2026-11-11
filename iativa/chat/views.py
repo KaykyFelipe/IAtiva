@@ -3,6 +3,8 @@
 O acesso é sempre conferido em `conversas.py`. O histórico guarda texto e fichas de critérios,
 nunca resultados de consultas.
 """
+import uuid
+
 from django.core.exceptions import ValidationError
 from django.http import Http404, HttpResponse
 from django.shortcuts import redirect, render
@@ -10,12 +12,25 @@ from django.urls import reverse
 from django.views.decorators.http import require_GET, require_POST
 
 from iativa.accounts.authz import PermissaoNegada, setor_do_usuario
+from iativa.agent.agente import Interrompido
 from iativa.memory.models import ParameterDefinition, TipoValor
 
 from . import conversas
 from .estados import TransicaoInvalida
 from .forms import MessageForm
 from .models import ConversationContext, TipoConversa
+
+
+def _pedido(request):
+    """Id do envio gerado no navegador (para o botão "parar"); qualquer coisa fora do formato é ignorada."""
+    try:
+        return uuid.UUID(request.POST.get("pedido", ""))
+    except ValueError:
+        return None
+
+
+def _interrompido():
+    return HttpResponse(status=204)  # o navegador já desfez a tela; nada a trocar
 
 
 def _obter(request, conversa_id) -> ConversationContext:
@@ -74,7 +89,10 @@ def nova(request):
     try:
         conversas._validar_texto(form.cleaned_data["mensagem"])
         c = conversas.nova_individual(request.user)
-        msg, resultado = conversas.enviar(request.user, c, form.cleaned_data["mensagem"])
+        msg, resultado = conversas.enviar(request.user, c, form.cleaned_data["mensagem"], pedido=_pedido(request))
+    except Interrompido:
+        conversas.limpar_interrupcao(request.user, _pedido(request))
+        return _interrompido()
     except PermissaoNegada:
         return _render(request, erro="Seu usuário ainda não tem setor. Fale com o administrador.")
     except ValidationError as exc:
@@ -100,7 +118,10 @@ def mensagem(request, conversa_id):
     if not form.is_valid():
         return _render(request, c, form=form)
     try:
-        msg, resultado = conversas.enviar(request.user, c, form.cleaned_data["mensagem"])
+        msg, resultado = conversas.enviar(request.user, c, form.cleaned_data["mensagem"], pedido=_pedido(request))
+    except Interrompido:
+        conversas.limpar_interrupcao(request.user, _pedido(request))
+        return _interrompido()
     except PermissaoNegada:
         return _render(request, c, erro="Esta conversa é somente leitura para você.")
     except ValidationError as exc:
@@ -249,3 +270,13 @@ def memoria_decidir(request):
         return _render_memoria(request, request.POST.get("setor"), erro=msg[0] if msg else str(exc))
     feito = "aprovada" if acao == "aprovar" else "rejeitada"
     return _render_memoria(request, request.POST.get("setor"), aviso=f"Proposta “{descricao}” {feito}.")
+
+
+@require_POST
+def parar(request):
+    """Botão "parar" do compositor: a resposta em andamento é descartada se a IA ainda não agiu."""
+    pedido = _pedido(request)
+    if pedido is None:
+        return HttpResponse(status=400)
+    conversas.interromper(request.user, pedido)
+    return HttpResponse(status=204)

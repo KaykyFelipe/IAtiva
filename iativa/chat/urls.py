@@ -18,5 +18,6 @@ urlpatterns = [
     path("setor/<int:setor_id>/", views.setor, name="setor"),
     path("mestre/", views.mestre, name="mestre"),
     path("memoria/", views.memoria, name="memoria"),
+    path("parar/", views.parar, name="parar"),
     path("memoria/decidir/", views.memoria_decidir, name="memoria_decidir"),
 ]

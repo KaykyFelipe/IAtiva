@@ -32,6 +32,10 @@ from .decisao import DecisaoInvalida, EntradaAgente, validar
 from .models import ConsultaModelo, SituacaoModelo
 from .provedores import FalhaModelo, obter_provedor
 
+class Interrompido(Exception):
+    """A pessoa clicou em "parar" enquanto a IA pensava: nada desta mensagem é aplicado."""
+
+
 HISTORICO = 12
 TENTATIVAS = 2
 
@@ -122,7 +126,7 @@ def _interpretar(provedor, entrada, codigos_obj, codigos_par):
     raise FalhaModelo("sem decisão válida")
 
 
-def conversar(user, c, texto: str, provedor=None, mensagem_usuario_id=None) -> Saida:
+def conversar(user, c, texto: str, provedor=None, mensagem_usuario_id=None, interrompido=None) -> Saida:
     objetivos = objetivos_para(user)
     administrador = pode_aprender(user)
     if not objetivos and not administrador:
@@ -157,6 +161,8 @@ def conversar(user, c, texto: str, provedor=None, mensagem_usuario_id=None) -> S
                          "Tente de novo em cerca de um minuto, com a mesma pergunta.", ficha={"tipo": "falha_modelo"})
         return Saida("Não consegui processar sua mensagem agora. Pode repetir ou escrever de outro jeito?",
                      ficha={"tipo": "falha_modelo"})
+    if interrompido is not None and interrompido():
+        raise Interrompido  # antes de qualquer ação (e de consultar o ERP)
     registrar("interpretacao", "agente", usuario=user, estado_novo=d.acao, entidade_id=atual.pk if atual else None,
               linhas=len(d.parametros))
     ficha = {"provedor": provedor.nome, "opcoes": list(d.opcoes)}
@@ -168,6 +174,10 @@ def conversar(user, c, texto: str, provedor=None, mensagem_usuario_id=None) -> S
         return _preparar(user, c, d, atual, defs, ficha)
     if acao == "executar_consulta":
         if atual is None:
+            # A anterior já terminou: o modelo quis "rodar de novo" (às vezes com critérios novos).
+            # Prepara uma nova com o mesmo objetivo em vez de só anunciar e não executar.
+            if d.objetivo or d.parametros or _ultima(user, c) is not None:
+                return _preparar(user, c, d, None, defs, ficha)
             return Saida(d.resposta or "Não há consulta em andamento. O que você quer consultar?", ficha)
         return _avaliar_e_executar(user, atual, d.resposta, [], ficha)
     if acao == "cancelar_consulta":
@@ -195,15 +205,40 @@ def _ajuda(objetivos) -> str:
     return "Posso consultar: " + "; ".join(o.nome for o in objetivos) + ". O que você precisa?"
 
 
+def _ultima(user, c):
+    """Última solicitação desta conversa (qualquer estado), para continuar o mesmo assunto."""
+    return c.solicitacoes.filter(usuario=user).exclude(objetivo="").order_by("-id").first()
+
+
+def _herdar_criterios(user, origem, destino):
+    """"e da Alcans?", "desde agosto": a nova consulta do mesmo assunto parte dos critérios ditos
+    na anterior; os que vierem na mensagem substituem. A busca por nome não é herdada (o modelo a
+    repete quando ainda vale), para "e todos?" voltar a trazer tudo."""
+    from iativa.memory import servicos as memoria_valores
+    from iativa.memory.models import Escopo, ParameterBinding, Situacao
+
+    for b in ParameterBinding.objects.filter(solicitacao=origem, escopo=Escopo.SOLICITACAO,
+                                             situacao=Situacao.APROVADA).select_related("definicao"):
+        if b.definicao.codigo == BUSCA or b.definicao.codigo not in OBJETIVOS[destino.objetivo].parametros:
+            continue
+        try:
+            memoria_valores.registrar_valor(user, b.definicao, Escopo.SOLICITACAO, b.valor, solicitacao=destino)
+        except Exception:  # valor que deixou de valer (ex.: filial): será perguntado de novo
+            continue
+
+
 def _preparar(user, c, d, atual, defs, ficha) -> Saida:
-    objetivo = d.objetivo or (atual.objetivo if atual else "")
-    if not objetivo:
+    anterior = _ultima(user, c) if atual is None else None
+    objetivo = d.objetivo or (atual.objetivo if atual else (anterior.objetivo if anterior else ""))
+    if not objetivo or objetivo not in OBJETIVOS:
         return Saida(d.resposta or "Que informação você procura?", ficha)
     if atual is not None and atual.objetivo != objetivo:
         cancelar(user, atual)  # novo assunto: a anterior é encerrada sem precisar clicar
         atual = None
     if atual is None:
         atual = criar_solicitacao(user, OBJETIVOS[objetivo].dominio, objetivo, conversa=c)
+        if anterior is not None and anterior.objetivo == objetivo:
+            _herdar_criterios(user, anterior, atual)
     erros = orq._aplicar_parametros(user, atual, d.parametros, defs)
     atual.refresh_from_db()
     return _avaliar_e_executar(user, atual, d.resposta, erros, ficha)
