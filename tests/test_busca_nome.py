@@ -123,3 +123,15 @@ def test_executar_sem_consulta_aberta_roda_de_novo(admin):
     msg, res = conversas.enviar(admin, c, "procure se tem do sintetico 002", p)
     assert res is not None and res.ok and "Consulta executada" in msg.texto
     assert RequestContext.objects.filter(estado=E.CONCLUIDA).count() == 2
+
+
+def test_continuacao_le_periodo_da_mensagem(admin):
+    from iativa.agent.provedores import FakeProvider
+
+    c = conversas.nova_individual(admin)
+    conversas.enviar(admin, c, "títulos a vencer de 01/08/2026 a 31/10/2026 filial 01 considerar saldo")
+    # Caso real: o modelo não reenviou o período em "faça de novo desde janeiro".
+    p = FakeProvider([_decisao(acao="preparar_consulta", objetivo="titulos-a-vencer")])
+    msg, res = conversas.enviar(admin, c, "faça a consulta de novo agora desde janeiro", p)
+    periodo = next(x["valor"] for x in msg.ficha["criterios"] if x["nome"].lower().startswith("período"))
+    assert res is not None and periodo.startswith("01/01/")

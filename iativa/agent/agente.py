@@ -171,13 +171,13 @@ def conversar(user, c, texto: str, provedor=None, mensagem_usuario_id=None, inte
     if acao in ("aprender_tabela", "remover_aprendizado") and not administrador:
         return Saida("Essa ação é só para administradores.", ficha)
     if acao == "preparar_consulta":
-        return _preparar(user, c, d, atual, defs, ficha)
+        return _preparar(user, c, d, atual, defs, ficha, texto)
     if acao == "executar_consulta":
         if atual is None:
             # A anterior já terminou: o modelo quis "rodar de novo" (às vezes com critérios novos).
             # Prepara uma nova com o mesmo objetivo em vez de só anunciar e não executar.
             if d.objetivo or d.parametros or _ultima(user, c) is not None:
-                return _preparar(user, c, d, None, defs, ficha)
+                return _preparar(user, c, d, None, defs, ficha, texto)
             return Saida(d.resposta or "Não há consulta em andamento. O que você quer consultar?", ficha)
         return _avaliar_e_executar(user, atual, d.resposta, [], ficha)
     if acao == "cancelar_consulta":
@@ -227,7 +227,7 @@ def _herdar_criterios(user, origem, destino):
             continue
 
 
-def _preparar(user, c, d, atual, defs, ficha) -> Saida:
+def _preparar(user, c, d, atual, defs, ficha, texto="") -> Saida:
     anterior = _ultima(user, c) if atual is None else None
     objetivo = d.objetivo or (atual.objetivo if atual else (anterior.objetivo if anterior else ""))
     if not objetivo or objetivo not in OBJETIVOS:
@@ -239,7 +239,15 @@ def _preparar(user, c, d, atual, defs, ficha) -> Saida:
         atual = criar_solicitacao(user, OBJETIVOS[objetivo].dominio, objetivo, conversa=c)
         if anterior is not None and anterior.objetivo == objetivo:
             _herdar_criterios(user, anterior, atual)
-    erros = orq._aplicar_parametros(user, atual, d.parametros, defs)
+    pares = list(d.parametros)
+    if "periodo-analise" in OBJETIVOS[objetivo].parametros and not any(c == "periodo-analise" for c, _ in pares):
+        # O modelo não mandou período: usa o que a mensagem diz ("desde janeiro"), se disser.
+        from .periodo import periodo_da_mensagem
+
+        lido = periodo_da_mensagem(texto, timezone.localdate())
+        if lido:
+            pares.append(("periodo-analise", lido))
+    erros = orq._aplicar_parametros(user, atual, pares, defs)
     atual.refresh_from_db()
     return _avaliar_e_executar(user, atual, d.resposta, erros, ficha)
 
