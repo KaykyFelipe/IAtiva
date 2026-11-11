@@ -1,0 +1,14 @@
+{# Visão consolidada do chat mestre (Etapa 6): um bloco por setor. Existe só nesta resposta. #}
+<div class="consolidado">
+  <p class="msg ia"><strong>{{ resultado.resumo }}</strong></p>
+  {% for bloco in resultado.blocos %}
+    <section class="bloco-setor">
+      <h3>Setor {{ bloco.setor }}</h3>
+      {% if bloco.resultado %}
+        {% include "chat/_resultado.html" with resultado=bloco.resultado %}
+      {% else %}
+        <p class="nota">{{ bloco.mensagem }}</p>
+      {% endif %}
+    </section>
+  {% endfor %}
+</div>

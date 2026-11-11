@@ -16,7 +16,11 @@ ACOES = (
     "listar_aprendizados",  # mostrar consultas aprendidas
     "remover_aprendizado",  # administrador: tirar de uso uma consulta aprendida (pede confirmação)
     "lembrar",              # guardar na memória do agente algo que o usuário ensinou
+    "listar_pendencias",    # Etapa 6: mostrar propostas aguardando aprovação
+    "aprovar_pendencia",    # Etapa 6: aprovar uma proposta (pede confirmação)
+    "rejeitar_pendencia",   # Etapa 6: rejeitar uma proposta (pede confirmação)
 )
+ALCANCES = ("", "usuario", "setor", "empresa")
 MAX_RESPOSTA = 2000
 MAX_NOTA = 300
 MAX_PARAMETROS = 8
@@ -38,6 +42,7 @@ class EntradaAgente:
     aprendidos: list[dict] = field(default_factory=list)
     trechos: list[dict] = field(default_factory=list)
     administrador: bool = False
+    pendencias: list[dict] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -50,6 +55,7 @@ class Decisao:
     nota: str
     confirmado: bool
     opcoes: tuple[str, ...]
+    alcance: str = ""
 
 
 def esquema(codigos_objetivo, codigos_parametro) -> dict:
@@ -70,10 +76,12 @@ def esquema(codigos_objetivo, codigos_parametro) -> dict:
                     "required": ["codigo", "valor"],
                 },
             },
-            "alvo": {"type": "string", "description": "Nome ou código da consulta aprendida, ou termos da busca."},
+            "alvo": {"type": "string", "description": "Nome ou código da consulta aprendida, referência da pendência (ex.: nota-3) ou termos da busca."},
             "nota": {"type": "string", "description": "O que guardar na memória (ação lembrar)."},
             "confirmado": {"type": "boolean"},
             "opcoes": {"type": "array", "items": {"type": "string"}},
+            "alcance": {"type": "string", "enum": list(ALCANCES),
+                        "description": "Ação lembrar: usuario, setor ou empresa; vazio = padrão."},
         },
         "required": ["resposta", "acao", "objetivo", "parametros", "alvo", "nota", "confirmado", "opcoes"],
     }
@@ -88,7 +96,8 @@ def _texto(v, limite, campo) -> str:
 def validar(saida, codigos_objetivo, codigos_parametro) -> Decisao:
     if not isinstance(saida, dict):
         raise DecisaoInvalida("formato")
-    extras = set(saida) - {"resposta", "acao", "objetivo", "parametros", "alvo", "nota", "confirmado", "opcoes"}
+    extras = set(saida) - {"resposta", "acao", "objetivo", "parametros", "alvo", "nota", "confirmado", "opcoes",
+                           "alcance"}
     if extras:
         raise DecisaoInvalida("campos extras")
     acao = saida.get("acao")
@@ -105,6 +114,9 @@ def validar(saida, codigos_objetivo, codigos_parametro) -> Decisao:
         if not isinstance(p, dict) or p.get("codigo") not in codigos_parametro:
             raise DecisaoInvalida("parametro")
         pares.append((p["codigo"], _texto(p.get("valor", ""), 200, "valor")))
+    alcance = saida.get("alcance") or ""
+    if alcance not in ALCANCES:
+        raise DecisaoInvalida("alcance")
     opcoes = saida.get("opcoes") or []
     if not isinstance(opcoes, list) or len(opcoes) > MAX_OPCOES:
         raise DecisaoInvalida("opcoes")
@@ -117,4 +129,5 @@ def validar(saida, codigos_objetivo, codigos_parametro) -> Decisao:
         nota=_texto(saida.get("nota", ""), MAX_NOTA, "nota"),
         confirmado=bool(saida.get("confirmado", False)),
         opcoes=tuple(_texto(o, 120, "opcao") for o in opcoes),
+        alcance=alcance,
     )

@@ -245,3 +245,21 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 .lista-campos input { width: auto; }
 @media (max-width: 860px) { .lista-campos { columns: 1; } }.criterios-linha { font-size: 13px; color: var(--sutil); }
 .criterios-linha strong { color: var(--texto); font-weight: 600; }
+
+/* Etapa 6: memória, aprovações e consolidado do chat mestre */
+.painel { border: 1px solid var(--linha); border-radius: var(--raio-p); padding: 14px 16px; }
+.painel h2 { font-size: 16px; margin: 0 0 10px; }
+.painel h3 { font-size: 14px; margin: 16px 0 6px; }
+.pendencia { border-top: 1px solid var(--linha); padding: 10px 0; }
+.pendencia:first-of-type { border-top: 0; }
+.pendencia p { margin: 0 0 6px; }
+.pendencia .acoes { display: flex; gap: 8px; flex-wrap: wrap; }
+.etiqueta { font-size: 12px; padding: 1px 8px; border-radius: 999px; background: var(--acento-claro); }
+.sutil { color: var(--sutil); font-size: 13px; }
+.conflito { font-size: 13px; border-left: 3px solid var(--acento); padding-left: 8px; }
+.aviso-ok { font-size: 13px; padding: 10px 14px; border-radius: var(--raio-p); background: var(--acento-claro); }
+.seletor-setor { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
+.nota-memoria { margin: 0 0 6px; }
+.contador { margin-left: auto; font-size: 12px; min-width: 20px; text-align: center; padding: 0 6px; border-radius: 999px; background: var(--acento); color: #fff; }
+.consolidado { display: flex; flex-direction: column; gap: 12px; }
+.bloco-setor h3 { font-size: 14px; margin: 0 0 6px; }

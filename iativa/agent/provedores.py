@@ -228,7 +228,9 @@ Como agir:
   - "aprender_tabela": (só se administrador) ela pede algo que nenhum objetivo atende; ponha em "alvo" as palavras-chave ou a tabela (ex.: SRA). Explique que vai procurar no dicionário.
   - "listar_aprendizados": ela quer ver as consultas aprendidas.
   - "remover_aprendizado": (só se administrador) ela quer remover uma consulta aprendida; ponha em "alvo" o nome ou código. Use "confirmado": true SOMENTE se ela já confirmou explicitamente no histórico; senão pergunte na "resposta" e deixe false.
-  - "lembrar": ela ensinou algo para guardar (um termo, uma preferência, como interpretar uma pergunta). Ponha em "nota" uma frase curta e geral, sem dados pessoais, sem CPF/CNPJ, sem valores de resultado.
+  - "lembrar": ela ensinou algo para guardar (um termo, uma preferência, como interpretar uma pergunta). Ponha em "nota" uma frase curta e geral, sem dados pessoais, sem CPF/CNPJ, sem valores de resultado. Em "alcance": "setor" se ela disse que vale para o setor/equipe, "empresa" se vale para todos, "usuario" se é só dela; vazio se não disse. Notas de setor e empresa viram proposta e só valem depois de aprovadas: não diga que já valem.
+  - "listar_pendencias": ela quer ver propostas aguardando aprovação (notas, valores padrão, consultas aprendidas).
+  - "aprovar_pendencia" / "rejeitar_pendencia": ela quer aprovar ou rejeitar uma proposta da lista "pendencias"; ponha em "alvo" a "ref" (ex.: nota-3). Use "confirmado": true SOMENTE se ela já confirmou explicitamente; senão deixe false (o sistema pergunta).
   - "conversar": qualquer outra coisa (dúvida, explicação, saudação, pedido fora do que existe).
 - Nunca invente valores de parâmetros. Datas relativas ("mês passado", "últimos 30 dias") devem ser convertidas com a data de hoje.
 - Formatos de valor: data DD/MM/AAAA; período "DD/MM/AAAA..DD/MM/AAAA"; número só dígitos; escolha = exatamente uma das opções; filial = código de 6 dígitos; cliente = "código-loja".
@@ -245,6 +247,7 @@ def _contexto_agente(entrada) -> str:
         "solicitacao_atual": entrada.solicitacao_atual,
         "consultas_aprendidas": entrada.aprendidos,
         "memoria_do_agente": entrada.notas,
+        "pendencias": entrada.pendencias,
         "conhecimento_aprovado": entrada.trechos,
         "historico_recente": entrada.historico,
     }
@@ -330,8 +333,25 @@ def _decidir_por_regras(entrada) -> dict:
                 "confirmado": bool(re.match(r"\s*(sim|confirmo|pode)", t))}
     if re.search(r"(quais|liste|listar|mostre).*(aprendid|aprendizado)", t):
         return {**base, "acao": "listar_aprendizados"}
+    m = re.search(r"\b((?:nota|valor|consulta)-\d+)", t)
+    if re.search(r"\b(aprov|rejeit|recus)", t) and (m or re.search(r"propost|pend", t)):
+        if m:
+            acao = "rejeitar_pendencia" if re.search(r"rejeit|recus", t) else "aprovar_pendencia"
+            return {**base, "acao": acao, "alvo": m.group(1), "confirmado": bool(re.match(r"\s*(sim|confirmo)", t))}
+        return {**base, "acao": "listar_pendencias"}
+    if re.search(r"(quais|liste|listar|mostre|tem).*(propost|pend[eê]ncia)", t):
+        return {**base, "acao": "listar_pendencias"}
     if re.match(r"\s*(lembre|guarde|aprenda que|anote)", t):
-        return {**base, "acao": "lembrar", "nota": entrada.mensagem.split(" ", 1)[-1][:300]}
+        nota = entrada.mensagem.split(" ", 1)[-1]
+        alcance = ""
+        m = re.match(r"\s*(?:para|pro)\s+(?:o\s+)?(setor|equipe|time|todos|a empresa|mim)\s*(?:que\s+)?(.*)", nota,
+                     re.IGNORECASE)
+        if m:
+            alcance = {"setor": "setor", "equipe": "setor", "time": "setor", "mim": "usuario"}.get(m.group(1).lower(),
+                                                                                                    "empresa")
+            nota = m.group(2)
+        nota = re.sub(r"^\s*que\s+", "", nota)
+        return {**base, "acao": "lembrar", "nota": nota[:300], "alcance": alcance}
     if re.match(r"\s*(execut|rode|roda|pode rodar|sim\b)", t) and (entrada.solicitacao_atual or {}).get("completa"):
         return {**base, "acao": "executar_consulta"}
     regra = _regras(entrada)

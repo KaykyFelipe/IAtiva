@@ -17,4 +17,6 @@ urlpatterns = [
     path("c/<int:conversa_id>/aprender/<int:modelo_id>/", views.aprender_decidir, name="aprender_decidir"),
     path("setor/<int:setor_id>/", views.setor, name="setor"),
     path("mestre/", views.mestre, name="mestre"),
+    path("memoria/", views.memoria, name="memoria"),
+    path("memoria/decidir/", views.memoria_decidir, name="memoria_decidir"),
 ]

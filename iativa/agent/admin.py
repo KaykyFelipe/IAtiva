@@ -7,9 +7,10 @@ from .models import ConsultaModelo, NotaAgente
 class NotaAgenteAdmin(admin.ModelAdmin):
     """Memória do agente: dá para conferir e desativar notas; criar só pelo chat."""
 
-    list_display = ("texto", "escopo", "usuario", "criado_por", "ativo", "criado_em")
-    list_filter = ("escopo", "ativo")
-    readonly_fields = ("texto", "escopo", "usuario", "criado_por", "criado_em")
+    list_display = ("texto", "escopo", "setor", "situacao", "usuario", "criado_por", "aprovado_por", "ativo", "criado_em")
+    list_filter = ("escopo", "situacao", "setor", "ativo")
+    readonly_fields = ("texto", "escopo", "setor", "situacao", "substitui", "usuario", "criado_por", "aprovado_por",
+                       "aprovado_em", "criado_em")
 
     def has_add_permission(self, request):
         return False

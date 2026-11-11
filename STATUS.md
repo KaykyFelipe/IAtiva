@@ -2,7 +2,25 @@
 
 **Atualizado em:** 2026-11-11
 **Etapa atual:** 6 — Memórias setoriais e chat consolidado
-**Situação:** **plano proposto (`PLANO.md` §7), aguardando aprovação para implementar.** Etapa 5 aprovada em 2026-11-11 por Diego; conferência dos números com o Financeiro e premissas T29 seguem pendentes.
+**Situação:** **implementada, aguardando validação.** Plano aprovado em 2026-11-11. Etapa 5 aprovada em 2026-11-11 por Diego; conferência dos números com o Financeiro e premissas T29 seguem pendentes.
+
+## Etapa 6 — o que foi entregue
+
+- Memória do setor: notas do agente por setor, com proposta → aprovação; valores e notas em conflito substituem o aprovado só quando aprovados (T31, T32).
+- Fila única de aprovação (valores, notas, consultas aprendidas) na tela "Memória e aprovações" e pelo chat ("quais propostas estão pendentes?", "aprovar nota-3") (T33).
+- Chat mestre consolidado: um bloco por setor autorizado, cada um com a sua memória e filiais; soma só com premissas iguais e filiais diferentes (T34).
+- 350 testes passando (10 da rotina M4 pulados no Windows).
+
+## Checklist de validação da Etapa 6
+
+- [ ] "Lembre para o setor que ..." vira proposta; só vale depois de aprovada; nota "só minha" vale na hora.
+- [ ] Autor (sem autoaprovação) e quem não aprova no nível não conseguem aprovar.
+- [ ] Proposta que contradiz algo aprovado aparece lado a lado na fila; aprovar substitui e mantém o histórico.
+- [ ] Setor não consegue definir valor contrário a regra obrigatória da empresa.
+- [ ] Tela "Memória" mostra só os setores do usuário, sem dados do ERP.
+- [ ] Chat mestre: um bloco por setor, cada um com sua memória/filiais; não soma premissas diferentes nem a mesma filial.
+- [ ] Setor sem "consultar" não aparece no consolidado.
+- [ ] Observação: com a autoaprovação ligada no servidor, as propostas do Diego (único aprovador) já entram aprovadas.
 
 ## Mudança M10 — agente conversacional com Gemini (2026-11-11)
 

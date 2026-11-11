@@ -40,6 +40,7 @@ class Resultado:
     premissas: list[str] = field(default_factory=list)
     truncado: bool = False
     total: str = ""
+    total_valor: object = None  # Decimal da coluna de dinheiro, para a soma do chat mestre
     estado: str = ""
     solicitacao: RequestContext | None = None
     duracao_ms: int = 0
@@ -134,10 +135,11 @@ def executar_solicitacao(user, s: RequestContext) -> Resultado:
 
     tipos = list(comp.tipos)
     formatadas = [[_fmt(v, t) for v, t in zip(l, tipos)] for l in linhas]
-    total = ""
+    total, total_valor = "", None
     if "dinheiro" in tipos:
         i = tipos.index("dinheiro")
-        total = _fmt(sum(Decimal(str(l[i] or 0)) for l in linhas), "dinheiro")
+        total_valor = sum((Decimal(str(l[i] or 0)) for l in linhas), Decimal(0))
+        total = _fmt(total_valor, "dinheiro")
     if s.objetivo == "titulos-em-atraso" and linhas:
         corte = date.fromisoformat(valores["data-corte"])
         i = comp.rotulos.index("Vencimento mais antigo")
@@ -151,7 +153,7 @@ def executar_solicitacao(user, s: RequestContext) -> Resultado:
 
     res = _encerrar(user, s, E.CONCLUIDA, inicio, len(linhas), _resumo(s.objetivo, len(linhas), total, truncado))
     res.ok, res.colunas, res.tipos, res.linhas = True, colunas, tipos, formatadas
-    res.premissas, res.truncado, res.total = plano.premissas, truncado, total
+    res.premissas, res.truncado, res.total, res.total_valor = plano.premissas, truncado, total, total_valor
     return res
 
 

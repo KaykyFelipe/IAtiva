@@ -15,21 +15,21 @@ from dataclasses import dataclass, field
 from django.core.exceptions import ValidationError
 from django.utils import timezone
 
-from iativa.accounts.authz import Permissao, filiais_autorizadas, setor_do_usuario, setores_autorizados
+from iativa.accounts.authz import Permissao, filiais_autorizadas, setores_autorizados
 from iativa.audit.servicos import registrar
 from iativa.chat.estados import EM_PREPARACAO
 from iativa.chat.models import EstadoSolicitacao as E
 from iativa.chat.servicos import cancelar, criar_solicitacao
 from iativa.memory.models import TipoValor
 from iativa.memory.resolucao import RESOLVIDO, resolver
-from iativa.memory.validadores import contem_cpf_cnpj
 
+from . import memoria
 from . import orquestrador as orq
 from .aprendizado import candidatos, pode_aprender
 from .contratos import OBJETIVOS, objetivos_para
 from .conversao import exibir
 from .decisao import DecisaoInvalida, EntradaAgente, validar
-from .models import ConsultaModelo, EscopoNota, NotaAgente, SituacaoModelo
+from .models import ConsultaModelo, SituacaoModelo
 from .provedores import FalhaModelo, obter_provedor
 
 HISTORICO = 12
@@ -87,10 +87,15 @@ def _historico(c, ate=None) -> list[dict]:
 
 
 def _notas(user) -> list[str]:
-    from django.db.models import Q
+    return [n.texto for n in memoria.notas_validas(user)[:40]]
 
-    qs = NotaAgente.objects.filter(ativo=True).filter(Q(escopo=EscopoNota.EMPRESA) | Q(usuario=user))
-    return [n.texto for n in qs[:40]]
+
+def _pendencias_contexto(user) -> list[dict]:
+    try:
+        return [{"ref": p.ref, "tipo": p.tipo, "descricao": p.descricao, "nivel": p.nivel,
+                 "pode_decidir": p.pode_decidir} for p in memoria.pendencias(user)[:20]]
+    except Exception:
+        return []
 
 
 def _catalogo(user, objetivos, defs) -> list[dict]:
@@ -135,6 +140,7 @@ def conversar(user, c, texto: str, provedor=None, mensagem_usuario_id=None) -> S
         mensagem=texto, hoje=timezone.localdate().isoformat(), historico=_historico(c, mensagem_usuario_id),
         objetivos=_catalogo(user, objetivos, defs), solicitacao_atual=_estado(user, atual, defs),
         notas=_notas(user), aprendidos=aprendidos, trechos=trechos, administrador=administrador,
+        pendencias=_pendencias_contexto(user),
     )
     provedor = provedor or obter_provedor()
     try:
@@ -167,7 +173,11 @@ def conversar(user, c, texto: str, provedor=None, mensagem_usuario_id=None) -> S
     if acao == "remover_aprendizado":
         return _remover(user, d, ficha)
     if acao == "lembrar":
-        return _lembrar(user, d, administrador, ficha)
+        return _lembrar(user, d, ficha)
+    if acao == "listar_pendencias":
+        return _listar_pendencias(user, ficha)
+    if acao in ("aprovar_pendencia", "rejeitar_pendencia"):
+        return _decidir_pendencia(user, d, acao == "aprovar_pendencia", ficha)
     return Saida(d.resposta or _ajuda(objetivos), ficha)
 
 
@@ -236,7 +246,13 @@ def _avaliar_e_executar(user, s, resposta_modelo, erros, ficha) -> Saida:
         base = resposta_modelo or f"Consultei {r.objetivo.lower()}."
         texto = f"{base}\n\nConsulta executada às {timezone.localtime():%H:%M}: {len(res.linhas)} linha(s)."
         ficha = {**ficha, "tipo": "executada", "estado": s.estado}
-        return Saida(texto, ficha, s, res)
+        from iativa.query.consolidado import talvez_consolidar
+
+        exibido = talvez_consolidar(user, s, res)
+        if exibido is not res:  # chat mestre: um bloco por setor (Etapa 6)
+            texto = (f"{base}\n\nConsulta executada às {timezone.localtime():%H:%M} em {len(exibido.blocos)} "
+                     f"setor(es). {exibido.resumo}")
+        return Saida(texto, ficha, s, exibido)
     return Saida(res.mensagem, {**ficha, "tipo": "falha_execucao", "estado": s.estado}, s)
 
 
@@ -295,15 +311,63 @@ def _remover(user, d, ficha) -> Saida:
     return Saida(f"Pronto, removi a consulta “{cm.nome}”. Ela não aparece mais para ninguém.", ficha)
 
 
-def _lembrar(user, d, administrador, ficha) -> Saida:
+def _lembrar(user, d, ficha) -> Saida:
     nota = d.nota.strip()
     if not nota:
         return Saida(d.resposta or "O que você quer que eu guarde?", ficha)
-    if contem_cpf_cnpj(nota):
-        return Saida("Não guardo CPF ou CNPJ na memória. Pode reformular sem esses dados?", ficha)
-    escopo = EscopoNota.EMPRESA if administrador else EscopoNota.USUARIO
-    NotaAgente.objects.create(texto=nota[:300], escopo=escopo, usuario=None if administrador else user,
-                              criado_por=user)
-    registrar("parametro_registrado", "agente", usuario=user, setor=setor_do_usuario(user), estado_novo="nota_memoria")
-    alcance = "para todos" if administrador else "para você"
-    return Saida(d.resposta or f"Anotado {alcance}: {nota}", ficha)
+    try:
+        n = memoria.lembrar(user, nota, d.alcance)
+    except ValidationError as exc:
+        texto = exc.messages[0]
+        if "CPF" in texto:
+            texto += " Pode reformular sem esses dados?"
+        return Saida(texto, ficha)
+    except Exception:  # PermissaoNegada
+        return Saida("Não consegui guardar isso para o setor: seu usuário está sem setor ativo.", ficha)
+    if n.situacao == "aprovada":
+        alcance = {"usuario": "para você", "setor": f"para o setor {n.setor.nome if n.setor else ''}".strip(),
+                   "empresa": "para todos"}[n.escopo]
+        return Saida(d.resposta if d.resposta and "aprova" not in d.resposta.lower() else f"Anotado {alcance}: {nota}",
+                     ficha)
+    extra = " Ela substitui a definição atual do mesmo termo depois de aprovada." if n.substitui_id else ""
+    nivel = f"do setor {n.setor.nome}" if n.setor else "da empresa"
+    return Saida(f"Registrei como proposta para a memória {nivel}: “{nota}”. Ela só vale depois de aprovada por "
+                 f"quem aprova definições nesse nível.{extra}", ficha)
+
+
+def _listar_pendencias(user, ficha) -> Saida:
+    lista = memoria.pendencias(user)
+    if not lista:
+        return Saida("Não há propostas aguardando aprovação para você.", ficha)
+    linhas = []
+    for p in lista[:10]:
+        atual = f" (hoje vale: {p.atual})" if p.atual else ""
+        linhas.append(f"{p.tipo} [{p.ref}], {p.nivel}: “{p.descricao}”{atual}")
+    ficha["opcoes"] = [f"Aprovar {p.ref}" for p in lista if p.pode_decidir][:6]
+    return Saida("Propostas aguardando aprovação: " + "; ".join(linhas) + ".", ficha)
+
+
+def _decidir_pendencia(user, d, aprovar: bool, ficha) -> Saida:
+    achados = memoria.achar_pendencia(user, d.alvo)
+    verbo = "aprovar" if aprovar else "rejeitar"
+    if not achados:
+        return Saida("Não encontrei essa proposta na fila. Peça “quais propostas estão pendentes?” para ver a lista.",
+                     ficha)
+    if len(achados) > 1:
+        ficha["opcoes"] = [f"{verbo.capitalize()} {p.ref}" for p in achados[:6]]
+        return Saida("Encontrei mais de uma proposta. Qual delas?", ficha)
+    p = achados[0]
+    if aprovar and not p.pode_decidir:
+        return Saida("Você não pode aprovar essa proposta: é preciso ter “aprovar definições” no nível "
+                     f"({p.nivel}) e não ser quem a propôs.", ficha)
+    if not d.confirmado:
+        atual = f" Hoje vale “{p.atual}”; ela será substituída." if p.atual and aprovar else ""
+        ficha["opcoes"] = [f"Sim, {verbo} {p.ref}", "Não"]
+        return Saida(f"Confirma {verbo} {p.tipo.lower()} “{p.descricao}” ({p.nivel})?{atual}", ficha)
+    try:
+        memoria.decidir(user, p.ref, aprovar)
+    except Exception as exc:
+        msg = getattr(exc, "messages", None)
+        return Saida(f"Não consegui {verbo}: {msg[0] if msg else exc}", ficha)
+    feito = "aprovada; já vale" if aprovar else "rejeitada"
+    return Saida(f"Pronto: proposta “{p.descricao}” {feito}.", ficha)

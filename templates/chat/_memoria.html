@@ -1,0 +1,78 @@
+{# Etapa 6: memória do setor (o que vale) e fila de aprovação. Nunca dados do ERP. #}
+<div class="conversa-area memoria-area" id="conversa">
+  <header class="cabecalho">
+    <button class="icone so-celular" type="button" data-abrir-lateral aria-label="Abrir menu">☰</button>
+    <div class="titulo-conversa">
+      <h1>Memória e aprovações</h1>
+      <span class="escopo">O que o IAtiva usa em cada setor e o que aguarda aprovação</span>
+    </div>
+  </header>
+
+  <div class="rolagem">
+    <div class="mensagens">
+      {% if aviso %}<p class="aviso-ok" role="status">{{ aviso }}</p>{% endif %}
+      {% if erro %}<p class="erro" role="alert">{{ erro }}</p>{% endif %}
+
+      <section class="painel">
+        <h2>Aguardando aprovação</h2>
+        {% for p in pendencias %}
+          <div class="pendencia">
+            <p><span class="etiqueta">{{ p.tipo }}</span> <span class="sutil">{{ p.nivel }} · proposto por {{ p.autor }} · {{ p.ref }}</span></p>
+            <p><strong>{{ p.descricao }}</strong></p>
+            {% if p.atual %}<p class="conflito">Hoje vale: {{ p.atual }}. Aprovar substitui (o histórico fica guardado).</p>{% endif %}
+            {% if p.pode_decidir %}
+              <form method="post" action="{% url 'chat:memoria_decidir' %}" class="acoes">
+                {% csrf_token %}
+                <input type="hidden" name="ref" value="{{ p.ref }}">
+                <input type="hidden" name="setor" value="{{ memoria.setor.pk }}">
+                <button type="submit" name="acao" value="aprovar" class="botao">Aprovar</button>
+                <button type="submit" name="acao" value="rejeitar" class="botao secundario">Rejeitar</button>
+              </form>
+            {% else %}
+              <p class="sutil">Aguardando quem aprova definições neste nível.</p>
+            {% endif %}
+          </div>
+        {% empty %}
+          <p class="sutil">Nenhuma proposta pendente.</p>
+        {% endfor %}
+      </section>
+
+      {% if memoria %}
+        <section class="painel">
+          <h2>O que vale no setor {{ memoria.setor.nome }}</h2>
+          {% if setores_memoria|length > 1 %}
+            <form method="get" action="{% url 'chat:memoria' %}" class="seletor-setor">
+              <label for="setor-memoria">Setor</label>
+              <select id="setor-memoria" name="setor">
+                {% for s in setores_memoria %}<option value="{{ s.pk }}"{% if s.pk == memoria.setor.pk %} selected{% endif %}>{{ s.nome }}</option>{% endfor %}
+              </select>
+              <button type="submit" class="botao secundario">Ver</button>
+            </form>
+          {% endif %}
+
+          <h3>Valores padrão e regras</h3>
+          {% if memoria.valores %}
+            <div class="tabela-rolagem"><table>
+              <thead><tr><th>Critério</th><th>Valor</th><th>Nível</th><th>Versão</th><th>Aprovado por</th></tr></thead>
+              <tbody>{% for v in memoria.valores %}
+                <tr><td>{{ v.nome }}{% if v.obrigatoria %} <span class="etiqueta">obrigatória</span>{% endif %}</td><td>{{ v.valor }}</td><td>{{ v.nivel }}</td><td>{{ v.versao }}</td><td>{{ v.aprovado_por }}{% if v.aprovado_em %}, {{ v.aprovado_em|date:"d/m/Y" }}{% endif %}</td></tr>
+              {% endfor %}</tbody>
+            </table></div>
+          {% else %}<p class="sutil">Nenhum valor padrão aprovado.</p>{% endif %}
+
+          <h3>Notas da memória</h3>
+          {% for n in memoria.notas %}
+            <p class="nota-memoria">{{ n.texto }} <span class="sutil">· {{ n.nivel }} · {{ n.aprovado_por }}</span></p>
+          {% empty %}<p class="sutil">Nenhuma nota.</p>{% endfor %}
+
+          <h3>Consultas aprendidas</h3>
+          {% for c in memoria.consultas %}
+            <p>{{ c.nome }} <span class="sutil">· {{ c.tabela }} · {{ c.aprovado_por }}</span></p>
+          {% empty %}<p class="sutil">Nenhuma consulta aprendida para este setor.</p>{% endfor %}
+        </section>
+      {% else %}
+        <p class="sutil">Seu usuário não tem setores liberados.</p>
+      {% endif %}
+    </div>
+  </div>
+</div>

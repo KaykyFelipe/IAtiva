@@ -16,7 +16,7 @@
       {% if conversa.tipo == TipoConversa.SETOR %}
         <p class="aviso-escopo">Todos com acesso ao setor leem esta conversa. Padrões propostos só valem depois de aprovados.</p>
       {% elif conversa.tipo == TipoConversa.MESTRE %}
-        <p class="aviso-escopo">O chat mestre vê só os setores liberados nas suas políticas de acesso. A visão consolidada completa chega na Etapa 6.</p>
+        <p class="aviso-escopo">O chat mestre consulta cada setor liberado nas suas políticas, com a memória e as filiais de cada um. Os números só são somados quando as premissas são iguais e as filiais diferentes.</p>
       {% endif %}
 
       {% for item in mensagens %}
@@ -32,7 +32,7 @@
           {% endif %}
         {% else %}
           {% include "chat/_resposta.html" with m=m editavel=item.editavel executavel=item.executavel repetivel=item.repetivel aprendivel=item.aprendivel aprovavel=item.aprovavel ultima=item.ultima %}
-          {% if resultado and resultado_msg == m.pk %}{% include "chat/_resultado.html" %}{% endif %}
+          {% if resultado and resultado_msg == m.pk %}{% if resultado.consolidado %}{% include "chat/_consolidado.html" %}{% else %}{% include "chat/_resultado.html" %}{% endif %}{% endif %}
         {% endif %}
         {% endwith %}
       {% empty %}

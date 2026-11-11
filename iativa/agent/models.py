@@ -49,19 +49,38 @@ class ConsultaModelo(models.Model):
 
 class EscopoNota(models.TextChoices):
     USUARIO = "usuario", "Só do usuário"
+    SETOR = "setor", "Setor"
     EMPRESA = "empresa", "Toda a empresa"
 
 
+class SituacaoNota(models.TextChoices):
+    PROPOSTA = "proposta", "Aguardando aprovação"
+    APROVADA = "aprovada", "Aprovada"
+    REJEITADA = "rejeitada", "Rejeitada"
+    SUBSTITUIDA = "substituida", "Substituída"
+
+
 class NotaAgente(models.Model):
-    """Memória do agente (M10): frases curtas que o usuário ensinou (termos, preferências, como
-    interpretar perguntas). Vão ao modelo como referência. Nunca resultados, SQL ou CPF/CNPJ."""
+    """Memória do agente (M10/Etapa 6): frases curtas que o usuário ensinou (termos, preferências,
+    como interpretar perguntas). Vão ao modelo como referência. Nunca resultados, SQL ou CPF/CNPJ.
+
+    Nota do usuário vale na hora. Nota do setor ou da empresa entra como proposta e só vale depois
+    de aprovada por quem tem "aprovar definições" naquele nível. `substitui` aponta para a nota
+    aprovada com que a proposta conflita (mesmo termo); aprovar a proposta substitui a anterior."""
 
     texto = models.CharField(max_length=300)
     escopo = models.CharField(max_length=10, choices=EscopoNota.choices)
     usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, null=True, blank=True,
                                 related_name="+")
+    setor = models.ForeignKey("iativa_accounts.Department", on_delete=models.PROTECT, null=True, blank=True,
+                              related_name="+")
+    situacao = models.CharField(max_length=12, choices=SituacaoNota.choices, default=SituacaoNota.APROVADA)
+    substitui = models.ForeignKey("self", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
     criado_por = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True,
                                    related_name="+")
+    aprovado_por = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+                                     related_name="+")
+    aprovado_em = models.DateTimeField(null=True, blank=True)
     ativo = models.BooleanField(default=True)
     criado_em = models.DateTimeField(auto_now_add=True)
 
@@ -71,9 +90,10 @@ class NotaAgente(models.Model):
         verbose_name_plural = "memória do agente"
         constraints = [
             models.CheckConstraint(
-                condition=(models.Q(escopo="usuario", usuario__isnull=False)
-                           | models.Q(escopo="empresa", usuario__isnull=True)),
-                name="nota_escopo_coerente",
+                condition=(models.Q(escopo="usuario", usuario__isnull=False, setor__isnull=True)
+                           | models.Q(escopo="setor", usuario__isnull=True, setor__isnull=False)
+                           | models.Q(escopo="empresa", usuario__isnull=True, setor__isnull=True)),
+                name="nota_escopo_coerente_v2",
             )
         ]
 

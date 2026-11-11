@@ -101,7 +101,10 @@ def lateral(user) -> dict:
             grupos.append((rotulo, []))
         grupos[-1][1].append({"conversa": c, "estado": _estado_lateral(c)})
     setores = Department.objects.filter(pk__in=setores_leitura(user), ativo=True).order_by("nome")
-    return {"grupos": grupos, "setores": setores, "mestre": pode_mestre(user)}
+    from iativa.agent import memoria
+
+    pendentes = sum(1 for p in memoria.pendencias(user) if p.pode_decidir)
+    return {"grupos": grupos, "setores": setores, "mestre": pode_mestre(user), "pendentes": pendentes}
 
 
 def _estado_lateral(c) -> str:
@@ -204,9 +207,15 @@ def _executar_e_registrar(user, c, s):
     ficha = {"tipo": "executada" if res.ok else "falha_execucao", "estado": res.estado,
              "estado_nome": res.solicitacao.get_estado_display() if res.solicitacao else "",
              "objetivo": orquestrador.OBJETIVOS[s.objetivo].nome}
-    msg = Mensagem.objects.create(conversa=c, papel=Papel.IA, texto=texto, ficha=ficha, solicitacao=res.solicitacao)
+    from iativa.query.consolidado import talvez_consolidar
+
+    exibido = talvez_consolidar(user, s, res)
+    if exibido is not res:  # chat mestre: um bloco por setor (Etapa 6)
+        texto += f" Setores: {len(exibido.blocos)}. {exibido.resumo}"
+    msg = Mensagem.objects.create(conversa=c, papel=Papel.IA, texto=texto[:MAX_TEXTO], ficha=ficha,
+                                  solicitacao=res.solicitacao)
     _tocar(c, "")
-    return msg, res
+    return msg, exibido
 
 
 @transaction.atomic

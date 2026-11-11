@@ -79,7 +79,7 @@ Conforme `docs/PEDIDO_INICIAL.md` §17: 0 Levantamento → 1 Fundação localhos
 - [ ] `pytest` passa sem dependência de rede.
 - [ ] README reproduz tudo do zero numa máquina limpa.
 
-## 7. Etapa 6 — memórias setoriais e chat consolidado (proposta, aguardando aprovação)
+## 7. Etapa 6 — memórias setoriais e chat consolidado (plano aprovado em 2026-11-11 por Diego)
 
 **Já existe:** valores de parâmetro por setor/empresa como proposta com aprovação (T9/T10), precedência (D12), memória do agente (`NotaAgente`, usuário/empresa, M10), consultas aprendidas por setor (M9) e o chat mestre (M8), que hoje consulta só como o setor do próprio usuário.
 

@@ -207,3 +207,45 @@ def mestre(request):
     except PermissaoNegada:
         raise Http404 from None
     return redirect("chat:conversa", conversa_id=c.pk)
+
+
+def _render_memoria(request, setor_id=None, aviso="", erro=""):
+    from iativa.agent import memoria
+
+    setores = list(memoria.setores_visiveis(request.user))
+    escolhido = next((s for s in setores if str(s.pk) == str(setor_id)), None)
+    if escolhido is None:
+        proprio = setor_do_usuario(request.user)
+        escolhido = next((s for s in setores if proprio and s.pk == proprio.pk), setores[0] if setores else None)
+    ctx = _contexto(request)
+    ctx.update({
+        "pagina_memoria": True,
+        "setores_memoria": setores,
+        "memoria": memoria.memoria_do_setor(request.user, escolhido) if escolhido else None,
+        "pendencias": memoria.pendencias(request.user),
+        "aviso": aviso,
+        "erro": erro,
+    })
+    return render(request, "chat/index.html", ctx)
+
+
+@require_GET
+def memoria(request):
+    """Etapa 6: o que vale em cada setor do usuário e a fila de aprovação."""
+    return _render_memoria(request, request.GET.get("setor"))
+
+
+@require_POST
+def memoria_decidir(request):
+    from iativa.agent import memoria as mem
+
+    ref, acao = request.POST.get("ref", ""), request.POST.get("acao", "")
+    if acao not in ("aprovar", "rejeitar") or ref not in {p.ref for p in mem.pendencias(request.user)}:
+        return _render_memoria(request, request.POST.get("setor"), erro="Proposta indisponível.")
+    try:
+        descricao = mem.decidir(request.user, ref, acao == "aprovar")
+    except (PermissaoNegada, ValidationError) as exc:
+        msg = getattr(exc, "messages", None)
+        return _render_memoria(request, request.POST.get("setor"), erro=msg[0] if msg else str(exc))
+    feito = "aprovada" if acao == "aprovar" else "rejeitada"
+    return _render_memoria(request, request.POST.get("setor"), aviso=f"Proposta “{descricao}” {feito}.")

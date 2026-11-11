@@ -35,6 +35,15 @@
     {% endif %}
 
     <section class="grupo">
+      <h2>Memória</h2>
+      <a href="{% url 'chat:memoria' %}" class="conversa{% if pagina_memoria %} ativa{% endif %}">
+        <span class="simbolo memoria" aria-hidden="true"></span>
+        <span class="titulo">Memória e aprovações</span>
+        {% if lateral.pendentes %}<span class="contador" title="Propostas aguardando sua decisão">{{ lateral.pendentes }}</span>{% endif %}
+      </a>
+    </section>
+
+    <section class="grupo">
       <h2>Suas conversas</h2>
       {% for rotulo, itens in lateral.grupos %}
         <p class="periodo">{{ rotulo }}</p>

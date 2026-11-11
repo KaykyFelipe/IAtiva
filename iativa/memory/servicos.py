@@ -8,6 +8,7 @@ Regras:
 - Parâmetro com dado pessoal: só no escopo da solicitação, com descarte em 30 dias.
 - Correção cria nova versão ligada à anterior (`substitui`) e registra revisão.
 """
+import json
 from datetime import timedelta
 
 from django.conf import settings
@@ -112,6 +113,8 @@ def registrar_valor(
         raise ValidationError("Escopo desconhecido.")
 
     privado = escopo not in ESCOPOS_COMPARTILHADOS
+    if not privado:
+        substitui = _conferir_conflito(definicao, escopo, setor, valor, obrigatoria, substitui)
     binding = ParameterBinding.objects.create(
         definicao=definicao,
         escopo=escopo,
@@ -136,6 +139,39 @@ def registrar_valor(
     return binding
 
 
+def _chave(valor) -> str:
+    return json.dumps(valor, sort_keys=True, ensure_ascii=False)
+
+
+def _conferir_conflito(definicao, escopo, setor, valor, obrigatoria, substitui):
+    """Etapa 6: resolução de conflitos na entrada da proposta compartilhada.
+
+    - Contraria regra obrigatória aprovada da empresa (proposta de setor): recusada.
+    - Mesmo valor já aprovado no mesmo nível: recusada (nada a mudar).
+    - Outro valor aprovado no mesmo nível: a proposta passa a substituí-lo; o aprovador vê os dois
+      lado a lado e, ao aprovar, o anterior vira "substituído" (histórico mantido).
+    """
+    aprovados = ParameterBinding.objects.filter(definicao=definicao, situacao=Situacao.APROVADA)
+    if escopo == Escopo.SETOR:
+        regra = aprovados.filter(escopo=Escopo.EMPRESA, obrigatoria=True).first()
+        if regra is not None and _chave(regra.valor) != _chave(valor):
+            raise ValidationError(
+                f"A empresa tem regra obrigatória para {definicao.nome}; o setor não pode definir outro valor."
+            )
+    if substitui is not None:
+        return substitui
+    mesmo_nivel = aprovados.filter(escopo=escopo, setor=setor).order_by("-id").first()
+    if mesmo_nivel is None:
+        return None
+    if _chave(mesmo_nivel.valor) == _chave(valor) and mesmo_nivel.obrigatoria == obrigatoria:
+        raise ValidationError("Esse valor já está aprovado neste nível.")
+    return mesmo_nivel
+
+
+def autoaprovacao() -> bool:
+    return bool(getattr(settings, "IATIVA_APRENDIZADO_AUTOAPROVACAO", False))
+
+
 def _travar(binding) -> ParameterBinding:
     # `of=("self",)`: o PostgreSQL não aceita FOR UPDATE no lado anulável de um JOIN.
     return (
@@ -151,7 +187,7 @@ def aprovar(ator, binding: ParameterBinding, motivo: str = "") -> ParameterBindi
     if binding.situacao != Situacao.PROPOSTA:
         raise ValidationError("Somente propostas podem ser aprovadas.")
     exigir(ator, Permissao.APROVAR_CONHECIMENTO, binding.setor)
-    if binding.criado_por_id == ator.pk:
+    if binding.criado_por_id == ator.pk and not autoaprovacao():
         raise PermissaoNegada("Quem propôs não aprova a própria proposta.")
     binding.situacao = Situacao.APROVADA
     binding.aprovado_por = ator

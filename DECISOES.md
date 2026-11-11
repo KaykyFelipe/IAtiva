@@ -15,7 +15,7 @@ Formato: `ID | data | decisão | situação | aprovado por | observações`
 | 3 — Plano de conhecimento e metadados (início autorizado, só fontes sintéticas) | 2026-11-10 | Diego (chat: "Aprovo a Etapa 3") — Protheus real só após liberação explícita e informações 4–8 |
 | 3 — Conhecimento e metadados (entrega validada, inclui T14–T19; fonte real de homologação) | 2026-11-10 | Diego (chat: "Aprovo a Etapa 3") |
 | 4 — Agente e esclarecimentos (entrega validada, inclui T20–T24 e M8) | 2026-11-10 | Diego (chat: "aprovo a etapa 4") |
-| 6 — Plano de memórias setoriais e chat consolidado (início autorizado; plano em `PLANO.md` §7 aguardando aprovação) | 2026-11-11 | Diego (chat: "aprovo a etapa 5, comece a proxima etapa") |
+| 6 — Plano de memórias setoriais e chat consolidado (`PLANO.md` §7, implementação autorizada) | 2026-11-11 | Diego (chat: "Aprovo, pode fazer") |
 | 5 — Consulta de leitura (entrega validada, inclui T25–T28, T30, M9 e M10) | 2026-11-11 | Diego (chat: "aprovo a etapa 5") — conferência dos números com o Financeiro e premissas T29 seguem como pendência |
 | 5 — Consulta de leitura (início autorizado; homologação, somente leitura) | 2026-11-10 | Diego (chat: "Vamos começar a Etapa 5") |
 | 4 — Plano de agente e esclarecimentos (início autorizado; provedor falso até a chave da API da Anthropic e a posição do DPO) | 2026-11-10 | Diego (chat: "Aprovo a Etapa 4") |
@@ -107,6 +107,15 @@ Aprovadas em 2026-11-09 por Kayky Felipe (chat), com as opções recomendadas na
 | T28 | 2026-11-10 | Resultado só em memória na resposta; o histórico guarda "consulta executada, N linhas"; reabrir = "Executar de novo" (nova solicitação com os mesmos valores). Auditoria: duração e número de linhas. | Aprovada com a Etapa 5 |
 | T30 | 2026-11-10 | No SQL Server os valores vão como literais (não parâmetros): na homologação a mesma consulta parametrizada estourava o tempo (HYT00) e com literais rodava em 0,0 s. Só valores do plano, restritos a `[0-9A-Za-z %-]` (até 40 caracteres, sem aspas); o SQL final é revalidado pela árvore sintática antes de executar. Na base sintética continuam parâmetros. | Aprovada com a Etapa 5 |
 | T29 | 2026-11-10 | **Premissas a confirmar com o Financeiro (informação 8):** excluídos tipos RA, NCC, PR e abatimentos (tipo terminado em "-"); usa o saldo atual (pagamentos após a data de corte já descontados); atraso = vencimento real antes de (corte − tolerância). Mostradas ao usuário em cada resultado. | Pendente — aguarda o Financeiro (não bloqueia a Etapa 6) |
+
+## Decisões técnicas de implementação (Etapa 6 — sujeitas à validação da etapa)
+
+| ID | Data | Decisão | Situação |
+|----|------|---------|----------|
+| T31 | 2026-11-11 | `NotaAgente` ganha escopo "setor", situação (proposta/aprovada/rejeitada/substituída), aprovador e `substitui`. Nota de usuário vale na hora; de setor/empresa só depois de aprovada por quem tem "aprovar definições" no nível. Notas já existentes ficam aprovadas. Autoaprovação segue a chave da M9 (`IATIVA_APRENDIZADO_AUTOAPROVACAO`), também para valores padrão. | Em validação |
+| T32 | 2026-11-11 | Conflitos resolvidos na entrada: proposta de setor que contraria regra obrigatória aprovada da empresa é recusada; mesmo valor/nota já aprovado no nível é recusado; valor ou nota diferente no mesmo nível (para nota: mesmo termo antes de "é/significa/:") vira proposta que substitui a aprovada ao ser aprovada (histórico mantido). A resolução continua tratando divergências legadas como conflito. | Em validação |
+| T33 | 2026-11-11 | Fila única (`agent/memoria.py`): valores padrão, notas e consultas aprendidas, com referência `tipo-id`. Tela "Memória e aprovações" no chat (só setores do usuário) e ações do agente `listar_pendencias`, `aprovar_pendencia`, `rejeitar_pendencia` (sempre com confirmação). | Em validação |
+| T34 | 2026-11-11 | Chat mestre: depois de executar no setor do usuário, roda uma solicitação por setor com "consultar", com a memória e as filiais do setor; os valores ditos na conversa valem para todos. Soma só com premissas iguais (exceto filial), filiais diferentes e resultado não truncado; senão mostra os blocos lado a lado e explica. Solicitações incompletas de outros setores são canceladas. | Em validação |
 
 ## Organização do trabalho
 

@@ -14,7 +14,7 @@
 <div class="app" id="app">
   {% include "chat/_lateral.html" %}
   <main class="principal">
-    {% include "chat/_conversa.html" %}
+    {% if pagina_memoria %}{% include "chat/_memoria.html" %}{% else %}{% include "chat/_conversa.html" %}{% endif %}
   </main>
 </div>
 </body>

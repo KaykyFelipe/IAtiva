@@ -278,23 +278,46 @@ def test_solicitacao_contra_regra_obrigatoria_gera_conflito(ana, gestor, setores
     assert resolver(d, ana, s).situacao == CONFLITO
 
 
-def test_obrigatorias_divergentes_geram_conflito(ana, gestor, aprovador_empresa, setores, definicoes):
+def test_setor_nao_contraria_regra_obrigatoria_da_empresa(ana, gestor, aprovador_empresa, setores, definicoes):
+    # Etapa 6: o conflito é recusado na entrada, em vez de virar conflito na resolução.
     d = definicoes["baixa_parcial"]
     servicos.aprovar(
         aprovador_empresa, servicos.registrar_valor(ana, d, Escopo.EMPRESA, "considerar-saldo", obrigatoria=True)
     )
+    with pytest.raises(ValidationError, match="regra obrigatória"):
+        servicos.registrar_valor(ana, d, Escopo.SETOR, "desconsiderar-titulo", setor=setores["cobranca"],
+                                 obrigatoria=True)
+    servicos.registrar_valor(ana, d, Escopo.SETOR, "considerar-saldo", setor=setores["cobranca"])  # igual: aceita
+
+
+def test_obrigatorias_divergentes_legadas_geram_conflito(ana, gestor, aprovador_empresa, setores, definicoes):
+    # Defesa para dados anteriores à Etapa 6: a resolução continua perguntando em vez de escolher.
+    d = definicoes["baixa_parcial"]
     servicos.aprovar(
         gestor,
         servicos.registrar_valor(
             ana, d, Escopo.SETOR, "desconsiderar-titulo", setor=setores["cobranca"], obrigatoria=True
         ),
     )
+    servicos.aprovar(
+        aprovador_empresa, servicos.registrar_valor(ana, d, Escopo.EMPRESA, "considerar-saldo", obrigatoria=True)
+    )
     assert resolver(d, ana).motivo == "obrigatorias_divergentes"
 
 
-def test_conflito_no_mesmo_nivel(ana, bia, gestor, setores, definicoes):
+def test_proposta_divergente_no_mesmo_nivel_substitui_ao_aprovar(ana, bia, gestor, setores, definicoes):
+    d = definicoes["tolerancia"]
+    primeiro = servicos.aprovar(gestor, servicos.registrar_valor(ana, d, Escopo.SETOR, 2, setor=setores["cobranca"]))
+    proposta = servicos.registrar_valor(bia, d, Escopo.SETOR, 5, setor=setores["cobranca"])
+    assert proposta.substitui_id == primeiro.pk and proposta.versao == 2
+    assert resolver(d, ana).valor == 2  # até a decisão, vale o aprovado
+    servicos.aprovar(gestor, proposta)
+    primeiro.refresh_from_db()
+    assert primeiro.situacao == Situacao.SUBSTITUIDA and resolver(d, ana).valor == 5
+
+
+def test_mesmo_valor_ja_aprovado_e_recusado(ana, gestor, setores, definicoes):
     d = definicoes["tolerancia"]
     servicos.aprovar(gestor, servicos.registrar_valor(ana, d, Escopo.SETOR, 2, setor=setores["cobranca"]))
-    servicos.aprovar(gestor, servicos.registrar_valor(bia, d, Escopo.SETOR, 5, setor=setores["cobranca"]))
-    r = resolver(d, ana)
-    assert r.situacao == CONFLITO and r.escopo == Escopo.SETOR
+    with pytest.raises(ValidationError, match="já está aprovado"):
+        servicos.registrar_valor(ana, d, Escopo.SETOR, 2, setor=setores["cobranca"])
