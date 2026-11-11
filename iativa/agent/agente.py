@@ -8,6 +8,7 @@ Regras que continuam valendo: lista fechada de objetivos, parâmetros validados 
 filiais autorizadas, compilador + validador AST, resultado só em memória (nunca no histórico
 nem no modelo), auditoria só com códigos.
 """
+import re
 import unicodedata
 from dataclasses import dataclass, field
 
@@ -226,6 +227,10 @@ def _avaliar_e_executar(user, s, resposta_modelo, erros, ficha) -> Saida:
 
     res = servico.executar_solicitacao(user, s)
     s = res.solicitacao or s
+    # Executou sem esperar: descarta perguntas do modelo do tipo "posso executar?" e botões de confirmação.
+    ficha["opcoes"] = []
+    if resposta_modelo and re.search(r"\?\s*$|posso execut|deseja que eu execut|quer que eu execut", resposta_modelo, re.I):
+        resposta_modelo = ""
     if res.ok:
         # M8: o histórico guarda só que rodou; os números ficam na tabela, em memória.
         base = resposta_modelo or f"Consultei {r.objetivo.lower()}."

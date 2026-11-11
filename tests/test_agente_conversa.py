@@ -81,6 +81,18 @@ def test_modelo_pergunta_o_que_falta_com_as_proprias_palavras(ana):
     assert "Até que data" in msg.texto and res is None
 
 
+def test_execucao_automatica_descarta_pergunta_de_confirmacao(ana):
+    c = conversas.nova_individual(ana)
+    p = FakeProvider([_decisao(resposta="Tudo certo. Posso executar a consulta?", acao="preparar_consulta",
+                               objetivo="titulos-em-atraso", opcoes=["Sim, executar", "Cancelar"],
+                               parametros=[{"codigo": "data-corte", "valor": "01/01/2026"},
+                                           {"codigo": "dias-tolerancia-atraso", "valor": "0"},
+                                           {"codigo": "tratamento-baixa-parcial", "valor": "considerar-saldo"},
+                                           {"codigo": "filial-analise", "valor": "01"}])])
+    msg, res = _falar(ana, c, "x", p)
+    assert res is not None and "Posso executar" not in msg.texto and msg.ficha["opcoes"] == []
+
+
 def test_contexto_vai_ao_modelo_sem_resultados(ana):
     c = conversas.nova_individual(ana)
     msg, res = _falar(ana, c, ATRASO)

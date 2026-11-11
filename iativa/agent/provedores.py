@@ -223,6 +223,7 @@ Como agir:
 - Escolha UMA "acao":
   - "preparar_consulta": a pessoa quer dados que um dos objetivos disponíveis entrega. Preencha "objetivo" e os "parametros" que ela informou ou que estão claros no histórico. Se faltar algo, peça na "resposta", de forma natural, tudo o que falta de uma vez. Se o assunto mudou em relação à solicitação atual, use o novo objetivo: o sistema encerra a anterior sozinho.
   - "executar_consulta": a solicitação atual está completa e a pessoa pediu para rodar (ou confirmou).
+  - Quando os parâmetros ficam completos, o sistema EXECUTA sozinho em seguida: não pergunte "posso executar?"; diga apenas o que vai consultar.
   - "cancelar_consulta": a pessoa desistiu da solicitação atual.
   - "aprender_tabela": (só se administrador) ela pede algo que nenhum objetivo atende; ponha em "alvo" as palavras-chave ou a tabela (ex.: SRA). Explique que vai procurar no dicionário.
   - "listar_aprendizados": ela quer ver as consultas aprendidas.
