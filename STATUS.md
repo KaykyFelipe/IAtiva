@@ -1,8 +1,8 @@
 # STATUS — IAtiva
 
-**Atualizado em:** 2026-11-10
-**Etapa atual:** 5 — Consulta de leitura
-**Situação:** **implementada, aguardando validação.** Etapa 4 aprovada em 2026-11-10. Execução na homologação, somente leitura.
+**Atualizado em:** 2026-11-11
+**Etapa atual:** 6 — Memórias setoriais e chat consolidado
+**Situação:** **plano proposto (`PLANO.md` §7), aguardando aprovação para implementar.** Etapa 5 aprovada em 2026-11-11 por Diego; conferência dos números com o Financeiro e premissas T29 seguem pendentes.
 
 ## Mudança M10 — agente conversacional com Gemini (2026-11-11)
 
@@ -24,7 +24,7 @@
 - 305 testes passando (10 da rotina M4 pulados no Windows), inclusive comparação com consulta de referência na base sintética.
 - Homologação (2026-11-10, filial 001001): inadimplência e títulos a vencer executaram em ~1 s (consultas com literais validados, T30). Conferência dos números com o Financeiro pendente.
 
-## Checklist de validação da Etapa 5
+## Checklist de validação da Etapa 5 (aprovada em 2026-11-11; itens do Financeiro pendentes)
 
 - [ ] Inadimplência, títulos a vencer e posição de cliente batem com o que o Financeiro vê no Protheus (conferir na homologação).
 - [ ] Premissas T29 (tipos excluídos, saldo atual, regra de atraso) aprovadas ou corrigidas pelo Financeiro.

@@ -78,3 +78,35 @@ Conforme `docs/PEDIDO_INICIAL.md` §17: 0 Levantamento → 1 Fundação localhos
 - [ ] Nenhum segredo no repositório.
 - [ ] `pytest` passa sem dependência de rede.
 - [ ] README reproduz tudo do zero numa máquina limpa.
+
+## 7. Etapa 6 — memórias setoriais e chat consolidado (proposta, aguardando aprovação)
+
+**Já existe:** valores de parâmetro por setor/empresa como proposta com aprovação (T9/T10), precedência (D12), memória do agente (`NotaAgente`, usuário/empresa, M10), consultas aprendidas por setor (M9) e o chat mestre (M8), que hoje consulta só como o setor do próprio usuário.
+
+**Escopo:**
+
+1. **Memória do setor.** A memória do agente ganha o escopo "setor". Notas de setor e empresa passam a entrar como **proposta**; só valem depois de aprovadas por quem tem "aprovar definições" naquele nível. A autoaprovação segue a mesma chave da M9. Notas de usuário continuam valendo na hora.
+2. **Tela "Memória"** no chat, por setor, só para quem é do setor. Lista o que vale (valores padrão, regras obrigatórias, notas e consultas aprendidas), com origem, quem aprovou e versão.
+3. **Fila de aprovação única** para valores, notas e consultas aprendidas. Pelo chat, o agente aceita "aprove a nota X" e "rejeite a proposta Y", sempre com confirmação. Autor não aprova a própria proposta (exceto com a autoaprovação ligada).
+4. **Resolução de conflitos:**
+   - Proposta que contradiz algo já aprovado no mesmo nível (mesmo parâmetro, outro valor) aparece lado a lado ao aprovador. Aprovar substitui com nova versão; o histórico fica.
+   - Proposta de setor que contradiz regra obrigatória da empresa é recusada na hora (D12).
+   - Notas que se contradizem (mesmo termo, definições diferentes) são marcadas para revisão. Até a decisão, vale a já aprovada.
+5. **Visão consolidada (chat mestre):**
+   - A consulta roda uma vez por setor autorizado, cada uma com a memória e as filiais do próprio setor.
+   - O resultado mostra um bloco por setor. Os números só são somados quando as premissas forem iguais; quando diferirem, o sistema mostra a diferença em vez de somar.
+   - Só setores em que o usuário tem "consultar" participam.
+
+**Fora do escopo:** operações de alteração (Etapa 8), acesso externo (Etapa 9) e importação de usuários do AD.
+
+**Critérios de aceite:**
+
+- [ ] Nota de setor/empresa não vale antes de aprovada; a de usuário vale na hora.
+- [ ] Quem não tem "aprovar definições" no nível não aprova; o autor não aprova a própria proposta (sem autoaprovação).
+- [ ] Conflito com valor aprovado aparece ao aprovador; aprovar cria versão nova e mantém o histórico.
+- [ ] Conflito com regra obrigatória da empresa é recusado.
+- [ ] A tela "Memória" mostra só setores do usuário, sem resultados do ERP.
+- [ ] No chat mestre, cada setor usa a própria memória e filiais; não soma números com premissas diferentes.
+- [ ] Usuário sem "consultar" num setor não vê o bloco desse setor.
+- [ ] Todas as aprovações, rejeições e substituições ficam na auditoria (só códigos).
+- [ ] `pytest` passa.

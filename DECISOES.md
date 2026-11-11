@@ -15,6 +15,8 @@ Formato: `ID | data | decisão | situação | aprovado por | observações`
 | 3 — Plano de conhecimento e metadados (início autorizado, só fontes sintéticas) | 2026-11-10 | Diego (chat: "Aprovo a Etapa 3") — Protheus real só após liberação explícita e informações 4–8 |
 | 3 — Conhecimento e metadados (entrega validada, inclui T14–T19; fonte real de homologação) | 2026-11-10 | Diego (chat: "Aprovo a Etapa 3") |
 | 4 — Agente e esclarecimentos (entrega validada, inclui T20–T24 e M8) | 2026-11-10 | Diego (chat: "aprovo a etapa 4") |
+| 6 — Plano de memórias setoriais e chat consolidado (início autorizado; plano em `PLANO.md` §7 aguardando aprovação) | 2026-11-11 | Diego (chat: "aprovo a etapa 5, comece a proxima etapa") |
+| 5 — Consulta de leitura (entrega validada, inclui T25–T28, T30, M9 e M10) | 2026-11-11 | Diego (chat: "aprovo a etapa 5") — conferência dos números com o Financeiro e premissas T29 seguem como pendência |
 | 5 — Consulta de leitura (início autorizado; homologação, somente leitura) | 2026-11-10 | Diego (chat: "Vamos começar a Etapa 5") |
 | 4 — Plano de agente e esclarecimentos (início autorizado; provedor falso até a chave da API da Anthropic e a posição do DPO) | 2026-11-10 | Diego (chat: "Aprovo a Etapa 4") |
 | 3 — Liberação para conectar na base de **homologação** com o login somente leitura (só metadados) | 2026-11-10 | Diego (chat: "pode tentar conectar") — dados de conexão só no `.env` do servidor |
@@ -95,16 +97,16 @@ Aprovadas em 2026-11-09 por Kayky Felipe (chat), com as opções recomendadas na
 | T23 | 2026-11-10 | Ao modelo vão só: mensagem, data de hoje, catálogo de objetivos/parâmetros, parâmetros já definidos (dado pessoal como "[informado]") e trechos de conhecimento aprovados. Nunca linhas do ERP. A mensagem não é persistida nem ecoada. | Aprovada com a Etapa 4 |
 | T24 | 2026-11-10 | `AnthropicProvider` só funciona com `IATIVA_AGENTE_ENVIO_LIBERADO=1`, que depende da posição do DPO/LGPD (D5/D6). Mudança de assunto cancela a solicitação anterior em preparação. | Aprovada com a Etapa 4 |
 
-## Decisões técnicas de implementação (Etapa 5 — sujeitas à validação da etapa)
+## Decisões técnicas de implementação (Etapa 5)
 
 | ID | Data | Decisão | Situação |
 |----|------|---------|----------|
-| T25 | 2026-11-10 | Plano de consulta montado pelo backend a partir do objetivo e dos parâmetros resolvidos (o modelo não participa). Compilador usa só nomes do catálogo (tabela física do SX2, campos consultáveis), valores sempre como parâmetros, filial calculada pelo compartilhamento (xFilial). | Em validação |
-| T26 | 2026-11-10 | Validação por AST com `sqlglot` (T-SQL): um SELECT, sem INTO/UNION/subconsulta/comandos/OPENROWSET, só tabelas permitidas sem banco/servidor no nome, D_E_L_E_T_ e filial em cada tabela, TOP obrigatório. | Em validação |
-| T27 | 2026-11-10 | Execução na mesma conexão somente leitura do catálogo (login conferido a cada abertura), até 500 linhas e 30 s. Antes de executar, reconfere permissões, filiais, parâmetros e metadados. Chave repetida no resultado → "não validada". | Em validação |
-| T28 | 2026-11-10 | Resultado só em memória na resposta; o histórico guarda "consulta executada, N linhas"; reabrir = "Executar de novo" (nova solicitação com os mesmos valores). Auditoria: duração e número de linhas. | Em validação |
-| T30 | 2026-11-10 | No SQL Server os valores vão como literais (não parâmetros): na homologação a mesma consulta parametrizada estourava o tempo (HYT00) e com literais rodava em 0,0 s. Só valores do plano, restritos a `[0-9A-Za-z %-]` (até 40 caracteres, sem aspas); o SQL final é revalidado pela árvore sintática antes de executar. Na base sintética continuam parâmetros. | Em validação |
-| T29 | 2026-11-10 | **Premissas a confirmar com o Financeiro (informação 8):** excluídos tipos RA, NCC, PR e abatimentos (tipo terminado em "-"); usa o saldo atual (pagamentos após a data de corte já descontados); atraso = vencimento real antes de (corte − tolerância). Mostradas ao usuário em cada resultado. | Em validação |
+| T25 | 2026-11-10 | Plano de consulta montado pelo backend a partir do objetivo e dos parâmetros resolvidos (o modelo não participa). Compilador usa só nomes do catálogo (tabela física do SX2, campos consultáveis), valores sempre como parâmetros, filial calculada pelo compartilhamento (xFilial). | Aprovada com a Etapa 5 |
+| T26 | 2026-11-10 | Validação por AST com `sqlglot` (T-SQL): um SELECT, sem INTO/UNION/subconsulta/comandos/OPENROWSET, só tabelas permitidas sem banco/servidor no nome, D_E_L_E_T_ e filial em cada tabela, TOP obrigatório. | Aprovada com a Etapa 5 |
+| T27 | 2026-11-10 | Execução na mesma conexão somente leitura do catálogo (login conferido a cada abertura), até 500 linhas e 30 s. Antes de executar, reconfere permissões, filiais, parâmetros e metadados. Chave repetida no resultado → "não validada". | Aprovada com a Etapa 5 |
+| T28 | 2026-11-10 | Resultado só em memória na resposta; o histórico guarda "consulta executada, N linhas"; reabrir = "Executar de novo" (nova solicitação com os mesmos valores). Auditoria: duração e número de linhas. | Aprovada com a Etapa 5 |
+| T30 | 2026-11-10 | No SQL Server os valores vão como literais (não parâmetros): na homologação a mesma consulta parametrizada estourava o tempo (HYT00) e com literais rodava em 0,0 s. Só valores do plano, restritos a `[0-9A-Za-z %-]` (até 40 caracteres, sem aspas); o SQL final é revalidado pela árvore sintática antes de executar. Na base sintética continuam parâmetros. | Aprovada com a Etapa 5 |
+| T29 | 2026-11-10 | **Premissas a confirmar com o Financeiro (informação 8):** excluídos tipos RA, NCC, PR e abatimentos (tipo terminado em "-"); usa o saldo atual (pagamentos após a data de corte já descontados); atraso = vencimento real antes de (corte − tolerância). Mostradas ao usuário em cada resultado. | Pendente — aguarda o Financeiro (não bloqueia a Etapa 6) |
 
 ## Organização do trabalho
 
