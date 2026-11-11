@@ -1,80 +1,30 @@
 {% load static %}
 <aside class="lateral" id="lateral" aria-label="Conversas"{% if oob_lateral %} hx-swap-oob="true"{% endif %}>
   <div class="lateral-topo">
-    <a class="marca" href="{% url 'chat:index' %}">
-      <img src="{% static 'img/logo-ativa.png' %}" alt="Ativa Locação" width="88" height="64">
-      <span class="produto">IAtiva</span>
-    </a>
-    <button class="icone so-celular" type="button" data-fechar-lateral aria-label="Fechar menu">✕</button>
+    <a class="marca" href="{% url 'chat:index' %}"><img src="{% static 'img/logo-ativa.png' %}" alt="Ativa Locação" width="37" height="31"><span class="identidade"><strong>IAtiva</strong><span>Inteligência para o seu dia</span></span></a>
+    <button class="icone" type="button" data-recolher-lateral aria-label="Recolher lateral" title="Recolher lateral">{% include "chat/_icone.html" with nome="painel" %}</button>
   </div>
-
-  <a class="nova" href="{% url 'chat:index' %}"><span class="mais" aria-hidden="true">+</span> Nova conversa</a>
-
+  <a class="nova" href="{% url 'chat:index' %}">{% include "chat/_icone.html" with nome="nova" %}<span>Nova conversa</span><span class="atalho">Ctrl K</span></a>
+  <label class="busca">{% include "chat/_icone.html" with nome="busca" %}<input type="search" placeholder="Buscar conversas" aria-label="Buscar conversas" data-busca-conversas autocomplete="off"><kbd>/</kbd></label>
   <nav class="listas">
     {% if lateral.mestre %}
-      <section class="grupo">
-        <h2>Diretoria</h2>
-        <a href="{% url 'chat:mestre' %}" class="conversa{% if conversa.tipo == TipoConversa.MESTRE %} ativa{% endif %}">
-          <span class="simbolo mestre" aria-hidden="true"></span>
-          <span class="titulo">Chat mestre</span>
-          <span class="dica">seus setores</span>
-        </a>
-      </section>
+      <details class="grupo" data-grupo="diretoria" open><summary>Diretoria {% include "chat/_icone.html" with nome="seta" %}</summary><a href="{% url 'chat:mestre' %}" class="conversa{% if conversa.tipo == TipoConversa.MESTRE %} ativa{% endif %}" data-item-busca>{% include "chat/_icone.html" with nome="mestre" %}<span class="titulo">Chat mestre</span></a></details>
     {% endif %}
-
     {% if lateral.setores %}
-      <section class="grupo">
-        <h2>{% if lateral.setores|length > 1 %}Setores{% else %}Setor{% endif %}</h2>
-        {% for s in lateral.setores %}
-          <a href="{% url 'chat:setor' s.pk %}" class="conversa{% if conversa.tipo == TipoConversa.SETOR and conversa.setor_id == s.pk %} ativa{% endif %}">
-            <span class="simbolo setor" aria-hidden="true"></span>
-            <span class="titulo">{{ s.nome }}</span>
-          </a>
-        {% endfor %}
-      </section>
+      <details class="grupo" data-grupo="setores" open><summary>Setores {% include "chat/_icone.html" with nome="seta" %}</summary>
+        {% for s in lateral.setores %}<a href="{% url 'chat:setor' s.pk %}" class="conversa{% if conversa.tipo == TipoConversa.SETOR and conversa.setor_id == s.pk %} ativa{% endif %}" data-item-busca>{% include "chat/_icone.html" with nome="setor" %}<span class="titulo">{{ s.nome }}</span></a>{% endfor %}
+      </details>
     {% endif %}
-
-    <section class="grupo">
-      <h2>Memória</h2>
-      <a href="{% url 'chat:memoria' %}" class="conversa{% if pagina_memoria %} ativa{% endif %}">
-        <span class="simbolo memoria" aria-hidden="true"></span>
-        <span class="titulo">Memória e aprovações</span>
-        {% if lateral.pendentes %}<span class="contador" title="Propostas aguardando sua decisão">{{ lateral.pendentes }}</span>{% endif %}
-      </a>
-    </section>
-
-    {% if user.is_superuser %}
-      <section class="grupo">
-        <h2>Configurações</h2>
-        <a href="{% url 'claude-conta' %}" class="conversa"><span class="titulo">Conectar Claude</span></a>
-      </section>
-    {% endif %}
-
-    <section class="grupo">
-      <h2>Suas conversas</h2>
-      {% for rotulo, itens in lateral.grupos %}
-        <p class="periodo">{{ rotulo }}</p>
-        {% for item in itens %}
-          <a href="{% url 'chat:conversa' item.conversa.pk %}" class="conversa{% if conversa.pk == item.conversa.pk %} ativa{% endif %}">
-            <span class="titulo">{{ item.conversa.titulo|default:"Conversa" }}</span>
-            {% if item.estado %}<span class="ponto {{ item.estado }}" title="{% if item.estado == 'pronta' %}Pronta{% else %}Aguardando informação{% endif %}"></span>{% endif %}
-          </a>
-        {% endfor %}
-      {% empty %}
-        <p class="periodo">Nenhuma conversa ainda.</p>
-      {% endfor %}
-    </section>
+    <details class="grupo" data-grupo="memoria" open><summary>Memória {% include "chat/_icone.html" with nome="seta" %}</summary><a href="{% url 'chat:memoria' %}" class="conversa{% if pagina_memoria %} ativa{% endif %}">{% include "chat/_icone.html" with nome="memoria" %}<span class="titulo">Memória e aprovações</span>{% if lateral.pendentes %}<span class="contador" title="Propostas aguardando sua decisão">{{ lateral.pendentes }}</span>{% endif %}</a></details>
+    <details class="grupo recentes" data-grupo="conversas" open><summary>Suas conversas {% include "chat/_icone.html" with nome="seta" %}</summary>
+      {% for rotulo, itens in lateral.grupos %}<p class="periodo">{{ rotulo }}</p>
+        {% for item in itens %}<a href="{% url 'chat:conversa' item.conversa.pk %}" class="conversa{% if conversa.pk == item.conversa.pk %} ativa{% endif %}" data-item-busca>{% include "chat/_icone.html" with nome="chat" %}<span class="titulo">{{ item.conversa.titulo|default:"Conversa" }}</span>{% if item.estado %}<span class="ponto {{ item.estado }}" title="{% if item.estado == 'pronta' %}Pronta{% else %}Aguardando informação{% endif %}"></span>{% endif %}</a>{% endfor %}
+      {% empty %}<p class="periodo">Nenhuma conversa ainda.</p>{% endfor %}
+    </details>
   </nav>
-
-  <div class="perfil">
-    <span class="avatar" aria-hidden="true">{{ perfil.iniciais }}</span>
-    <span class="quem">
-      <strong>{{ perfil.nome }}</strong>
-      <span>{{ perfil.setor }}</span>
-    </span>
-    <form method="post" action="{% url 'logout' %}">
-      {% csrf_token %}
-      <button type="submit" class="icone" title="Sair" aria-label="Sair">⎋</button>
-    </form>
+  <div class="lateral-rodape">
+    {% if user.is_superuser %}<a href="{% url 'claude-conta' %}" class="conta-claude">{% include "chat/_icone.html" with nome="conexao" %}<span>Conectar Claude</span></a>{% endif %}
+    <div class="perfil"><span class="avatar" aria-hidden="true">{{ perfil.iniciais }}</span><span class="quem"><strong>{{ perfil.nome }}</strong><span>{{ perfil.setor }}</span></span><form method="post" action="{% url 'logout' %}">{% csrf_token %}<button type="submit" class="icone" title="Sair" aria-label="Sair">{% include "chat/_icone.html" with nome="sair" %}</button></form></div>
   </div>
+  <div class="divisoria-lateral" data-redimensionar role="separator" aria-label="Ajustar largura da lateral" aria-orientation="vertical" aria-valuemin="224" aria-valuemax="430" aria-valuenow="278" tabindex="0" title="Arraste para ajustar. Duplo clique para restaurar."></div>
 </aside>

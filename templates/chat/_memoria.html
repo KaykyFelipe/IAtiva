@@ -1,11 +1,12 @@
 {# Etapa 6: memória do setor (o que vale) e fila de aprovação. Nunca dados do ERP. #}
 <div class="conversa-area memoria-area" id="conversa">
   <header class="cabecalho">
-    <button class="icone so-celular" type="button" data-abrir-lateral aria-label="Abrir menu">☰</button>
+    {% include "chat/_cabecalho_acoes.html" %}
     <div class="titulo-conversa">
       <h1>Memória e aprovações</h1>
       <span class="escopo">O que o IAtiva usa em cada setor e o que aguarda aprovação</span>
     </div>
+    <button class="icone expandir-leitura" type="button" data-expandir-leitura aria-label="Expandir área de leitura" aria-pressed="false" title="Expandir área de leitura">{% include "chat/_icone.html" with nome="expandir" %}</button>
   </header>
 
   <div class="rolagem">

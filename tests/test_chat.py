@@ -55,7 +55,27 @@ def logado(client, ana):
 def test_pagina_inicial_tem_lateral_perfil_e_logo(logado):
     html = logado.get(reverse("chat:index")).content.decode()
     assert "Nova conversa" in html and "Ana Souza" in html and "Financeiro — Cobrança" in html
-    assert "img/logo-ativa.png" in html and "Por onde começar" in html
+    assert "img/logo-ativa.png" in html and "data-saudacao" in html and "O que vamos descobrir hoje?" in html
+
+
+def test_nova_conversa_alterna_frase_sem_guardar_mensagem(logado):
+    from iativa.chat.views import FRASES_INICIO
+
+    anteriores = []
+    for _ in range(len(FRASES_INICIO) + 1):
+        response = logado.get(reverse("chat:index"))
+        anteriores.append(response.context["frase_inicio"])
+    assert all(a != b for a, b in zip(anteriores, anteriores[1:]))
+    assert set(anteriores) == set(FRASES_INICIO)
+    assert not ConversationContext.objects.exists()
+    assert not Mensagem.objects.exists()
+    assert isinstance(logado.session["inicio_frase"], int)
+
+
+def test_erro_do_formulario_nao_troca_frase_inicial(logado):
+    before = logado.get(reverse("chat:index")).context["frase_inicio"]
+    after = logado.post(reverse("chat:nova"), {"mensagem": ""}).context["frase_inicio"]
+    assert after == before
 
 
 def test_sem_setor_nao_cria_conversa(client, usuario):

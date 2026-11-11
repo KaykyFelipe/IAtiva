@@ -131,6 +131,8 @@ Aprovadas em 2026-11-09 por Kayky Felipe (chat), com as opções recomendadas na
 
 ## Mudanças de escopo
 
+| M13 | 2026-11-11 | Interface do chat conforme prévia aprovada: navegação por categorias recolhíveis, busca nos títulos autorizados, lateral redimensionável/recolhível, leitura expansível, tela inicial centralizada, mensagens e resultados com nova estética, compositor com enviar/parar e animações com redução de movimento. Saudação acompanha o horário local do navegador e frase inicial alterna a cada nova conversa (apenas índice na sessão Django). Sem mascotes/microfone, sem mudanças nas permissões, consultas ou histórico. | Autorizado por Diego (chat: "Pode fazer", após aprovação visual e observações de saudação/frase) |
+
 | M12 | 2026-11-11 | Login Claude pela interface: conectar, abrir link oficial, concluir com código efêmero, verificar, cancelar e desconectar. CLI detectada automaticamente; conta em diretório exclusivo por usuário, somente superusuários (restrição adicional opcional por username), fluxo vinculado à sessão, sem salvar código. Após autenticação confirmada, seleciona o provedor apenas para o próprio usuário; mantém liberação de privacidade e regras de SQL. | Autorizado por Diego (chat: "Sim", após proposta da tela) |
 
 | M11 | 2026-11-11 | Claude Code oficial para uso pessoal do Diego, por adaptador Python inspirado na chamada isolada do OpenMausBot. Sem cookies, API paga automática, compartilhamento de credenciais, SQL livre ou envio de resultados do ERP. Mantém compilador, validações, privacidade e histórico do Django. Implementação e testes isolados autorizados; ativação depende da CLI e login no ambiente do Python. | Autorizado por Diego (chat: "apenas para uso pessoal. Vamos fazer isso") |

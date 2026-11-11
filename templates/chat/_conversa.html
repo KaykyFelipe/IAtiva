@@ -1,16 +1,17 @@
-<div class="conversa-area" id="conversa">
+<div class="conversa-area{% if not conversa and not aprendizado %} inicio{% endif %}" id="conversa">
   <header class="cabecalho">
-    <button class="icone so-celular" type="button" data-abrir-lateral aria-label="Abrir menu">☰</button>
+    {% include "chat/_cabecalho_acoes.html" %}
     <div class="titulo-conversa">
-      <h1>{% if conversa %}{{ conversa.titulo|default:"Conversa" }}{% else %}Nova conversa{% endif %}</h1>
+      <h1>{% if conversa %}{{ conversa.titulo|default:"Conversa" }}{% else %}IAtiva{% endif %}</h1>
       <span class="escopo">
         {% if not conversa or conversa.tipo == TipoConversa.INDIVIDUAL %}Conversa individual
         {% elif conversa.tipo == TipoConversa.SETOR %}Conversa do setor {{ conversa.setor.nome }}{% if not pode_escrever %} (somente leitura){% endif %}
         {% else %}Chat mestre: setores liberados na sua política{% endif %}
       </span>
     </div>
+    <button class="icone expandir-leitura" type="button" data-expandir-leitura aria-label="Expandir área de leitura" aria-pressed="false" title="Expandir área de leitura">{% include "chat/_icone.html" with nome="expandir" %}</button>
   </header>
-
+  <div class="conteudo-chat">
   <div class="rolagem" data-rolagem>
     <div class="mensagens">
       {% if conversa.tipo == TipoConversa.SETOR %}
@@ -38,12 +39,9 @@
       {% empty %}
         {% if not conversa and not aprendizado %}
           <div class="vazio">
-            <h2>Por onde começar</h2>
-            <div class="sugestoes">
-              <button type="button" data-sugestao="Quais clientes estão inadimplentes?">Quais clientes estão inadimplentes?</button>
-              <button type="button" data-sugestao="Títulos a vencer de 01/01/2026 a 31/01/2026">Títulos a vencer em janeiro</button>
-              <button type="button" data-sugestao="Posição do cliente ">Posição de um cliente</button>
-            </div>
+            <p class="saudacao"><span class="ponto-saudacao" aria-hidden="true"></span><span data-saudacao data-nome="{{ perfil.primeiro_nome }}">Olá, {{ perfil.primeiro_nome }}</span></p>
+            <h2>{{ frase_inicio }}</h2>
+            <p class="subtitulo-inicio">Uma conversa mais simples com os dados da sua empresa.</p>
           </div>
         {% endif %}
       {% endfor %}
@@ -62,13 +60,22 @@
       {% if erro %}<p class="erro" role="alert">{{ erro }}</p>{% endif %}
       {% for e in form.mensagem.errors %}<p class="erro" role="alert">{{ e }}</p>{% endfor %}
       <label class="sr" for="campo-mensagem">Mensagem</label>
-      <textarea id="campo-mensagem" name="mensagem" rows="1" maxlength="{{ form.fields.mensagem.max_length }}"
-                placeholder="Pergunte o que precisar" required data-campo></textarea>
-      <button type="submit" class="enviar" aria-label="Enviar" data-botao-enviar>↑</button>
-      <p class="rodape-compositor">A conversa fica salva por 90 dias. Não envie CPF ou CNPJ.</p>
+      <div class="caixa-compositor">
+        <textarea id="campo-mensagem" name="mensagem" rows="1" maxlength="{{ form.fields.mensagem.max_length }}" placeholder="{% if conversa %}Continue a conversa…{% else %}Pergunte à IAtiva…{% endif %}" required data-campo></textarea>
+        <div class="compositor-acoes"><span class="contexto-compositor">{% include "chat/_icone.html" with nome="cadeado" %}{% if conversa.tipo == TipoConversa.SETOR %}Conversa do setor{% elif conversa.tipo == TipoConversa.MESTRE %}Seus setores autorizados{% else %}Somente os dados que você pode consultar{% endif %}</span><button type="submit" class="enviar" aria-label="Enviar" data-botao-enviar>{% include "chat/_icone.html" with nome="enviar" %}</button></div>
+      </div>
+      <div class="rodape-compositor"><span>Não envie CPF ou CNPJ. Histórico por 90 dias.</span><span class="dica-teclado"><kbd>Enter</kbd> enviar · <kbd>Shift + Enter</kbd> nova linha</span></div>
     </form>
   {% else %}
     <p class="rodape-compositor somente-leitura">{% if erro %}{{ erro }}{% else %}Você pode ler esta conversa, mas não enviar mensagens.{% endif %}</p>
   {% endif %}
+  {% if not conversa and not aprendizado and pode_escrever %}
+    <div class="sugestoes-inicio" data-sugestoes-inicio>
+      <button type="button" data-sugestao="Quais clientes estão inadimplentes?">{% include "chat/_icone.html" with nome="grafico" %}<span>Quais clientes estão inadimplentes?</span></button>
+      <button type="button" data-sugestao="Quais títulos vencem nesta semana?">{% include "chat/_icone.html" with nome="calendario" %}<span>Ver os títulos que vencem nesta semana</span></button>
+      <button type="button" data-sugestao="Quero consultar a posição de um cliente.">{% include "chat/_icone.html" with nome="busca" %}<span>Consultar a posição de um cliente</span></button>
+    </div>
+  {% endif %}
+  </div>
 </div>
 {% if oob_lateral %}{% include "chat/_lateral.html" %}{% endif %}

@@ -4,6 +4,24 @@
 **Etapa atual:** 6 — Memórias setoriais e chat consolidado
 **Situação:** **implementada, aguardando validação.** Plano aprovado em 2026-11-11. Etapa 5 aprovada em 2026-11-11 por Diego; conferência dos números com o Financeiro e premissas T29 seguem pendentes.
 
+## Mudança M13 — interface do chat (2026-11-11)
+
+- Layout aprovado aplicado ao chat real: lateral com categorias recolhíveis e
+  busca, divisória arrastável/teclado, recolher menu e expandir área de leitura.
+- Início com pergunta centralizada, sugestões e saudação pelo horário local,
+  atualizada a cada minuto/retorno à aba. Frase inicial alterna ao abrir nova
+  conversa; só o índice de apresentação é mantido na sessão Django.
+- Mensagens, tabelas, memória, formulários e compositor reorganizados; enviar/parar
+  alinhados, animações discretas com suporte a redução de movimento. Sem mascotes
+  ou microfone. Atualizações HTMX preservam a largura e categorias na página.
+- Parar interrompe a espera visual imediatamente e registra a interrupção em
+  paralelo; consulta que já começou continua sujeita à regra T37.
+- CSP preservada; HTMX não copia atributos de estilo entre respostas.
+- 451 testes aprovados, 10 pulados no Windows. Navegador com Django isolado e
+  dados sintéticos: saudação 6h/14h/21h, alternância de frases, drag, recolher,
+  expansão, enviar/parar com campo vazio, OOB, resultados, celular e memória.
+  Sem erros de JavaScript/CSP. Nenhum acesso ao ERP real ou mudança de provedor.
+
 ## Mudança M12 — login Claude pela interface (2026-11-11)
 
 - Página "Conectar Claude" na lateral do superusuário: iniciar, link oficial,

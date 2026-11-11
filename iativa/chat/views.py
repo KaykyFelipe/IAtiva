@@ -20,6 +20,12 @@ from .estados import TransicaoInvalida
 from .forms import MessageForm
 from .models import ConversationContext, TipoConversa
 
+FRASES_INICIO = (
+    "O que vamos descobrir hoje?", "Como posso ajudar você hoje?",
+    "O que você quer consultar agora?", "Qual informação você precisa encontrar?",
+    "Por onde vamos começar hoje?", "Vamos olhar os dados juntos?",
+)
+
 
 def _pedido(request):
     """Id do envio gerado no navegador (para o botão "parar"); qualquer coisa fora do formato é ignorada."""
@@ -59,7 +65,9 @@ def _contexto(request, c=None, form=None, erro="", resultado=None, resultado_msg
         "enviado": enviado or _enviado_aprendizado(),
         "tipos": TipoValor,
         "TipoConversa": TipoConversa,
-        "perfil": {"nome": nome, "iniciais": iniciais or "?", "setor": setor.nome if setor else "Sem setor"},
+        "perfil": {"nome": nome, "primeiro_nome": (request.user.first_name.strip() or request.user.get_username()).split()[0],
+                   "iniciais": iniciais or "?", "setor": setor.nome if setor else "Sem setor"},
+        "frase_inicio": FRASES_INICIO[request.session.get("inicio_frase", 0) % len(FRASES_INICIO)],
     }
 
 
@@ -73,6 +81,8 @@ def _render(request, c=None, **extra):
 
 @require_GET
 def index(request):
+    # Só o índice de apresentação vai à sessão; nenhuma mensagem ou resultado.
+    request.session["inicio_frase"] = (request.session.get("inicio_frase", -1) + 1) % len(FRASES_INICIO)
     return _render(request)
 
 
