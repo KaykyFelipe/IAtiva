@@ -257,7 +257,7 @@ def avaliar(user, s: RequestContext, erros=None) -> Resposta:
     if avaliacao.estado == E.BLOQUEADA:
         return Resposta("bloqueada", MOTIVOS["sem_autorizacao"], **base)
     criterios = [
-        Criterio(defs[r.definicao].nome, exibir(r.valor), ORIGENS.get(r.escopo, r.escopo))
+        Criterio(defs[r.definicao].nome, _exibir(defs[r.definicao], r.valor), ORIGENS.get(r.escopo, r.escopo))
         for r in avaliacao.resolucoes if r.situacao == "resolvido"
     ]
     for d in _definicoes(objetivo.opcionais).values():  # opcionais informados (ex.: busca por nome)
@@ -279,6 +279,14 @@ def avaliar(user, s: RequestContext, erros=None) -> Resposta:
         perguntas.append(Pergunta(d.codigo, d.nome, d.descricao, d.tipo, opcoes, r.situacao == CONFLITO))
     return Resposta("pergunta", "Preciso de mais informações antes de consultar:", perguntas=perguntas,
                     criterios=criterios, **base)
+
+
+def _exibir(definicao, valor) -> str:
+    if definicao.tipo == TipoValor.FILIAL:
+        from iativa.accounts.filiais import rotulo
+
+        return rotulo(valor)
+    return exibir(valor)
 
 
 def processar_mensagem(user, texto: str, solicitacao_id=None, provedor=None, conversa=None) -> Resposta:

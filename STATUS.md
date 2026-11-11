@@ -4,6 +4,13 @@
 **Etapa atual:** 6 — Memórias setoriais e chat consolidado
 **Situação:** **implementada, aguardando validação.** Plano aprovado em 2026-11-11. Etapa 5 aprovada em 2026-11-11 por Diego; conferência dos números com o Financeiro e premissas T29 seguem pendentes.
 
+## Mudança M16 — nomes das filiais (2026-11-11)
+
+- `iativa/accounts/filiais.py`: código e cidade das 8 filiais (001001–001008).
+- Filial escrita por nome ("filial Cuiabá") vira o código; botões e critérios mostram
+  "código · cidade". Autorização por filial inalterada (continua pelas políticas).
+- Testes: 469 aprovados e 10 pulados no Windows.
+
 ## Mudança M15 — ajustes do chat e da conexão Claude (2026-11-11)
 
 - Layout (largura da lateral, leitura expandida, lateral recolhida) lembrado na sessão

@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 from django.core.exceptions import ImproperlyConfigured, ValidationError
 from django.utils import timezone
 
+from iativa.accounts.filiais import codigo_por_texto, rotulo
 from iativa.accounts.authz import Permissao, filiais_autorizadas, setores_autorizados
 from iativa.audit.servicos import registrar
 from iativa.chat.estados import EM_PREPARACAO
@@ -111,6 +112,8 @@ def _catalogo(user, objetivos, defs) -> list[dict]:
         for p in o["parametros"]:
             if p["tipo"] == TipoValor.FILIAL:
                 p["opcoes"] = filiais
+                p["descricao"] = (p.get("descricao", "") + " Nomes: "
+                                  + ", ".join(rotulo(f) for f in filiais) + ". Responda sempre o código.").strip()
     return cat
 
 
@@ -233,6 +236,9 @@ def _resposta_direta(user, atual, texto, defs):
     else:
         return None
     achado = next((o for o in opcoes if _norm(o) == _norm(t)), None)
+    if achado is None and d.tipo == TipoValor.FILIAL:
+        cod = codigo_por_texto(t)  # "Cuiabá" em resposta a "qual filial?"
+        achado = cod if cod in opcoes else None
     return (d.codigo, achado) if achado else None
 
 

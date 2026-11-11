@@ -50,6 +50,10 @@ def converter(definicao, texto) -> object:
         if t in ("nao", "não", "n", "false", "falso"):
             return False
         raise ValidationError("Responda sim ou não.")
+    if tipo == TipoValor.FILIAL:
+        from iativa.accounts.filiais import codigo_por_texto
+
+        return codigo_por_texto(texto) or texto  # nome da filial vira o código
     return texto
 
 

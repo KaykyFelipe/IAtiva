@@ -1,4 +1,4 @@
-{% with f=m.ficha %}
+{% load filiais %}{% with f=m.ficha %}
 <div class="msg ia">
   <div class="assinatura-ia"><span class="marca-ia" aria-hidden="true">iA</span><span>IAtiva</span></div>
   {% for linha in m.texto.splitlines %}{% if linha %}<p>{{ linha }}</p>{% endif %}{% endfor %}
@@ -14,7 +14,7 @@
       {% for o in f.opcoes %}
         <form method="post" action="{% url 'chat:mensagem' conversa.pk %}"
               hx-post="{% url 'chat:mensagem' conversa.pk %}" hx-target="#conversa" hx-swap="outerHTML" hx-disabled-elt="find button">
-          {% csrf_token %}<input type="hidden" name="mensagem" value="{{ o }}"><button type="submit">{{ o }}</button>
+          {% csrf_token %}<input type="hidden" name="mensagem" value="{{ o }}"><button type="submit">{{ o|rotulo_filial }}</button>
         </form>
       {% endfor %}
     </div>
