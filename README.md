@@ -231,6 +231,24 @@ valida a árvore sintática (`sqlglot`) e executa com até 500 linhas e 30 segun
 reabrir a conversa, use "Executar de novo". As premissas de negócio (tipos excluídos, saldo atual,
 regra de atraso) estão na decisão T29 e precisam da aprovação do Financeiro.
 
+## Agente conversacional (M10)
+
+O chat conversa em texto corrido. A cada mensagem o modelo responde e escolhe uma ação (consultar,
+executar, cancelar, aprender tabela, listar/remover consulta aprendida, lembrar); o backend autoriza
+e executa. Mudou de assunto, a solicitação anterior é encerrada sozinha; com tudo definido, a
+consulta roda sem clique. "Lembre que..." guarda uma nota na memória do agente (admin: empresa;
+demais: só para si), visível no admin em **Memória do agente**.
+
+Para ligar o Gemini, no `.env` do servidor:
+
+```text
+IATIVA_AGENTE_PROVEDOR=gemini
+GEMINI_API_KEY=...            # projeto com faturamento ativo
+IATIVA_AGENTE_ENVIO_LIBERADO=1
+```
+
+Depois: `docker compose up -d app`. Sem isso, o provedor de teste (regras) continua ativo.
+
 ## Aprendizado de novas consultas (M9)
 
 Quando um **administrador** pergunta algo que o sistema ainda não sabe consultar, ele busca no

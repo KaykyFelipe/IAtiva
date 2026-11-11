@@ -10,6 +10,7 @@ class SituacaoModelo(models.TextChoices):
     PROPOSTA = "proposta", "Aguardando aprovação"
     APROVADA = "aprovada", "Aprovada"
     REJEITADA = "rejeitada", "Rejeitada"
+    REMOVIDA = "removida", "Removida"
 
 
 class ConsultaModelo(models.Model):
@@ -44,3 +45,37 @@ class ConsultaModelo(models.Model):
             raise ValidationError({"tabela": "Alias inválido."})
         if not isinstance(self.spec, dict) or not self.spec.get("colunas"):
             raise ValidationError({"spec": "Informe as colunas."})
+
+
+class EscopoNota(models.TextChoices):
+    USUARIO = "usuario", "Só do usuário"
+    EMPRESA = "empresa", "Toda a empresa"
+
+
+class NotaAgente(models.Model):
+    """Memória do agente (M10): frases curtas que o usuário ensinou (termos, preferências, como
+    interpretar perguntas). Vão ao modelo como referência. Nunca resultados, SQL ou CPF/CNPJ."""
+
+    texto = models.CharField(max_length=300)
+    escopo = models.CharField(max_length=10, choices=EscopoNota.choices)
+    usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, null=True, blank=True,
+                                related_name="+")
+    criado_por = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True,
+                                   related_name="+")
+    ativo = models.BooleanField(default=True)
+    criado_em = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-criado_em"]
+        verbose_name = "nota da memória do agente"
+        verbose_name_plural = "memória do agente"
+        constraints = [
+            models.CheckConstraint(
+                condition=(models.Q(escopo="usuario", usuario__isnull=False)
+                           | models.Q(escopo="empresa", usuario__isnull=True)),
+                name="nota_escopo_coerente",
+            )
+        ]
+
+    def __str__(self):
+        return self.texto[:60]

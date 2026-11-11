@@ -31,7 +31,7 @@
             <div class="msg usuario"><p>{{ m.texto|linebreaksbr }}</p></div>
           {% endif %}
         {% else %}
-          {% include "chat/_resposta.html" with m=m editavel=item.editavel executavel=item.executavel repetivel=item.repetivel aprendivel=item.aprendivel aprovavel=item.aprovavel %}
+          {% include "chat/_resposta.html" with m=m editavel=item.editavel executavel=item.executavel repetivel=item.repetivel aprendivel=item.aprendivel aprovavel=item.aprovavel ultima=item.ultima %}
           {% if resultado and resultado_msg == m.pk %}{% include "chat/_resultado.html" %}{% endif %}
         {% endif %}
         {% endwith %}
@@ -61,7 +61,7 @@
       {% for e in form.mensagem.errors %}<p class="erro" role="alert">{{ e }}</p>{% endfor %}
       <label class="sr" for="campo-mensagem">Mensagem</label>
       <textarea id="campo-mensagem" name="mensagem" rows="1" maxlength="{{ form.fields.mensagem.max_length }}"
-                placeholder="Pergunte sobre contas a receber" required data-campo></textarea>
+                placeholder="Pergunte o que precisar" required data-campo></textarea>
       <button type="submit" class="enviar" aria-label="Enviar">↑</button>
       <p class="rodape-compositor">A conversa fica salva por 90 dias. Não envie CPF ou CNPJ.</p>
     </form>

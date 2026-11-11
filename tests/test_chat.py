@@ -65,33 +65,31 @@ def test_sem_setor_nao_cria_conversa(client, usuario):
     assert not ConversationContext.objects.exists()
 
 
-def test_primeira_mensagem_cria_conversa_e_redireciona(logado, ana):
+def test_primeira_mensagem_cria_conversa(logado, ana):
     r = logado.post(reverse("chat:nova"), {"mensagem": INADIMPLENTES})
     c = ConversationContext.objects.get()
-    assert r.status_code == 302 and r.url == reverse("chat:conversa", args=[c.pk])
+    assert r.status_code == 200 and r["HX-Push-Url"] == reverse("chat:conversa", args=[c.pk])
     assert c.tipo == TipoConversa.INDIVIDUAL and c.usuario == ana and c.titulo == INADIMPLENTES
     papeis = list(c.mensagens.values_list("papel", flat=True))
     assert papeis == ["usuario", "ia"]
 
 
-def test_nova_por_htmx_usa_hx_redirect(logado):
+def test_nova_por_htmx_mostra_a_conversa(logado):
     r = logado.post(reverse("chat:nova"), {"mensagem": INADIMPLENTES}, HTTP_HX_REQUEST="true")
-    assert r.status_code == 204 and r["HX-Redirect"].startswith("/c/")
+    assert r.status_code == 200 and r["HX-Push-Url"].startswith("/c/") and 'id="conversa"' in r.content.decode()
 
 
-def test_conversa_com_varias_mensagens_e_ficha(logado, ana):
-    logado.post(reverse("chat:nova"), {"mensagem": INADIMPLENTES})
+def test_conversa_em_texto_e_execucao_automatica(logado, ana):
+    html = logado.post(reverse("chat:nova"), {"mensagem": INADIMPLENTES}, HTTP_HX_REQUEST="true").content.decode()
+    assert "me diga" in html and "data de corte" in html  # pergunta em texto, sem formulário
+    assert 'name="codigo"' not in html
     c = ConversationContext.objects.get()
-    html = logado.get(reverse("chat:conversa", args=[c.pk])).content.decode()
-    assert 'name="codigo" value="data-corte"' in html  # ficha editável
     url = reverse("chat:mensagem", args=[c.pk])
     r = logado.post(url, {"mensagem": "corte 31/12/2025, 5 dias, considerar saldo, filial 001001"}, HTTP_HX_REQUEST="true")
     html = r.content.decode()
     assert 'id="conversa"' in html and "<html" not in html
-    assert "Todos os critérios estão definidos" in html
-    assert 'name="codigo" value="data-corte"' not in html  # ficha antiga deixou de ser editável
+    assert "Consulta executada" in html and "Critérios:" in html  # completou e executou sozinha
     assert c.mensagens.count() == 4
-
 
 def test_resposta_pelo_formulario_vira_mensagem(logado):
     logado.post(reverse("chat:nova"), {"mensagem": INADIMPLENTES})

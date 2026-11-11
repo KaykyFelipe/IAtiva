@@ -4,6 +4,12 @@
 **Etapa atual:** 5 — Consulta de leitura
 **Situação:** **implementada, aguardando validação.** Etapa 4 aprovada em 2026-11-10. Execução na homologação, somente leitura.
 
+## Mudança M10 — agente conversacional com Gemini (2026-11-11)
+
+- `agent/agente.py` (decisão + ações), `agent/decisao.py` (esquema), `GeminiProvider`, `NotaAgente` (memória), consulta aprendida "removida".
+- Chat em texto corrido: pergunta o que falta em frase, opções rápidas como botões, execução automática ao completar, troca de assunto sem clique.
+- Pendências: chave do Gemini no `.env` (projeto com faturamento) e `IATIVA_AGENTE_ENVIO_LIBERADO=1` (decisão do DPO); avaliação com perguntas reais.
+
 ## Mudança M9 — aprendizado de novas consultas (2026-11-10)
 
 - Administrador pergunta algo desconhecido → busca no dicionário → "Aprender com XXX" → formulário (colunas, período, filtros fixos, setores) → proposta testada no compilador/validador → aprovação por outra pessoa com "aprovar definições" → disponível para os setores escolhidos.

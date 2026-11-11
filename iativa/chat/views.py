@@ -72,13 +72,16 @@ def nova(request):
     if not form.is_valid():
         return _render(request, form=form)
     try:
+        conversas._validar_texto(form.cleaned_data["mensagem"])
         c = conversas.nova_individual(request.user)
-        conversas.enviar(request.user, c, form.cleaned_data["mensagem"])
+        msg, resultado = conversas.enviar(request.user, c, form.cleaned_data["mensagem"])
     except PermissaoNegada:
         return _render(request, erro="Seu usuário ainda não tem setor. Fale com o administrador.")
     except ValidationError as exc:
         return _render(request, form=form, erro=exc.messages[0])
-    return _ir(request, c)
+    resposta = _render(request, c, resultado=resultado, resultado_msg=msg.pk)
+    resposta["HX-Push-Url"] = reverse("chat:conversa", args=[c.pk])  # endereço da conversa nova
+    return resposta
 
 
 def _ir(request, c):
@@ -97,12 +100,12 @@ def mensagem(request, conversa_id):
     if not form.is_valid():
         return _render(request, c, form=form)
     try:
-        conversas.enviar(request.user, c, form.cleaned_data["mensagem"])
+        msg, resultado = conversas.enviar(request.user, c, form.cleaned_data["mensagem"])
     except PermissaoNegada:
         return _render(request, c, erro="Esta conversa é somente leitura para você.")
     except ValidationError as exc:
         return _render(request, c, form=form, erro=exc.messages[0])
-    return _render(request, c)
+    return _render(request, c, resultado=resultado, resultado_msg=msg.pk)
 
 
 @require_POST

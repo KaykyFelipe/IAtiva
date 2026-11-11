@@ -46,6 +46,8 @@ IATIVA_AGENTE = {
     "provedor": env("IATIVA_AGENTE_PROVEDOR", "teste"),
     "modelo": env("IATIVA_AGENTE_MODELO", "claude-opus-5-5"),
     "api_key": env("ANTHROPIC_API_KEY"),
+    "gemini_api_key": env("GEMINI_API_KEY"),
+    "gemini_modelo": env("IATIVA_GEMINI_MODELO", "gemini-3.8-flash"),
     "envio_liberado": env("IATIVA_AGENTE_ENVIO_LIBERADO", "0") == "1",
 }
 

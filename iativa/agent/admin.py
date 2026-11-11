@@ -1,6 +1,18 @@
 from django.contrib import admin
 
-from .models import ConsultaModelo
+from .models import ConsultaModelo, NotaAgente
+
+
+@admin.register(NotaAgente)
+class NotaAgenteAdmin(admin.ModelAdmin):
+    """Memória do agente: dá para conferir e desativar notas; criar só pelo chat."""
+
+    list_display = ("texto", "escopo", "usuario", "criado_por", "ativo", "criado_em")
+    list_filter = ("escopo", "ativo")
+    readonly_fields = ("texto", "escopo", "usuario", "criado_por", "criado_em")
+
+    def has_add_permission(self, request):
+        return False
 
 
 @admin.register(ConsultaModelo)

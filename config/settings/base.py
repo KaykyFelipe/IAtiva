@@ -149,6 +149,8 @@ IATIVA_AGENTE = {
     "esforco": "low",
     "timeout_s": 30,
     "api_key": "",
+    "gemini_api_key": "",
+    "gemini_modelo": "gemini-3.8-flash",
     "envio_liberado": False,
 }
 

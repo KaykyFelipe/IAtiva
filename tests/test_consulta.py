@@ -252,14 +252,10 @@ def test_executar_pelo_chat_mostra_resultado_sem_salvar(client, ana):
     from iativa.chat.models import ConversationContext, Mensagem
 
     client.force_login(ana)
-    client.post(reverse("chat:nova"), {"mensagem": ATRASO})
+    html = client.post(reverse("chat:nova"), {"mensagem": ATRASO}, HTTP_HX_REQUEST="true").content.decode()
+    assert "<table>" in html and "R$" in html and "Critérios e premissas" in html  # executou direto
+    assert "CLIENTE SINTETICO" in html
     c = ConversationContext.objects.get()
-    html = client.get(reverse("chat:conversa", args=[c.pk])).content.decode()
-    assert reverse("chat:executar", args=[c.pk]) in html
-    html = client.post(reverse("chat:executar", args=[c.pk]), HTTP_HX_REQUEST="true").content.decode()
-    assert "<table>" in html and "R$" in html and "Critérios e premissas" in html
-    nome = next(l for l in html.split("<td") if "CLIENTE SINTETICO" in l)
-    assert nome
     assert "CLIENTE SINTETICO" not in repr(list(Mensagem.objects.values_list("texto", "ficha")))
     # Reabrir não mostra os dados; oferece executar de novo.
     html = client.get(reverse("chat:conversa", args=[c.pk])).content.decode()
@@ -267,7 +263,6 @@ def test_executar_pelo_chat_mostra_resultado_sem_salvar(client, ana):
     s = c.solicitacoes.get()
     html = client.post(reverse("chat:executar_de_novo", args=[c.pk, s.pk]), HTTP_HX_REQUEST="true").content.decode()
     assert "CLIENTE SINTETICO" in html and c.solicitacoes.count() == 2
-
 
 def test_executar_sem_pronta_avisa(client, ana):
     from django.urls import reverse

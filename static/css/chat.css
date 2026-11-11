@@ -243,4 +243,5 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 .lista-campos { max-height: 320px; overflow-y: auto; border: 1px solid var(--linha); border-radius: var(--raio-p); padding: 6px 10px; columns: 2; }
 .lista-campos label { display: block; font-weight: 400; font-size: 14px; break-inside: avoid; padding: 2px 0; }
 .lista-campos input { width: auto; }
-@media (max-width: 860px) { .lista-campos { columns: 1; } }
+@media (max-width: 860px) { .lista-campos { columns: 1; } }.criterios-linha { font-size: 13px; color: var(--sutil); }
+.criterios-linha strong { color: var(--texto); font-weight: 600; }

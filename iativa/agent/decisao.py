@@ -1,0 +1,120 @@
+"""Decisão do agente conversacional (M10): o modelo escreve a resposta em texto corrido e escolhe
+UMA ação de uma lista fechada. Quem executa e autoriza a ação é o backend.
+
+Ao modelo vão: a mensagem, o histórico curto da conversa (texto salvo pelo M8, sem resultados),
+os objetivos que o usuário pode usar, o estado da solicitação atual, notas da memória do agente e
+trechos de conhecimento aprovados. Nunca linhas do ERP (D6).
+"""
+from dataclasses import dataclass, field
+
+ACOES = (
+    "conversar",            # só responder (dúvida, saudação, explicação, pedir informação)
+    "preparar_consulta",    # escolher/trocar objetivo e/ou informar parâmetros
+    "executar_consulta",    # rodar a consulta que já está completa
+    "cancelar_consulta",    # abandonar a solicitação atual
+    "aprender_tabela",      # administrador: procurar tabelas no dicionário para ensinar consulta nova
+    "listar_aprendizados",  # mostrar consultas aprendidas
+    "remover_aprendizado",  # administrador: tirar de uso uma consulta aprendida (pede confirmação)
+    "lembrar",              # guardar na memória do agente algo que o usuário ensinou
+)
+MAX_RESPOSTA = 2000
+MAX_NOTA = 300
+MAX_PARAMETROS = 8
+MAX_OPCOES = 6
+
+
+class DecisaoInvalida(ValueError):
+    pass
+
+
+@dataclass(frozen=True)
+class EntradaAgente:
+    mensagem: str
+    hoje: str
+    historico: list[dict]
+    objetivos: list[dict]
+    solicitacao_atual: dict | None
+    notas: list[str] = field(default_factory=list)
+    aprendidos: list[dict] = field(default_factory=list)
+    trechos: list[dict] = field(default_factory=list)
+    administrador: bool = False
+
+
+@dataclass(frozen=True)
+class Decisao:
+    resposta: str
+    acao: str
+    objetivo: str
+    parametros: tuple[tuple[str, str], ...]
+    alvo: str
+    nota: str
+    confirmado: bool
+    opcoes: tuple[str, ...]
+
+
+def esquema(codigos_objetivo, codigos_parametro) -> dict:
+    return {
+        "type": "object",
+        "properties": {
+            "resposta": {"type": "string", "description": "Texto ao usuário, em português, tom de conversa."},
+            "acao": {"type": "string", "enum": list(ACOES)},
+            "objetivo": {"type": "string", "enum": [""] + list(codigos_objetivo)},
+            "parametros": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "codigo": {"type": "string", "enum": list(codigos_parametro) or [""]},
+                        "valor": {"type": "string"},
+                    },
+                    "required": ["codigo", "valor"],
+                },
+            },
+            "alvo": {"type": "string", "description": "Nome ou código da consulta aprendida, ou termos da busca."},
+            "nota": {"type": "string", "description": "O que guardar na memória (ação lembrar)."},
+            "confirmado": {"type": "boolean"},
+            "opcoes": {"type": "array", "items": {"type": "string"}},
+        },
+        "required": ["resposta", "acao", "objetivo", "parametros", "alvo", "nota", "confirmado", "opcoes"],
+    }
+
+
+def _texto(v, limite, campo) -> str:
+    if not isinstance(v, str) or len(v) > limite:
+        raise DecisaoInvalida(campo)
+    return v.strip()
+
+
+def validar(saida, codigos_objetivo, codigos_parametro) -> Decisao:
+    if not isinstance(saida, dict):
+        raise DecisaoInvalida("formato")
+    extras = set(saida) - {"resposta", "acao", "objetivo", "parametros", "alvo", "nota", "confirmado", "opcoes"}
+    if extras:
+        raise DecisaoInvalida("campos extras")
+    acao = saida.get("acao")
+    if acao not in ACOES:
+        raise DecisaoInvalida("acao")
+    objetivo = saida.get("objetivo") or ""
+    if objetivo and objetivo not in codigos_objetivo:
+        raise DecisaoInvalida("objetivo")
+    params = saida.get("parametros") or []
+    if not isinstance(params, list) or len(params) > MAX_PARAMETROS:
+        raise DecisaoInvalida("parametros")
+    pares = []
+    for p in params:
+        if not isinstance(p, dict) or p.get("codigo") not in codigos_parametro:
+            raise DecisaoInvalida("parametro")
+        pares.append((p["codigo"], _texto(p.get("valor", ""), 200, "valor")))
+    opcoes = saida.get("opcoes") or []
+    if not isinstance(opcoes, list) or len(opcoes) > MAX_OPCOES:
+        raise DecisaoInvalida("opcoes")
+    return Decisao(
+        resposta=_texto(saida.get("resposta", ""), MAX_RESPOSTA, "resposta"),
+        acao=acao,
+        objetivo=objetivo,
+        parametros=tuple(pares),
+        alvo=_texto(saida.get("alvo", ""), 200, "alvo"),
+        nota=_texto(saida.get("nota", ""), MAX_NOTA, "nota"),
+        confirmado=bool(saida.get("confirmado", False)),
+        opcoes=tuple(_texto(o, 120, "opcao") for o in opcoes),
+    )

@@ -157,12 +157,15 @@ def _tocar(c, texto):
 def enviar(user, c: ConversationContext, texto: str, provedor=None) -> None:
     if not pode_escrever(user, c):
         raise PermissaoNegada("Somente leitura nesta conversa.")
+    from iativa.agent import agente
+
     texto = _validar_texto(texto)
-    Mensagem.objects.create(conversa=c, papel=Papel.USUARIO, autor=user, texto=texto)
-    atual = _ativa(user, c)
-    r = orquestrador.processar_mensagem(user, texto, atual.pk if atual else None, provedor=provedor, conversa=c)
-    _resposta_ia(c, r)
+    m = Mensagem.objects.create(conversa=c, papel=Papel.USUARIO, autor=user, texto=texto)
+    saida = agente.conversar(user, c, texto, provedor=provedor, mensagem_usuario_id=m.pk)
+    msg = Mensagem.objects.create(conversa=c, papel=Papel.IA, texto=saida.texto[:MAX_TEXTO], ficha=saida.ficha,
+                                  solicitacao=saida.solicitacao)
     _tocar(c, texto)
+    return msg, saida.resultado
 
 
 @transaction.atomic
@@ -311,6 +314,7 @@ def mensagens_com_interacao(user, c: ConversationContext) -> list[dict]:
             "executavel": ultima_dono and s.estado == "pronta",
             "repetivel": ultima_dono and m.ficha.get("tipo") in ("executada", "falha_execucao"),
             "aprendivel": administrador and m.ficha.get("tipo") == "aprendizado" and m.pk == msgs[-1].pk,
+            "ultima": m.pk == msgs[-1].pk,
             "aprovavel": bool(m.ficha.get("modelo") and ultima_modelo.get(m.ficha["modelo"]) == m.pk
                               and m.ficha["modelo"] in modelos and pode_aprovar(user, modelos[m.ficha["modelo"]])),
         })
