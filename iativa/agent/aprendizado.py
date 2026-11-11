@@ -41,6 +41,21 @@ def pode_aprender(user) -> bool:
     return politicas_vigentes(user).filter(pode_administrar=True).exists()
 
 
+def pode_aprender_sozinho(user) -> bool:
+    """M18: a IA cria consultas sozinha para quem consulta algum setor (sem aprovação humana)."""
+    from iativa.accounts.authz import Permissao, setores_autorizados
+
+    return pode_aprender(user) or bool(setores_autorizados(user, Permissao.CONSULTAR))
+
+
+# Campos que a criação automática nunca mostra (documentos, salário, dados pessoais e bancários).
+SENSIVEL_RE = re.compile(r"CPF|CGC|CNPJ|\bRG\b|_RG\b|PIS\b|_PIS|CTPS|SALAR|SAL[AÁ]RIO|SENHA|NASC|\bM[AÃ]E\b|\bPAI\b|"
+                         r"BANCO|AGENC|CONTA ?COR|E-?MAIL|TELEF|FONE|CELUL|ENDERE|BAIRRO|\bCEP\b|_CIC\b", re.I)
+
+
+def sensivel(campo) -> bool:
+    return bool(SENSIVEL_RE.search(f"{campo.nome} {campo.titulo or ''} {campo.descricao or ''}"))
+
 def _normalizar(texto: str) -> str:
     return unicodedata.normalize("NFKD", texto or "").encode("ascii", "ignore").decode().upper()
 
@@ -78,8 +93,8 @@ def _restritas(user) -> set[str]:
     return out
 
 
-def candidatos(user, texto: str, limite: int = 5) -> list[dict]:
-    if not pode_aprender(user):
+def candidatos(user, texto: str, limite: int = 5, automatico: bool = False) -> list[dict]:
+    if not (pode_aprender_sozinho(user) if automatico else pode_aprender(user)):
         raise PermissaoNegada("Somente administradores ensinam novas consultas.")
     radicais = _radicais(texto)
     citados = _aliases_citados(texto)
@@ -124,8 +139,8 @@ def candidatos(user, texto: str, limite: int = 5) -> list[dict]:
     return out
 
 
-def campos_da_tabela(user, alias: str) -> dict:
-    if not pode_aprender(user):
+def campos_da_tabela(user, alias: str, automatico: bool = False) -> dict:
+    if not (pode_aprender_sozinho(user) if automatico else pode_aprender(user)):
         raise PermissaoNegada("Somente administradores ensinam novas consultas.")
     if not ALIAS_RE.match(alias or "") or alias.startswith(SISTEMA) or alias in _restritas(user):
         raise PermissaoNegada("Tabela indisponível.")
@@ -149,10 +164,44 @@ def _tipo(campo) -> str:
 
 
 @transaction.atomic
-def salvar_proposta(user, alias: str, dados) -> ConsultaModelo:
+def criar_automatico(user, consulta: dict) -> ConsultaModelo:
+    """M18: a IA montou a consulta; o sistema confere, cria e já aprova (sem revisão humana).
+    Colunas sensíveis são descartadas; setores = os que a pessoa consulta."""
+    from iativa.accounts.authz import Permissao, setores_autorizados
+
+    alias = consulta["tabela"]
+    info = campos_da_tabela(user, alias, automatico=True)
+    por_nome = {c.nome: c for c in info["campos"] if not sensivel(c)}
+    colunas = [c for c in dict.fromkeys(consulta["colunas"]) if c in por_nome][:MAX_COLUNAS]
+    if not colunas:
+        raise ValidationError("Nenhuma coluna válida para a consulta.")
+    busca = consulta.get("campo_busca", "")
+    filtraveis = [c for c in consulta.get("filtraveis", []) if c in por_nome and por_nome[c].tipo == "C"]
+    dados = {
+        "nome": consulta["nome"] or info["nome"], "descricao": consulta.get("descricao", ""),
+        "colunas": colunas,
+        "campo_data": consulta.get("campo_data", "") if por_nome.get(consulta.get("campo_data", "")) else "",
+        "campo_busca": busca if busca in por_nome and por_nome[busca].tipo == "C" else "",
+        "filtraveis": [c for c in filtraveis if c in colunas or len(colunas) < MAX_COLUNAS][:MAX_FILTRAVEIS],
+        "setores": [str(s) for s in setores_autorizados(user, Permissao.CONSULTAR)],
+    }
+    if not dados["setores"]:
+        raise PermissaoNegada("Sem setor para usar a consulta.")
+    igual = ConsultaModelo.objects.filter(tabela=alias, nome=dados["nome"], situacao=SituacaoModelo.APROVADA).first()
+    if igual is not None:
+        return igual
+    cm = salvar_proposta(user, alias, dados, automatico=True)
+    cm.situacao, cm.aprovado_por, cm.aprovado_em = SituacaoModelo.APROVADA, user, timezone.now()
+    cm.save(update_fields=["situacao", "aprovado_por", "aprovado_em"])
+    registrar("parametro_aprovado", "agente", usuario=user, entidade_id=cm.pk, estado_novo="modelo_aprovado_automatico")
+    return cm
+
+
+@transaction.atomic
+def salvar_proposta(user, alias: str, dados, automatico: bool = False) -> ConsultaModelo:
     """`dados`: QueryDict/dict com nome, descricao, colunas (lista), campo_data, filtro_campo_N,
     filtro_valor_N, setores (lista de ids)."""
-    info = campos_da_tabela(user, alias)
+    info = campos_da_tabela(user, alias, automatico=automatico)
     por_nome = {c.nome: c for c in info["campos"]}
     lista = dados.getlist if hasattr(dados, "getlist") else (lambda k: dados.get(k, []))
     nome = (dados.get("nome") or "").strip()[:120]

@@ -10,13 +10,13 @@ nem no modelo), auditoria só com códigos.
 """
 import re
 import unicodedata
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 from django.core.exceptions import ImproperlyConfigured, ValidationError
 from django.utils import timezone
 
 from iativa.accounts.filiais import codigo_por_texto, rotulo
-from iativa.accounts.authz import Permissao, filiais_autorizadas, setores_autorizados
+from iativa.accounts.authz import Permissao, PermissaoNegada, filiais_autorizadas, setores_autorizados
 from iativa.audit.servicos import registrar
 from iativa.chat.estados import EM_PREPARACAO
 from iativa.chat.models import EstadoSolicitacao as E
@@ -26,7 +26,8 @@ from iativa.memory.resolucao import RESOLVIDO, resolver
 
 from . import memoria
 from . import orquestrador as orq
-from .aprendizado import candidatos, pode_aprender
+from . import aprendizado
+from .aprendizado import candidatos, pode_aprender, pode_aprender_sozinho
 from .contratos import BUSCA, OBJETIVOS, objetivos_para
 from .conversao import exibir
 from .decisao import DecisaoInvalida, EntradaAgente, validar
@@ -184,7 +185,7 @@ def conversar(user, c, texto: str, provedor=None, mensagem_usuario_id=None, inte
     ficha = {"provedor": provedor.nome, "opcoes": list(d.opcoes)}
 
     acao = d.acao
-    if acao in ("aprender_tabela", "remover_aprendizado") and not administrador:
+    if acao == "remover_aprendizado" and not administrador:
         return Saida("Essa ação é só para administradores.", ficha)
     if acao == "preparar_consulta":
         return _preparar(user, c, d, atual, defs, ficha, texto)
@@ -200,8 +201,8 @@ def conversar(user, c, texto: str, provedor=None, mensagem_usuario_id=None, inte
         if atual is not None:
             cancelar(user, atual)
         return Saida(d.resposta or ("Cancelei a consulta." if atual else "Não havia consulta em andamento."), ficha)
-    if acao == "aprender_tabela":
-        return _aprender(user, d, texto, ficha)
+    if acao in ("aprender_tabela", "criar_consulta"):
+        return _aprender(user, c, d, texto, ficha, provedor, entrada, atual)
     if acao == "listar_aprendizados":
         return _listar(administrador, objetivos, d, ficha)
     if acao == "remover_aprendizado":
@@ -353,7 +354,18 @@ def _avaliar_e_executar(user, s, resposta_modelo, erros, ficha) -> Saida:
     return Saida(res.mensagem, {**ficha, "tipo": "falha_execucao", "estado": s.estado}, s)
 
 
-def _aprender(user, d, texto, ficha) -> Saida:
+def _aprender(user, c, d, texto, ficha, provedor=None, entrada=None, atual=None) -> Saida:
+    """M18: a IA acha a tabela, monta a consulta, o sistema cria/aprova sozinho e já executa.
+    Se algo falhar, cai na lista de tabelas para escolher à mão (administrador)."""
+    if provedor is not None and entrada is not None and pode_aprender_sozinho(user):
+        try:
+            saida = _aprender_sozinho(user, c, d, texto, ficha, provedor, entrada, atual)
+        except FalhaModelo:
+            saida = None
+        if saida is not None:
+            return saida
+    if not pode_aprender(user):
+        return Saida(d.resposta or "Ainda não consigo consultar isso. Pode me dizer de outro jeito o que procura?", ficha)
     try:
         lista = candidatos(user, d.alvo or texto)
     except Exception:
@@ -363,6 +375,51 @@ def _aprender(user, d, texto, ficha) -> Saida:
                      "tabela (ex.: SRA)?", ficha)
     texto = (d.resposta + "\n\n" if d.resposta else "") + "Encontrei estas tabelas no dicionário. Escolha uma para eu aprender:"
     return Saida(texto, {**ficha, "tipo": "aprendizado", "candidatos": lista})
+
+
+def _campos_para_modelo(user, alias):
+    info = aprendizado.campos_da_tabela(user, alias, automatico=True)
+    campos = [{"campo": f.nome, "tipo": {"D": "data", "N": "numero"}.get(f.tipo, "texto"), "titulo": f.titulo}
+              for f in info["campos"] if not aprendizado.sensivel(f)]
+    return {"tabela": info["alias"], "nome": info["nome"], "campos": campos[:150]}
+
+
+def _aprender_sozinho(user, c, d, texto, ficha, provedor, entrada, atual):
+    consulta = d.consulta
+    if consulta is None:
+        try:
+            lista = candidatos(user, d.alvo or texto, limite=3, automatico=True)
+        except Exception:
+            return None
+        tabelas = []
+        for item in lista:
+            try:
+                tabelas.append(_campos_para_modelo(user, item["alias"]))
+            except Exception:
+                continue  # sem campo filial, restrita etc.
+        if not tabelas:
+            return None
+        entrada2 = replace(entrada, tabelas_para_aprender=tabelas)
+        codigos_par = sorted({p["codigo"] for o in entrada.objetivos for p in o.get("parametros", [])}
+                             | {"filial-analise", "periodo-analise", "texto-busca", "filtro-campo"})
+        d2 = _interpretar(provedor, entrada2, [o["codigo"] for o in entrada.objetivos], codigos_par)
+        if d2.acao != "criar_consulta" or d2.consulta is None:
+            return None
+        d, consulta = d2, d2.consulta
+    consulta = {**consulta, "campo_data": consulta.get("campo_data", "").upper(),
+                "campo_busca": consulta.get("campo_busca", "").upper()}
+    try:
+        cm = aprendizado.criar_automatico(user, consulta)
+    except (ValidationError, PermissaoNegada) as exc:
+        registrar("modelo_falhou", "agente", usuario=user, estado_novo="aprendizado_automatico", resultado="erro")
+        return None
+    registrar("interpretacao", "agente", usuario=user, estado_novo="aprendeu_sozinho", entidade_id=cm.pk)
+    codigos = set(OBJETIVOS[cm.codigo].parametros)
+    defs = orq._definicoes(sorted(codigos))
+    d3 = replace(d, acao="preparar_consulta", objetivo=cm.codigo,
+                 parametros=tuple((k, v) for k, v in d.parametros if k in codigos),
+                 resposta=(f"Aprendi a consultar “{cm.nome}” ({cm.tabela}). " + (d.resposta or "")).strip())
+    return _preparar(user, c, d3, atual, defs, ficha, texto)
 
 
 def _listar(administrador, objetivos, d, ficha) -> Saida:

@@ -4,6 +4,12 @@
 **Etapa atual:** 6 — Memórias setoriais e chat consolidado
 **Situação:** **implementada, aguardando validação.** Plano aprovado em 2026-11-11. Etapa 5 aprovada em 2026-11-11 por Diego; conferência dos números com o Financeiro e premissas T29 seguem pendentes.
 
+## Mudança M18 — IA aprende consultas sozinha (2026-11-11)
+
+- Sem consulta que atenda: a IA acha a tabela, monta a consulta, o sistema valida, aprova e executa.
+- Colunas sensíveis descartadas automaticamente; vale para quem consulta algum setor.
+- Testes: 474 aprovados e 10 pulados no Windows.
+
 ## Mudança M17 — chat mais esperto e todas as filiais (2026-11-11)
 
 - Filial "TODAS": uma consulta por filial autorizada, mesmo validador, coluna Filial no resultado.

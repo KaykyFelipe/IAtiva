@@ -12,7 +12,8 @@ ACOES = (
     "preparar_consulta",    # escolher/trocar objetivo e/ou informar parâmetros
     "executar_consulta",    # rodar a consulta que já está completa
     "cancelar_consulta",    # abandonar a solicitação atual
-    "aprender_tabela",      # administrador: procurar tabelas no dicionário para ensinar consulta nova
+    "aprender_tabela",      # procurar tabelas no dicionário para criar sozinha uma consulta nova (M18)
+    "criar_consulta",       # M18: montar a consulta nova a partir de "tabelas_para_aprender"
     "listar_aprendizados",  # mostrar consultas aprendidas
     "remover_aprendizado",  # administrador: tirar de uso uma consulta aprendida (pede confirmação)
     "lembrar",              # guardar na memória do agente algo que o usuário ensinou
@@ -43,6 +44,7 @@ class EntradaAgente:
     trechos: list[dict] = field(default_factory=list)
     administrador: bool = False
     pendencias: list[dict] = field(default_factory=list)
+    tabelas_para_aprender: list[dict] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -56,6 +58,7 @@ class Decisao:
     confirmado: bool
     opcoes: tuple[str, ...]
     alcance: str = ""
+    consulta: dict | None = None
 
 
 def esquema(codigos_objetivo, codigos_parametro) -> dict:
@@ -82,6 +85,17 @@ def esquema(codigos_objetivo, codigos_parametro) -> dict:
             "opcoes": {"type": "array", "items": {"type": "string"}},
             "alcance": {"type": "string", "enum": list(ALCANCES),
                         "description": "Ação lembrar: usuario, setor ou empresa; vazio = padrão."},
+            "consulta": {
+                "type": "object",
+                "description": "Só na ação criar_consulta: a consulta nova montada com os campos de tabelas_para_aprender.",
+                "properties": {
+                    "tabela": {"type": "string"}, "nome": {"type": "string"}, "descricao": {"type": "string"},
+                    "colunas": {"type": "array", "items": {"type": "string"}},
+                    "campo_data": {"type": "string"}, "campo_busca": {"type": "string"},
+                    "filtraveis": {"type": "array", "items": {"type": "string"}},
+                },
+                "required": ["tabela", "nome", "colunas"],
+            },
         },
         "required": ["resposta", "acao", "objetivo", "parametros", "alvo", "nota", "confirmado", "opcoes"],
     }
@@ -97,7 +111,7 @@ def validar(saida, codigos_objetivo, codigos_parametro) -> Decisao:
     if not isinstance(saida, dict):
         raise DecisaoInvalida("formato")
     extras = set(saida) - {"resposta", "acao", "objetivo", "parametros", "alvo", "nota", "confirmado", "opcoes",
-                           "alcance"}
+                           "alcance", "consulta"}
     if extras:
         raise DecisaoInvalida("campos extras")
     acao = saida.get("acao")
@@ -120,7 +134,13 @@ def validar(saida, codigos_objetivo, codigos_parametro) -> Decisao:
     opcoes = saida.get("opcoes") or []
     if not isinstance(opcoes, list) or len(opcoes) > MAX_OPCOES:
         raise DecisaoInvalida("opcoes")
+    consulta = saida.get("consulta") or None
+    if consulta is not None:
+        consulta = _consulta(consulta)
+    if acao == "criar_consulta" and consulta is None:
+        raise DecisaoInvalida("consulta")
     return Decisao(
+        consulta=consulta,
         resposta=_texto(saida.get("resposta", ""), MAX_RESPOSTA, "resposta"),
         acao=acao,
         objetivo=objetivo,
@@ -131,3 +151,24 @@ def validar(saida, codigos_objetivo, codigos_parametro) -> Decisao:
         opcoes=tuple(_texto(o, 120, "opcao") for o in opcoes),
         alcance=alcance,
     )
+
+
+def _consulta(c) -> dict:
+    if not isinstance(c, dict) or set(c) - {"tabela", "nome", "descricao", "colunas", "campo_data", "campo_busca",
+                                             "filtraveis"}:
+        raise DecisaoInvalida("consulta")
+    def lista(chave, maximo):
+        v = c.get(chave) or []
+        if not isinstance(v, list) or len(v) > maximo:
+            raise DecisaoInvalida(chave)
+        return [_texto(x, 20, chave).upper() for x in v]
+
+    return {
+        "tabela": _texto(c.get("tabela", ""), 6, "tabela").upper(),
+        "nome": _texto(c.get("nome", ""), 120, "nome"),
+        "descricao": _texto(c.get("descricao", "") or "", 300, "descricao"),
+        "colunas": lista("colunas", 20),
+        "campo_data": _texto(c.get("campo_data", "") or "", 20, "campo_data"),
+        "campo_busca": _texto(c.get("campo_busca", "") or "", 20, "campo_busca"),
+        "filtraveis": lista("filtraveis", 10),
+    }

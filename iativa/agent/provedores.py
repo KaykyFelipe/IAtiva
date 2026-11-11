@@ -235,7 +235,8 @@ Como agir:
   - "executar_consulta": a solicitação atual está completa e a pessoa pediu para rodar (ou confirmou).
   - Quando os parâmetros ficam completos, o sistema EXECUTA sozinho em seguida: não pergunte "posso executar?"; diga apenas o que vai consultar.
   - "cancelar_consulta": a pessoa desistiu da solicitação atual.
-  - "aprender_tabela": (só se administrador) ela pede algo que nenhum objetivo atende; ponha em "alvo" as palavras-chave ou a tabela (ex.: SRA). Explique que vai procurar no dicionário.
+  - "aprender_tabela": ela pede dados que nenhum objetivo atende. Não pergunte nada: ponha em "alvo" as palavras-chave do assunto ou o código da tabela do Protheus que você sabe que guarda isso (ex.: faturamento = SF2 ou SD2, funcionários = SRA, contas a pagar = SE2). O sistema procura no dicionário e devolve os campos para você montar a consulta sozinha.
+  - "criar_consulta": SÓ quando o contexto trouxer "tabelas_para_aprender". Escolha a tabela que responde a pergunta e preencha "consulta": tabela, nome curto e claro, descricao, "colunas" (até 12, só campos da lista: identificação, nome/descrição, datas e valores úteis; nunca CPF, CNPJ, RG, salário ou dados pessoais sensíveis), "campo_data" (campo de data do período, ex.: emissão; vazio se não houver), "campo_busca" (campo de nome, se houver) e "filtraveis" (códigos úteis para filtrar). Preencha também "objetivo" vazio e os "parametros" que a pessoa já informou (filial-analise, periodo-analise como "DD/MM/AAAA..DD/MM/AAAA", texto-busca). O sistema cria, aprova e executa sozinho: na "resposta" diga em uma frase o que vai consultar.
   - "listar_aprendizados": ela quer ver as consultas aprendidas.
   - "remover_aprendizado": (só se administrador) ela quer remover uma consulta aprendida; ponha em "alvo" o nome ou código. Use "confirmado": true SOMENTE se ela já confirmou explicitamente no histórico; senão pergunte na "resposta" e deixe false.
   - "lembrar": ela ensinou algo para guardar (um termo, uma preferência, como interpretar uma pergunta). Ponha em "nota" uma frase curta e geral, sem dados pessoais, sem CPF/CNPJ, sem valores de resultado. Em "alcance": "setor" se ela disse que vale para o setor/equipe, "empresa" se vale para todos, "usuario" se é só dela; vazio se não disse. Notas de setor e empresa viram proposta e só valem depois de aprovadas: não diga que já valem.
@@ -268,6 +269,8 @@ def _contexto_agente(entrada) -> str:
         "conhecimento_aprovado": entrada.trechos,
         "historico_recente": entrada.historico,
     }
+    if getattr(entrada, "tabelas_para_aprender", None):
+        contexto["tabelas_para_aprender"] = entrada.tabelas_para_aprender
     return (
         "<contexto>\n" + json.dumps(contexto, ensure_ascii=False) + "\n</contexto>\n"
         "<mensagem_do_usuario>\n" + entrada.mensagem + "\n</mensagem_do_usuario>"
