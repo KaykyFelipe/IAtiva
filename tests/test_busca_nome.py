@@ -195,3 +195,18 @@ def test_erro_ao_salvar_mantem_o_preenchido(client, admin):
     assert 'value="Minha consulta"' in html and 'value="desc"' in html and 'value="000001"' in html
     assert 'value="A1_COD" checked' in html and 'value="A1_NOME" checked' in html
     assert 'name="setores" value="%s" checked' % dados["setores"][0] in html
+
+
+def test_resposta_curta_com_a_filial_aplica_sem_modelo(admin):
+    from iativa.agent.provedores import FakeProvider
+
+    c = conversas.nova_individual(admin)
+    msg, _ = conversas.enviar(admin, c, "inadimplentes corte 2026-01-01, 0 dias, considerar saldo")
+    assert "filial" in msg.texto.lower()
+
+    class Proibido(FakeProvider):
+        def decidir(self, entrada):
+            raise AssertionError("não deveria chamar o modelo")
+
+    msg, res = conversas.enviar(admin, c, "01", Proibido())
+    assert res is not None and res.ok

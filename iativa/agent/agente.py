@@ -136,6 +136,13 @@ def conversar(user, c, texto: str, provedor=None, mensagem_usuario_id=None, inte
     codigos_par = sorted({cod for o in objetivos for cod in o.parametros} | {"filial-analise"})
     defs = orq._definicoes(codigos_par)
     atual = _ativa(user, c)
+    direta = _resposta_direta(user, atual, texto, defs)
+    if direta is not None:
+        # "001001" em resposta a "qual filial?": aplica sem passar pelo modelo (mais rápido e sem erro).
+        registrar("interpretacao", "agente", usuario=user, estado_novo="resposta_direta", entidade_id=atual.pk, linhas=1)
+        erros = orq._aplicar_parametros(user, atual, [direta], defs)
+        atual.refresh_from_db()
+        return _avaliar_e_executar(user, atual, "", erros, {"provedor": "direto", "opcoes": []})
     try:
         trechos = [{"documento": t.titulo_documento, "secao": t.secao, "texto": t.texto}
                    for t in orq.descoberta.conhecimento(user, orq.DOMINIO, texto, limite=3)]
@@ -197,6 +204,30 @@ def conversar(user, c, texto: str, provedor=None, mensagem_usuario_id=None, inte
     if acao in ("aprovar_pendencia", "rejeitar_pendencia"):
         return _decidir_pendencia(user, d, acao == "aprovar_pendencia", ficha)
     return Saida(d.resposta or _ajuda(objetivos), ficha)
+
+
+def _resposta_direta(user, atual, texto, defs):
+    """Resposta curta que é exatamente uma das opções do único critério que falta (filial ou escolha).
+    Devolve (código, valor) ou None."""
+    if atual is None:
+        return None
+    t = (texto or "").strip().strip(".")
+    if not t or len(t) > 40:
+        return None
+    estado = _estado(user, atual, defs)
+    faltando = [cod for cod in OBJETIVOS[atual.objetivo].obrigatorios
+                if defs.get(cod) is not None and defs[cod].nome in (estado or {}).get("faltando", [])]
+    if len(faltando) != 1:
+        return None
+    d = defs[faltando[0]]
+    if d.tipo == TipoValor.FILIAL:
+        opcoes = _filiais(user)
+    elif d.tipo == TipoValor.ESCOLHA:
+        opcoes = list(d.opcoes or [])
+    else:
+        return None
+    achado = next((o for o in opcoes if _norm(o) == _norm(t)), None)
+    return (d.codigo, achado) if achado else None
 
 
 def _ajuda(objetivos) -> str:
