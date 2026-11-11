@@ -33,7 +33,7 @@
           {% endif %}
         {% else %}
           {% include "chat/_resposta.html" with m=m editavel=item.editavel executavel=item.executavel repetivel=item.repetivel aprendivel=item.aprendivel aprovavel=item.aprovavel ultima=item.ultima %}
-          {% if resultado and resultado_msg == m.pk %}{% if resultado.consolidado %}{% include "chat/_consolidado.html" %}{% else %}{% include "chat/_resultado.html" %}{% endif %}{% endif %}
+          <div class="resultado-de" data-resultado-de="{{ m.pk }}">{% if resultado and resultado_msg == m.pk %}{% if resultado.consolidado %}{% include "chat/_consolidado.html" %}{% else %}{% include "chat/_resultado.html" %}{% endif %}{% endif %}</div>
         {% endif %}
         {% endwith %}
       {% empty %}

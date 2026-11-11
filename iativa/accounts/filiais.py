@@ -6,6 +6,8 @@ e para entender a filial escrita por nome ("filial Cuiabá" -> 001002).
 import re
 import unicodedata
 
+TODAS = "TODAS"  # valor especial: todas as filiais autorizadas da pessoa
+
 NOMES = {
     "001001": "Matriz",
     "001002": "Cuiabá",
@@ -29,6 +31,8 @@ def nome(codigo: str) -> str:
 
 def rotulo(codigo) -> str:
     """'001002 · Cuiabá'; código desconhecido volta como está."""
+    if codigo == TODAS:
+        return "Todas as filiais"
     n = NOMES.get(str(codigo), "")
     return f"{codigo} · {n}" if n else str(codigo)
 
@@ -38,6 +42,8 @@ def codigo_por_texto(texto: str) -> str | None:
     t = _norm(texto)
     if not t:
         return None
+    if re.fullmatch(r"(?:em |de |na |nas )?(?:todas|todas as filiais|todas filiais|todas elas|geral|tudo|todas as unidades)", t):
+        return TODAS
     if m := re.fullmatch(r"(?:filial )?(\d{6})(?: .*)?", t):
         return m.group(1) if m.group(1) in NOMES else None
     t = re.sub(r"^(?:a |da |de |na |em )?(?:filial )?(?:de |da |em )?", "", t)

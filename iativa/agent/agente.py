@@ -63,7 +63,7 @@ def _filiais(user) -> list[str]:
         from iativa.accounts.models import Department
 
         out |= filiais_autorizadas(user, Department.objects.get(pk=sid))
-    return sorted(out)
+    return sorted(out) + (["TODAS"] if len(out) > 1 else [])
 
 
 def _estado(user, s, defs) -> dict | None:
@@ -113,7 +113,7 @@ def _catalogo(user, objetivos, defs) -> list[dict]:
             if p["tipo"] == TipoValor.FILIAL:
                 p["opcoes"] = filiais
                 p["descricao"] = (p.get("descricao", "") + " Nomes: "
-                                  + ", ".join(rotulo(f) for f in filiais) + ". Responda sempre o código.").strip()
+                                  + ", ".join(rotulo(f) for f in filiais) + ". Responda sempre o código; use TODAS quando a pessoa pedir todas as filiais.").strip()
     return cat
 
 

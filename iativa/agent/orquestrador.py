@@ -136,7 +136,9 @@ def _registrar_parametro(user, s: RequestContext, definicao, texto: str):
             valor = "; ".join(f"{c}={v}" for c, v in ler_filtros(valor, permitidos))
         except ValueError as exc:
             raise ValidationError(f"{exc}. Campos aceitos: {', '.join(sorted(permitidos)) or 'nenhum'}.") from None
-    if definicao.tipo == TipoValor.FILIAL and valor not in filiais_autorizadas(user, s.setor):
+    if definicao.tipo == TipoValor.FILIAL and valor == "TODAS" and filiais_autorizadas(user, s.setor):
+        pass  # todas as filiais autorizadas; cada uma é conferida de novo na execução
+    elif definicao.tipo == TipoValor.FILIAL and valor not in filiais_autorizadas(user, s.setor):
         raise ValidationError("Filial fora das suas filiais autorizadas.")
     anterior = (
         ParameterBinding.objects.filter(
@@ -276,6 +278,8 @@ def avaliar(user, s: RequestContext, erros=None) -> Resposta:
         opcoes = list(d.opcoes or [])
         if d.tipo == TipoValor.FILIAL:
             opcoes = sorted(filiais_autorizadas(user, s.setor))
+            if len(opcoes) > 1:
+                opcoes.append("TODAS")
         perguntas.append(Pergunta(d.codigo, d.nome, d.descricao, d.tipo, opcoes, r.situacao == CONFLITO))
     return Resposta("pergunta", "Preciso de mais informações antes de consultar:", perguntas=perguntas,
                     criterios=criterios, **base)

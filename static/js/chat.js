@@ -344,7 +344,24 @@
     rolarParaFim();
     prepararCampo();
   });
+  // Resultados anteriores continuam na tela ao mandar outra mensagem. Ficam só na memória da
+  // página (somem ao recarregar): o servidor não guarda resultados (R3).
+  let resultadosAnteriores = new Map();
+  document.body.addEventListener("htmx:beforeSwap", () => {
+    resultadosAnteriores = new Map();
+    document.querySelectorAll("[data-resultado-de]").forEach((el) => {
+      if (el.childElementCount) resultadosAnteriores.set(el.dataset.resultadoDe, Array.from(el.childNodes));
+    });
+  });
+  function restaurarResultados() {
+    resultadosAnteriores.forEach((nos, id) => {
+      const lugar = document.querySelector(`[data-resultado-de="${CSS.escape(id)}"]`);
+      if (lugar && !lugar.childElementCount) { lugar.append(...nos); lugar.classList.add("anterior"); }
+    });
+    resultadosAnteriores = new Map();
+  }
   document.body.addEventListener("htmx:afterSwap", () => {
+    restaurarResultados();
     if (atual && !atual.form.isConnected) atual = null;
     atualizarSaudacao();
     prepararLateral();

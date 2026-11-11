@@ -4,6 +4,14 @@
 **Etapa atual:** 6 — Memórias setoriais e chat consolidado
 **Situação:** **implementada, aguardando validação.** Plano aprovado em 2026-11-11. Etapa 5 aprovada em 2026-11-11 por Diego; conferência dos números com o Financeiro e premissas T29 seguem pendentes.
 
+## Mudança M17 — chat mais esperto e todas as filiais (2026-11-11)
+
+- Filial "TODAS": uma consulta por filial autorizada, mesmo validador, coluna Filial no resultado.
+- Resultados anteriores ficam na tela ao mandar nova mensagem (só na memória da página; R3 mantida).
+- Animações rodam mesmo com "reduzir movimento" do sistema.
+- Instruções do agente: responde perguntas gerais, nunca só "não consigo", corrige sozinho.
+- Pendente: faturamento (SF2) voltou 0 linhas em out/2026; diagnóstico exige leitura agregada no ERP.
+
 ## Mudança M16 — nomes das filiais (2026-11-11)
 
 - `iativa/accounts/filiais.py`: código e cidade das 8 filiais (001001–001008).

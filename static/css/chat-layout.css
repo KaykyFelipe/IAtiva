@@ -171,7 +171,6 @@ button.secundario:hover { background: #f0f5f1; }
   th, td { padding: 10px 11px; font-size: 11px; }
   th { font-size: 10px; }
 }
-@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }
 
 /* Renomear conversa: lápis aparece ao passar o mouse. */
 .conversa .renomear { display: none; flex: none; border: 0; background: none; padding: 2px; margin: -2px 0; border-radius: 5px; color: #76877c; cursor: pointer; line-height: 0; }

@@ -26,3 +26,36 @@ def test_converter_filial_por_nome():
 
     assert converter(D, "Uberlândia") == "001003"
     assert converter(D, "01") == "01"
+
+
+def test_todas_por_texto():
+    from iativa.accounts.filiais import TODAS
+
+    assert codigo_por_texto("todas") == TODAS and codigo_por_texto("todas as filiais") == TODAS
+    assert rotulo(TODAS) == "Todas as filiais"
+
+
+@pytest.mark.django_db
+def test_consulta_em_todas_as_filiais(erp_sintetico, settings, novo_usuario, politica):
+    from io import StringIO
+
+    from django.core.management import call_command
+
+    from iativa.accounts.models import Department
+    from iativa.agent.provedores import FakeProvider
+    from iativa.chat import conversas
+
+    settings.IATIVA_METADADOS = {"fonte": "sintetico"}
+    call_command("seed_exemplos", stdout=StringIO())
+    cob = Department.objects.get(codigo="financeiro-cobranca")
+    u = novo_usuario("ana", cob)
+    politica(u, cob, consultar=True, filiais=["01", "02"])
+    c = conversas.nova_individual(u)
+    _, um = conversas.enviar(u, c, "inadimplentes corte 2026-01-01, 0 dias, considerar saldo, filial 01")
+    p = FakeProvider([{"resposta": "", "acao": "preparar_consulta", "objetivo": "titulos-em-atraso",
+                       "parametros": [{"codigo": "filial-analise", "valor": "TODAS"}], "alvo": "", "nota": "",
+                       "confirmado": False, "opcoes": []}])
+    msg, res = conversas.enviar(u, c, "e de todas as filiais?", p)
+    assert res is not None and res.ok, msg.texto
+    assert res.colunas[0] == "Filial" and len(res.linhas) >= len(um.linhas)
+    assert any("Todas as filiais" in x["valor"] for x in msg.ficha["criterios"])

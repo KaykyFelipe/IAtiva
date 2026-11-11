@@ -24,6 +24,8 @@ from iativa.memory.models import Escopo, ParameterBinding, ParameterDefinition, 
 from iativa.memory.resolucao import RESOLVIDO, resolver
 from iativa.metadata.catalogo import abrir_catalogo
 
+from iativa.accounts.filiais import TODAS, rotulo
+
 from .compilador import PlanoInvalido, compilar
 from .executor import ValorRecusado, executar
 from .plano import montar
@@ -103,26 +105,37 @@ def executar_solicitacao(user, s: RequestContext) -> Resultado:
     if conferencia.tipo != "pronta":
         return Resultado(False, conferencia.mensagem, estado=s.estado, solicitacao=s)
     valores = _valores(user, s)
-    if valores.get("filial-analise") not in filiais_autorizadas(user, s.setor):
+    autorizadas = filiais_autorizadas(user, s.setor)
+    todas = valores.get("filial-analise") == TODAS
+    if todas:
+        filiais = sorted(autorizadas)
+    else:
+        filiais = [valores.get("filial-analise")]
+    if not filiais or any(f not in autorizadas for f in filiais):
         registrar("acesso_negado", "solicitacao", usuario=user, setor=s.setor, entidade_id=s.pk,
                   estado_novo="filial", resultado="negado")
         s = transicionar(user, s, E.AGUARDANDO_PARAMETROS)
         return Resultado(False, "A filial escolhida não está mais entre as suas filiais autorizadas. Escolha outra.",
                          estado=s.estado, solicitacao=s)
 
-    plano = montar(s.objetivo, valores)
     s = transicionar(user, s, E.EXECUTANDO)
     cfg = _cfg()
     inicio = time.monotonic()
+    linhas, truncado, origem = [], False, []
     try:
         with abrir_catalogo() as cat:
-            comp = compilar(plano, cat, cfg["limite_linhas"])
-            permitidas = {t.fisica for t in cat.tabelas([plano.base] + [j.tabela for j in plano.juncoes]).values()}
-            validar(comp.sql, permitidas, cfg["limite_linhas"] + 1)
-            linhas, truncado = executar(
-                cat, comp.sql, comp.params, cfg["limite_linhas"], cfg["timeout_s"],
-                validar_final=lambda sql: validar(sql, permitidas, cfg["limite_linhas"] + 1),
-            )
+            for filial in filiais:  # "todas as filiais": uma consulta por filial autorizada, mesmo validador
+                plano = montar(s.objetivo, {**valores, "filial-analise": filial})
+                comp = compilar(plano, cat, cfg["limite_linhas"])
+                permitidas = {t.fisica for t in cat.tabelas([plano.base] + [j.tabela for j in plano.juncoes]).values()}
+                validar(comp.sql, permitidas, cfg["limite_linhas"] + 1)
+                parte, cortou = executar(
+                    cat, comp.sql, comp.params, cfg["limite_linhas"], cfg["timeout_s"],
+                    validar_final=lambda sql, p=permitidas: validar(sql, p, cfg["limite_linhas"] + 1),
+                )
+                linhas += parte
+                origem += [filial] * len(parte)
+                truncado = truncado or cortou
     except (ConsultaRecusada, PlanoInvalido, ValorRecusado) as exc:
         return _encerrar(user, s, E.FALHOU, inicio, 0, f"Consulta recusada pelo validador: {exc}")
     except Exception as exc:  # rede, tempo, banco: sem detalhes (podem conter dados)
@@ -131,7 +144,7 @@ def executar_solicitacao(user, s: RequestContext) -> Resultado:
 
     # 2. Checagem pós-execução: chave repetida indica junção que duplica valores.
     idx = [comp.rotulos.index(r) for r in plano.chave_unica]
-    chaves = [tuple(str(l[i]).strip() for i in idx) for l in linhas]
+    chaves = [(o,) + tuple(str(l[i]).strip() for i in idx) for o, l in zip(origem, linhas)]
     if idx and len(chaves) != len(set(chaves)):
         return _encerrar(user, s, E.NAO_VALIDADA, inicio, len(linhas),
                          "O resultado tem registros repetidos e não foi validado. Os critérios precisam ser revistos.")
@@ -153,6 +166,11 @@ def executar_solicitacao(user, s: RequestContext) -> Resultado:
         colunas = list(comp.rotulos) + ["Dias de atraso (maior)"]
     else:
         colunas = list(comp.rotulos)
+    if todas:
+        colunas, tipos = ["Filial"] + colunas, ["texto"] + tipos
+        formatadas = [[rotulo(o)] + linha for o, linha in zip(origem, formatadas)]
+        plano.premissas = [p for p in plano.premissas if "filial" not in p.lower()] + [
+            "Filiais: " + ", ".join(rotulo(f) for f in filiais) + "."]
 
     res = _encerrar(user, s, E.CONCLUIDA, inicio, len(linhas), _resumo(s.objetivo, len(linhas), total, truncado))
     res.ok, res.colunas, res.tipos, res.linhas = True, colunas, tipos, formatadas
