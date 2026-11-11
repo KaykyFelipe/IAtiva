@@ -4,7 +4,17 @@
 **Etapa atual:** 6 — Memórias setoriais e chat consolidado
 **Situação:** **implementada, aguardando validação.** Plano aprovado em 2026-11-11. Etapa 5 aprovada em 2026-11-11 por Diego; conferência dos números com o Financeiro e premissas T29 seguem pendentes.
 
-## Mudança M13 — interface do chat (2026-11-11)
+## Mudança M14 — CLI Claude no Docker (2026-11-11)
+
+- Corrigida a dependência ausente na imagem: instalação nativa oficial 2.1.321,
+  executada como `iativa`, em `/home/iativa/.local/bin`, sem Node/NVM do host.
+- Build verifica versão e flag de isolamento. Conta pessoal permanece no volume
+  `var` já existente; sem credenciais na imagem. Compose, portas e bancos preservados.
+- Instruções de rebuild e correção de caminho explícito em `docs/CLAUDE_CODE.md`.
+- Docker Engine indisponível nesta máquina: build e login no container pendentes
+  de confirmação no servidor. Testes Python: 451 aprovados e 10 pulados no Windows.
+
+## Mudança M13 — entrega da interface
 
 - Layout aprovado aplicado ao chat real: lateral com categorias recolhíveis e
   busca, divisória arrastável/teclado, recolher menu e expandir área de leitura.

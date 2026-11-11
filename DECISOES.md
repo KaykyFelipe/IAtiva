@@ -131,6 +131,8 @@ Aprovadas em 2026-11-09 por Kayky Felipe (chat), com as opções recomendadas na
 
 ## Mudanças de escopo
 
+| M14 | 2026-11-11 | Completa a instalação da integração Claude no ambiente Docker confirmado pelo Diego: CLI nativa oficial 2.1.321 instalada na imagem como usuário iativa e disponível no PATH, sem depender do NVM do OpenMausBot. Mantém conta/logins no volume var existente, sem credenciais na imagem e sem modificar banco, rede ou portas. | Complemento da integração pessoal autorizada em M11/M12; ambiente Docker confirmado pelo Diego no chat |
+
 | M13 | 2026-11-11 | Interface do chat conforme prévia aprovada: navegação por categorias recolhíveis, busca nos títulos autorizados, lateral redimensionável/recolhível, leitura expansível, tela inicial centralizada, mensagens e resultados com nova estética, compositor com enviar/parar e animações com redução de movimento. Saudação acompanha o horário local do navegador e frase inicial alterna a cada nova conversa (apenas índice na sessão Django). Sem mascotes/microfone, sem mudanças nas permissões, consultas ou histórico. | Autorizado por Diego (chat: "Pode fazer", após aprovação visual e observações de saudação/frase) |
 
 | M12 | 2026-11-11 | Login Claude pela interface: conectar, abrir link oficial, concluir com código efêmero, verificar, cancelar e desconectar. CLI detectada automaticamente; conta em diretório exclusivo por usuário, somente superusuários (restrição adicional opcional por username), fluxo vinculado à sessão, sem salvar código. Após autenticação confirmada, seleciona o provedor apenas para o próprio usuário; mantém liberação de privacidade e regras de SQL. | Autorizado por Diego (chat: "Sim", após proposta da tela) |

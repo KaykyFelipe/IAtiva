@@ -21,7 +21,7 @@ RUN apt-get update \
     && apt-get update \
     && ACCEPT_EULA=Y apt-get install -y --no-install-recommends msodbcsql18 unixodbc libgssapi-krb5-2 \
     && apt-mark manual libgssapi-krb5-2 \
-    && apt-get purge -y curl gnupg && apt-get autoremove -y && apt-get clean \
+    && apt-get purge -y gnupg && apt-get autoremove -y && apt-get clean \
     && rm -rf /var/lib/apt/lists/* \
     && ! ldd /opt/microsoft/msodbcsql18/lib64/libmsodbcsql-18*.so* | grep -q "not found"
 
@@ -29,12 +29,22 @@ WORKDIR /app
 COPY requirements.txt requirements-dev.txt ./
 RUN pip install --no-cache-dir -r requirements-dev.txt
 
-COPY . .
-
 # Usuário sem privilégios; só a pasta var/ (base sintética) é gravável.
 RUN useradd --create-home --uid 10001 iativa \
     && mkdir -p /app/var \
     && chown -R iativa:iativa /app/var
 USER iativa
+
+# CLI nativa oficial: não depende do Node/NVM instalado no host.
+ARG CLAUDE_CODE_VERSION=2.1.321
+ENV HOME=/home/iativa \
+    PATH=/home/iativa/.local/bin:$PATH
+RUN curl -fsSL --retry 3 https://claude.ai/install.sh -o /tmp/iativa-claude-install.sh \
+    && bash /tmp/iativa-claude-install.sh "$CLAUDE_CODE_VERSION" \
+    && rm /tmp/iativa-claude-install.sh \
+    && claude --version \
+    && claude --help | grep -q -- '--safe-mode'
+
+COPY . .
 
 EXPOSE 8000

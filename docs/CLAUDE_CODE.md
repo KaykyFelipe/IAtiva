@@ -46,10 +46,42 @@ conta já conectada. Use um único processo Django para este fluxo local (como o
 `runserver --noreload` do projeto); balanceamento entre vários workers exige
 um serviço dedicado de autenticação e não é suportado nesta etapa.
 
-Não se adicionou instalador automático da CLI nem fluxo OAuth próprio. As páginas
+O login pela interface não instala a CLI nem implementa OAuth próprio. As páginas
 de autenticação e a troca do código continuam sob controle do binário oficial.
 
 ## Preparar o ambiente
+
+### Docker do IAtiva
+
+A imagem instala a CLI nativa oficial 2.1.321 como usuário `iativa`, em
+`/home/iativa/.local/bin/claude`, disponível no PATH do container. Não é necessário
+montar diretórios do OpenMausBot, copiar cookies ou instalar Node/NVM.
+O build precisa de acesso HTTPS ao instalador e aos downloads da Anthropic e
+confere a versão e a presença de `--safe-mode`; se a instalação falhar, o build falha.
+`CLAUDE_CODE_VERSION` é um argumento de build para atualizar a versão explicitamente.
+
+Na pasta do repositório no servidor, atualize o código e reconstrua somente o app:
+
+```bash
+git pull --ff-only
+docker compose up -d --build --no-deps app
+docker compose exec app claude --version
+```
+
+Se seu `.env` tiver `IATIVA_CLAUDE_CLI` apontando para o caminho NVM do OpenMausBot,
+troque por `IATIVA_CLAUDE_CLI=claude` antes de recriar o container. Um caminho
+explícito errado tem prioridade sobre a detecção automática.
+
+Depois, use **Conectar Claude** no site. O login continua exclusivo por usuário e
+é mantido em `/app/var/claude-pessoal`, dentro do volume `iativa_var` já definido
+no Compose. Não use `docker compose down -v`: isso apagaria os volumes existentes.
+Não faça login durante o build: a imagem contém somente a CLI, sem credenciais.
+
+O Docker Engine não estava disponível na máquina de desenvolvimento nesta
+alteração; o build real e o login dentro do container precisam ser confirmados
+no servidor. A instalação segue https://code.claude.com/docs/en/setup.
+
+### Execução direta no sistema operacional
 
 Instale ou atualize Claude Code seguindo https://code.claude.com/docs/en/setup.
 Use a mesma conta do sistema operacional que executa Python/Django. O login de
