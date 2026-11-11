@@ -91,7 +91,7 @@ def test_campo_busca_invalido_e_recusado(admin):
     from django.core.exceptions import ValidationError
 
     with pytest.raises(ValidationError, match="busca por nome"):
-        _modelo_sa1(admin, campo_busca="A1_LOJA")
+        _modelo_sa1(admin, campo_busca="XX_NADA")
 
 
 def _decisao(**kw):
@@ -170,8 +170,28 @@ def test_sem_escolha_todas_as_colunas_de_texto_filtram(admin):
     assert {c for c, _ in campos_filtraveis(cm.spec)} == {"A1_COD", "A1_NOME"}
 
 
-def test_filtravel_fora_das_colunas_e_recusado(admin):
+def test_filtravel_fora_das_colunas_entra_nas_colunas(admin):
+    cm = _modelo_sa1(admin, filtraveis="A1_LOJA")
+    assert "A1_LOJA" in [c["campo"] for c in cm.spec["colunas"]] and cm.spec["filtraveis"] == ["A1_LOJA"]
+
+
+def test_filtravel_inexistente_diz_qual_campo(admin):
     from django.core.exceptions import ValidationError
 
-    with pytest.raises(ValidationError, match="filtráveis"):
-        _modelo_sa1(admin, filtraveis="A1_LOJA")
+    with pytest.raises(ValidationError, match="XX_NADA"):
+        _modelo_sa1(admin, filtraveis="XX_NADA")
+
+
+def test_erro_ao_salvar_mantem_o_preenchido(client, admin):
+    from django.urls import reverse
+
+    c = conversas.nova_individual(admin)
+    client.force_login(admin)
+    dados = {"tabela": "SA1", "nome": "Minha consulta", "descricao": "desc", "colunas": ["A1_COD", "A1_NOME"],
+             "filtraveis": ["XX_NADA"], "filtro_campo_0": "A1_COD", "filtro_valor_0": "000001",
+             "setores": [str(Department.objects.get(codigo="financeiro-cobranca").pk)]}
+    html = client.post(reverse("chat:aprender_salvar", args=[c.pk]), dados).content.decode()
+    assert "XX_NADA" in html
+    assert 'value="Minha consulta"' in html and 'value="desc"' in html and 'value="000001"' in html
+    assert 'value="A1_COD" checked' in html and 'value="A1_NOME" checked' in html
+    assert 'name="setores" value="%s" checked' % dados["setores"][0] in html

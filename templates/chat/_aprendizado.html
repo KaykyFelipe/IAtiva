@@ -8,44 +8,44 @@
     <input type="hidden" name="tabela" value="{{ aprendizado.alias }}">
     <dl>
       <div><dt><label for="ap-nome">Nome da consulta</label></dt>
-        <dd><input id="ap-nome" name="nome" maxlength="120" required placeholder="Ex.: Funcionários demitidos no período"></dd></div>
+        <dd><input id="ap-nome" name="nome" maxlength="120" required value="{{ enviado.nome }}" placeholder="Ex.: Funcionários demitidos no período"></dd></div>
       <div><dt><label for="ap-desc">Descrição</label></dt>
-        <dd><input id="ap-desc" name="descricao" maxlength="300" placeholder="O que a consulta responde"></dd></div>
+        <dd><input id="ap-desc" name="descricao" maxlength="300" value="{{ enviado.descricao }}" placeholder="O que a consulta responde"></dd></div>
       <div><dt><label for="ap-data">Período sobre o campo</label></dt>
         <dd><select id="ap-data" name="campo_data">
           <option value="">Sem período</option>
-          {% for c in aprendizado.datas %}<option value="{{ c.nome }}">{{ c.nome }} · {{ c.titulo }}</option>{% endfor %}
+          {% for c in aprendizado.datas %}<option value="{{ c.nome }}"{% if c.nome == enviado.campo_data %} selected{% endif %}>{{ c.nome }} · {{ c.titulo }}</option>{% endfor %}
         </select></dd></div>
       <div><dt><label for="ap-busca">Busca por nome no campo</label></dt>
         <dd><select id="ap-busca" name="campo_busca">
           <option value="">Automático (coluna de nome)</option>
-          {% for c in aprendizado.textos %}<option value="{{ c.nome }}">{{ c.nome }} · {{ c.titulo }}</option>{% endfor %}
+          {% for c in aprendizado.textos %}<option value="{{ c.nome }}"{% if c.nome == enviado.campo_busca %} selected{% endif %}>{{ c.nome }} · {{ c.titulo }}</option>{% endfor %}
         </select>
-        <span class="sutil">Permite perguntas como “a Alcans lançou conta?”. Precisa estar entre as colunas.</span></dd></div>
+        <span class="sutil">Permite perguntas como “a Alcans lançou conta?”. Entra nas colunas automaticamente.</span></dd></div>
       <div><dt><label for="ap-filtraveis">Campos que a pessoa pode filtrar</label></dt>
         <dd><select id="ap-filtraveis" name="filtraveis" multiple size="5">
-          {% for c in aprendizado.textos %}<option value="{{ c.nome }}">{{ c.nome }} · {{ c.titulo }}</option>{% endfor %}
+          {% for c in aprendizado.textos %}<option value="{{ c.nome }}"{% if c.nome in enviado.filtraveis %} selected{% endif %}>{{ c.nome }} · {{ c.titulo }}</option>{% endfor %}
         </select>
-        <span class="sutil">Ex.: matrícula ou código da função, para perguntas como “a matrícula 000123 trocou de função?”. Precisam estar entre as colunas (Ctrl+clique para vários). Sem escolha: todas as colunas de texto.</span></dd></div>
+        <span class="sutil">Ex.: matrícula ou código da função, para perguntas como “a matrícula 000123 trocou de função?”. Entram nas colunas automaticamente (Ctrl+clique para vários). Sem escolha: todas as colunas de texto.</span></dd></div>
       <div><dt></dt><dd class="sutil">Filtros fixos são opcionais e restringem <strong>todas</strong> as execuções a um valor exato
         (ex.: <code>RA_SITFOLH</code> = <code>D</code> para só demitidos). Deixe em branco se não precisar. Não use para escolher colunas.</dd></div>
-      {% for n in faixa_filtros %}
+      {% for f in enviado.filtros %}
         <div><dt>Filtro fixo {{ forloop.counter }} (opcional)</dt>
           <dd class="linha">
-            <select name="filtro_campo_{{ n }}" aria-label="Campo do filtro {{ forloop.counter }}"><option value="">—</option>
-              {% for c in aprendizado.campos %}<option value="{{ c.nome }}">{{ c.nome }} · {{ c.titulo }}</option>{% endfor %}
+            <select name="filtro_campo_{{ f.n }}" aria-label="Campo do filtro {{ forloop.counter }}"><option value="">—</option>
+              {% for c in aprendizado.campos %}<option value="{{ c.nome }}"{% if c.nome == f.campo %} selected{% endif %}>{{ c.nome }} · {{ c.titulo }}</option>{% endfor %}
             </select>
-            = <input name="filtro_valor_{{ n }}" maxlength="40" placeholder="valor exato, ex.: D" aria-label="Valor do filtro {{ forloop.counter }}">
+            = <input name="filtro_valor_{{ f.n }}" maxlength="40" value="{{ f.valor }}" placeholder="valor exato, ex.: D" aria-label="Valor do filtro {{ forloop.counter }}">
           </dd></div>
       {% endfor %}
       <div><dt>Setores que podem usar</dt>
-        <dd class="opcoes-marcar">{% for s in aprendizado.setores %}<label><input type="checkbox" name="setores" value="{{ s.pk }}"> {{ s.nome }}</label>{% endfor %}</dd></div>
+        <dd class="opcoes-marcar">{% for s in aprendizado.setores %}<label><input type="checkbox" name="setores" value="{{ s.pk }}"{% if s.pk|stringformat:"s" in enviado.setores %} checked{% endif %}> {{ s.nome }}</label>{% endfor %}</dd></div>
     </dl>
     <fieldset class="colunas">
       <legend>Colunas a mostrar (até 15). Campos não marcados ficam ocultos — deixe de fora CPF, salário e outros dados sensíveis.</legend>
       <div class="lista-campos">
         {% for c in aprendizado.campos %}
-          <label><input type="checkbox" name="colunas" value="{{ c.nome }}"> <code>{{ c.nome }}</code> {{ c.titulo }}{% if c.personalizado %} <span class="origem">personalizado</span>{% endif %}</label>
+          <label><input type="checkbox" name="colunas" value="{{ c.nome }}"{% if c.nome in enviado.colunas %} checked{% endif %}> <code>{{ c.nome }}</code> {{ c.titulo }}{% if c.personalizado %} <span class="origem">personalizado</span>{% endif %}</label>
         {% endfor %}
       </div>
     </fieldset>

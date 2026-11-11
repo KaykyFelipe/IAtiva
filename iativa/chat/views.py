@@ -40,7 +40,8 @@ def _obter(request, conversa_id) -> ConversationContext:
         raise Http404 from None
 
 
-def _contexto(request, c=None, form=None, erro="", resultado=None, resultado_msg=None, aprendizado=None):
+def _contexto(request, c=None, form=None, erro="", resultado=None, resultado_msg=None, aprendizado=None,
+              enviado=None):
     setor = setor_do_usuario(request.user)
     nome = request.user.get_full_name() or request.user.get_username()
     iniciais = "".join(p[0] for p in nome.split()[:2]).upper()
@@ -55,7 +56,7 @@ def _contexto(request, c=None, form=None, erro="", resultado=None, resultado_msg
         "resultado": resultado,
         "resultado_msg": resultado_msg,
         "aprendizado": aprendizado,
-        "faixa_filtros": range(3),
+        "enviado": enviado or _enviado_aprendizado(),
         "tipos": TipoValor,
         "TipoConversa": TipoConversa,
         "perfil": {"nome": nome, "iniciais": iniciais or "?", "setor": setor.nome if setor else "Sem setor"},
@@ -179,6 +180,19 @@ def aprender(request, conversa_id):
     return _render(request, c, aprendizado=info)
 
 
+def _enviado_aprendizado(post=None) -> dict:
+    """Valores já preenchidos no formulário de aprendizado, para não perdê-los quando o salvar falha."""
+    post = post or {}
+    lista = post.getlist if hasattr(post, "getlist") else (lambda k: [])
+    return {
+        "nome": post.get("nome", ""), "descricao": post.get("descricao", ""),
+        "campo_data": post.get("campo_data", ""), "campo_busca": post.get("campo_busca", ""),
+        "filtraveis": lista("filtraveis"), "colunas": lista("colunas"), "setores": lista("setores"),
+        "filtros": [{"n": n, "campo": post.get(f"filtro_campo_{n}", ""), "valor": post.get(f"filtro_valor_{n}", "")}
+                    for n in range(3)],
+    }
+
+
 @require_POST
 def aprender_salvar(request, conversa_id):
     c = _obter(request, conversa_id)
@@ -191,7 +205,7 @@ def aprender_salvar(request, conversa_id):
             info = conversas.formulario_aprendizado(request.user, c, alias)
         except Exception:
             info = None
-        return _render(request, c, erro=erro, aprendizado=info)
+        return _render(request, c, erro=erro, aprendizado=info, enviado=_enviado_aprendizado(request.POST))
     return _render(request, c)
 
 

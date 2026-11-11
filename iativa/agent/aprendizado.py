@@ -158,7 +158,12 @@ def salvar_proposta(user, alias: str, dados) -> ConsultaModelo:
     nome = (dados.get("nome") or "").strip()[:120]
     if not nome:
         raise ValidationError("Dê um nome para a consulta.")
-    colunas = [c for c in lista("colunas") if c in por_nome][:MAX_COLUNAS + 1]
+    colunas = [c for c in lista("colunas") if c in por_nome]
+    # Campos de busca e filtráveis precisam aparecer no resultado: entram nas colunas sozinhos.
+    for extra in [dados.get("campo_busca") or ""] + list(lista("filtraveis")):
+        if extra in por_nome and extra not in colunas:
+            colunas.append(extra)
+    colunas = colunas[:MAX_COLUNAS + 1]
     if not colunas:
         raise ValidationError("Escolha ao menos uma coluna.")
     if len(colunas) > MAX_COLUNAS:
@@ -167,11 +172,12 @@ def salvar_proposta(user, alias: str, dados) -> ConsultaModelo:
     if campo_data and (campo_data not in por_nome or por_nome[campo_data].tipo != "D"):
         raise ValidationError("Campo de data inválido.")
     busca = dados.get("campo_busca") or ""
-    if busca and (busca not in colunas or por_nome[busca].tipo != "C"):
+    if busca and (busca not in por_nome or por_nome[busca].tipo != "C"):
         raise ValidationError("O campo de busca por nome precisa ser uma das colunas escolhidas, do tipo texto.")
     filtraveis = [c for c in dict.fromkeys(lista("filtraveis")) if c]
-    if any(c not in colunas or por_nome[c].tipo != "C" for c in filtraveis):
-        raise ValidationError("Campos filtráveis precisam estar entre as colunas escolhidas e ser do tipo texto.")
+    invalidos = [c for c in filtraveis if c not in colunas or por_nome[c].tipo != "C"]
+    if invalidos:
+        raise ValidationError(f"Campo filtrável inválido: {', '.join(invalidos)} (precisa ser um campo de texto da tabela).")
     if len(filtraveis) > MAX_FILTRAVEIS:
         raise ValidationError(f"No máximo {MAX_FILTRAVEIS} campos filtráveis.")
     filtros = []
