@@ -153,6 +153,11 @@ IATIVA_AGENTE = {
     "gemini_modelo": "gemini-3.8-flash",
     # Modelos tentados quando o principal está sobrecarregado (503) ou no limite (429).
     "gemini_reserva": ["gemini-3.5-flash"],
+    "openrouter_api_key": "",
+    "openrouter_modelo": "google/gemma-4-26b-a4b-it:free",
+    "openrouter_reserva": [],
+    "openrouter_raciocinio": True,
+    "openrouter_timeout_s": 120,  # modelos gratuitos com raciocínio podem demorar
     "envio_liberado": False,
 }
 

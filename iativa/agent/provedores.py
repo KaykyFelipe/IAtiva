@@ -348,6 +348,110 @@ class GeminiProvider(LLMProvider):
             raise FalhaModelo("JSON inválido") from None
 
 
+class OpenRouterProvider(LLMProvider):
+    """OpenRouter (API compatível com a da OpenAI), padrão Gemma 4 26B A4B gratuito.
+
+    Pede saída JSON pelo esquema; se o modelo não aceitar `response_format`, repete só com a
+    instrução (o esquema vai no texto) e extrai o JSON da resposta. Raciocínio ligado por padrão
+    (`reasoning`); o raciocínio não é guardado nem reenviado: cada mensagem é uma chamada nova,
+    com o histórico curto da conversa no contexto. Modelos gratuitos têm limite por minuto e os
+    provedores podem registrar os dados enviados (mesma pendência do DPO)."""
+
+    nome = "openrouter"
+    URL = "https://openrouter.ai/api/v1/chat/completions"
+    ESPERAS = (2, 4)
+    TEMPORARIOS = (408, 429, 500, 502, 503, 504)
+
+    def __init__(self, enviar=None):
+        _exigir_envio_liberado()
+        cfg = settings.IATIVA_AGENTE
+        if enviar is None and not cfg.get("openrouter_api_key"):
+            raise ImproperlyConfigured("OPENROUTER_API_KEY não configurada.")
+        self._chave = cfg.get("openrouter_api_key", "")
+        self._enviar = enviar or self._http
+        self.timeout = int(cfg.get("openrouter_timeout_s", 120))
+        self.modelo = cfg.get("openrouter_modelo") or "google/gemma-4-26b-a4b-it:free"
+        self.reserva = [m for m in cfg.get("openrouter_reserva", []) if m != self.modelo]
+        self.raciocinio = bool(cfg.get("openrouter_raciocinio", True))
+
+    def _http(self, corpo: dict) -> tuple[int, dict]:
+        import urllib.error
+        import urllib.request
+
+        req = urllib.request.Request(
+            self.URL, data=json.dumps(corpo).encode(), method="POST",
+            headers={"Authorization": f"Bearer {self._chave}", "Content-Type": "application/json",
+                     "X-Title": "IAtiva"},
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=self.timeout) as r:  # noqa: S310 - URL fixa
+                return r.status, json.loads(r.read() or b"{}")
+        except urllib.error.HTTPError as exc:
+            try:
+                return exc.code, json.loads(exc.read() or b"{}")
+            except ValueError:
+                return exc.code, {}
+
+    def _corpo(self, modelo, entrada, esquema, com_formato: bool) -> dict:
+        sistema = INSTRUCOES_AGENTE + (
+            "\n\nResponda com UM objeto JSON (sem markdown, sem texto fora dele) que siga este esquema:\n"
+            + json.dumps(esquema, ensure_ascii=False)
+        )
+        corpo = {
+            "model": modelo,
+            "messages": [{"role": "system", "content": sistema},
+                         {"role": "user", "content": _contexto_agente(entrada)}],
+            "max_tokens": 4000,
+        }
+        if self.raciocinio:
+            corpo["reasoning"] = {"enabled": True}
+        if com_formato:
+            corpo["response_format"] = {"type": "json_schema",
+                                        "json_schema": {"name": "decisao", "strict": True, "schema": esquema}}
+        return corpo
+
+    @staticmethod
+    def _extrair_json(texto: str) -> dict:
+        texto = (texto or "").strip()
+        if texto.startswith("```"):
+            texto = re.sub(r"^```(?:json)?\s*|\s*```$", "", texto)
+        inicio, fim = texto.find("{"), texto.rfind("}")
+        if inicio < 0 or fim <= inicio:
+            raise FalhaModelo("resposta sem JSON")
+        try:
+            return json.loads(texto[inicio:fim + 1])
+        except json.JSONDecodeError:
+            raise FalhaModelo("JSON inválido") from None
+
+    def decidir(self, entrada) -> dict:
+        objetivos, parametros = _codigos_agente(entrada)
+        esquema = esquema_decisao(objetivos, parametros)
+        tentativas = [(self.modelo, 0)] + [(self.modelo, s) for s in self.ESPERAS] + [(m, 0) for m in self.reserva]
+        ultimo, com_formato = None, True
+        for modelo, espera in tentativas:
+            if espera:
+                time.sleep(espera)
+            try:
+                status, dados = self._enviar(self._corpo(modelo, entrada, esquema, com_formato))
+                if status == 400 and com_formato:
+                    # Modelo sem suporte a saída estruturada: mesma pergunta só com a instrução.
+                    com_formato = False
+                    status, dados = self._enviar(self._corpo(modelo, entrada, esquema, False))
+            except Exception as exc:  # rede, tempo
+                ultimo = type(exc).__name__
+                continue
+            if status == 200:
+                try:
+                    msg = dados["choices"][0]["message"]
+                except (KeyError, IndexError, TypeError):
+                    raise FalhaModelo("resposta sem conteúdo") from None
+                return self._extrair_json(msg.get("content") or "")
+            ultimo = status
+            if status not in self.TEMPORARIOS:
+                raise FalhaModelo(f"erro do provedor ({status})")
+        raise FalhaModelo(f"provedor indisponível ({ultimo})", temporaria=True)
+
+
 def _decidir_por_regras(entrada) -> dict:
     """Versão sem IA (provedor de teste): reaproveita as regras de palavras-chave."""
     t = entrada.mensagem.lower()
@@ -421,4 +525,6 @@ def obter_provedor() -> LLMProvider:
         return AnthropicProvider()
     if nome == "gemini":
         return GeminiProvider()
+    if nome == "openrouter":
+        return OpenRouterProvider()
     raise ImproperlyConfigured("Provedor de IA desconhecido.")

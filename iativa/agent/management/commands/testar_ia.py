@@ -1,7 +1,8 @@
 """Testa o provedor de IA configurado, sem dados do ERP.
 
     python manage.py testar_ia            # lista modelos Flash da chave e faz uma pergunta de teste
-    python manage.py testar_ia --modelos  # só lista os modelos
+    python manage.py testar_ia --modelos  # só lista os modelos (Gemini)
+    Com IATIVA_AGENTE_PROVEDOR=openrouter, faz só a pergunta de teste.
 """
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
@@ -18,14 +19,19 @@ class Command(BaseCommand):
 
     def handle(self, *args, modelos=False, **options):
         cfg = settings.IATIVA_AGENTE
-        self.stdout.write(f"Provedor: {cfg['provedor']} | modelo: {cfg.get('gemini_modelo')} | "
-                          f"envio liberado: {cfg.get('envio_liberado')} | chave: {'sim' if cfg.get('gemini_api_key') else 'não'}")
-        if cfg["provedor"] != "gemini":
-            raise CommandError("IATIVA_AGENTE_PROVEDOR não é gemini.")
+        nome = cfg["provedor"]
+        if nome not in ("gemini", "openrouter"):
+            raise CommandError("IATIVA_AGENTE_PROVEDOR deve ser gemini ou openrouter.")
+        chave = cfg.get("gemini_api_key") if nome == "gemini" else cfg.get("openrouter_api_key")
+        self.stdout.write(f"Provedor: {nome} | modelo: {cfg.get(nome + '_modelo')} | "
+                          f"envio liberado: {cfg.get('envio_liberado')} | chave: {'sim' if chave else 'não'}")
         try:
             provedor = obter_provedor()
         except Exception as exc:
             raise CommandError(str(exc)) from None
+        if nome == "openrouter":
+            self._decidir(provedor)
+            return
         try:
             nomes = sorted(m.name.removeprefix("models/") for m in provedor.cliente.models.list()
                            if "flash" in (m.name or ""))
@@ -36,6 +42,9 @@ class Command(BaseCommand):
             self.stdout.write(self.style.WARNING(f"O modelo configurado ({provedor.modelo}) não está na lista."))
         if modelos:
             return
+        self._decidir(provedor)
+
+    def _decidir(self, provedor):
         entrada = EntradaAgente(
             mensagem="Quais clientes estão inadimplentes até 31/12/2025 na filial 001001?", hoje="2026-01-15",
             historico=[], solicitacao_atual=None, administrador=False,

@@ -322,3 +322,83 @@ def test_views_parar_e_mensagem_interrompida(client, ana):
     assert r.status_code == 204 and not Mensagem.objects.filter(conversa=c).exists()
     r = client.post(reverse("chat:mensagem", args=[c.pk]), {"mensagem": ATRASO, "pedido": pedido})
     assert r.status_code == 200 and Mensagem.objects.filter(conversa=c).exists()  # marca usada e apagada
+
+
+# --- OpenRouter (sem rede) -----------------------------------------------------------------
+
+
+class _OpenRouterFalso:
+    """Fila de respostas (status, corpo) no formato do OpenRouter; guarda os corpos enviados."""
+
+    def __init__(self, respostas):
+        self.respostas, self.enviados = list(respostas), []
+
+    def __call__(self, corpo):
+        self.enviados.append(corpo)
+        return self.respostas.pop(0)
+
+
+def _ok(conteudo):
+    return 200, {"choices": [{"message": {"content": conteudo, "reasoning_details": [{"x": 1}]}}]}
+
+
+@pytest.fixture
+def _openrouter(settings, monkeypatch):
+    settings.IATIVA_AGENTE = {**settings.IATIVA_AGENTE, "envio_liberado": True, "openrouter_reserva": ["reserva:free"]}
+    monkeypatch.setattr("iativa.agent.provedores.time.sleep", lambda s: None)
+
+
+def test_openrouter_exige_chave_e_liberacao(settings):
+    from iativa.agent.provedores import OpenRouterProvider
+
+    settings.IATIVA_AGENTE = {**settings.IATIVA_AGENTE, "envio_liberado": False}
+    with pytest.raises(ImproperlyConfigured):
+        OpenRouterProvider(enviar=lambda c: None)
+    settings.IATIVA_AGENTE = {**settings.IATIVA_AGENTE, "envio_liberado": True, "openrouter_api_key": ""}
+    with pytest.raises(ImproperlyConfigured):
+        OpenRouterProvider()
+
+
+def test_openrouter_usa_gemma_esquema_e_raciocinio(_openrouter):
+    from iativa.agent.provedores import OpenRouterProvider
+
+    falso = _OpenRouterFalso([_ok(json.dumps(_decisao(resposta="Olá")))])
+    assert OpenRouterProvider(enviar=falso).decidir(_entrada())["resposta"] == "Olá"
+    corpo = falso.enviados[0]
+    assert corpo["model"] == "google/gemma-4-26b-a4b-it:free" and corpo["reasoning"] == {"enabled": True}
+    assert corpo["response_format"]["json_schema"]["schema"]["required"]
+    assert "IAtiva" in corpo["messages"][0]["content"]
+
+
+def test_openrouter_sem_saida_estruturada_extrai_json_do_texto(_openrouter):
+    from iativa.agent.provedores import OpenRouterProvider
+
+    texto = "```json\n" + json.dumps(_decisao(resposta="Oi")) + "\n```"
+    falso = _OpenRouterFalso([(400, {"error": {"message": "response_format"}}), _ok(texto)])
+    assert OpenRouterProvider(enviar=falso).decidir(_entrada())["resposta"] == "Oi"
+    assert "response_format" not in falso.enviados[1]
+
+
+def test_openrouter_limite_espera_e_usa_reserva(_openrouter):
+    from iativa.agent.provedores import OpenRouterProvider
+
+    falso = _OpenRouterFalso([(429, {}), (429, {}), (503, {}), _ok(json.dumps(_decisao()))])
+    OpenRouterProvider(enviar=falso).decidir(_entrada())
+    assert [c["model"] for c in falso.enviados][-1] == "reserva:free"
+
+
+def test_openrouter_indisponivel_e_temporario(_openrouter):
+    from iativa.agent.provedores import OpenRouterProvider
+
+    falso = _OpenRouterFalso([(429, {})] * 4)
+    with pytest.raises(FalhaModelo) as exc:
+        OpenRouterProvider(enviar=falso).decidir(_entrada())
+    assert exc.value.temporaria
+
+
+@pytest.mark.parametrize("conteudo", ["", "sem json aqui", "{quebrado"])
+def test_openrouter_resposta_ruim(_openrouter, conteudo):
+    from iativa.agent.provedores import OpenRouterProvider
+
+    with pytest.raises(FalhaModelo):
+        OpenRouterProvider(enviar=_OpenRouterFalso([_ok(conteudo)])).decidir(_entrada())
