@@ -11,7 +11,7 @@ e valores de parâmetros (memória da solicitação), como nas Etapas 2 e 3.
 """
 from dataclasses import dataclass, field
 
-from django.core.exceptions import ValidationError
+from django.core.exceptions import ImproperlyConfigured, ValidationError
 from django.utils import timezone
 
 from iativa.accounts.authz import PermissaoNegada, filiais_autorizadas
@@ -304,7 +304,11 @@ def processar_mensagem(user, texto: str, solicitacao_id=None, provedor=None, con
         mensagem=texto, hoje=timezone.localdate().isoformat(), objetivos=_catalogo(objetivos, defs),
         solicitacao_atual=_resumo(user, atual, defs), trechos=trechos,
     )
-    provedor = provedor or obter_provedor()
+    try:
+        provedor = provedor or obter_provedor(usuario=user)
+    except ImproperlyConfigured:
+        return Resposta("falha_modelo", "A conexão de IA precisa de configuração. Confira o login e a liberação de privacidade.",
+                        solicitacao=atual)
     codigos_obj = [o.codigo for o in objetivos]
     try:
         inter = _interpretar(provedor, entrada, codigos_obj, todos_codigos)

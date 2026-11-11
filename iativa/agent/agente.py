@@ -12,7 +12,7 @@ import re
 import unicodedata
 from dataclasses import dataclass, field
 
-from django.core.exceptions import ValidationError
+from django.core.exceptions import ImproperlyConfigured, ValidationError
 from django.utils import timezone
 
 from iativa.accounts.authz import Permissao, filiais_autorizadas, setores_autorizados
@@ -158,11 +158,17 @@ def conversar(user, c, texto: str, provedor=None, mensagem_usuario_id=None, inte
         notas=_notas(user), aprendidos=aprendidos, trechos=trechos, administrador=administrador,
         pendencias=_pendencias_contexto(user),
     )
-    provedor = provedor or obter_provedor()
+    try:
+        provedor = provedor or obter_provedor(usuario=user)
+    except ImproperlyConfigured:
+        return Saida("A conexão de IA precisa de configuração. Confira Conectar Claude e a liberação de privacidade do IAtiva.",
+                     ficha={"tipo": "falha_modelo"})
     try:
         d = _interpretar(provedor, entrada, [o.codigo for o in objetivos], codigos_par)
     except FalhaModelo as exc:
         registrar("modelo_falhou", "agente", usuario=user, estado_novo=provedor.nome, resultado="erro")
+        if provedor.nome == "claude-code":
+            return Saida(str(exc), ficha={"tipo": "falha_modelo"})
         if exc.temporaria:
             return Saida("A IA (Gemini) está sobrecarregada ou no limite de uso do plano gratuito neste momento. "
                          "Tente de novo em cerca de um minuto, com a mesma pergunta.", ficha={"tipo": "falha_modelo"})

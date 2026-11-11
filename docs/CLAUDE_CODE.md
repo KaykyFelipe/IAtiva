@@ -4,6 +4,51 @@ Integração opcional com o executável oficial, inspirada nas chamadas isoladas
 `server/drivers/claude-background.ts` do OpenMausBot. Não depende de OpenMausBot
 rodando, de Node como serviço, de cookies de navegador ou de API não oficial.
 
+## Conectar pela interface (M12)
+
+1. Entre no IAtiva com seu superusuário pessoal.
+2. Na lateral, abra **Conectar Claude** (rota `/configuracoes/claude/`).
+3. Clique em **Conectar Claude** e aguarde o link oficial.
+4. Use **Abrir login do Claude**, entre na sua própria conta e copie o código
+   exibido pelo Claude.
+5. Cole o código no campo oculto e clique em **Concluir**. Aguarde a confirmação.
+
+O provedor fica selecionado apenas para suas mensagens; outras contas mantêm o
+provedor configurado anteriormente. O envio pelo chat continua dependendo de
+`IATIVA_AGENTE_ENVIO_LIBERADO=1`. O login sozinho não libera dados para o modelo.
+Quando essa liberação estiver ausente, o chat informa o bloqueio em vez de falhar.
+
+**Verificar conexão** confere a autenticação sem enviar uma pergunta. **Cancelar**
+encerra um login pendente. **Desconectar** desativa a seleção para seu chat e pede
+à CLI que encerre a conta exclusiva do IAtiva.
+
+Cada usuário possui um diretório próprio em `var/claude-pessoal/usuario-ID`,
+ignorado pelo Git. O único estado adicional do IAtiva é um marcador vazio de
+ativação; o código de login não é salvo em arquivo, banco, sessão ou histórico.
+A CLI oficial gerencia suas próprias credenciais nesse diretório. Não copie nem
+publique essa pasta. A conexão não usa o diretório padrão do OpenMausBot.
+
+Somente superusuários ativos podem gerenciar ou usar essa conexão pessoal.
+`IATIVA_CLAUDE_USUARIO` pode restringir também a um username específico.
+`IATIVA_CLAUDE_CONTAS_DIR` troca a raiz por um caminho absoluto persistente.
+Estas permissões não concedem acesso ao ERP: continuam valendo as políticas
+de consulta, setor e filial já existentes.
+
+A detecção procura a CLI no PATH, nos diretórios nativos usuais e na instalação
+do Claude Desktop para Windows. Campo/caminho vazio significa detecção automática;
+o executável precisa existir no mesmo ambiente onde o Django roda. A instalação
+do aplicativo desktop do host não instala a CLI dentro de um container.
+
+O login é temporário: até 30 segundos para mostrar o link, 15 minutos para entrar
+e 60 segundos para confirmar o código. O fluxo pertence ao usuário **e à sessão**
+que o iniciou. Reiniciar o processo invalida logins ainda em andamento, não a
+conta já conectada. Use um único processo Django para este fluxo local (como o
+`runserver --noreload` do projeto); balanceamento entre vários workers exige
+um serviço dedicado de autenticação e não é suportado nesta etapa.
+
+Não se adicionou instalador automático da CLI nem fluxo OAuth próprio. As páginas
+de autenticação e a troca do código continuam sob controle do binário oficial.
+
 ## Preparar o ambiente
 
 Instale ou atualize Claude Code seguindo https://code.claude.com/docs/en/setup.
@@ -52,7 +97,7 @@ O comando valida a resposta contra o mesmo contrato JSON do agente. A liberaçã
 de envio nesse comando vale somente para sua entrada fictícia; não habilita o chat.
 Não coloca pergunta, resposta ou credenciais em arquivos temporários.
 
-## Habilitar no chat pessoal
+## Alternativa: configurar um provedor fixo pelo ambiente
 
 Somente depois do teste, configure no `.env` local, preservando as demais opções:
 
@@ -67,6 +112,8 @@ IATIVA_CLAUDE_TIMEOUT_S=120
 O chat continua exigindo `IATIVA_AGENTE_ENVIO_LIBERADO=1`, conforme as regras de
 privacidade do projeto. Não foi alterado nem habilitado automaticamente.
 Reinicie o processo Django após configurar. O provedor padrão continua `teste`.
+Para usuários autenticados na interface, o provedor `claude-code` sempre resolve
+o diretório pessoal correspondente; não compartilha a conta padrão do processo.
 
 ## Isolamento e limites
 
@@ -97,3 +144,8 @@ Testes automatizados usam um executor simulado e subprocessos Python locais para
 verificar stdin, ambiente, timeout e limite de saída. Não comprovam qualidade do
 modelo nem o estado do login. Teste real exige CLI instalada, login e rede; teste
 com ERP exige também a conexão local autorizada e VPN, quando necessária.
+
+Em 2026-11-11 foi detectado Claude Code 2.1.321 neste Windows. O diagnóstico
+confirmou o login já existente e uma chamada sintética real retornou uma decisão
+JSON válida. Isso não valida o login completo pela nova tela com uma conta real,
+não comprova custo zero e não envolve consultas ao SQL Server.

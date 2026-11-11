@@ -43,6 +43,13 @@
       </a>
     </section>
 
+    {% if user.is_superuser %}
+      <section class="grupo">
+        <h2>Configurações</h2>
+        <a href="{% url 'claude-conta' %}" class="conversa"><span class="titulo">Conectar Claude</span></a>
+      </section>
+    {% endif %}
+
     <section class="grupo">
       <h2>Suas conversas</h2>
       {% for rotulo, itens in lateral.grupos %}

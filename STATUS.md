@@ -4,7 +4,23 @@
 **Etapa atual:** 6 — Memórias setoriais e chat consolidado
 **Situação:** **implementada, aguardando validação.** Plano aprovado em 2026-11-11. Etapa 5 aprovada em 2026-11-11 por Diego; conferência dos números com o Financeiro e premissas T29 seguem pendentes.
 
-## Mudança M11 — Claude Code pessoal (2026-11-11)
+## Mudança M12 — login Claude pela interface (2026-11-11)
+
+- Página "Conectar Claude" na lateral do superusuário: iniciar, link oficial,
+  código oculto, concluir, verificar, cancelar e desconectar.
+- CLI detectada fora do PATH, inclusive instalação do Claude Desktop no Windows.
+- Conta exclusiva por usuário em `var/claude-pessoal`; seleção do provedor somente
+  para o próprio dono. Login não altera a liberação de privacidade do chat.
+- Fluxo efêmero vinculado a usuário/sessão, sem persistir código; somente links
+  HTTPS oficiais; limites de saída e tempo; POST com CSRF e respostas sem cache.
+- 27 testes de login passaram; suíte completa: 449 aprovados, 10 pulados no Windows.
+  Tela renderizada e conferida visualmente em navegador headless.
+- CLI 2.1.321 e login existente confirmados neste Windows; chamada real com mensagem
+  fictícia retornou JSON válido, sem ERP. Sem confirmação de ausência de cobrança.
+- Pendente: concluir login real pela nova tela no ambiente do Django. O fluxo local
+  exige processo único; CLI deve estar instalada dentro do ambiente de execução.
+
+## Mudança M11 — entrega do adaptador
 
 - Adaptador `claude-code` com stdin, JSON estruturado, validação dos contratos,
   ferramentas/MCP desativados e sem persistência de sessão na CLI.

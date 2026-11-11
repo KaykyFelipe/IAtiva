@@ -528,7 +528,14 @@ def _decidir_fake(self, entrada) -> dict:
 FakeProvider.decidir = _decidir_fake
 
 
-def obter_provedor() -> LLMProvider:
+def obter_provedor(usuario=None) -> LLMProvider:
+    if usuario is not None:
+        from .claude_login import ativa, config_usuario
+
+        if ativa(usuario) or settings.IATIVA_AGENTE["provedor"] == "claude-code":
+            from .claude_code import ClaudeCodeProvider
+
+            return ClaudeCodeProvider(config_usuario(usuario))
     nome = settings.IATIVA_AGENTE["provedor"]
     if nome == "claude-code":
         from .claude_code import ClaudeCodeProvider

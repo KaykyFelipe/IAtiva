@@ -48,6 +48,8 @@ IATIVA_AGENTE = {
     "claude_config_dir": env("IATIVA_CLAUDE_CONFIG_DIR", ""),
     "claude_modelo": env("IATIVA_CLAUDE_MODELO", "sonnet"),
     "claude_timeout_s": int(env("IATIVA_CLAUDE_TIMEOUT_S", "120")),
+    "claude_usuario": env("IATIVA_CLAUDE_USUARIO", ""),
+    "claude_contas_dir": env("IATIVA_CLAUDE_CONTAS_DIR", ""),
     "modelo": env("IATIVA_AGENTE_MODELO", "claude-opus-5-5"),
     "api_key": env("ANTHROPIC_API_KEY"),
     "gemini_api_key": env("GEMINI_API_KEY"),

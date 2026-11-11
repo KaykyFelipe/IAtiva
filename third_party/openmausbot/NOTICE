@@ -4,6 +4,10 @@ Copyright 2026 Milind Soni and OpenMausBot contributors
 The personal Claude Code adapter in iativa/agent/claude_code.py adapts the
 isolated CLI invocation pattern of server/drivers/claude-background.ts and
 the authentication status checks of server/drivers/claude-auth-status.ts.
+The interface-driven login flow in iativa/agent/claude_login.py adapts the
+CLI login lifecycle and official authorization-link checks from
+server/drivers/claude-login-auth.ts. Native executable discovery also follows
+the platform-aware lookup pattern in server/env-path.ts.
 The implementation has been rewritten in Python for IAtiva, with mandatory
 isolation flags, bounded output, strict response validation, and sanitized errors.
 

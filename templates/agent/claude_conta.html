@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Minha conta Claude · IAtiva{% endblock %}
+{% block content %}
+<p><a href="{% url 'chat:index' %}">← Voltar ao chat</a></p>
+<section class="cartao">
+  <h1>Minha conta Claude</h1>
+  <p>Conecte sua assinatura pelo login oficial do Claude. A conexão fica disponível somente para suas conversas pessoais neste IAtiva.</p>
+  {% include "agent/_claude_estado.html" %}
+  <hr>
+  <p class="sutil">Seu histórico continua no IAtiva. Resultados do banco não são enviados ao Claude.</p>
+  <p class="sutil">A assinatura tem limites. Confira na sua conta Claude se o uso extra pago está desativado.</p>
+  <p class="sutil">O envio de perguntas pelo chat também depende da liberação de privacidade configurada no IAtiva.</p>
+</section>
+{% endblock %}

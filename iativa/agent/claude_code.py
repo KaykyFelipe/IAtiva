@@ -1,7 +1,7 @@
 """Claude Code pessoal via CLI oficial; histórico pertence ao Django, nunca à CLI.
 
 Adaptado do padrão de chamadas isoladas de OpenMausBot (Apache-2.0),
-server/drivers/claude-background.ts. Sem copiar credenciais ou intermediar login.
+server/drivers/claude-background.ts. Sem copiar credenciais entre aplicações.
 """
 import json
 import os
@@ -17,7 +17,7 @@ from django.core.exceptions import ImproperlyConfigured
 from . import decisao, esquema
 from .provedores import (
     FalhaModelo, LLMProvider, INSTRUCOES, INSTRUCOES_AGENTE,
-    _catalogo, _codigos, _contexto_agente, _exigir_envio_liberado, _renderizar,
+    _catalogo, _codigos, _contexto_agente, _renderizar,
 )
 
 
@@ -51,6 +51,26 @@ def resolver_cli(configurado):
         candidate = Path(configurado).expanduser()
         if candidate.is_absolute() and candidate.is_file():
             path = str(candidate)
+    if not path and configurado == "claude":
+        home = Path.home()
+        nomes = ("claude.exe",) if os.name == "nt" else ("claude",)
+        for pasta in (home / ".local/bin", home / ".claude/local", home / "bin"):
+            for nome in nomes:
+                candidate = pasta / nome
+                if candidate.is_file():
+                    path = str(candidate)
+                    break
+            if path:
+                break
+        if not path and os.name == "nt":
+            local = Path(os.environ.get("LOCALAPPDATA", str(home / "AppData/Local")))
+            candidates = list((local / "Claude-Data").glob("*/claude-code/*/*/claude.exe"))
+
+            def version(p):
+                return tuple(int(n) if n.isdigit() else 0 for n in p.parents[1].name.split("."))
+
+            candidates.sort(key=version, reverse=True)
+            path = next((str(p) for p in candidates if p.is_file()), None)
     if not path:
         raise ImproperlyConfigured("Claude Code não encontrado. Instale a CLI ou configure IATIVA_CLAUDE_CLI.")
     if Path(path).suffix.lower() in (".cmd", ".bat", ".ps1"):
@@ -124,7 +144,7 @@ def _falha(texto):
     if any(t in texto for t in ("rate_limit", "rate limit", "usage limit", "hit your limit", "429", "overloaded")):
         return FalhaModelo("Limite da assinatura ou capacidade do Claude atingido; tente mais tarde.", temporaria=True)
     if any(t in texto for t in ("not logged", "authentication", "unauthorized", "401", "oauth")):
-        return FalhaModelo("Login Claude inválido ou expirado; execute claude auth login.", temporaria=True)
+        return FalhaModelo("Login Claude inválido ou expirado; reconecte em Conectar Claude.", temporaria=True)
     if any(t in texto for t in ("billing", "credit balance", "extra usage")):
         return FalhaModelo("Claude recusou o uso por limite ou cobrança. Nenhum fallback foi ativado.", temporaria=True)
     return FalhaModelo("O processo Claude Code falhou.", temporaria=True)
@@ -133,9 +153,10 @@ def _falha(texto):
 class ClaudeCodeProvider(LLMProvider):
     nome = "claude-code"
 
-    def __init__(self):
-        _exigir_envio_liberado()
-        cfg = settings.IATIVA_AGENTE
+    def __init__(self, config=None, *, somente_login=False):
+        cfg = settings.IATIVA_AGENTE if config is None else config
+        if not somente_login and not cfg.get("envio_liberado"):
+            raise ImproperlyConfigured("Envio ao provedor de IA não liberado (IATIVA_AGENTE_ENVIO_LIBERADO).")
         self.cli = resolver_cli(cfg.get("claude_cli", "claude"))
         self.env = ambiente(cfg.get("claude_config_dir", ""))
         self.timeout = int(cfg.get("claude_timeout_s", 120))
@@ -146,14 +167,17 @@ class ClaudeCodeProvider(LLMProvider):
     def _executar(self, args, prompt="", timeout=None):
         return executar_cli([self.cli, *args], prompt, env=self.env, timeout=timeout or self.timeout)
 
-    def verificar(self):
+    def checar_cli(self):
         code, help_text, _ = self._executar(["--help"], timeout=10)
         if code or any(flag not in help_text for flag in FLAGS):
             raise FalhaModelo("Atualize o Claude Code: faltam controles obrigatórios de isolamento.", temporaria=True)
+
+    def verificar(self):
+        self.checar_cli()
         code, texto, _ = self._executar(["--safe-mode", "auth", "status", "--json"], timeout=10)
         status = _objeto(texto)
         if code or status.get("loggedIn") is not True:
-            raise FalhaModelo("Entre na CLI com claude auth login no ambiente do Python.", temporaria=True)
+            raise FalhaModelo("Reconecte sua conta em Conectar Claude no IAtiva.", temporaria=True)
         if status.get("authMethod") != "claude.ai":
             raise FalhaModelo("Autenticação não confirmada como assinatura Claude; API e rotas alternativas bloqueadas.", temporaria=True)
         return {"autenticado": True, "metodo": "claude.ai"}
