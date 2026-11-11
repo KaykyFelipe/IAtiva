@@ -10,6 +10,7 @@ O provedor devolve um dicionário bruto; quem valida é `esquema.validar`.
 """
 import json
 import re
+import time
 
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
@@ -19,7 +20,12 @@ from .esquema import EntradaModelo, esquema_json
 
 
 class FalhaModelo(RuntimeError):
-    """Falha do provedor (rede, tempo, recusa, resposta truncada). Sem detalhes do conteúdo."""
+    """Falha do provedor (rede, tempo, recusa, resposta truncada). Sem detalhes do conteúdo.
+    `temporaria`: sobrecarga ou limite de uso; o provedor já tentou de novo e não adianta repetir."""
+
+    def __init__(self, *args, temporaria: bool = False):
+        super().__init__(*args)
+        self.temporaria = temporaria
 
 
 class LLMProvider:
@@ -293,26 +299,46 @@ class GeminiProvider(LLMProvider):
             )
         self.cliente = cliente
         self.modelo = cfg.get("gemini_modelo") or "gemini-3.8-flash"
+        self.reserva = [m for m in cfg.get("gemini_reserva", []) if m != self.modelo]
+
+    # 503 (sobrecarga) e 429 (limite por minuto do plano gratuito) costumam passar em segundos.
+    ESPERAS = (2, 4)
+    TEMPORARIOS = (429, 500, 503, 504)
+
+    def _gerar(self, modelo, entrada, objetivos, parametros):
+        from google.genai import types
+
+        return self.cliente.models.generate_content(
+            model=modelo,
+            contents=_contexto_agente(entrada),
+            config=types.GenerateContentConfig(
+                system_instruction=INSTRUCOES_AGENTE,
+                response_mime_type="application/json",
+                response_json_schema=esquema_decisao(objetivos, parametros),
+                max_output_tokens=4000,
+            ),
+        )
 
     def decidir(self, entrada) -> dict:
-        objetivos, parametros = _codigos_agente(entrada)
-        try:
-            from google.genai import errors, types
+        from google.genai import errors
 
-            resposta = self.cliente.models.generate_content(
-                model=self.modelo,
-                contents=_contexto_agente(entrada),
-                config=types.GenerateContentConfig(
-                    system_instruction=INSTRUCOES_AGENTE,
-                    response_mime_type="application/json",
-                    response_json_schema=esquema_decisao(objetivos, parametros),
-                    max_output_tokens=4000,
-                ),
-            )
-        except errors.APIError as exc:
-            raise FalhaModelo(f"erro do provedor ({type(exc).__name__} {getattr(exc, 'code', '')})") from None
-        except Exception as exc:  # rede, tempo
-            raise FalhaModelo(f"falha de comunicação ({type(exc).__name__})") from None
+        objetivos, parametros = _codigos_agente(entrada)
+        resposta, ultimo = None, None
+        tentativas = [(self.modelo, 0)] + [(self.modelo, s) for s in self.ESPERAS] + [(m, 0) for m in self.reserva]
+        for modelo, espera in tentativas:
+            if espera:
+                time.sleep(espera)
+            try:
+                resposta = self._gerar(modelo, entrada, objetivos, parametros)
+                break
+            except errors.APIError as exc:
+                ultimo = getattr(exc, "code", None)
+                if ultimo not in self.TEMPORARIOS:
+                    raise FalhaModelo(f"erro do provedor ({type(exc).__name__} {ultimo})") from None
+            except Exception as exc:  # rede, tempo
+                raise FalhaModelo(f"falha de comunicação ({type(exc).__name__})") from None
+        if resposta is None:
+            raise FalhaModelo(f"provedor indisponível ({ultimo})", temporaria=True)
         texto = getattr(resposta, "text", None)
         if not texto:
             raise FalhaModelo("resposta vazia ou bloqueada")

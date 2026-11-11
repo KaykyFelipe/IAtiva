@@ -151,6 +151,8 @@ IATIVA_AGENTE = {
     "api_key": "",
     "gemini_api_key": "",
     "gemini_modelo": "gemini-3.8-flash",
+    # Modelos tentados quando o principal está sobrecarregado (503) ou no limite (429).
+    "gemini_reserva": ["gemini-3.5-flash"],
     "envio_liberado": False,
 }
 

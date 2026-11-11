@@ -114,7 +114,10 @@ def _interpretar(provedor, entrada, codigos_obj, codigos_par):
     for _ in range(TENTATIVAS):
         try:
             return validar(provedor.decidir(entrada), codigos_obj, codigos_par)
-        except (FalhaModelo, DecisaoInvalida):
+        except FalhaModelo as exc:
+            if exc.temporaria:
+                raise  # o provedor já esperou e tentou outros modelos
+        except DecisaoInvalida:
             continue
     raise FalhaModelo("sem decisão válida")
 
@@ -147,8 +150,11 @@ def conversar(user, c, texto: str, provedor=None, mensagem_usuario_id=None) -> S
     provedor = provedor or obter_provedor()
     try:
         d = _interpretar(provedor, entrada, [o.codigo for o in objetivos], codigos_par)
-    except FalhaModelo:
+    except FalhaModelo as exc:
         registrar("modelo_falhou", "agente", usuario=user, estado_novo=provedor.nome, resultado="erro")
+        if exc.temporaria:
+            return Saida("A IA (Gemini) está sobrecarregada ou no limite de uso do plano gratuito neste momento. "
+                         "Tente de novo em cerca de um minuto, com a mesma pergunta.", ficha={"tipo": "falha_modelo"})
         return Saida("Não consegui processar sua mensagem agora. Pode repetir ou escrever de outro jeito?",
                      ficha={"tipo": "falha_modelo"})
     registrar("interpretacao", "agente", usuario=user, estado_novo=d.acao, entidade_id=atual.pk if atual else None,

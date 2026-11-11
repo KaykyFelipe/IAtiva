@@ -224,3 +224,59 @@ def test_gemini_resposta_ruim_vira_falha(settings, texto):
     settings.IATIVA_AGENTE = {**settings.IATIVA_AGENTE, "envio_liberado": True}
     with pytest.raises(FalhaModelo):
         GeminiProvider(cliente=_ClienteGemini(texto)).decidir(_entrada())
+
+
+class _ClienteInstavel:
+    """Simula o Gemini: devolve os códigos de erro da fila e depois responde."""
+
+    def __init__(self, erros, texto):
+        self.erros, self.texto, self.modelos = list(erros), texto, []
+        self.models = SimpleNamespace(generate_content=self._gerar)
+
+    def _gerar(self, **kw):
+        from google.genai import errors
+
+        self.modelos.append(kw["model"])
+        if self.erros:
+            codigo = self.erros.pop(0)
+            raise errors.APIError(codigo, {"error": {"code": codigo, "message": "x", "status": "X"}})
+        return SimpleNamespace(text=self.texto)
+
+
+@pytest.fixture
+def _gemini(settings, monkeypatch):
+    settings.IATIVA_AGENTE = {**settings.IATIVA_AGENTE, "envio_liberado": True, "gemini_modelo": "principal",
+                              "gemini_reserva": ["reserva"]}
+    monkeypatch.setattr("iativa.agent.provedores.time.sleep", lambda s: None)
+
+
+def test_gemini_sobrecarregado_tenta_de_novo(_gemini):
+    cliente = _ClienteInstavel([503, 429], json.dumps(_decisao(resposta="Olá")))
+    assert GeminiProvider(cliente=cliente).decidir(_entrada())["resposta"] == "Olá"
+    assert cliente.modelos == ["principal"] * 3
+
+
+def test_gemini_usa_modelo_reserva(_gemini):
+    cliente = _ClienteInstavel([503, 503, 429], json.dumps(_decisao(resposta="Olá")))
+    GeminiProvider(cliente=cliente).decidir(_entrada())
+    assert cliente.modelos == ["principal"] * 3 + ["reserva"]
+
+
+def test_gemini_indisponivel_vira_falha_temporaria(_gemini):
+    cliente = _ClienteInstavel([503] * 4, "{}")
+    with pytest.raises(FalhaModelo) as exc:
+        GeminiProvider(cliente=cliente).decidir(_entrada())
+    assert exc.value.temporaria
+
+
+def test_erro_definitivo_nao_espera(_gemini):
+    cliente = _ClienteInstavel([400], "{}")
+    with pytest.raises(FalhaModelo) as exc:
+        GeminiProvider(cliente=cliente).decidir(_entrada())
+    assert not exc.value.temporaria and cliente.modelos == ["principal"]
+
+
+def test_falha_temporaria_explica_ao_usuario(ana):
+    c = conversas.nova_individual(ana)
+    msg, _ = _falar(ana, c, "x", FakeProvider([FalhaModelo("503", temporaria=True)]))
+    assert "sobrecarregada ou no limite" in msg.texto

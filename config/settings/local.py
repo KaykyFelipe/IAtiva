@@ -48,6 +48,7 @@ IATIVA_AGENTE = {
     "api_key": env("ANTHROPIC_API_KEY"),
     "gemini_api_key": env("GEMINI_API_KEY"),
     "gemini_modelo": env("IATIVA_GEMINI_MODELO", "gemini-3.8-flash"),
+    "gemini_reserva": [m.strip() for m in env("IATIVA_GEMINI_RESERVA", "gemini-3.5-flash").split(",") if m.strip()],
     "envio_liberado": env("IATIVA_AGENTE_ENVIO_LIBERADO", "0") == "1",
 }
 
