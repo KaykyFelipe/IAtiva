@@ -131,6 +131,8 @@ Aprovadas em 2026-11-09 por Kayky Felipe (chat), com as opções recomendadas na
 
 ## Mudanças de escopo
 
+| M11 | 2026-11-11 | Claude Code oficial para uso pessoal do Diego, por adaptador Python inspirado na chamada isolada do OpenMausBot. Sem cookies, API paga automática, compartilhamento de credenciais, SQL livre ou envio de resultados do ERP. Mantém compilador, validações, privacidade e histórico do Django. Implementação e testes isolados autorizados; ativação depende da CLI e login no ambiente do Python. | Autorizado por Diego (chat: "apenas para uso pessoal. Vamos fazer isso") |
+
 | ID | Data | Mudança | Situação |
 |---|---|---|---|
 | M10 | 2026-11-11 | **Agente conversacional com Gemini.** (1) Provedor `GeminiProvider` (SDK `google-genai`, modelo padrão `gemini-3.8-flash`, saída JSON por esquema) para testes; continua exigindo `IATIVA_AGENTE_ENVIO_LIBERADO=1` e chave de projeto **com faturamento** (no nível gratuito o Google pode usar os dados). (2) O modelo responde em texto corrido e escolhe UMA ação de lista fechada (conversar, preparar/executar/cancelar consulta, aprender tabela, listar/remover aprendizado, lembrar); o backend autoriza e executa. (3) Troca de assunto encerra a solicitação anterior sozinha; com os parâmetros completos a consulta executa sem clique (somente leitura). (4) Memória do agente (`NotaAgente`): o usuário ensina termos/preferências; administrador grava para a empresa, demais só para si; sem CPF/CNPJ nem resultados; vai ao modelo como referência. (5) Remover consulta aprendida pelo chat (só administrador, com confirmação; vira "removida"). (6) Ao modelo vão também as últimas 12 mensagens da conversa (texto salvo pelo M8, sem resultados). | Autorizado por Diego (chat, 2026-11-11) |

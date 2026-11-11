@@ -530,6 +530,10 @@ FakeProvider.decidir = _decidir_fake
 
 def obter_provedor() -> LLMProvider:
     nome = settings.IATIVA_AGENTE["provedor"]
+    if nome == "claude-code":
+        from .claude_code import ClaudeCodeProvider
+
+        return ClaudeCodeProvider()
     if nome == "teste":
         return FakeProvider()
     if nome == "anthropic":

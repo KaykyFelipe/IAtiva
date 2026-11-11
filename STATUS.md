@@ -4,7 +4,20 @@
 **Etapa atual:** 6 — Memórias setoriais e chat consolidado
 **Situação:** **implementada, aguardando validação.** Plano aprovado em 2026-11-11. Etapa 5 aprovada em 2026-11-11 por Diego; conferência dos números com o Financeiro e premissas T29 seguem pendentes.
 
-## Etapa 6 — o que foi entregue
+## Mudança M11 — Claude Code pessoal (2026-11-11)
+
+- Adaptador `claude-code` com stdin, JSON estruturado, validação dos contratos,
+  ferramentas/MCP desativados e sem persistência de sessão na CLI.
+- Login oficial por assinatura conferido antes do envio; API e autenticação
+  desconhecida bloqueadas, ambiente sem credenciais ERP e sem fallback pago.
+- `testar_claude` diagnostica a CLI e faz envio sintético opcional sem banco.
+  Configuração e limites em `docs/CLAUDE_CODE.md`; provedor não ativado automaticamente.
+- 27 testes do adaptador passaram, incluindo geração/validação de SQL sem execução.
+  Suíte completa: 422 aprovados, 10 pulados no Windows (dependem de bash/git/flock).
+- Pendente: confirmar caminho da CLI e login pessoal no ambiente do Python,
+  chamada real com mensagem fictícia e consulta de leitura autorizada no ERP.
+
+## Etapa 6 — entregas anteriores
 
 - Memória do setor: notas do agente por setor, com proposta → aprovação; valores e notas em conflito substituem o aprovado só quando aprovados (T31, T32).
 - Fila única de aprovação (valores, notas, consultas aprendidas) na tela "Memória e aprovações" e pelo chat ("quais propostas estão pendentes?", "aprovar nota-3") (T33).

@@ -1,0 +1,11 @@
+OpenMausBot
+Copyright 2026 Milind Soni and OpenMausBot contributors
+
+The personal Claude Code adapter in iativa/agent/claude_code.py adapts the
+isolated CLI invocation pattern of server/drivers/claude-background.ts and
+the authentication status checks of server/drivers/claude-auth-status.ts.
+The implementation has been rewritten in Python for IAtiva, with mandatory
+isolation flags, bounded output, strict response validation, and sanitized errors.
+
+OpenMausBot is licensed under the Apache License, Version 2.0; see LICENSE
+in this directory. No enterprise components are included.

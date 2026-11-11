@@ -373,6 +373,9 @@ Requisitos e observações:
 
 ## Testes
 
+Claude Code para uso pessoal: instalação, login, teste sem banco e configuração
+opcional em [docs/CLAUDE_CODE.md](docs/CLAUDE_CODE.md).
+
 ```bash
 pytest
 ```

@@ -44,6 +44,10 @@ IATIVA_METADADOS = {"fonte": env("IATIVA_METADADOS_FONTE", "protheus" if IATIVA_
 IATIVA_AGENTE = {
     **IATIVA_AGENTE,  # noqa: F405
     "provedor": env("IATIVA_AGENTE_PROVEDOR", "teste"),
+    "claude_cli": env("IATIVA_CLAUDE_CLI", "claude"),
+    "claude_config_dir": env("IATIVA_CLAUDE_CONFIG_DIR", ""),
+    "claude_modelo": env("IATIVA_CLAUDE_MODELO", "sonnet"),
+    "claude_timeout_s": int(env("IATIVA_CLAUDE_TIMEOUT_S", "120")),
     "modelo": env("IATIVA_AGENTE_MODELO", "claude-opus-5-5"),
     "api_key": env("ANTHROPIC_API_KEY"),
     "gemini_api_key": env("GEMINI_API_KEY"),
