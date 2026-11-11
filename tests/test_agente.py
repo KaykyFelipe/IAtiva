@@ -76,7 +76,7 @@ def test_inadimplencia_pergunta_so_o_que_falta(ana):
         "data-corte", "dias-tolerancia-atraso", "tratamento-baixa-parcial", "filial-analise"
     }
     filial = next(p for p in r.perguntas if p.codigo == "filial-analise")
-    assert filial.opcoes == ["001001", "001007"]  # só as autorizadas
+    assert filial.opcoes == ["001001", "001007", "TODAS"]  # só as autorizadas
 
 
 def test_aproveita_informacao_ja_confirmada(ana):
