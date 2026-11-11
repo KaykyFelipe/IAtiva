@@ -12,6 +12,8 @@ from dataclasses import dataclass
 
 PREFIXO_APRENDIDO = "aprendido-"
 BUSCA = "texto-busca"  # opcional: filtra pelo nome (cliente, fornecedor, funcionário...)
+FILTRO = "filtro-campo"  # opcional: CAMPO=valor exato num campo filtrável da consulta aprendida
+MAX_FILTRAVEIS = 6
 DOMINIO_APRENDIDO = "aprendido"
 
 
@@ -26,6 +28,7 @@ class Objetivo:
     modelo_id: int | None = None
     # Opcionais: usados se a pessoa informar; nunca perguntados (ex.: busca por nome).
     opcionais: tuple[str, ...] = ()
+    filtraveis: tuple[tuple[str, str], ...] = ()  # (campo, rótulo) aceitos em FILTRO
 
     @property
     def parametros(self) -> tuple[str, ...]:
@@ -78,12 +81,23 @@ def campo_busca(spec: dict) -> str:
     return ""
 
 
+def campos_filtraveis(spec: dict) -> list[tuple[str, str]]:
+    """Campos que aceitam filtro exato: os escolhidos no formulário ou, se nenhum, as colunas de texto."""
+    colunas = {c["campo"]: c.get("rotulo") or c["campo"] for c in spec.get("colunas", [])}
+    escolhidos = [c for c in spec.get("filtraveis", []) if c in colunas]
+    if not escolhidos:
+        escolhidos = [c["campo"] for c in spec.get("colunas", []) if c.get("tipo") == "texto"]
+    return [(c, colunas[c]) for c in escolhidos[:MAX_FILTRAVEIS]]
+
+
 def de_modelo(cm) -> Objetivo:
     obrig = ["filial-analise"] + (["periodo-analise"] if cm.spec.get("campo_data") else [])
+    filtraveis = tuple(campos_filtraveis(cm.spec))
+    opcionais = ((BUSCA,) if campo_busca(cm.spec) else ()) + ((FILTRO,) if filtraveis else ())
     return Objetivo(
         codigo=cm.codigo, dominio=DOMINIO_APRENDIDO, nome=cm.nome, descricao=cm.descricao,
         tabelas=(cm.tabela,), obrigatorios=tuple(obrig), modelo_id=cm.pk,
-        opcionais=(BUSCA,) if campo_busca(cm.spec) else (),
+        opcionais=opcionais, filtraveis=filtraveis,
     )
 
 

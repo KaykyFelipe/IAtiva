@@ -25,7 +25,7 @@ from iativa.metadata.catalogo import abrir_catalogo
 from iativa.metadata.fontes import ALIAS_RE, CAMPO_RE
 from iativa.metadata.models import RestricaoMetadado
 
-from .contratos import PREFIXO_APRENDIDO
+from .contratos import MAX_FILTRAVEIS, PREFIXO_APRENDIDO
 from .models import ConsultaModelo, SituacaoModelo
 
 MAX_COLUNAS = 15
@@ -169,6 +169,11 @@ def salvar_proposta(user, alias: str, dados) -> ConsultaModelo:
     busca = dados.get("campo_busca") or ""
     if busca and (busca not in colunas or por_nome[busca].tipo != "C"):
         raise ValidationError("O campo de busca por nome precisa ser uma das colunas escolhidas, do tipo texto.")
+    filtraveis = [c for c in dict.fromkeys(lista("filtraveis")) if c]
+    if any(c not in colunas or por_nome[c].tipo != "C" for c in filtraveis):
+        raise ValidationError("Campos filtráveis precisam estar entre as colunas escolhidas e ser do tipo texto.")
+    if len(filtraveis) > MAX_FILTRAVEIS:
+        raise ValidationError(f"No máximo {MAX_FILTRAVEIS} campos filtráveis.")
     filtros = []
     for n in range(MAX_FILTROS):
         campo, valor = dados.get(f"filtro_campo_{n}") or "", (dados.get(f"filtro_valor_{n}") or "").strip()
@@ -190,6 +195,7 @@ def salvar_proposta(user, alias: str, dados) -> ConsultaModelo:
         "colunas": [{"campo": c, "rotulo": por_nome[c].titulo or c, "tipo": _tipo(por_nome[c])} for c in colunas],
         "campo_data": campo_data,
         "campo_busca": busca,  # vazio: escolhido automaticamente (contratos.campo_busca)
+        "filtraveis": filtraveis,  # vazio: todas as colunas de texto (contratos.campos_filtraveis)
         "filtros_fixos": filtros,
         "ocultos": sorted(set(por_nome) - set(colunas)),
     }

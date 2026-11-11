@@ -135,3 +135,43 @@ def test_continuacao_le_periodo_da_mensagem(admin):
     msg, res = conversas.enviar(admin, c, "faça a consulta de novo agora desde janeiro", p)
     periodo = next(x["valor"] for x in msg.ficha["criterios"] if x["nome"].lower().startswith("período"))
     assert res is not None and periodo.startswith("01/01/")
+
+
+def test_filtro_por_campo_em_consulta_aprendida(admin):
+    from iativa.agent.provedores import FakeProvider
+
+    cm = _modelo_sa1(admin, filtraveis="A1_COD")
+    assert OBJETIVOS[cm.codigo].filtraveis == (("A1_COD", OBJETIVOS[cm.codigo].filtraveis[0][1]),)
+    c = conversas.nova_individual(admin)
+    p = FakeProvider([_decisao(acao="preparar_consulta", objetivo=cm.codigo,
+                               parametros=[{"codigo": "filial-analise", "valor": "01"},
+                                           {"codigo": "filtro-campo", "valor": "a1_cod = 000001"}])])
+    msg, res = conversas.enviar(admin, c, "o cliente de código 000001 existe?", p)
+    assert res.ok and res.linhas and all(linha[0] == "000001" for linha in res.linhas)
+    assert any("Filtro: A1_COD = 000001" in x for x in res.premissas)
+
+
+def test_filtro_em_campo_nao_permitido_e_recusado(admin):
+    from iativa.agent.provedores import FakeProvider
+
+    cm = _modelo_sa1(admin, filtraveis="A1_COD")
+    c = conversas.nova_individual(admin)
+    p = FakeProvider([_decisao(acao="preparar_consulta", objetivo=cm.codigo,
+                               parametros=[{"codigo": "filial-analise", "valor": "01"},
+                                           {"codigo": "filtro-campo", "valor": "A1_NOME=X"}])])
+    msg, res = conversas.enviar(admin, c, "x", p)
+    assert "não filtrável" in msg.texto and "A1_COD" in msg.texto
+
+
+def test_sem_escolha_todas_as_colunas_de_texto_filtram(admin):
+    from iativa.agent.contratos import campos_filtraveis
+
+    cm = _modelo_sa1(admin)
+    assert {c for c, _ in campos_filtraveis(cm.spec)} == {"A1_COD", "A1_NOME"}
+
+
+def test_filtravel_fora_das_colunas_e_recusado(admin):
+    from django.core.exceptions import ValidationError
+
+    with pytest.raises(ValidationError, match="filtráveis"):
+        _modelo_sa1(admin, filtraveis="A1_LOJA")

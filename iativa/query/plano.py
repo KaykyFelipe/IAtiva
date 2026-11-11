@@ -95,6 +95,27 @@ def _aplicar_busca(plano, campo: Campo, valores: dict):
         plano.premissas.append(f"Busca por nome: {campo.nome} contendo “{padrao.strip('%').replace('%', ' ')}”.")
 
 
+FILTRO = "filtro-campo"
+VALOR_FILTRO_RE = re.compile(r"^[0-9A-Za-z][0-9A-Za-z -]{0,29}$")
+
+
+def ler_filtros(texto: str, permitidos) -> list[tuple[str, str]]:
+    """"R7_MAT=000123; RA_CODFUNC = 0042" → [(campo, valor)]. Campo fora da lista ou valor fora do
+    formato seguro é recusado (ValueError), nunca ignorado em silêncio."""
+    out = []
+    for parte in (texto or "").split(";"):
+        if not parte.strip():
+            continue
+        campo, sep, valor = parte.partition("=")
+        campo, valor = campo.strip().upper(), valor.strip()
+        if not sep or campo not in permitidos:
+            raise ValueError(f"campo não filtrável: {campo or parte.strip()}")
+        if not VALOR_FILTRO_RE.match(valor):
+            raise ValueError(f"valor inválido para {campo}")
+        out.append((campo, valor))
+    return out[:6]
+
+
 def _comuns(plano, filial):
     e1 = "e1"
     plano.filial = filial
@@ -127,10 +148,22 @@ def montar_modelo(tabela: str, spec: dict, valores: dict, codigo: str) -> Plano:
         plano.premissas.append(f"Período aplicado ao campo {campo_data}.")
     for f in spec.get("filtros_fixos", []):
         plano.premissas.append(f"Filtro fixo: {f['campo']} = {f['valor']}.")
-    from iativa.agent.contratos import campo_busca
+    from iativa.agent.contratos import campo_busca  # noqa: I001
 
     if campo_busca(spec):
         _aplicar_busca(plano, Campo(e1, campo_busca(spec)), valores)
+    if valores.get(FILTRO):
+        from iativa.agent.contratos import campos_filtraveis
+
+        try:
+            filtros = ler_filtros(valores[FILTRO], {c for c, _ in campos_filtraveis(spec)})
+        except ValueError as exc:
+            from .compilador import PlanoInvalido
+
+            raise PlanoInvalido(str(exc)) from None
+        for campo, valor in filtros:
+            plano.filtros.append(Filtro(Campo(e1, campo), "=", valor))
+            plano.premissas.append(f"Filtro: {campo} = {valor}.")
     tipos = {"data": "data", "numero": "numero", "texto": "texto"}
     plano.colunas = [Coluna(c["rotulo"], Campo(e1, c["campo"]), tipo=tipos.get(c["tipo"], "texto"))
                      for c in spec["colunas"]]

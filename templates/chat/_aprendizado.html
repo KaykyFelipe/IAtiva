@@ -22,6 +22,11 @@
           {% for c in aprendizado.textos %}<option value="{{ c.nome }}">{{ c.nome }} · {{ c.titulo }}</option>{% endfor %}
         </select>
         <span class="sutil">Permite perguntas como “a Alcans lançou conta?”. Precisa estar entre as colunas.</span></dd></div>
+      <div><dt><label for="ap-filtraveis">Campos que a pessoa pode filtrar</label></dt>
+        <dd><select id="ap-filtraveis" name="filtraveis" multiple size="5">
+          {% for c in aprendizado.textos %}<option value="{{ c.nome }}">{{ c.nome }} · {{ c.titulo }}</option>{% endfor %}
+        </select>
+        <span class="sutil">Ex.: matrícula ou código da função, para perguntas como “a matrícula 000123 trocou de função?”. Precisam estar entre as colunas (Ctrl+clique para vários). Sem escolha: todas as colunas de texto.</span></dd></div>
       <div><dt></dt><dd class="sutil">Filtros fixos são opcionais e restringem <strong>todas</strong> as execuções a um valor exato
         (ex.: <code>RA_SITFOLH</code> = <code>D</code> para só demitidos). Deixe em branco se não precisar. Não use para escolher colunas.</dd></div>
       {% for n in faixa_filtros %}

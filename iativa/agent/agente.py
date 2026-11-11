@@ -282,6 +282,9 @@ def _avaliar_e_executar(user, s, resposta_modelo, erros, ficha) -> Saida:
         return Saida(" ".join(x for x in (texto_erros, texto) if x), ficha, s)
     if r.tipo != "pronta":
         return Saida(" ".join(x for x in (texto_erros, r.mensagem) if x), ficha, s)
+    if texto_erros:
+        # Um critério pedido não foi aceito: executar sem ele traria outro resultado (ex.: sem filtro).
+        return Saida(f"{texto_erros} Me diga o valor certo e eu executo.", ficha, s)
 
     # Completa: executa sem esperar clique (somente leitura, já validada).
     from iativa.query import servico

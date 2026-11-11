@@ -116,6 +116,6 @@ def test_seed_exemplos_idempotente():
     call_command("seed_exemplos", stdout=StringIO())
     call_command("seed_exemplos", stdout=StringIO())
     assert Department.objects.count() == 3
-    # cliente-especifico (seed) e texto-busca (migração da busca por nome)
-    assert ParameterDefinition.objects.filter(contem_dado_pessoal=True).count() == 2
+    # cliente-especifico (seed), texto-busca e filtro-campo (migrações)
+    assert ParameterDefinition.objects.filter(contem_dado_pessoal=True).count() == 3
     assert not AccessPolicy.objects.exists()

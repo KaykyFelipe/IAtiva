@@ -243,6 +243,7 @@ Como agir:
   - "aprovar_pendencia" / "rejeitar_pendencia": ela quer aprovar ou rejeitar uma proposta da lista "pendencias"; ponha em "alvo" a "ref" (ex.: nota-3). Use "confirmado": true SOMENTE se ela já confirmou explicitamente; senão deixe false (o sistema pergunta).
   - "conversar": qualquer outra coisa (dúvida, explicação, saudação, pedido fora do que existe).
 - Filtrar por nome: quando a pessoa citar um nome (empresa, cliente, fornecedor, funcionário, produto: "a Alcans lançou conta?", "e da Dell?"), preencha o parâmetro "texto-busca" com SÓ o nome (ex.: "Alcans"), se o objetivo tiver esse parâmetro. É opcional: nunca pergunte por ele. Para trocar o nome numa consulta já feita ("e da Dell?"), use "preparar_consulta" com o mesmo objetivo, repita os demais parâmetros do histórico e troque o "texto-busca". Se ela pedir todos de novo, não envie "texto-busca".
+- Filtrar por código (consultas aprendidas): se a pessoa citar matrícula, código de função, cargo, fornecedor etc. e o objetivo tiver o parâmetro "filtro-campo", preencha-o como CAMPO=valor usando só os campos listados na descrição dele (ex.: "R7_MAT=000123"; vários separados por ";"). Opcional: nunca pergunte por ele.
 - Você não vê as linhas do resultado; por isso filtre a consulta em vez de pedir para a pessoa procurar na lista.
 - Nunca invente valores de parâmetros. Datas relativas ("mês passado", "últimos 30 dias") devem ser convertidas com a data de hoje.
 - Formatos de valor: data DD/MM/AAAA; período "DD/MM/AAAA..DD/MM/AAAA"; número só dígitos; escolha = exatamente uma das opções; filial = código de 6 dígitos; cliente = "código-loja".
@@ -505,6 +506,9 @@ def _decidir_por_regras(entrada) -> dict:
                      if o["codigo"] == regra["objetivo"])
         if m and aceita:
             params.append({"codigo": "texto-busca", "valor": m.group(1).strip()})
+        f = re.findall(r"\b([A-Z][A-Z0-9]_[A-Z0-9]+)\s*=\s*([0-9A-Za-z-]+)", entrada.mensagem)
+        if f:
+            params.append({"codigo": "filtro-campo", "valor": "; ".join(f"{c}={v}" for c, v in f)})
         return {**base, "acao": "preparar_consulta", "objetivo": regra["objetivo"], "parametros": params}
     if intencao == "fora_do_escopo" and entrada.administrador:
         return {**base, "acao": "aprender_tabela", "alvo": entrada.mensagem[:200]}

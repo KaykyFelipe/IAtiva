@@ -93,7 +93,10 @@ def _catalogo(objetivos, defs: dict) -> list[dict]:
         for codigo in o.parametros:
             d = defs.get(codigo)
             if d is not None:
-                params.append({"codigo": codigo, "nome": d.nome, "descricao": d.descricao, "tipo": d.tipo,
+                descricao = d.descricao
+                if codigo == "filtro-campo" and o.filtraveis:
+                    descricao += " Campos desta consulta: " + ", ".join(f"{c} ({r})" for c, r in o.filtraveis) + "."
+                params.append({"codigo": codigo, "nome": d.nome, "descricao": descricao, "tipo": d.tipo,
                                "opcoes": list(d.opcoes or []), "opcional": codigo in o.opcionais})
         out.append({"codigo": o.codigo, "nome": o.nome, "descricao": o.descricao, "parametros": params})
     return out
@@ -125,6 +128,14 @@ def _interpretar(provedor, entrada, codigos_obj, codigos_par):
 
 def _registrar_parametro(user, s: RequestContext, definicao, texto: str):
     valor = converter(definicao, texto)
+    if definicao.codigo == "filtro-campo":
+        from iativa.query.plano import ler_filtros
+
+        permitidos = {c for c, _ in OBJETIVOS[s.objetivo].filtraveis}
+        try:
+            valor = "; ".join(f"{c}={v}" for c, v in ler_filtros(valor, permitidos))
+        except ValueError as exc:
+            raise ValidationError(f"{exc}. Campos aceitos: {', '.join(sorted(permitidos)) or 'nenhum'}.") from None
     if definicao.tipo == TipoValor.FILIAL and valor not in filiais_autorizadas(user, s.setor):
         raise ValidationError("Filial fora das suas filiais autorizadas.")
     anterior = (
