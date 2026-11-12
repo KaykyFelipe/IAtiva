@@ -41,7 +41,7 @@ class Resultado:
     linhas: list[list] = field(default_factory=list)
     premissas: list[str] = field(default_factory=list)
     truncado: bool = False
-    total: str = ""
+    total: str = ""  # "R$ ..." aparece no resumo; totais de colunas numéricas só vão à IA (não aparecem)
     total_valor: object = None  # Decimal da coluna de dinheiro, para a soma do chat mestre
     estado: str = ""
     solicitacao: RequestContext | None = None
@@ -156,6 +156,15 @@ def executar_solicitacao(user, s: RequestContext) -> Resultado:
         i = tipos.index("dinheiro")
         total_valor = sum((Decimal(str(l[i] or 0)) for l in linhas), Decimal(0))
         total = _fmt(total_valor, "dinheiro")
+    elif "numero" in tipos and linhas:
+        # Consultas aprendidas: soma cada coluna numérica (ex.: valor bruto e valor da mercadoria).
+        partes = []
+        for i, t in enumerate(tipos):
+            if t == "numero":
+                soma = sum((Decimal(str(l[i] or 0)) for l in linhas), Decimal(0))
+                total_valor = soma if total_valor is None else total_valor
+                partes.append(f"{comp.rotulos[i]} {_numero_br(soma)}")
+        total = "; ".join(partes)
     if s.objetivo == "titulos-em-atraso" and linhas:
         corte = date.fromisoformat(valores["data-corte"])
         i = comp.rotulos.index("Vencimento mais antigo")
@@ -178,12 +187,17 @@ def executar_solicitacao(user, s: RequestContext) -> Resultado:
     return res
 
 
+def _numero_br(v) -> str:
+    inteiro, _, dec = f"{Decimal(v).quantize(Decimal('0.01')):,.2f}".partition(".")
+    return f"{inteiro.replace(',', '.')},{dec}"
+
+
 def _resumo(objetivo, n, total, truncado) -> str:
     if n == 0:
         return "Nenhum registro encontrado com esses critérios."
     unidade = {"titulos-em-atraso": "clientes", "titulos-a-vencer": "títulos", "posicao-cliente": "títulos"}.get(
         objetivo, "registros")
-    texto = f"{n} {unidade}" + (f", somando {total}" if total else "") + "."
+    texto = f"{n} {unidade}" + (f", somando {total}" if total.startswith("R$") else "") + "."
     if truncado:
         texto += f" Mostrando só os primeiros {n}: o total é parcial."
     return texto

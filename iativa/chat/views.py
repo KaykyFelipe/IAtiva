@@ -35,6 +35,20 @@ def _pedido(request):
         return None
 
 
+def _resultados(request) -> list[str]:
+    """Resumos dos resultados que estão na tela (contagem e totais), enviados pelo navegador.
+    Só servem a esta pergunta: não são gravados."""
+    import json
+
+    try:
+        dados = json.loads(request.POST.get("resultados") or "[]")
+    except ValueError:
+        return []
+    if not isinstance(dados, list):
+        return []
+    return [str(x)[:400] for x in dados[-3:] if isinstance(x, str) and x.strip()]
+
+
 def _interrompido():
     return HttpResponse(status=204)  # o navegador já desfez a tela; nada a trocar
 
@@ -131,7 +145,8 @@ def nova(request):
     try:
         conversas._validar_texto(form.cleaned_data["mensagem"])
         c = conversas.nova_individual(request.user)
-        msg, resultado = conversas.enviar(request.user, c, form.cleaned_data["mensagem"], pedido=_pedido(request))
+        msg, resultado = conversas.enviar(request.user, c, form.cleaned_data["mensagem"], pedido=_pedido(request),
+                                          resultados=_resultados(request))
     except Interrompido:
         conversas.limpar_interrupcao(request.user, _pedido(request))
         return _interrompido()
@@ -160,7 +175,8 @@ def mensagem(request, conversa_id):
     if not form.is_valid():
         return _render(request, c, form=form)
     try:
-        msg, resultado = conversas.enviar(request.user, c, form.cleaned_data["mensagem"], pedido=_pedido(request))
+        msg, resultado = conversas.enviar(request.user, c, form.cleaned_data["mensagem"], pedido=_pedido(request),
+                                          resultados=_resultados(request))
     except Interrompido:
         conversas.limpar_interrupcao(request.user, _pedido(request))
         return _interrompido()

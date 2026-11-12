@@ -45,6 +45,7 @@ class EntradaAgente:
     administrador: bool = False
     pendencias: list[dict] = field(default_factory=list)
     tabelas_para_aprender: list[dict] = field(default_factory=list)
+    resultados_na_tela: list[str] = field(default_factory=list)  # contagem/totais, transitório (R3)
 
 
 @dataclass(frozen=True)

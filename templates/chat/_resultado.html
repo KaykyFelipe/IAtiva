@@ -1,5 +1,5 @@
 {# Resultado da consulta: existe só nesta resposta. Não é salvo no histórico. #}
-<div class="msg ia resultado">
+<div class="msg ia resultado" data-resumo-resultado="{{ resultado.solicitacao.objetivo }}: {{ resultado.mensagem }}{% if resultado.total %} Totais: {{ resultado.total }}{% endif %}">
   <p><strong>{{ resultado.mensagem }}</strong></p>
   {% if resultado.linhas %}
     <div class="tabela-rolagem">

@@ -4,6 +4,12 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **plano proposto em `PLANO.md` §8, aguardando aprovação.** Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M19 — somas sob pedido (2026-11-12)
+
+- Totais das colunas numéricas calculados e não exibidos; vão à IA só na pergunta seguinte ("some os valores").
+- Instruções: entender a intenção, tentar outro caminho sozinha antes de dizer que não dá.
+- Testes: 477 aprovados e 10 pulados no Windows.
+
 ## Mudança M18 — IA aprende consultas sozinha (2026-11-11)
 
 - Sem consulta que atenda: a IA acha a tabela, monta a consulta, o sistema valida, aprova e executa.

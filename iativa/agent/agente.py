@@ -130,7 +130,8 @@ def _interpretar(provedor, entrada, codigos_obj, codigos_par):
     raise FalhaModelo("sem decisão válida")
 
 
-def conversar(user, c, texto: str, provedor=None, mensagem_usuario_id=None, interrompido=None) -> Saida:
+def conversar(user, c, texto: str, provedor=None, mensagem_usuario_id=None, interrompido=None,
+              resultados=None) -> Saida:
     objetivos = objetivos_para(user)
     administrador = pode_aprender(user)
     if not objetivos and not administrador:
@@ -160,7 +161,7 @@ def conversar(user, c, texto: str, provedor=None, mensagem_usuario_id=None, inte
         mensagem=texto, hoje=timezone.localdate().isoformat(), historico=_historico(c, mensagem_usuario_id),
         objetivos=_catalogo(user, objetivos, defs), solicitacao_atual=_estado(user, atual, defs),
         notas=_notas(user), aprendidos=aprendidos, trechos=trechos, administrador=administrador,
-        pendencias=_pendencias_contexto(user),
+        pendencias=_pendencias_contexto(user), resultados_na_tela=list(resultados or []),
     )
     try:
         provedor = provedor or obter_provedor(usuario=user)

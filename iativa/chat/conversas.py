@@ -196,7 +196,7 @@ def limpar_interrupcao(user, pedido) -> None:
 
 
 @transaction.atomic
-def enviar(user, c: ConversationContext, texto: str, provedor=None, pedido=None) -> None:
+def enviar(user, c: ConversationContext, texto: str, provedor=None, pedido=None, resultados=None) -> None:
     """`pedido`: id do envio gerado no navegador; se a pessoa clicar em "parar" antes da IA agir,
     `agente.Interrompido` é lançado e a transação desfaz tudo (inclusive a mensagem dela)."""
     if not pode_escrever(user, c):
@@ -206,7 +206,7 @@ def enviar(user, c: ConversationContext, texto: str, provedor=None, pedido=None)
     texto = _validar_texto(texto)
     m = Mensagem.objects.create(conversa=c, papel=Papel.USUARIO, autor=user, texto=texto)
     saida = agente.conversar(user, c, texto, provedor=provedor, mensagem_usuario_id=m.pk,
-                             interrompido=_verificador(user, pedido))
+                             interrompido=_verificador(user, pedido), resultados=resultados or [])
     msg = Mensagem.objects.create(conversa=c, papel=Papel.IA, texto=saida.texto[:MAX_TEXTO], ficha=saida.ficha,
                                   solicitacao=saida.solicitacao)
     _tocar(c, texto)
