@@ -9,6 +9,7 @@
 - O erro "OperationalError" era a busca em lote estourando o tempo no Protheus. Agora o lote é dividido, o registro problemático é repetido e, se ainda falhar, fica inconclusivo com o motivo; o resto da lista é verificado.
 - Toda etapa tenta de novo e mostra no cartão o que corrigiu ("↻ ..."); só desiste depois de 3 tentativas e de pedir outro caminho ao modelo.
 - Barra do compositor some ao terminar; botão de enviar vira "parar" enquanto a verificação roda.
+- Conferido no Protheus (sem gravar nada): a lista de 19 desligados foi verificada inteira em 41 s, com 33 consultas; 16 verificados e 3 inconclusivos por nome igual. A busca se ajustou sozinha (lotes de 9) depois da primeira lentidão.
 - Testes: 547 aprovados e 10 pulados no Windows.
 
 ## Mudança M26 — continuar até a verificação; "Pensando" ao vivo (2026-11-12)
