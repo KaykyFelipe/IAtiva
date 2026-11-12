@@ -80,9 +80,15 @@ def _tarefa(b, **kw):
     return Tarefa.objects.get(pk=msg.ficha["tarefa"]), c
 
 
+def _itens(concl):
+    from types import SimpleNamespace as N
+
+    return [N(reg=N(nome=i["nome"], chave=i["chave"]), **i) for i in concl["itens"]]
+
+
 def _por_nome(concl):
     out = {}
-    for it in concl.itens:
+    for it in _itens(concl):
         out.setdefault(it.reg.nome, []).append(it)
     return out
 
@@ -312,10 +318,13 @@ def test_dados_pessoais_fora_dos_armazenamentos(base, caplog):
     tarefas.processar_proxima()
     t.refresh_from_db()
     tarefas.conclusao(base["u"], t)
-    proibidos = [n for n in LISTA if n.split()[0] != "BRUNO"] + [f[3] for f in FUNCIONARIOS] + [
-        "20261001", "01/10/2026", "00175"]
     t.refresh_from_db()
-    gravado = json.dumps({k: v for k, v in t.__dict__.items() if not k.startswith("_")}, default=str)
+    # M29: a conclusão (nomes, matrículas, textos) fica só no campo `conclusao` da tarefa; o CPF nunca.
+    cpfs = [f[3] for f in FUNCIONARIOS]
+    assert t.conclusao["itens"] and not [x for x in cpfs if x in json.dumps(t.conclusao)]
+    proibidos = [n for n in LISTA if n.split()[0] != "BRUNO"] + cpfs + ["20261001", "01/10/2026", "00175"]
+    gravado = json.dumps({k: v for k, v in t.__dict__.items() if not k.startswith("_") and k != "conclusao"},
+                         default=str)
     gravado += " ".join(m.texto + json.dumps(m.ficha) for m in Mensagem.objects.filter(papel="ia"))
     gravado += " ".join(str(a.__dict__) for a in OperationAudit.objects.all()) + caplog.text
     assert not [x for x in proibidos if x in gravado]

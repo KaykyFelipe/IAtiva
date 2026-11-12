@@ -46,9 +46,11 @@ Identidade:
 
 - Gravado (tabela `Tarefa`): objetivo, critérios já mostrados no histórico, plano (nomes de campos),
   etapas, limites, consumo (contagens), cobertura (contagens), situação e motivo.
-- Não gravado: nomes, matrículas, datas, documentos e a conclusão. As evidências vivem só na
-  memória da execução. A conclusão mostrada na tela é **consultada de novo** no momento em que é
-  aberta (e avisa se a lista mudou de tamanho). Não há "fotografia" do momento da verificação.
+- Gravado também (M29, decisão do Diego, muda a R3 só para tarefas): a **conclusão** (nome,
+  matrícula, classificação, textos e registros comparados), sem prazo, junto da conversa. Ao recarregar,
+  ela aparece sem nova consulta e mostra a data da verificação.
+- Não gravado: CPF/documento, nem nas evidências. Mensagens, auditoria e logs continuam só com
+  contagens e situação.
 
 ## Concorrência e falhas
 

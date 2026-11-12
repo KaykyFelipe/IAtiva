@@ -96,6 +96,9 @@ class Tarefa(models.Model):
     limites = models.JSONField(default=dict)
     consumo = models.JSONField(default=dict)
     cobertura = models.JSONField(default=dict)  # só contagens
+    # M29 (decisão do Diego, muda a R3 só para tarefas): conclusão por pessoa (nome, matrícula, textos e
+    # evidências exibidas), guardada com a conversa para não consultar de novo ao recarregar. Sem CPF.
+    conclusao = models.JSONField(default=dict, blank=True)
     situacao = models.CharField(max_length=20, choices=SituacaoTarefa.choices, default=SituacaoTarefa.PENDENTE)
     motivo = models.CharField(max_length=400, blank=True)
     progresso = models.CharField(max_length=300, blank=True)

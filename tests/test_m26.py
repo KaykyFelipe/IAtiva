@@ -136,8 +136,8 @@ def test_lote_que_nao_responde_e_dividido_e_a_tarefa_conclui(base, monkeypatch):
     assert t.cobertura["inconclusivos"] >= 1
     correcoes = " ".join(t.consumo["correcoes"])
     assert "passei a buscar em lotes de" in correcoes and "marquei como inconclusivo" in correcoes
-    bruno = next(i for i in tarefas.conclusao(base["u"], t).itens if i.reg.nome.startswith("BRUNO"))
-    assert bruno.verificado is False and "não respondeu" in bruno.texto  # o motivo aparece na conclusão
+    bruno = next(i for i in tarefas.conclusao(base["u"], t)["itens"] if i["nome"].startswith("BRUNO"))
+    assert bruno["verificado"] is False and "não respondeu" in bruno["texto"]  # o motivo aparece na conclusão
     assert "BRUNO" not in str(t.consumo)
 
 
@@ -189,3 +189,21 @@ def test_atualizacoes_nao_substituem_a_conversa_e_conclusao_aparece_sozinha(base
     assert "Ver conclusão" not in cartao and 'hx-trigger="load"' in cartao
     html = client.get(reverse("chat:tarefa_conclusao", args=[t.pk])).content.decode()
     assert "conclusao-tabela" in html and "Inconclusivo" in html or "Verificado" in html
+
+
+def test_conclusao_fica_salva_e_recarregar_nao_consulta_de_novo(base, client, monkeypatch):
+    from iativa.agent import investigacao as inv
+
+    t = _tarefa_pronta(base)
+    tarefas.processar_proxima()
+    t.refresh_from_db()
+    assert t.conclusao["cobertura"]["total"] == len(LISTA)
+
+    def proibido(*a, **kw):
+        raise AssertionError("consultou o ERP de novo")
+
+    monkeypatch.setattr(inv, "_consultar", proibido)
+    client.force_login(base["u"])
+    for _ in range(2):  # recarregar a página
+        html = client.get(reverse("chat:tarefa_conclusao", args=[t.pk])).content.decode()
+        assert all(n in html for n in LISTA) and "verificação feita em" in html

@@ -96,13 +96,14 @@ class Command(BaseCommand):
                 tarefas.executar(tarefas.reivindicar())
                 t.refresh_from_db()
                 concl = tarefas.conclusao(user, t)
-                nomes = {it.reg.nome for it in concl.itens}
-                bruno = next((it for it in concl.itens if it.reg.nome.startswith("BRUNO")), None)
-                ok = (t.situacao == "concluida" and nomes == lista and concl.cobertura["sem_classificacao"] == 0
-                      and bruno is not None and bruno.classe in ("novo_vinculo_posterior", "mesmo_nome")
-                      and "efetivado" not in bruno.texto.lower())
-                detalhe = (f"situação {t.situacao}; cobertura {concl.cobertura['verificados']}+"
-                           f"{concl.cobertura['inconclusivos']} de {len(lista)}; exemplo: {bruno.classe if bruno else '-'}")
+                nomes = {it["nome"] for it in concl["itens"]}
+                bruno = next((it for it in concl["itens"] if it["nome"].startswith("BRUNO")), None)
+                ok = (t.situacao == "concluida" and nomes == lista and concl["cobertura"]["sem_classificacao"] == 0
+                      and bruno is not None and bruno["classe"] in ("novo_vinculo_posterior", "mesmo_nome")
+                      and "efetivado" not in bruno["texto"].lower())
+                detalhe = (f"situação {t.situacao}; cobertura {concl['cobertura']['verificados']}+"
+                           f"{concl['cobertura']['inconclusivos']} de {len(lista)}; "
+                           f"exemplo: {bruno['classe'] if bruno else '-'}")
             except Exception as exc:
                 ok, detalhe = False, f"erro: {type(exc).__name__}"
             transaction.set_rollback(True)

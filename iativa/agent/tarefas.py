@@ -225,6 +225,7 @@ def executar(t: Tarefa):
                         _salvar(t, cobertura=cob)
                         if cob["sem_classificacao"]:
                             raise inv.LimiteAtingido(f"{cob['sem_classificacao']} pessoa(s) ficaram sem classificação.")
+                        _salvar(t, conclusao=inv.para_gravar(inv.concluir(t.plano, ctx, refeita=False)))
                         if not cob["lista_completa"]:
                             raise inv.LimiteAtingido(
                                 f"A lista passou do limite de {lim['registros']} registros: {cob['total']} verificados; "
@@ -341,11 +342,14 @@ def processar_proxima() -> bool:
     return True
 
 
-def conclusao(user, t: Tarefa):
-    """Conclusão detalhada para a tela: refeita agora, com as mesmas regras e permissões, e nunca
-    gravada. Só para tarefas concluídas ou que pararam num limite."""
+def conclusao(user, t: Tarefa) -> dict:
+    """Conclusão detalhada para a tela. M29: fica gravada na tarefa desde a verificação (decisão do
+    Diego) e é mostrada sem consultar o ERP de novo. Tarefas antigas, sem conclusão gravada, são
+    verificadas de novo uma vez e passam a guardá-la."""
     if t.usuario_id != user.pk:
         raise inv.SemPermissao("Tarefa de outra pessoa.")
+    if t.conclusao:
+        return t.conclusao
     lim = {**(t.limites or limites())}
     with prazo.definir(float(lim["prazo_s"])):
         ctl = inv.Controle(lim)
@@ -354,4 +358,6 @@ def conclusao(user, t: Tarefa):
     if t.cobertura and t.cobertura.get("total") != c.cobertura["total"]:
         c.limitacoes.insert(0, f"A lista tinha {t.cobertura.get('total')} pessoas na verificação e agora tem "
                                f"{c.cobertura['total']}: a base mudou nesse meio-tempo.")
-    return c
+    dados = inv.para_gravar(c)
+    Tarefa.objects.filter(pk=t.pk).update(conclusao=dados)
+    return dados

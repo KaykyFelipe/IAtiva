@@ -592,7 +592,7 @@ class Conclusao:
     titulos: dict
 
 
-def concluir(plano_inv, ctx: Contexto, extra_limitacoes=()) -> Conclusao:
+def concluir(plano_inv, ctx: Contexto, extra_limitacoes=(), refeita=True) -> Conclusao:
     cob = cobertura(ctx)
     resumo = {}
     for it in ctx.itens:
@@ -602,8 +602,11 @@ def concluir(plano_inv, ctx: Contexto, extra_limitacoes=()) -> Conclusao:
         limitacoes.append(plano_inv["aviso"])
     if ctx.lista_truncada:
         limitacoes.append("A lista original passou do limite de registros: só os primeiros foram verificados.")
-    limitacoes.append("Lista e vínculos consultados de novo agora; se a base mudou desde a lista original, o "
-                      "conjunto pode ser diferente.")
+    if refeita:
+        limitacoes.append("Lista e vínculos consultados de novo agora; se a base mudou desde a lista original, o "
+                          "conjunto pode ser diferente.")
+    else:
+        limitacoes.append("Situação da base no momento da verificação; ela não é atualizada sozinha depois.")
     hoje = timezone.localdate()
     ref = f"Data de referência: {hoje:%d/%m/%Y}." + (
         f" Data mais recente vista nesses registros: {_fmt(ctx.ultima_data)} (a base pode estar atrasada em relação "
@@ -611,6 +614,15 @@ def concluir(plano_inv, ctx: Contexto, extra_limitacoes=()) -> Conclusao:
     itens = sorted(ctx.itens, key=lambda it: (bool(it.verificado), it.reg.nome))  # inconclusivos primeiro
     return Conclusao(itens, cob, sorted(resumo.items(), key=lambda x: -x[1]), ref, limitacoes,
                      f"{timezone.localtime():%d/%m/%Y %H:%M}", plano_inv["titulos"])
+
+
+def para_gravar(c: Conclusao) -> dict:
+    """Conclusão no formato gravado na tarefa (M29: guardada na conversa, decisão do Diego).
+    O documento (CPF) nunca entra: os itens só têm nome, matrícula, textos e evidências exibidas."""
+    return {"itens": [{"nome": it.reg.nome, "chave": list(it.reg.chave), "verificado": bool(it.verificado),
+                       "classe": it.classe, "texto": it.texto, "evidencias": list(it.evidencias)} for it in c.itens],
+            "cobertura": c.cobertura, "resumo": [list(x) for x in c.resumo], "referencia": c.referencia,
+            "limitacoes": c.limitacoes, "consultado_em": c.consultado_em}
 
 
 def investigar(user, base, plano_inv, ctl: Controle, ctx: Contexto | None = None) -> Conclusao:

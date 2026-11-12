@@ -15,7 +15,7 @@
         <tbody>
           {% for it in c.itens %}
             <tr class="{% if it.verificado %}verificado{% else %}inconclusivo{% endif %}">
-              <td class="pessoa"><strong>{{ it.reg.nome|default:"—" }}</strong><span>{{ it.reg.chave|join:"/" }}</span></td>
+              <td class="pessoa"><strong>{{ it.nome|default:"—" }}</strong><span>{{ it.chave|join:"/" }}</span></td>
               <td><span class="selo-linha {% if it.verificado %}ok{% else %}alerta{% endif %}">{% if it.verificado %}Verificado{% else %}Inconclusivo{% endif %}</span></td>
               <td class="texto">
                 {{ it.texto }}
@@ -33,6 +33,6 @@
     {% if c.limitacoes %}
       <details class="premissas"><summary>Limitações</summary><ul>{% for l in c.limitacoes %}<li>{{ l }}</li>{% endfor %}</ul></details>
     {% endif %}
-    <p class="nota">Estes dados não ficam salvos: ao reabrir a conversa, a conclusão é consultada de novo.</p>
+    <p class="nota">Resultado da verificação feita em {{ c.consultado_em }}. Para ver a situação atual, peça a verificação de novo.</p>
   {% endif %}
 </div>
