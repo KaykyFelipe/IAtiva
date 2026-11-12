@@ -35,7 +35,7 @@ def tipo_falha(exc) -> str:
         return "bloqueio"
     if estado.startswith("HYT") or "timeout" in type(exc).__name__.lower():
         return "tempo"
-    if estado.startswith("08") or "Communication link" in detalhe:
+    if estado.startswith(("08", "IMC")) or "Communication link" in detalhe:
         return "conexao"
     return ""
 

@@ -244,7 +244,10 @@ def _fmt(d: str) -> str:
     return f"{d[6:8]}/{d[4:6]}/{d[0:4]}" if d else "sem data"
 
 
-def _consultar(cat, plano, ctl, limite):
+TIMEOUT_LOTE_S = 10  # lote lento é dividido logo, em vez de esperar o tempo inteiro
+
+
+def _consultar(cat, plano, ctl, limite, timeout=None):
     from iativa.query.compilador import compilar
     from iativa.query.executor import executar
     from iativa.query.servico import _cfg
@@ -254,7 +257,8 @@ def _consultar(cat, plano, ctl, limite):
     comp = compilar(plano, cat, limite)
     permitidas = {t.fisica for t in cat.tabelas([plano.base]).values()}
     validar(comp.sql, permitidas, limite + 1)
-    linhas, cortou = executar(cat, comp.sql, comp.params, limite, _cfg()["timeout_s"],
+    tempo = _cfg()["timeout_s"] if timeout is None else min(timeout, _cfg()["timeout_s"])
+    linhas, cortou = executar(cat, comp.sql, comp.params, limite, tempo,
                               validar_final=lambda sql: validar(sql, permitidas, limite + 1))
     return comp, linhas, cortou
 
@@ -314,14 +318,14 @@ def reconstruir_lista(user, base, plano_inv, ctx: Contexto, ctl: Controle):
     limite = int(ctl.limites.get("registros", 2000))
     ctx.itens, ctx.lista_truncada = [], False
     vistos = set()
-    with abrir_catalogo() as cat:
+    with _Sessao() as ses:
         for f in filiais:
             ctl.progresso(f"Reexecutando a lista original ({rotulo(f)}).")
             _acesso(user, base, f)
             p = montar(base.objetivo, {**valores, "filial-analise": f})
             p.colunas, p.agrupar, p.top = _colunas(plano_inv), False, 0
             p.ordenar = [(plano_inv["chave"][0], False)]
-            comp, linhas, cortou = _consultar_com_retentativa(cat, p, ctl, max(1, limite - len(ctx.itens)),
+            comp, linhas, cortou = _consultar_com_retentativa(ses, p, ctl, max(1, limite - len(ctx.itens)),
                                                               f"a lista da filial {rotulo(f)}")
             ctx.lista_truncada = ctx.lista_truncada or cortou
             for linha in linhas:
@@ -340,14 +344,48 @@ FALHA_TXT = {"tempo": "não respondeu a tempo", "bloqueio": "encontrou registro 
              "conexao": "perdeu a conexão com o ERP"}
 
 
-def _consultar_com_retentativa(cat, plano, ctl, limite, o_que):
+class _Sessao:
+    """Catálogo que se reabre quando a conexão quebra (no SQL Server, uma consulta que estoura o tempo
+    deixa a conexão inutilizável: IMC06/08S01)."""
+
+    def __init__(self):
+        self._pilha, self.cat = None, None
+
+    def abrir(self):
+        from contextlib import ExitStack
+
+        from iativa.metadata.catalogo import abrir_catalogo
+
+        self.fechar()
+        self._pilha = ExitStack()
+        self.cat = self._pilha.enter_context(abrir_catalogo())
+        return self
+
+    def fechar(self):
+        if self._pilha is not None:
+            try:
+                self._pilha.close()
+            except Exception:
+                pass
+        self._pilha, self.cat = None, None
+
+    def __enter__(self):
+        return self.abrir()
+
+    def __exit__(self, *exc):
+        self.fechar()
+
+
+def _consultar_com_retentativa(ses, plano, ctl, limite, o_que):
     from iativa.query.executor import tipo_falha
 
     for tentativa in range(3):
         try:
-            return _consultar(cat, plano, ctl, limite)
+            return _consultar(ses.cat, plano, ctl, limite)
         except Exception as exc:
             tipo = tipo_falha(exc)
+            if tipo:
+                ses.abrir()
             if not tipo or tentativa == 2:
                 if tipo:
                     raise Transitoria(f"A consulta de {o_que} {FALHA_TXT[tipo]} depois de 3 tentativas.") from None
@@ -372,8 +410,8 @@ def buscar_relacionados(user, base, plano_inv, ctx: Contexto, ctl: Controle):
     ctx.relacionados = {}
     lote = max(1, int(ctl.limites.get("lote", 40)))
     limite = int(ctl.limites.get("registros", 2000))
-    with abrir_catalogo() as cat:
-        t = cat.tabelas([plano_inv["tabela"]], com_campos=True)[plano_inv["tabela"]]
+    with _Sessao() as ses:
+        t = ses.cat.tabelas([plano_inv["tabela"]], com_campos=True)[plano_inv["tabela"]]
         tamanho = next((c.tamanho for c in t.campos if c.nome == campo), 0) or 0
         valores = {}
         for it in ctx.itens:
@@ -406,16 +444,20 @@ def buscar_relacionados(user, base, plano_inv, ctx: Contexto, ctl: Controle):
                          Filtro(Campo("e1", campo), "IN", tuple(valores[i] for i in parte))]
             p.colunas = _colunas(plano_inv)
             try:
-                comp, linhas, cortou = _consultar(cat, p, ctl, limite)
+                comp, linhas, cortou = _consultar(ses.cat, p, ctl, limite, TIMEOUT_LOTE_S if len(parte) > 1 else None)
             except Exception as exc:
                 tipo = tipo_falha(exc)
                 if not tipo:
                     raise
-                if len(parte) > 1:  # divide o lote: acha o registro problemático sem perder os demais
-                    meio = len(parte) // 2
-                    fila[0:0] = [(f, parte[:meio]), (f, parte[meio:])]
-                    ctx.lotes += 1
-                    ctl.corrigir(f"o lote {FALHA_TXT[tipo]} ({rotulo(f)}); dividi em lotes menores e segui.")
+                ses.abrir()  # no SQL Server, o estouro de tempo deixa a conexão inutilizável
+                if len(parte) > 1:
+                    # Lote lento: os próximos lotes (de todas as filiais) também ficam menores. O banco do
+                    # Protheus responde na hora a buscas pequenas e pode travar com listas grandes.
+                    lote = max(1, len(parte) // 2)
+                    pendentes = [(f, parte)] + fila
+                    fila = [(ff, pp[i:i + lote]) for ff, pp in pendentes for i in range(0, len(pp), lote)]
+                    ctx.lotes = ctx.lotes_feitos + len(fila)
+                    ctl.corrigir(f"o lote {FALHA_TXT[tipo]} ({rotulo(f)}); passei a buscar em lotes de {lote} e segui.")
                 elif (f, parte[0]) not in repetidos:
                     repetidos.add((f, parte[0]))
                     fila.insert(0, (f, parte))

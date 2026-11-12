@@ -79,7 +79,7 @@ IATIVA_TAREFAS = {
     **IATIVA_TAREFAS,  # noqa: F405
     "prazo_s": int(env("IATIVA_TAREFA_PRAZO_S", "900")),
     "chamadas_modelo": int(env("IATIVA_TAREFA_CHAMADAS_MODELO", "4")),
-    "consultas": int(env("IATIVA_TAREFA_CONSULTAS", "150")),
+    "consultas": int(env("IATIVA_TAREFA_CONSULTAS", "600")),
     "registros": int(env("IATIVA_TAREFA_REGISTROS", "2000")),
 }
 IATIVA_VINCULO_POR_DOCUMENTO = env("IATIVA_VINCULO_POR_DOCUMENTO", "0") == "1"

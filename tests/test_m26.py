@@ -109,10 +109,10 @@ def _falhar_quando(monkeypatch, condicao, estado="HYT00"):
 
     original = inv._consultar
 
-    def talvez(cat, plano, ctl, limite):
+    def talvez(cat, plano, ctl, limite, timeout=None):
         if condicao(plano):
             raise FalhaBanco(estado, "Query timeout expired")
-        return original(cat, plano, ctl, limite)
+        return original(cat, plano, ctl, limite, timeout)
 
     monkeypatch.setattr(inv, "_consultar", talvez)
 
@@ -135,7 +135,7 @@ def test_lote_que_nao_responde_e_dividido_e_a_tarefa_conclui(base, monkeypatch):
     assert t.situacao == "concluida" and t.cobertura["total"] == len(LISTA)
     assert t.cobertura["inconclusivos"] >= 1
     correcoes = " ".join(t.consumo["correcoes"])
-    assert "dividi em lotes menores" in correcoes and "marquei como inconclusivo" in correcoes
+    assert "passei a buscar em lotes de" in correcoes and "marquei como inconclusivo" in correcoes
     bruno = next(i for i in tarefas.conclusao(base["u"], t).itens if i.reg.nome.startswith("BRUNO"))
     assert bruno.verificado is False and "não respondeu" in bruno.texto  # o motivo aparece na conclusão
     assert "BRUNO" not in str(t.consumo)

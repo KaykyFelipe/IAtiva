@@ -44,7 +44,7 @@ CRITERIO = ("Todos os integrantes da lista original verificados e classificados 
 
 
 def limites() -> dict:
-    return {"prazo_s": 900, "chamadas_modelo": 4, "consultas": 150, "tentativas": 3, "registros": 2000,
+    return {"prazo_s": 900, "chamadas_modelo": 4, "consultas": 600, "tentativas": 3, "registros": 2000,
             "lote": 40, "lease_s": 90, **getattr(settings, "IATIVA_TAREFAS", {})}
 
 
