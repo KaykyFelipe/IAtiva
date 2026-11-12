@@ -29,6 +29,7 @@ import json
 import os
 import re
 import shlex
+import stat
 import subprocess
 import sys
 import time
@@ -301,7 +302,7 @@ def comando_agente(wt: Path, pasta_diag: Path, imagem: str, c: dict, diag: dict)
             '--read-only', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges',
             '--tmpfs', '/tmp:rw,nosuid,nodev,size=256m',
             '-e', 'CODEX_HOME=/codex', '-v', f'{pasta_codex(c)}:/codex',
-            '-v', f'{wt}:/app/trabalho', '-v', f'{pasta_diag}:/diag:ro', '-w', '/app/trabalho',
+            '-v', f'{wt}:/app/trabalho', '-v', f'{wt}/.git:/app/trabalho/.git:ro', '-v', f'{pasta_diag}:/diag:ro', '-w', '/app/trabalho',
             '--entrypoint', 'codex', imagem, 'exec', '--ephemeral', '--ignore-user-config', '--ignore-rules',
             '--skip-git-repo-check', '--sandbox', 'danger-full-access', '-c', 'approval_policy="never"',
             '--disable', 'apps', '--disable', 'plugins', '--disable', 'hooks', '--disable', 'multi_agent',
@@ -317,11 +318,25 @@ def comando_claude(wt: Path, pasta_diag: Path, imagem: str, c: dict, diag: dict)
     login próprio da manutenção. Sem .env, sem socket do Docker, sem chave do Git, sem o var/ do app."""
     return ["docker", "run", "--rm", "--cpus", "2", "--memory", "3g", "--pids-limit", "512",
             "-e", "CLAUDE_CONFIG_DIR=/claude", "-v", f"{pasta_claude(c)}:/claude",
-            "-v", f"{wt}:/app/trabalho", "-v", f"{pasta_diag}:/diag:ro", "-w", "/app/trabalho",
+            "-v", f"{wt}:/app/trabalho", "-v", f"{wt}/.git:/app/trabalho/.git:ro", "-v", f"{pasta_diag}:/diag:ro", "-w", "/app/trabalho",
             "--entrypoint", "claude", imagem, "-p", prompt(diag), "--max-turns", "40",
             *modelo_e_esforco(pasta_claude(c)),
             "--permission-mode", "acceptEdits",
             "--allowedTools", "Read,Edit,Write,Glob,Grep,Bash(python -m pytest:*)"]
+
+
+def preparar_escrita(wt: Path):
+    """Grupo do usuário da imagem só na cópia isolada; preserva dono/Git e ignora links."""
+    if wt.is_symlink() or wt.resolve().parent != TRABALHO.resolve() or not re.fullmatch(r'inc-\d+', wt.name):
+        raise Recusa("cópia de trabalho fora da pasta de manutenção")
+    if not hasattr(os, 'geteuid') or os.geteuid() != 0:
+        return
+    for base, dirs, files in os.walk(wt, followlinks=False):
+        for path in [Path(base), *(Path(base) / n for n in files)]:
+            if path.name == '.git' or path.is_symlink():
+                continue
+            os.chown(path, -1, 10001, follow_symlinks=False)
+            os.chmod(path, stat.S_IMODE(path.stat().st_mode) | stat.S_IWGRP)
 
 
 def corrigir(diag: dict, c: dict) -> str:
@@ -333,6 +348,7 @@ def corrigir(diag: dict, c: dict) -> str:
     if wt.exists():
         git("worktree", "remove", "--force", str(wt), verificar=False)
     git("worktree", "add", "-B", f"manutencao/inc-{inc}", str(wt), base)
+    preparar_escrita(wt)
     pasta_diag = TRABALHO / f"inc-{inc}-diag"
     pasta_diag.mkdir(exist_ok=True)
     (pasta_diag / "diagnostico.json").write_text(json.dumps(diag, ensure_ascii=False))

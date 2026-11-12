@@ -49,7 +49,9 @@ Com ChatGPT selecionado, chama `codex exec` em container isolado, com sandbox ex
 `no-new-privileges` e temporários em tmpfs. Apenas worktree e pasta própria da conta são graváveis;
 sem `.env`, credenciais Git ou socket Docker. A CLI usa `--sandbox danger-full-access` **apenas dentro
 desse container isolado**, pois o Bubblewrap interno não funciona nos namespaces Docker deste host.
-Não se libera `--privileged`, namespaces do host nem se muda a política de segurança do servidor. Continua sujeito a teste de regressão, suíte,
+Não se libera `--privileged`, namespaces do host nem se muda a política de segurança do servidor.
+A cópia criada pelo executor root recebe escrita para o grupo 10001, sem trocar o dono,
+seguir links ou alterar outras pastas. O ponteiro `.git` fica montado somente leitura. Continua sujeito a teste de regressão, suíte,
 lista de arquivos, tamanho, publicação e implantação azul/verde existentes. Os arquivos de
 autenticação/seleção e adaptadores ficam protegidos contra alteração pela própria manutenção.
 

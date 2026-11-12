@@ -339,5 +339,25 @@ def test_codex_manutencao_usa_modelo_e_isolamento(tmp_path):
     assert cmd[cmd.index('--tmpfs') + 1] == '/tmp:rw,nosuid,nodev,size=256m'
     assert 'approval_policy="never"' in cmd
     assert 'code_mode_host' in cmd and 'code_mode' in cmd
+    assert f'{tmp_path / "wt"}/.git:/app/trabalho/.git:ro' in cmd
     assert '--privileged' not in cmd and '--network=host' not in cmd
     assert not any('docker.sock' in x or '.ssh' in x or 'OPENAI_API_KEY' in x  for x in cmd)
+
+
+def test_escrita_da_manutencao_restrita_a_copia(tmp_path, monkeypatch):
+    monkeypatch.setattr(mx, 'TRABALHO', tmp_path)
+    fora = tmp_path / 'fora' / 'inc-1'
+    fora.mkdir(parents=True)
+    with pytest.raises(mx.Recusa):
+        mx.preparar_escrita(fora)
+    wt = tmp_path / 'inc-1'
+    wt.mkdir()
+    (wt / '.git').write_text('gitdir: ponteiro do host')
+    (wt / 'codigo.py').write_text('sintetico')
+    mudancas = []
+    # O executor real é Linux/root; registra as permissões sem modificar grupos no host de teste.
+    monkeypatch.setattr(mx.os, 'geteuid', lambda: 0, raising=False)
+    monkeypatch.setattr(mx.os, 'chown', lambda p, u, g, **kw: mudancas.append((Path(p), u, g, kw)), raising=False)
+    mx.preparar_escrita(wt)
+    assert {p for p, *_ in mudancas} == {wt, wt / 'codigo.py'}
+    assert all(u == -1 and g == 10001 and kw == {'follow_symlinks': False} for _, u, g, kw in mudancas)
