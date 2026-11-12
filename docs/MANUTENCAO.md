@@ -85,5 +85,7 @@ no automático: a versão anterior continua funcionando com o esquema novo e a r
 
 1. Uma chave SSH com **escrita** no repositório, só para o executor (deploy key), em
    `MANUTENCAO_GIT_SSH_KEY` — o servidor hoje não tem credencial de push.
-2. Um login do Claude **só da manutenção** em `MANUTENCAO_CLAUDE_DIR` (não usar o login de um usuário).
+2. O login do Claude **só da manutenção**: na tela **Conexões Claude** do IAtiva (TI), cartão
+   "Agente de manutenção" → Conectar Claude, e escolher o modelo (padrão Opus). Fica em
+   `var/claude-manutencao` do volume do app; o executor encontra sozinho (ou use `MANUTENCAO_CLAUDE_DIR`).
 3. `MANUTENCAO_ATIVA=1` e, depois de acompanhar algumas correções preparadas, `MANUTENCAO_PUBLICAR=1`.

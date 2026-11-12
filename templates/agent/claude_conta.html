@@ -1,25 +1,32 @@
 {% extends "base.html" %}
-{% block title %}Minha conta Claude · IAtiva{% endblock %}
+{% block title %}Conexões Claude · IAtiva{% endblock %}
 {% block content %}
 <p><a href="{% url 'chat:index' %}">← Voltar ao chat</a></p>
+{% for c in cartoes %}
 <section class="cartao">
-  <h1>Minha conta Claude</h1>
-  <p>Conecte sua assinatura pelo login oficial do Claude. A conexão fica disponível somente para suas conversas pessoais neste IAtiva.</p>
+  <h1>{{ c.titulo }}</h1>
+  <p>{{ c.descricao }} Conecte a assinatura pelo login oficial do Claude; cada agente tem a sua própria conexão.</p>
   {% include "agent/_claude_estado.html" %}
   <hr>
   <h2>Modelo e esforço</h2>
   <form method="post" action="{% url 'claude-conta' %}" class="preferencias-claude">
-    {% csrf_token %}<input type="hidden" name="acao" value="preferencias">
-    <label for="claude-modelo">Modelo</label>
-    <select id="claude-modelo" name="modelo">{% for v, r in modelos %}<option value="{{ v }}"{% if v == modelo_atual %} selected{% endif %}>{{ r }}</option>{% endfor %}</select>
-    <label for="claude-esforco">Esforço de raciocínio</label>
-    <select id="claude-esforco" name="esforco">{% for v, r in esforcos %}<option value="{{ v }}"{% if v == esforco_atual %} selected{% endif %}>{{ r }}</option>{% endfor %}</select>
+    {% csrf_token %}<input type="hidden" name="acao" value="preferencias"><input type="hidden" name="perfil" value="{{ c.perfil }}">
+    <label for="claude-modelo-{{ c.perfil }}">Modelo</label>
+    <select id="claude-modelo-{{ c.perfil }}" name="modelo">{% for v, r in modelos %}<option value="{{ v }}"{% if v == c.modelo_atual %} selected{% endif %}>{{ r }}</option>{% endfor %}</select>
+    <label for="claude-esforco-{{ c.perfil }}">Esforço de raciocínio</label>
+    <select id="claude-esforco-{{ c.perfil }}" name="esforco">{% for v, r in esforcos %}<option value="{{ v }}"{% if v == c.esforco_atual %} selected{% endif %}>{{ r }}</option>{% endfor %}</select>
     <p class="sutil">Mais esforço pensa mais antes de responder: fica mais lento e gasta mais do limite da assinatura.</p>
     <button type="submit">Salvar</button>
   </form>
-  <hr>
-  <p class="sutil">Seu histórico continua no IAtiva. Resultados do banco não são enviados ao Claude.</p>
+  {% if c.perfil == "atendimento" %}
+    <hr>
+    <p class="sutil">Seu histórico continua no IAtiva. Resultados do banco não são enviados ao Claude.</p>
+    <p class="sutil">O envio de perguntas pelo chat também depende da liberação de privacidade configurada no IAtiva.</p>
+  {% else %}
+    <hr>
+    <p class="sutil">O executor só usa esta conexão quando estiver ligado no servidor (/etc/iativa/manutencao.env). Ele recebe apenas diagnósticos técnicos, sem dados do ERP.</p>
+  {% endif %}
   <p class="sutil">A assinatura tem limites. Confira na sua conta Claude se o uso extra pago está desativado.</p>
-  <p class="sutil">O envio de perguntas pelo chat também depende da liberação de privacidade configurada no IAtiva.</p>
 </section>
+{% endfor %}
 {% endblock %}

@@ -280,6 +280,14 @@ def test_ambiente_de_manutencao_nao_recebe_segredos_nem_dados(tmp_path):
     for proibido in (".env", "docker.sock", ".ssh", "iativa_var", "/app/var", "GIT_SSH", "IATIVA_ERP"):
         assert proibido not in cmd
     assert "/diag:ro" in cmd and "--allowedTools" in cmd
+    assert "--model opus" in cmd  # sem preferência salva, a manutenção usa Opus
+
+
+def test_manutencao_usa_modelo_escolhido_na_tela(tmp_path):
+    (tmp_path / "iativa-preferencias.json").write_text('{"modelo": "opus", "esforco": "high"}')
+    assert mx.modelo_e_esforco(str(tmp_path)) == ["--model", "opus", "--effort", "high"]
+    (tmp_path / "iativa-preferencias.json").write_text('{"modelo": "rm -rf", "esforco": "; x"}')
+    assert mx.modelo_e_esforco(str(tmp_path)) == ["--model", "opus"]
 
 
 def test_atendimento_continua_sem_ferramentas():

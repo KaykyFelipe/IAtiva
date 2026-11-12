@@ -62,8 +62,8 @@ def fake(tmp_path, settings, monkeypatch):
     calls = []
 
     class Provider:
-        def __init__(self, user):
-            self.cfg = cl.config_usuario(user)
+        def __init__(self, user, perfil="atendimento"):
+            self.cfg = cl.config_usuario(user, perfil)
             from iativa.agent.claude_code import ambiente
 
             self.env = ambiente(self.cfg["claude_config_dir"])
@@ -139,7 +139,7 @@ def test_nao_reutiliza_codigo_e_nao_ecoar(admin, fake, client):
     client.force_login(admin)
     response = client.post(reverse("claude-conta"), {"acao": "conectar"})
     assert response.status_code == 200
-    fluxo = fake.manager.fluxos[admin.pk]
+    fluxo = fake.manager.fluxos[(admin.pk, "atendimento")]
     esperar(lambda: fluxo.estado()["fase"] == "aguardando")
     response = client.get(reverse("claude-estado", args=[fluxo.id]))
     html = response.content.decode()
@@ -294,3 +294,35 @@ def test_esforco_vai_para_a_cli(admin, fake, monkeypatch, settings):
         p._gerar("x", {}, lambda *a: None, [], [])
     i = chamado["args"].index("--effort")
     assert chamado["args"][i + 1] == "max"
+
+
+
+def test_duas_conexoes_separadas(client, admin, fake, settings, tmp_path):
+    """M33: o agente de manutenção tem conexão, pasta e modelo próprios; não ativa o chat."""
+    settings.IATIVA_AGENTE = {**settings.IATIVA_AGENTE, "claude_manutencao_dir": str(tmp_path / "manutencao")}
+    client.force_login(admin)
+    html = client.get(reverse("claude-conta")).content.decode()
+    assert "Agente de atendimento" in html and "Agente de manutenção" in html
+    assert cl.config_usuario(admin, "manutencao")["claude_modelo"] == "opus"  # padrão da manutenção
+    pessoal = cl.config_usuario(admin)["claude_config_dir"]
+    assert cl.config_usuario(admin, "manutencao")["claude_config_dir"] != pessoal
+    r = client.post(reverse("claude-conta"), {"acao": "preferencias", "perfil": "manutencao", "modelo": "opus",
+                                              "esforco": "high"})
+    assert r.status_code == 200
+    assert cl.config_usuario(admin, "manutencao")["claude_esforco"] == "high"
+    assert cl.config_usuario(admin)["claude_esforco"] != "high"  # o atendimento não muda
+    r = client.post(reverse("claude-conta"), {"acao": "conectar", "perfil": "manutencao"})
+    assert r.status_code == 200
+    fluxo = fake.manager.fluxos[(admin.pk, "manutencao")]
+    esperar(lambda: fluxo.estado()["fase"] == "aguardando")
+    client.post(reverse("claude-conta"), {"acao": "concluir", "perfil": "manutencao", "fluxo": fluxo.id, "codigo": CODE})
+    esperar(lambda: cl.ativa(admin, "manutencao"))
+    assert (tmp_path / "manutencao" / "iativa-ativado").is_file()
+    assert not cl.ativa(admin)  # conectar a manutenção não liga o Claude no chat
+
+
+def test_perfil_desconhecido_vira_atendimento(client, admin):
+    client.force_login(admin)
+    r = client.post(reverse("claude-conta"), {"acao": "preferencias", "perfil": "../../etc", "modelo": "sonnet",
+                                              "esforco": ""})
+    assert r.status_code == 200 and cl.config_usuario(admin)["claude_modelo"] == "sonnet"

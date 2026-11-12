@@ -1,34 +1,35 @@
-<div id="claude-estado"{% if estado.fase == "iniciando" or estado.fase == "confirmando" %} hx-get="{% url 'claude-estado' estado.id %}" hx-trigger="every 2s" hx-swap="outerHTML"{% endif %}>
-  {% if erro %}<p class="erro" role="alert">{{ erro }}</p>{% endif %}
-  {% if estado.mensagem %}<p role="status">{{ estado.mensagem }}</p>{% endif %}
-  {% if not estado and not claude_ativo %}<p class="aviso">Nenhuma conta Claude conectada neste IAtiva.</p>{% endif %}
-  {% if claude_ativo %}<p class="estado estado-pronta">Selecionado para suas conversas</p>{% endif %}
+<div id="claude-estado-{{ c.perfil }}"{% if c.estado.fase == "iniciando" or c.estado.fase == "confirmando" %} hx-get="{% url 'claude-estado' c.estado.id %}?perfil={{ c.perfil }}" hx-trigger="every 2s" hx-target="this" hx-swap="outerHTML"{% endif %}>
+  {% if c.erro %}<p class="erro" role="alert">{{ c.erro }}</p>{% endif %}
+  {% if c.estado.mensagem %}<p role="status">{{ c.estado.mensagem }}</p>{% endif %}
+  {% if not c.estado and not c.claude_ativo %}<p class="aviso">Nenhuma conta Claude conectada neste agente.</p>{% endif %}
+  {% if c.claude_ativo %}<p class="estado estado-pronta">Conectado</p>{% endif %}
 
-  {% if estado.fase == "aguardando" %}
+  {% if c.estado.fase == "aguardando" %}
     <p><strong>1. Entre na sua conta na página oficial</strong></p>
-    <a href="{{ estado.url }}" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer">Abrir login do Claude ↗</a>
+    <a href="{{ c.estado.url }}" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer">Abrir login do Claude ↗</a>
     <form method="post" action="{% url 'claude-conta' %}" autocomplete="off">
       {% csrf_token %}
       <input type="hidden" name="acao" value="concluir">
-      <input type="hidden" name="fluxo" value="{{ estado.id }}">
-      <label for="codigo-claude">2. Cole o código que o Claude mostrar</label>
-      <input id="codigo-claude" name="codigo" type="password" required maxlength="1024" autocomplete="off" spellcheck="false" placeholder="Cole o código completo">
+      <input type="hidden" name="perfil" value="{{ c.perfil }}">
+      <input type="hidden" name="fluxo" value="{{ c.estado.id }}">
+      <label for="codigo-claude-{{ c.perfil }}">2. Cole o código que o Claude mostrar</label>
+      <input id="codigo-claude-{{ c.perfil }}" name="codigo" type="password" required maxlength="1024" autocomplete="off" spellcheck="false" placeholder="Cole o código completo">
       <p class="sutil">O código é entregue uma única vez ao Claude Code e não é salvo pelo IAtiva.</p>
       <button type="submit">Concluir</button>
     </form>
   {% endif %}
 
-  {% if estado.aguardando %}
+  {% if c.estado.aguardando %}
     <form method="post" action="{% url 'claude-conta' %}">
-      {% csrf_token %}<input type="hidden" name="acao" value="cancelar"><input type="hidden" name="fluxo" value="{{ estado.id }}">
+      {% csrf_token %}<input type="hidden" name="acao" value="cancelar"><input type="hidden" name="perfil" value="{{ c.perfil }}"><input type="hidden" name="fluxo" value="{{ c.estado.id }}">
       <button type="submit" class="secundario">Cancelar conexão</button>
     </form>
   {% else %}
     <form method="post" action="{% url 'claude-conta' %}">
-      {% csrf_token %}
-      {% if not claude_ativo %}<button name="acao" value="conectar" type="submit">Conectar Claude</button>{% endif %}
+      {% csrf_token %}<input type="hidden" name="perfil" value="{{ c.perfil }}">
+      {% if not c.claude_ativo %}<button name="acao" value="conectar" type="submit">Conectar Claude</button>{% endif %}
       <button name="acao" value="verificar" type="submit" class="secundario">Verificar conexão</button>
-      {% if claude_ativo or estado.fase == "conectado" %}<button name="acao" value="desconectar" type="submit" class="secundario">Desconectar</button>{% endif %}
+      {% if c.claude_ativo or c.estado.fase == "conectado" %}<button name="acao" value="desconectar" type="submit" class="secundario">Desconectar</button>{% endif %}
     </form>
   {% endif %}
 </div>

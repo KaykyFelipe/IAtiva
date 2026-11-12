@@ -21,7 +21,8 @@ Configuração (fora do repositório; o executor não pode alterá-la): /etc/iat
   MANUTENCAO_PUBLICAR=1         publica e implanta (padrão 0: só prepara e valida)
   MANUTENCAO_GIT_SSH_KEY=...    chave SSH com escrita no repositório (só o executor usa)
   MANUTENCAO_GIT_REMOTO=git@github.com:KaykyFelipe/IAtiva.git
-  MANUTENCAO_CLAUDE_DIR=...     login do Claude só da manutenção
+  MANUTENCAO_CLAUDE_DIR=...     login do Claude só da manutenção (padrão: a conexão "Agente de manutenção"
+                                da tela Conexões Claude, em var/claude-manutencao do volume do app)
   MANUTENCAO_MAX_POR_DIA=3  MANUTENCAO_TEMPO_S=1800
 """
 import json
@@ -181,7 +182,8 @@ def reproduz(wt: Path, base: str, imagem: str, novos: list[str]) -> bool:
 
 def integrar_e_publicar(wt: Path, remoto: str, ssh_key: str, imagem: str, validar_final) -> str:
     """Integra a main atual sem sobrescrever ninguém (rebase, sem force) e publica. Devolve o commit."""
-    env = {**os.environ, "GIT_SSH_COMMAND": f"ssh -i {shlex.quote(ssh_key)} -o IdentitiesOnly=yes -o BatchMode=yes"}
+    env = {**os.environ, "GIT_SSH_COMMAND": f"ssh -i {shlex.quote(ssh_key)} -o IdentitiesOnly=yes -o BatchMode=yes "
+                                            "-o StrictHostKeyChecking=accept-new"}
     for tentativa in range(2):
         git("fetch", remoto, "main", cwd=wt, env=env)
         if git("rebase", "FETCH_HEAD", cwd=wt, verificar=False).returncode != 0:
@@ -227,13 +229,33 @@ def contador_do_dia(incrementar=False) -> int:
     return n
 
 
+def pasta_claude(c: dict) -> str:
+    """Conexão do "Agente de manutenção" feita na tela do IAtiva (M33), salvo se configurada à mão."""
+    if c.get("MANUTENCAO_CLAUDE_DIR"):
+        return c["MANUTENCAO_CLAUDE_DIR"]
+    r = rodar(["docker", "volume", "inspect", "-f", "{{.Mountpoint}}", "iativa_iativa_var"], verificar=False)
+    return str(Path(r.stdout.strip()) / "claude-manutencao") if r.returncode == 0 and r.stdout.strip() else ""
+
+
+def modelo_e_esforco(pasta: str) -> list[str]:
+    """Modelo e esforço escolhidos na tela para o agente de manutenção (padrão: Opus)."""
+    try:
+        pref = json.loads((Path(pasta) / "iativa-preferencias.json").read_text())
+    except (OSError, ValueError):
+        pref = {}
+    modelo = pref.get("modelo") if pref.get("modelo") in ("opus", "sonnet", "haiku") else "opus"
+    esforco = pref.get("esforco") if pref.get("esforco") in ("low", "medium", "high", "xhigh", "max") else ""
+    return ["--model", modelo] + (["--effort", esforco] if esforco else [])
+
+
 def comando_claude(wt: Path, pasta_diag: Path, imagem: str, c: dict, diag: dict) -> list[str]:
     """Claude com ferramentas de desenvolvimento, isolado: só o worktree, o diagnóstico (leitura) e o
     login próprio da manutenção. Sem .env, sem socket do Docker, sem chave do Git, sem o var/ do app."""
     return ["docker", "run", "--rm", "--cpus", "2", "--memory", "3g", "--pids-limit", "512",
-            "-e", "CLAUDE_CONFIG_DIR=/claude", "-v", f"{c.get('MANUTENCAO_CLAUDE_DIR', '')}:/claude",
+            "-e", "CLAUDE_CONFIG_DIR=/claude", "-v", f"{pasta_claude(c)}:/claude",
             "-v", f"{wt}:/app/trabalho", "-v", f"{pasta_diag}:/diag:ro", "-w", "/app/trabalho",
             "--entrypoint", "claude", imagem, "-p", prompt(diag), "--max-turns", "40",
+            *modelo_e_esforco(pasta_claude(c)),
             "--permission-mode", "acceptEdits",
             "--allowedTools", "Read,Edit,Write,Glob,Grep,Bash(python -m pytest:*)"]
 
@@ -288,7 +310,8 @@ def principal(argv) -> int:
     if "--estado" in argv:
         print(f"ativa={c['MANUTENCAO_ATIVA']} publicar={c['MANUTENCAO_PUBLICAR']} "
               f"credencial={'sim' if c.get('MANUTENCAO_GIT_SSH_KEY') else 'não'} "
-              f"claude={'sim' if c.get('MANUTENCAO_CLAUDE_DIR') else 'não'} hoje={contador_do_dia()}")
+              f"agente_manutencao={'conectado' if (Path(pasta_claude(c) or '/x') / 'iativa-ativado').is_file() else 'não conectado'} "
+              f"modelo={' '.join(modelo_e_esforco(pasta_claude(c) or '/x'))} hoje={contador_do_dia()}")
         return 0
     if c["MANUTENCAO_ATIVA"] != "1":
         return 0
@@ -303,8 +326,9 @@ def principal(argv) -> int:
     if contador_do_dia() >= int(c["MANUTENCAO_MAX_POR_DIA"]):
         log("limite diário de correções atingido")
         return 0
-    if not c.get("MANUTENCAO_CLAUDE_DIR"):
-        log("sem login do Claude da manutenção (MANUTENCAO_CLAUDE_DIR); nada feito")
+    pasta = pasta_claude(c)
+    if not pasta or not (Path(pasta) / "iativa-ativado").is_file():
+        log("o agente de manutenção não está conectado (tela Conexões Claude); nada feito")
         return 0
     try:
         fila = json.loads(manage("exportar") or "[]")

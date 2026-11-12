@@ -34,6 +34,30 @@ MODELOS = (("opus", "Opus (mais capaz)"), ("sonnet", "Sonnet (equilibrado)"), ("
 ESFORCOS = (("", "Padrão da CLI"), ("low", "Baixo"), ("medium", "Médio"), ("high", "Alto"),
             ("xhigh", "Muito alto"), ("max", "Máximo"))
 PREFERENCIAS = "iativa-preferencias.json"
+# M33: duas conexões separadas, como dois agentes. "atendimento" responde no chat (uma por usuário de TI);
+# "manutencao" é do executor de manutenção (uma só, do sistema), com modelo próprio (ex.: Opus).
+PERFIS = {
+    "atendimento": {"titulo": "Agente de atendimento",
+                    "descricao": "Responde nas suas conversas pessoais do chat.",
+                    "conectado": "Claude conectado para suas conversas pessoais."},
+    "manutencao": {"titulo": "Agente de manutenção",
+                   "descricao": "Usado só pelo executor de manutenção para corrigir falhas técnicas do IAtiva, num "
+                                "ambiente isolado. Não responde no chat nem vê dados do ERP.",
+                   "conectado": "Claude conectado para o agente de manutenção."},
+}
+
+
+def perfil_valido(perfil):
+    if perfil not in PERFIS:
+        raise FalhaModelo("Conexão desconhecida.")
+    return perfil
+
+
+def pasta_manutencao() -> Path:
+    pasta = Path(settings.IATIVA_AGENTE.get("claude_manutencao_dir") or Path(settings.BASE_DIR) / "var/claude-manutencao")
+    if not pasta.is_absolute():
+        raise FalhaModelo("O diretório da conta Claude da manutenção deve ser absoluto.")
+    return pasta
 
 
 def eh_ti(user):
@@ -50,14 +74,19 @@ def permitido(user):
                 and (not dono or user.get_username() == dono))
 
 
-def config_usuario(user):
+def config_usuario(user, perfil="atendimento"):
     if not permitido(user):
         raise PermissionDenied
+    perfil_valido(perfil)
     cfg = dict(settings.IATIVA_AGENTE)
-    root = Path(cfg.get("claude_contas_dir") or Path(settings.BASE_DIR) / "var/claude-pessoal")
-    if not root.is_absolute():
-        raise FalhaModelo("O diretório das contas Claude deve ser absoluto.")
-    cfg["claude_config_dir"] = str(root / f"usuario-{user.pk}")
+    if perfil == "manutencao":
+        cfg["claude_config_dir"] = str(pasta_manutencao())
+        cfg["claude_modelo"] = "opus"  # padrão da manutenção; a escolha salva vale por cima
+    else:
+        root = Path(cfg.get("claude_contas_dir") or Path(settings.BASE_DIR) / "var/claude-pessoal")
+        if not root.is_absolute():
+            raise FalhaModelo("O diretório das contas Claude deve ser absoluto.")
+        cfg["claude_config_dir"] = str(root / f"usuario-{user.pk}")
     cfg.update(preferencias(cfg))
     return cfg
 
@@ -77,18 +106,18 @@ def preferencias(cfg):
     return atual
 
 
-def salvar_preferencias(user, modelo, esforco):
+def salvar_preferencias(user, modelo, esforco, perfil="atendimento"):
     if modelo not in dict(MODELOS) or esforco not in dict(ESFORCOS):
         raise FalhaModelo("Modelo ou esforço inválido.")
-    pasta = Path(config_usuario(user)["claude_config_dir"])
+    pasta = Path(config_usuario(user, perfil)["claude_config_dir"])
     pasta.mkdir(parents=True, exist_ok=True, mode=0o700)
     (pasta / PREFERENCIAS).write_text(json.dumps({"modelo": modelo, "esforco": esforco}), encoding="utf-8")
 
 
-def ativa(user):
+def ativa(user, perfil="atendimento"):
     if not permitido(user):
         return False
-    return (Path(config_usuario(user)["claude_config_dir"]) / "iativa-ativado").is_file()
+    return (Path(config_usuario(user, perfil)["claude_config_dir"]) / "iativa-ativado").is_file()
 
 
 def _marcar(cfg, habilitado):
@@ -121,8 +150,8 @@ def chave_sessao(request):
     return hashlib.sha256(request.session.session_key.encode()).hexdigest()
 
 
-def provedor_login(user):
-    return ClaudeCodeProvider(config_usuario(user), somente_login=True)
+def provedor_login(user, perfil="atendimento"):
+    return ClaudeCodeProvider(config_usuario(user, perfil), somente_login=True)
 
 
 def conectado(provider):
@@ -144,7 +173,7 @@ def conectado(provider):
 
 @dataclass
 class Fluxo:
-    dono: int
+    dono: object  # (id do usuário, perfil)
     sessao: str
     cfg: dict
     provider: object
@@ -187,7 +216,7 @@ class Fluxo:
                 with self.lock:
                     if self.fase == "iniciando":
                         _marcar(self.cfg, True)
-                        self.terminar("conectado", "Claude conectado para suas conversas pessoais.")
+                        self.terminar("conectado", PERFIS[self.dono[1]]["conectado"])
                 return
             folder = Path(self.cfg["claude_config_dir"])
             folder.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -222,7 +251,7 @@ class Fluxo:
                         return
                     if code == 0 and conectado(self.provider):
                         _marcar(self.cfg, True)
-                        self.terminar("conectado", "Claude conectado para suas conversas pessoais.")
+                        self.terminar("conectado", PERFIS[self.dono[1]]["conectado"])
                     else:
                         self.terminar("falhou", "O Claude não confirmou o login. Inicie uma nova conexão.")
         except Exception:
@@ -242,32 +271,37 @@ class LoginPessoal:
         self.lock = RLock()
         self.fluxos = {}
 
-    def iniciar(self, user, sessao):
-        cfg = config_usuario(user)
+    def iniciar(self, user, sessao, perfil="atendimento"):
+        cfg = config_usuario(user, perfil)
+        chave = (user.pk, perfil)
         with self.lock:
-            antigo = self.fluxos.get(user.pk)
+            antigo = self.fluxos.get(chave)
             if antigo and antigo.estado()["aguardando"]:
                 if antigo.sessao != sessao:
                     raise FalhaModelo("Já existe um login em andamento em outra sessão sua.")
                 return antigo.estado()
-            fluxo = Fluxo(user.pk, sessao, cfg, provedor_login(user))
-            self.fluxos[user.pk] = fluxo
+            if perfil == "manutencao":  # conta única do sistema: um login por vez, de qualquer pessoa de TI
+                for (dono, p), f in self.fluxos.items():
+                    if p == "manutencao" and dono != user.pk and f.estado()["aguardando"]:
+                        raise FalhaModelo("Outra pessoa de TI está conectando o agente de manutenção agora.")
+            fluxo = Fluxo(chave, sessao, cfg, provedor_login(user, perfil))
+            self.fluxos[chave] = fluxo
             fluxo.temporizador = Timer(min(30, TEMPO_LOGIN), lambda: fluxo.terminar("expirou", "O login não respondeu a tempo. Conecte novamente."))
             fluxo.temporizador.daemon = True
             fluxo.temporizador.start()
             Thread(target=fluxo.rodar, daemon=True).start()
             return fluxo.estado()
 
-    def obter(self, user, sessao, id):
-        config_usuario(user)
+    def obter(self, user, sessao, id, perfil="atendimento"):
+        config_usuario(user, perfil)
         with self.lock:
-            fluxo = self.fluxos.get(user.pk)
+            fluxo = self.fluxos.get((user.pk, perfil))
             if not fluxo or fluxo.id != id or fluxo.sessao != sessao:
                 raise FalhaModelo("Este login expirou ou pertence a outra sessão. Conecte novamente.")
             return fluxo
 
-    def concluir(self, user, sessao, id, codigo):
-        fluxo = self.obter(user, sessao, id)
+    def concluir(self, user, sessao, id, codigo, perfil="atendimento"):
+        fluxo = self.obter(user, sessao, id, perfil)
         codigo = codigo.strip()
         if not CODIGO.fullmatch(codigo):
             raise FalhaModelo("Cole o código completo exibido pelo Claude, sem espaços ou quebras de linha.")
@@ -290,21 +324,21 @@ class LoginPessoal:
                 codigo = ""
         return fluxo.estado()
 
-    def cancelar(self, user, sessao, id):
-        fluxo = self.obter(user, sessao, id)
+    def cancelar(self, user, sessao, id, perfil="atendimento"):
+        fluxo = self.obter(user, sessao, id, perfil)
         fluxo.terminar("cancelado", "Conexão cancelada.")
         return fluxo.estado()
 
-    def desconectar(self, user, sessao):
-        cfg = config_usuario(user)
+    def desconectar(self, user, sessao, perfil="atendimento"):
+        cfg = config_usuario(user, perfil)
         with self.lock:
-            fluxo = self.fluxos.get(user.pk)
+            fluxo = self.fluxos.get((user.pk, perfil))
             if fluxo and fluxo.estado()["aguardando"]:
                 if fluxo.sessao != sessao:
                     raise FalhaModelo("Cancele o login na sessão que o iniciou antes de desconectar.")
                 fluxo.terminar("cancelado", "Conexão cancelada.")
             _marcar(cfg, False)
-            provider = provedor_login(user)
+            provider = provedor_login(user, perfil)
             code, _, _ = provider._executar(["--safe-mode", "auth", "logout"], timeout=10)
             if code or conectado(provider):
                 raise FalhaModelo("O uso no chat foi desativado, mas a CLI não confirmou a desconexão. Tente novamente.")
