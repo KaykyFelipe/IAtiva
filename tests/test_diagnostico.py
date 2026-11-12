@@ -208,3 +208,13 @@ def test_consolidacao_preserva_setor_sem_somar_escopos(faturamento):
     assert r.blocos[0].resultado.consolidado
     from django.template.loader import render_to_string
     assert '2.431,27' in render_to_string('chat/_consolidado.html',{'resultado':r})
+
+def test_por_filial_nao_interrompe_investigacao_por_erro_de_formato(faturamento):
+    b=faturamento
+    c=conversas.nova_individual(b['ana'])
+    d=consulta(b);d['acao']='investigar_divergencia'
+    d['parametros'][-1]['valor']+=' por filial'
+    p=Espiao([d])
+    m,r=conversas.enviar(b['ana'],c,'Investigue a diferença do faturamento em todas as filiais',p)
+    assert m.ficha['tipo']=='diagnostico' and len(r.blocos)==12
+    assert len(p.entradas)==1

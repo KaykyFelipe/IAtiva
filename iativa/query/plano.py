@@ -156,6 +156,10 @@ def ler_agregacao(texto: str, spec: dict):
     if not metricas or len(metricas) > 4:
         raise ValueError("informe de 1 a 4 cálculos (ex.: soma:CAMPO)")
     grupo = grupo.strip().upper()
+    if grupo in ('FILIAL', 'FILIAIS'):
+        # Cada filial autorizada já é executada separadamente pelo serviço. Não é nome de
+        # coluna nem motivo para ampliar o escopo: TODAS/filial continua sendo parâmetro próprio.
+        grupo = ''
     if grupo in ("MES", "ANO"):
         if not spec.get("campo_data"):
             raise ValueError("a consulta não tem campo de data para agrupar por mês/ano")

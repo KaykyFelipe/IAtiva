@@ -6,7 +6,8 @@ no primeiro sucesso, mesmo quando o texto prometia investigar a diferença depoi
 A ação `investigar_divergencia` aceita o mesmo objetivo/parâmetros de `preparar_consulta`.
 O modelo identifica semanticamente o pedido; há também uma proteção para divergências explícitas
 que tenham sido tratadas como consulta simples. A execução inicial vira a primeira evidência,
-não a conclusão. A recusa textual numa continuação sem escopo novo reaproveita a consulta anterior.
+não a conclusão. A expressão de cálculo `por filial` é aceita como o agrupamento já feito
+pelo serviço; não muda o parâmetro de escopo nem amplia filiais. A recusa textual numa continuação sem escopo novo reaproveita a consulta anterior.
 Um período/empresa/filial novo não reaproveita silenciosamente os critérios antigos.
 
 O executor faz decomposições por filial/moeda, tipo, série, status e datas disponíveis.
