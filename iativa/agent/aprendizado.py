@@ -163,6 +163,35 @@ def _tipo(campo) -> str:
     return {"D": "data", "N": "numero"}.get(campo.tipo, "texto")
 
 
+MAX_JUNCOES = 2
+MAX_COLUNAS_JUNCAO = 5
+
+
+def juncoes_possiveis(user, alias: str) -> list[dict]:
+    """Tabelas que a base `alias` referencia pelo dicionário (SX9) e que dá para juntar sem duplicar:
+    os campos do outro lado cobrem a chave única dele (SIX ordem 1, sem a filial). Ex.: SF2 -> SA1
+    por F2_CLIENTE+F2_LOJA = A1_COD+A1_LOJA, para trazer o nome do cliente."""
+    restritas = _restritas(user)
+    out, vistos = [], set()
+    with abrir_catalogo() as cat:
+        for r in cat.relacionados(alias):
+            dom = r.origem  # tabela referenciada (X9_DOM)
+            if dom in vistos or not ALIAS_RE.match(dom) or dom.startswith(SISTEMA) or dom in restritas:
+                continue
+            t = cat.tabelas([dom], com_campos=True).get(dom)
+            if t is None or not t.chave:
+                continue
+            pares = [(a, b) for a, b in zip(r.campos_origem, r.campos_destino)
+                     if not a.endswith("_FILIAL") and not b.endswith("_FILIAL")]
+            chave = {c for c in t.chave if not c.endswith("_FILIAL")}
+            if not pares or not chave or not chave <= {a for a, _ in pares}:
+                continue  # não liga pela chave única: poderia duplicar linhas e somas
+            vistos.add(dom)
+            campos = [c for c in t.campos if c.consultavel and not c.nome.endswith("_FILIAL") and not sensivel(c)]
+            out.append({"tabela": dom, "nome": t.nome, "pares": [list(p) for p in pares], "campos": campos})
+    return out
+
+
 @transaction.atomic
 def criar_automatico(user, consulta: dict) -> ConsultaModelo:
     """M18: a IA montou a consulta; o sistema confere, cria e já aprova (sem revisão humana).
@@ -191,6 +220,29 @@ def criar_automatico(user, consulta: dict) -> ConsultaModelo:
     if igual is not None:
         return igual
     cm = salvar_proposta(user, alias, dados, automatico=True)
+    pedidas = consulta.get("juncoes") or []
+    if pedidas:
+        possiveis = {j["tabela"]: j for j in juncoes_possiveis(user, alias)}
+        juncoes, extras = [], []
+        for n, pedida in enumerate(pedidas[:MAX_JUNCOES], start=1):
+            j = possiveis.get(pedida.get("tabela", ""))
+            if j is None:
+                continue  # sem relacionamento seguro: ignora em vez de arriscar duplicar
+            por_nome_j = {c.nome: c for c in j["campos"]}
+            cols = [c for c in dict.fromkeys(pedida.get("colunas", [])) if c in por_nome_j][:MAX_COLUNAS_JUNCAO]
+            if not cols:
+                continue
+            apelido = f"j{n}"
+            juncoes.append({"tabela": j["tabela"], "alias": apelido, "pares": j["pares"]})
+            extras += [{"campo": c, "rotulo": por_nome_j[c].titulo or c, "tipo": _tipo(por_nome_j[c]),
+                        "alias": apelido} for c in cols]
+        if juncoes:
+            spec = dict(cm.spec)
+            spec["juncoes"] = juncoes
+            spec["colunas"] = spec["colunas"] + extras
+            cm.spec = spec
+            cm.save(update_fields=["spec"])
+            _testar_compilacao(cm)
     cm.situacao, cm.aprovado_por, cm.aprovado_em = SituacaoModelo.APROVADA, user, timezone.now()
     cm.save(update_fields=["situacao", "aprovado_por", "aprovado_em"])
     registrar("parametro_aprovado", "agente", usuario=user, entidade_id=cm.pk, estado_novo="modelo_aprovado_automatico")
@@ -278,8 +330,9 @@ def _testar_compilacao(cm):
     plano = montar_modelo(cm.tabela, cm.spec, valores, cm.codigo)
     with abrir_catalogo() as cat:
         comp = compilar(plano, cat, 10)
-        fisica = cat.tabelas([cm.tabela])[cm.tabela].fisica
-    validar(comp.sql, {fisica}, 11)
+        aliases = [cm.tabela] + [j["tabela"] for j in cm.spec.get("juncoes", [])]
+        fisicas = {t.fisica for t in cat.tabelas(aliases).values()}
+    validar(comp.sql, fisicas, 11)
 
 
 def _autoaprovacao() -> bool:

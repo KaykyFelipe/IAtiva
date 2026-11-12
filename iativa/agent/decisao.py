@@ -94,6 +94,11 @@ def esquema(codigos_objetivo, codigos_parametro) -> dict:
                     "colunas": {"type": "array", "items": {"type": "string"}},
                     "campo_data": {"type": "string"}, "campo_busca": {"type": "string"},
                     "filtraveis": {"type": "array", "items": {"type": "string"}},
+                    "juncoes": {"type": "array", "description": "Outras tabelas de juncoes_possiveis para trazer nomes/descrições.",
+                                "items": {"type": "object", "properties": {
+                                    "tabela": {"type": "string"},
+                                    "colunas": {"type": "array", "items": {"type": "string"}}},
+                                    "required": ["tabela", "colunas"]}},
                 },
                 "required": ["tabela", "nome", "colunas"],
             },
@@ -156,7 +161,7 @@ def validar(saida, codigos_objetivo, codigos_parametro) -> Decisao:
 
 def _consulta(c) -> dict:
     if not isinstance(c, dict) or set(c) - {"tabela", "nome", "descricao", "colunas", "campo_data", "campo_busca",
-                                             "filtraveis"}:
+                                             "filtraveis", "juncoes"}:
         raise DecisaoInvalida("consulta")
     def lista(chave, maximo):
         v = c.get(chave) or []
@@ -172,4 +177,17 @@ def _consulta(c) -> dict:
         "campo_data": _texto(c.get("campo_data", "") or "", 20, "campo_data"),
         "campo_busca": _texto(c.get("campo_busca", "") or "", 20, "campo_busca"),
         "filtraveis": lista("filtraveis", 10),
+        "juncoes": _juncoes(c.get("juncoes") or []),
     }
+
+
+def _juncoes(v) -> list[dict]:
+    if not isinstance(v, list) or len(v) > 2:
+        raise DecisaoInvalida("juncoes")
+    out = []
+    for j in v:
+        if not isinstance(j, dict) or not isinstance(j.get("colunas") or [], list) or len(j.get("colunas") or []) > 5:
+            raise DecisaoInvalida("juncao")
+        out.append({"tabela": _texto(j.get("tabela", ""), 6, "tabela").upper(),
+                    "colunas": [_texto(x, 20, "coluna").upper() for x in j.get("colunas") or []]})
+    return out

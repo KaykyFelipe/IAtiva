@@ -382,7 +382,13 @@ def _campos_para_modelo(user, alias):
     info = aprendizado.campos_da_tabela(user, alias, automatico=True)
     campos = [{"campo": f.nome, "tipo": {"D": "data", "N": "numero"}.get(f.tipo, "texto"), "titulo": f.titulo}
               for f in info["campos"] if not aprendizado.sensivel(f)]
-    return {"tabela": info["alias"], "nome": info["nome"], "campos": campos[:150]}
+    try:
+        juncoes = [{"tabela": j["tabela"], "nome": j["nome"],
+                    "campos": [{"campo": f.nome, "titulo": f.titulo} for f in j["campos"]][:40]}
+                   for j in aprendizado.juncoes_possiveis(user, alias)][:6]
+    except Exception:
+        juncoes = []
+    return {"tabela": info["alias"], "nome": info["nome"], "campos": campos[:150], "juncoes_possiveis": juncoes}
 
 
 def _aprender_sozinho(user, c, d, texto, ficha, provedor, entrada, atual):

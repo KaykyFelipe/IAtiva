@@ -81,6 +81,9 @@ class Catalogo:
     def relacionamentos(self, aliases: list[str]) -> list[Relacionamento]:
         return self.dicionario.relacionamentos(aliases)
 
+    def relacionados(self, alias: str) -> list[Relacionamento]:
+        return self.dicionario.relacionados(alias)
+
 
 FONTES = ("sintetico", "protheus")
 

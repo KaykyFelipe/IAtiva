@@ -170,6 +170,23 @@ class DicionarioProtheus:
         except FonteInvalida:
             return ()
 
+    def relacionados(self, alias: str) -> list[Relacionamento]:
+        """Relacionamentos em que `alias` aponta para outra tabela (X9_CDOM = alias)."""
+        validar_alias(alias)
+        rows = self._consultar(
+            f"SELECT X9_DOM, X9_CDOM, X9_EXPDOM, X9_EXPCDOM FROM {self.sx9} "
+            "WHERE D_E_L_E_T_ = ' ' AND X9_CDOM = ? ORDER BY X9_DOM, X9_IDENT", (alias,),
+        )
+        out = []
+        for dom, cdom, expdom, expcdom in rows:
+            try:
+                origem, destino = _expressao(expdom), _expressao(expcdom)
+            except FonteInvalida:
+                continue
+            if len(origem) == len(destino) and dom.strip() != alias:
+                out.append(Relacionamento(dom.strip(), cdom.strip(), origem, destino))
+        return out
+
     def relacionamentos(self, aliases: list[str]) -> list[Relacionamento]:
         aliases = [validar_alias(a) for a in aliases]
         if len(aliases) < 2:

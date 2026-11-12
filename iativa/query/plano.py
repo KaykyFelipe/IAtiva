@@ -164,6 +164,11 @@ def ler_agregacao(texto: str, spec: dict):
     return metricas, grupo, top
 
 
+def apelido(spec: dict, campo: str) -> str:
+    """Alias SQL do campo na consulta aprendida: e1 (base) ou j1/j2 (tabela juntada)."""
+    return next((c.get("alias", "e1") for c in spec.get("colunas", []) if c["campo"] == campo), "e1")
+
+
 def _aplicar_agregacao(plano, spec: dict, texto: str):
     try:
         metricas, grupo, top = ler_agregacao(texto, spec)
@@ -179,16 +184,17 @@ def _aplicar_agregacao(plano, spec: dict, texto: str):
         colunas.append(Coluna("Mês" if grupo == "MES" else "Ano", Campo(e1, spec["campo_data"]),
                               tipo=grupo.lower(), transformacao=grupo))
     elif grupo:
-        colunas.append(Coluna(rotulos[grupo], Campo(e1, grupo), tipo=tipos[grupo]))
+        colunas.append(Coluna(rotulos[grupo], Campo(apelido(spec, grupo), grupo), tipo=tipos[grupo]))
     filial = next(f.campo for f in plano.filtros if f.campo.nome.endswith("_FILIAL"))
     for func, campo in metricas:
         if campo == "*":
             colunas.append(Coluna("Quantidade", filial, agregacao="COUNT", tipo="inteiro"))
         elif func == "COUNT":
-            colunas.append(Coluna(f"Quantidade de {rotulos[campo]}", Campo(e1, campo), agregacao=func, tipo="inteiro"))
+            colunas.append(Coluna(f"Quantidade de {rotulos[campo]}", Campo(apelido(spec, campo), campo), agregacao=func,
+                                  tipo="inteiro"))
         else:
             tipo = "valor" if tipos[campo] == "numero" else tipos[campo]
-            colunas.append(Coluna(f"{NOME_FUNCAO[func]} de {rotulos[campo]}", Campo(e1, campo), agregacao=func,
+            colunas.append(Coluna(f"{NOME_FUNCAO[func]} de {rotulos[campo]}", Campo(apelido(spec, campo), campo), agregacao=func,
                                   tipo=tipo))
     plano.colunas, plano.agrupar, plano.top = colunas, bool(grupo), top
     primeira_metrica = colunas[1 if grupo else 0].rotulo
@@ -221,6 +227,9 @@ def montar_modelo(tabela: str, spec: dict, valores: dict, codigo: str) -> Plano:
     e1 = "e1"
     filial_campo = f"{tabela[1:]}_FILIAL" if tabela.startswith("S") else f"{tabela}_FILIAL"
     plano = Plano(objetivo=codigo, base=tabela, filial=valores["filial-analise"])
+    for j in spec.get("juncoes", []):
+        plano.juncoes.append(Juncao(j["alias"], j["tabela"], tuple((a, b) for a, b in j["pares"])))
+        plano.premissas.append(f"Junção com {j['tabela']} pela chave do dicionário (SX9), sem duplicar linhas.")
     plano.filtros.append(Filtro(Campo(e1, filial_campo), "=", valores["filial-analise"]))
     for f in spec.get("filtros_fixos", []):
         plano.filtros.append(Filtro(Campo(e1, f["campo"]), "=", f["valor"]))
@@ -237,7 +246,7 @@ def montar_modelo(tabela: str, spec: dict, valores: dict, codigo: str) -> Plano:
     from iativa.agent.contratos import campo_busca  # noqa: I001
 
     if campo_busca(spec):
-        _aplicar_busca(plano, Campo(e1, campo_busca(spec)), valores)
+        _aplicar_busca(plano, Campo(apelido(spec, campo_busca(spec)), campo_busca(spec)), valores)
     if valores.get(FILTRO):
         from iativa.agent.contratos import campos_filtraveis
 
@@ -248,10 +257,10 @@ def montar_modelo(tabela: str, spec: dict, valores: dict, codigo: str) -> Plano:
 
             raise PlanoInvalido(str(exc)) from None
         for campo, valor in filtros:
-            plano.filtros.append(Filtro(Campo(e1, campo), "=", valor))
+            plano.filtros.append(Filtro(Campo(apelido(spec, campo), campo), "=", valor))
             plano.premissas.append(f"Filtro: {campo} = {valor}.")
     tipos = {"data": "data", "numero": "numero", "texto": "texto"}
-    plano.colunas = [Coluna(c["rotulo"], Campo(e1, c["campo"]), tipo=tipos.get(c["tipo"], "texto"))
+    plano.colunas = [Coluna(c["rotulo"], Campo(c.get("alias", "e1"), c["campo"]), tipo=tipos.get(c["tipo"], "texto"))
                      for c in spec["colunas"]]
     rotulos = [c.rotulo for c in plano.colunas]
     ordem = next((c["rotulo"] for c in spec["colunas"] if c["campo"] == campo_data), rotulos[0])
