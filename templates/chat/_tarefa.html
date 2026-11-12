@@ -20,6 +20,11 @@
     {% endfor %}
   </ol>
 
+  {% if tarefa.consumo.correcoes %}
+    <ul class="tarefa-correcoes" aria-label="Correções feitas sozinha">
+      {% for x in tarefa.consumo.correcoes %}<li>{{ x }}</li>{% endfor %}
+    </ul>
+  {% endif %}
   {% if tarefa.motivo and tarefa.situacao != "concluida" %}<p class="tarefa-motivo">{{ tarefa.motivo }}</p>{% endif %}
   {% if tarefa.cobertura.total %}
     <p class="tarefa-cobertura"><strong>{{ tarefa.cobertura.verificados }}</strong> verificada(s) · <strong>{{ tarefa.cobertura.inconclusivos }}</strong> inconclusiva(s) · {{ tarefa.cobertura.total }} na lista</p>

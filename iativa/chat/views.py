@@ -395,22 +395,12 @@ def andamento(request, pedido):
 
 
 def tarefa_ativa(user, c):
-    """Tarefa da conversa para a barra fixa: a em andamento ou a que acabou há pouco."""
-    from datetime import timedelta
-
-    from django.utils import timezone
-
-    from iativa.agent.models import Tarefa
+    """Tarefa em andamento da conversa (barra fixa e botão de parar). Terminou: a barra some."""
+    from iativa.agent.models import TERMINAIS, Tarefa
 
     if c is None:
         return None
-    qs = Tarefa.objects.filter(usuario=user, conversa=c).order_by("-id")
-    t = qs.first()
-    if t is None:
-        return None
-    if t.terminal and (t.concluido_em is None or timezone.now() - t.concluido_em > timedelta(minutes=10)):
-        return None
-    return t
+    return Tarefa.objects.filter(usuario=user, conversa=c).exclude(situacao__in=TERMINAIS).order_by("-id").first()
 
 
 @require_GET

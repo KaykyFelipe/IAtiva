@@ -265,10 +265,9 @@ def _juncoes_sem_duplicar(cat, plano, cfg, permitidas) -> bool:
 
 
 def _situacao_da_falha(exc) -> str:
-    nome = type(exc).__name__.lower()
-    if isinstance(exc, TempoEsgotado) or "timeout" in nome or "HYT00" in (str(exc.args[0]) if exc.args else ""):
-        return TEMPO_ESGOTADO
-    return FALHA_TRANSITORIA
+    from .executor import tipo_falha
+
+    return TEMPO_ESGOTADO if tipo_falha(exc) in ("tempo", "bloqueio") else FALHA_TRANSITORIA
 
 
 def executar_solicitacao(user, s: RequestContext) -> Resultado:

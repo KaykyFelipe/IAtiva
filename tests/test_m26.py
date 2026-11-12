@@ -95,4 +95,82 @@ def test_barra_fixa_acompanha_a_tarefa(base, client):
     assert html.index('id="atividade-fixa"') > html.index('class="compositor"')  # barra dentro do compositor
     tarefas.processar_proxima()
     barra = client.get(reverse("chat:atividade", args=[c.pk])).content.decode()
-    assert "Concluída" in barra and "hx-trigger" not in barra  # parou de consultar
+    assert "hidden" in barra and "hx-trigger" not in barra and "data-tarefa-ativa" not in barra  # some ao terminar
+
+
+# --- recuperação de falhas do banco no worker ---------------------------------------------------------
+
+class FalhaBanco(Exception):
+    """Imita o pyodbc.OperationalError do SQL Server (SQLSTATE no primeiro argumento)."""
+
+
+def _falhar_quando(monkeypatch, condicao, estado="HYT00"):
+    from iativa.agent import investigacao as inv
+
+    original = inv._consultar
+
+    def talvez(cat, plano, ctl, limite):
+        if condicao(plano):
+            raise FalhaBanco(estado, "Query timeout expired")
+        return original(cat, plano, ctl, limite)
+
+    monkeypatch.setattr(inv, "_consultar", talvez)
+
+
+def _tarefa_pronta(b):
+    c = _lista(b)
+    conversas.enviar(b["u"], c, PEDIDO, FakeProvider([_investigar()]))
+    return Tarefa.objects.get()
+
+
+def _tem_nome(plano, nome):
+    return any(f.op == "IN" and any(nome in str(v) for v in f.valor) for f in plano.filtros)
+
+
+def test_lote_que_nao_responde_e_dividido_e_a_tarefa_conclui(base, monkeypatch):
+    t = _tarefa_pronta(base)
+    _falhar_quando(monkeypatch, lambda p: _tem_nome(p, "BRUNO") and p.filial == "01")
+    tarefas.processar_proxima()
+    t.refresh_from_db()
+    assert t.situacao == "concluida" and t.cobertura["total"] == len(LISTA)
+    assert t.cobertura["inconclusivos"] >= 1
+    correcoes = " ".join(t.consumo["correcoes"])
+    assert "dividi em lotes menores" in correcoes and "marquei como inconclusivo" in correcoes
+    bruno = next(i for i in tarefas.conclusao(base["u"], t).itens if i.reg.nome.startswith("BRUNO"))
+    assert bruno.verificado is False and "não respondeu" in bruno.texto  # o motivo aparece na conclusão
+    assert "BRUNO" not in str(t.consumo)
+
+
+def test_falha_passageira_na_lista_e_repetida(base, monkeypatch):
+    t = _tarefa_pronta(base)
+    vezes = {"n": 0}
+
+    def primeira_falha(p):
+        if p.objetivo != "investigacao" and vezes["n"] == 0:
+            vezes["n"] += 1
+            return True
+        return False
+
+    _falhar_quando(monkeypatch, primeira_falha)
+    tarefas.processar_proxima()
+    t.refresh_from_db()
+    assert t.situacao == "concluida" and any("tentando de novo" in x for x in t.consumo["correcoes"])
+
+
+def test_erro_inesperado_tenta_corrigir_antes_de_desistir(base, monkeypatch):
+    from iativa.agent import investigacao as inv
+
+    t = _tarefa_pronta(base)
+    monkeypatch.setattr(tarefas.time, "sleep", lambda s: None)
+
+    def quebra(*a, **kw):
+        raise KeyError("x")
+
+    monkeypatch.setattr(inv, "classificar", quebra)
+    p = FakeProvider([_investigar()])
+    monkeypatch.setattr(tarefas, "obter_provedor", lambda usuario=None: p)
+    tarefas.processar_proxima()
+    t.refresh_from_db()
+    assert t.situacao == "falhou" and p.chamadas == 1  # tentou de novo e ainda refez o plano com o modelo
+    assert "Tentei 3 vezes e pedi outro caminho ao modelo" in t.motivo
+    assert sum("tentando de novo" in x for x in t.consumo["correcoes"]) >= 2

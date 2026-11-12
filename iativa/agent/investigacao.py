@@ -221,7 +221,14 @@ class Controle:
         self.consultas += 1
 
     def progresso(self, texto: str):
-        pass
+        from . import andamento
+
+        andamento.avisar(texto)
+
+    def corrigir(self, texto: str):
+        """Correção feita sozinha (texto operacional, sem dados): aparece no andamento."""
+        self.correcoes = (getattr(self, "correcoes", []) + [texto])[-10:]
+        self.progresso("Corrigindo: " + texto)
 
 
 def _norm(t) -> str:
@@ -314,7 +321,8 @@ def reconstruir_lista(user, base, plano_inv, ctx: Contexto, ctl: Controle):
             p = montar(base.objetivo, {**valores, "filial-analise": f})
             p.colunas, p.agrupar, p.top = _colunas(plano_inv), False, 0
             p.ordenar = [(plano_inv["chave"][0], False)]
-            comp, linhas, cortou = _consultar(cat, p, ctl, max(1, limite - len(ctx.itens)))
+            comp, linhas, cortou = _consultar_com_retentativa(cat, p, ctl, max(1, limite - len(ctx.itens)),
+                                                              f"a lista da filial {rotulo(f)}")
             ctx.lista_truncada = ctx.lista_truncada or cortou
             for linha in linhas:
                 reg, doc = _registro(plano_inv, f, linha, comp.rotulos)
@@ -326,6 +334,25 @@ def reconstruir_lista(user, base, plano_inv, ctx: Contexto, ctl: Controle):
             if len(ctx.itens) >= limite:
                 ctx.lista_truncada = ctx.lista_truncada or f != filiais[-1]
                 break
+
+
+FALHA_TXT = {"tempo": "não respondeu a tempo", "bloqueio": "encontrou registro travado no ERP",
+             "conexao": "perdeu a conexão com o ERP"}
+
+
+def _consultar_com_retentativa(cat, plano, ctl, limite, o_que):
+    from iativa.query.executor import tipo_falha
+
+    for tentativa in range(3):
+        try:
+            return _consultar(cat, plano, ctl, limite)
+        except Exception as exc:
+            tipo = tipo_falha(exc)
+            if not tipo or tentativa == 2:
+                if tipo:
+                    raise Transitoria(f"A consulta de {o_que} {FALHA_TXT[tipo]} depois de 3 tentativas.") from None
+                raise
+            ctl.corrigir(f"a consulta de {o_que} {FALHA_TXT[tipo]}; tentando de novo ({tentativa + 2}/3).")
 
 
 def _literal_ok(valor: str, tamanho: int) -> bool:
@@ -365,27 +392,54 @@ def buscar_relacionados(user, base, plano_inv, ctx: Contexto, ctl: Controle):
         filiais = sorted(filiais_autorizadas(user, base.setor))
         if not filiais or not tem_permissao(user, Permissao.CONSULTAR, base.setor):
             raise SemPermissao("Seu usuário perdeu a permissão de consulta neste setor durante a verificação.")
-        ctx.lotes, ctx.lotes_feitos = len(lotes) * len(filiais), 0
-        cortados = set()
-        for f in filiais:
-            for parte in lotes:
-                ctl.progresso(f"Buscando outros vínculos em lote ({ctx.lotes_feitos + 1} de {ctx.lotes}).")
-                _acesso(user, base, f)
-                p = Plano(objetivo="investigacao", base=plano_inv["tabela"], filial=f)
-                p.filtros = [Filtro(Campo("e1", t.campo_filial), "=", f),
-                             Filtro(Campo("e1", campo), "IN", tuple(valores[i] for i in parte))]
-                p.colunas = _colunas(plano_inv)
+        from iativa.query.executor import tipo_falha
+
+        fila = [(f, parte) for f in filiais for parte in lotes]
+        ctx.lotes, ctx.lotes_feitos = len(fila), 0
+        cortados, falhos, repetidos = set(), {}, set()
+        while fila:
+            f, parte = fila.pop(0)
+            ctl.progresso(f"Buscando outros vínculos em lote ({ctx.lotes_feitos + 1} de {ctx.lotes}).")
+            _acesso(user, base, f)
+            p = Plano(objetivo="investigacao", base=plano_inv["tabela"], filial=f)
+            p.filtros = [Filtro(Campo("e1", t.campo_filial), "=", f),
+                         Filtro(Campo("e1", campo), "IN", tuple(valores[i] for i in parte))]
+            p.colunas = _colunas(plano_inv)
+            try:
                 comp, linhas, cortou = _consultar(cat, p, ctl, limite)
-                if cortou:
-                    cortados |= set(parte)
-                for linha in linhas:
-                    reg, doc = _registro(plano_inv, f, linha, comp.rotulos)
-                    _ver_datas(ctx, reg)
-                    ident = _ident(ctx, plano_inv, reg, doc)
-                    ctx.relacionados.setdefault(ident, []).append(reg)
-                ctx.lotes_feitos += 1
+            except Exception as exc:
+                tipo = tipo_falha(exc)
+                if not tipo:
+                    raise
+                if len(parte) > 1:  # divide o lote: acha o registro problemático sem perder os demais
+                    meio = len(parte) // 2
+                    fila[0:0] = [(f, parte[:meio]), (f, parte[meio:])]
+                    ctx.lotes += 1
+                    ctl.corrigir(f"o lote {FALHA_TXT[tipo]} ({rotulo(f)}); dividi em lotes menores e segui.")
+                elif (f, parte[0]) not in repetidos:
+                    repetidos.add((f, parte[0]))
+                    fila.insert(0, (f, parte))
+                    ctl.corrigir(f"um registro {FALHA_TXT[tipo]} ({rotulo(f)}); tentando só ele de novo.")
+                else:
+                    falhos[parte[0]] = (f, tipo)
+                    ctl.corrigir(f"um registro {FALHA_TXT[tipo]} nem sozinho ({rotulo(f)}); marquei como "
+                                 "inconclusivo e segui com os demais.")
+                continue
+            if cortou:
+                cortados |= set(parte)
+            for linha in linhas:
+                reg, doc = _registro(plano_inv, f, linha, comp.rotulos)
+                _ver_datas(ctx, reg)
+                ident = _ident(ctx, plano_inv, reg, doc)
+                ctx.relacionados.setdefault(ident, []).append(reg)
+            ctx.lotes_feitos += 1
     ctx._documentos.clear()  # o documento não sai daqui: sobram só os resumos
     for it in ctx.itens:
+        if it.ident in falhos and it.verificado is None:
+            f, tipo = falhos[it.ident]
+            it.verificado, it.classe = False, "inconclusivo"
+            it.motivo = (f"a busca dos outros vínculos na filial {rotulo(f)} {FALHA_TXT[tipo]}, mesmo sozinha e "
+                         "repetida; tente de novo mais tarde")
         if it.ident in cortados and it.verificado is None:
             it.verificado, it.classe = False, "inconclusivo"
             it.motivo = "a busca em lote passou do limite de registros; os vínculos dessa pessoa ficaram incompletos"

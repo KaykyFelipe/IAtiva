@@ -1,12 +1,11 @@
-{# Barra fixa dentro do compositor (M26): o que a verificação em segundo plano está fazendo agora. Sem dados do ERP. #}
-<div class="atividade-fixa{% if tarefa_fixa.terminal %} terminada{% endif %}" id="atividade-fixa" role="status" aria-live="polite"
-     {% if tarefa_fixa and not tarefa_fixa.terminal %}hx-get="{% url 'chat:atividade' conversa.pk %}" hx-trigger="every 2s" hx-swap="outerHTML"{% endif %}>
-  {% if tarefa_fixa %}
-    {% if tarefa_fixa.terminal %}
-      <span class="tarefa-icone {% if tarefa_fixa.situacao == 'concluida' %}ok{% else %}alerta{% endif %}" aria-hidden="true"></span>
-    {% else %}
-      <span class="giro" aria-hidden="true"></span>
-    {% endif %}
-    <span class="atividade-texto">{{ tarefa_fixa.progresso|default:tarefa_fixa.get_situacao_display }}</span>
-  {% endif %}
+{# Barra dentro do compositor (M26): o que a verificação em segundo plano está fazendo agora. Some ao terminar. #}
+{% if tarefa_fixa and not tarefa_fixa.terminal %}
+<div class="atividade-fixa" id="atividade-fixa" role="status" aria-live="polite"
+     data-tarefa-ativa data-cancelar-url="{% url 'chat:tarefa_cancelar' tarefa_fixa.pk %}" data-tarefa-id="{{ tarefa_fixa.pk }}"
+     hx-get="{% url 'chat:atividade' conversa.pk %}" hx-trigger="every 2s" hx-swap="outerHTML">
+  <span class="giro" aria-hidden="true"></span>
+  <span class="atividade-texto">{{ tarefa_fixa.progresso|default:tarefa_fixa.get_situacao_display }}</span>
 </div>
+{% else %}
+<div class="atividade-fixa" id="atividade-fixa" hidden></div>
+{% endif %}

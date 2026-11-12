@@ -44,7 +44,7 @@ CRITERIO = ("Todos os integrantes da lista original verificados e classificados 
 
 
 def limites() -> dict:
-    return {"prazo_s": 900, "chamadas_modelo": 4, "consultas": 150, "tentativas": 2, "registros": 2000,
+    return {"prazo_s": 900, "chamadas_modelo": 4, "consultas": 150, "tentativas": 3, "registros": 2000,
             "lote": 40, "lease_s": 90, **getattr(settings, "IATIVA_TAREFAS", {})}
 
 
@@ -117,6 +117,13 @@ class _Controle(inv.Controle):
         self.t.progresso = texto[:300]
         self.renovar(progresso=self.t.progresso)
 
+    def corrigir(self, texto: str):
+        """Correção feita sozinha: fica visível no cartão (só texto operacional, sem dados do ERP)."""
+        correcoes = (list(self.t.consumo.get("correcoes", [])) + [texto[:200]])[-8:]
+        self.t.consumo = {**self.t.consumo, "correcoes": correcoes}
+        self.renovar(consumo=self.t.consumo)
+        self.progresso("Corrigindo: " + texto)
+
 
 def _salvar(t: Tarefa, **campos):
     for k, v in campos.items():
@@ -163,8 +170,8 @@ def _replanejar(t, motivo: str) -> bool:
     if d.acao == "conversar" and d.resposta.strip().endswith("?"):
         _salvar(t, situacao=S.AGUARDANDO, motivo=d.resposta[:400], concluido_em=timezone.now())
         return True
-    if d.acao != "investigar_lista" or not d.investigacao:
-        return False
+    if d.acao != "investigar_lista" or not d.investigacao or d.investigacao == t.proposta:
+        return False  # sem caminho novo: repetir o mesmo plano só repetiria a falha
     _salvar(t, proposta=d.investigacao)
     return True
 
@@ -230,25 +237,34 @@ def executar(t: Tarefa):
                         continue
                     _etapa(t, e["id"], estado="bloqueada")
                     return _fim(t, S.BLOQUEADA, str(exc))
-                except (inv.Transitoria, ConnectionError, OSError) as exc:
-                    tent = e["tentativas"] + 1
-                    _etapa(t, e["id"], estado="pendente", tentativas=tent)
-                    if tent >= int(lim.get("tentativas", 2)):
-                        _etapa(t, e["id"], estado="bloqueada")
-                        return _fim(t, S.FALHOU, f"{e['nome']}: falhou {tent} vezes ({type(exc).__name__}).")
-                    continue
                 except Exception as exc:
-                    from iativa.query.executor import TempoEsgotado
-
                     if isinstance(exc, (inv.SemPermissao, inv.Cancelada, inv.LimiteAtingido, PerdeuExecucao,
                                         prazo.PrazoEsgotado)):
                         raise
-                    if isinstance(exc, TempoEsgotado) or "timeout" in type(exc).__name__.lower():
-                        tent = e["tentativas"] + 1
-                        _etapa(t, e["id"], estado="pendente", tentativas=tent)
-                        if tent < int(lim.get("tentativas", 2)):
-                            continue
-                    raise
+                    from iativa.query.executor import tipo_falha
+
+                    passageira = bool(tipo_falha(exc)) or isinstance(exc, (inv.Transitoria, ConnectionError, OSError))
+                    o_que = str(exc) if isinstance(exc, inv.Transitoria) else (
+                        "o ERP não respondeu" if passageira else f"erro inesperado ({type(exc).__name__})")
+                    tent = e["tentativas"] + 1
+                    maximo = int(lim.get("tentativas", 3))
+                    _etapa(t, e["id"], estado="pendente", tentativas=tent)
+                    if tent < maximo:
+                        ctl.corrigir(f"{e['nome']}: {o_que}; tentando de novo ({tent + 1}/{maximo}).")
+                        time.sleep(min(2 * tent, 6) if passageira else 0)
+                        continue
+                    if not passageira and _replanejar(t, f"A etapa “{e['nome']}” falhou {tent} vezes ({o_que}). "
+                                                         "Escolha outros campos ou outro caminho."):
+                        if t.situacao == S.AGUARDANDO:
+                            return
+                        ctl.corrigir(f"{e['nome']}: refiz o plano depois de {tent} falhas.")
+                        t.etapas = [dict(x, estado="pendente", evidencia="", tentativas=0) for x in t.etapas]
+                        _salvar(t, etapas=t.etapas)
+                        continue
+                    _etapa(t, e["id"], estado="bloqueada")
+                    return _fim(t, S.FALHOU, f"{e['nome']}: {o_que}. Tentei {tent} vezes"
+                                             + (" e pedi outro caminho ao modelo, sem solução" if not passageira else "")
+                                             + "; nada foi concluído pela metade. Tente de novo em alguns minutos.")
                 ev = f"memória da execução {t.execucao[:8]}" if e["id"] in DADOS else ""
                 _etapa(t, e["id"], estado="concluida", evidencia=ev)
         cob = t.cobertura

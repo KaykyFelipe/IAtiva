@@ -309,6 +309,7 @@
     const { form, texto, elementos } = atual;
     atual = null;
     pararAcompanhamento();
+    setTimeout(atualizarBotaoTarefa, 0);
     elementos.forEach((el) => el.remove());
     const vazio = document.querySelector(".mensagens .vazio");
     if (vazio) {
@@ -339,10 +340,42 @@
     encerrar(true);
   }
 
+  // M26: com uma verificação em segundo plano rodando, o botão de enviar vira "parar" e cancela a tarefa.
+  function tarefaAtiva() { return document.querySelector("#atividade-fixa[data-tarefa-ativa]"); }
+  function atualizarBotaoTarefa() {
+    const form = document.querySelector("[data-compositor]");
+    if (!form || atual) return;
+    const ativa = tarefaAtiva();
+    botao(form, Boolean(ativa));
+    const b = form.querySelector("[data-botao-enviar]");
+    if (b && ativa) { b.setAttribute("aria-label", "Parar a verificação"); b.title = "Parar a verificação"; }
+  }
+  function cancelarTarefa(form, barra) {
+    const dados = new FormData();
+    dados.append("csrfmiddlewaretoken", form.querySelector("[name=csrfmiddlewaretoken]").value);
+    const texto = barra.querySelector(".atividade-texto");
+    if (texto) texto.textContent = "Cancelando a verificação…";
+    fetch(barra.dataset.cancelarUrl, { method: "POST", body: dados, credentials: "same-origin" })
+      .then((r) => (r.ok ? r.text() : null))
+      .then((html) => {
+        const cartao = document.getElementById(`tarefa-${barra.dataset.tarefaId}`);
+        if (html && cartao) { cartao.outerHTML = html; }
+        barra.removeAttribute("data-tarefa-ativa");
+        barra.hidden = true;
+        atualizarBotaoTarefa();
+      })
+      .catch(() => {});
+  }
+
   document.addEventListener("click", (e) => {
     const enviar = e.target.closest("[data-botao-enviar]");
     if (atual && enviar && enviar.form === atual.form) {
       e.preventDefault(); e.stopImmediatePropagation(); parar();
+      return;
+    }
+    const barra = tarefaAtiva();
+    if (!atual && enviar && barra) {
+      e.preventDefault(); e.stopImmediatePropagation(); cancelarTarefa(enviar.form, barra);
     }
   }, true);
 
@@ -387,6 +420,7 @@
     prepararLateral();
     rolarParaFim();
     prepararCampo();
+    atualizarBotaoTarefa();
   });
   // Resultados anteriores continuam na tela ao mandar outra mensagem. Ficam só na memória da
   // página (somem ao recarregar): o servidor não guarda resultados (R3).
@@ -404,9 +438,12 @@
     });
     resultadosAnteriores = new Map();
   }
-  document.body.addEventListener("htmx:afterSwap", () => {
+  document.body.addEventListener("htmx:afterSwap", (e) => {
+    if (e.detail && e.detail.target && e.detail.target.id === "atividade-fixa") { atualizarBotaoTarefa(); return; }
+    if (e.detail && e.detail.target && e.detail.target.classList && e.detail.target.classList.contains("tarefa-card")) return;
     restaurarResultados();
     if (atual && !atual.form.isConnected) { atual = null; pararAcompanhamento(); }
+    atualizarBotaoTarefa();
     atualizarSaudacao();
     prepararLateral();
     rolarParaFim();

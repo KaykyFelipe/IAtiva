@@ -235,7 +235,10 @@ button.secundario:hover { background: #f0f5f1; }
 /* Barra dentro do compositor: o que está rodando agora, sem precisar subir a conversa. */
 .atividade-fixa { display: flex; align-items: center; gap: 9px; margin: 0 4px 8px; padding: 7px 12px;
   border: 1px solid var(--linha); border-radius: 12px; background: #f6f9f7; font-size: 12px; color: var(--sutil); }
-.atividade-fixa:empty { display: none; }
+.atividade-fixa:empty, .atividade-fixa[hidden] { display: none; }
+.tarefa-correcoes { list-style: none; margin: 0; padding: 8px 10px; border-radius: 8px; background: #f4f7fb;
+  display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--sutil); }
+.tarefa-correcoes li::before { content: "↻ "; color: var(--acento); font-weight: 700; }
 .atividade-fixa.terminada { background: #fff; }
 .atividade-fixa .atividade-texto { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 

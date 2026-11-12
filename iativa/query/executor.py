@@ -20,6 +20,26 @@ class ValorRecusado(ValueError):
     pass
 
 
+LOCK_TIMEOUT_S = 10  # registro travado no ERP: falha rápido em vez de esperar o tempo todo
+
+
+def tipo_falha(exc) -> str:
+    """"tempo", "conexao", "bloqueio" ou "" (não é falha passageira). Só códigos, nunca o texto do erro
+    vai para a tela ou para log (pode conter dados)."""
+    if isinstance(exc, TempoEsgotado):
+        return "tempo"
+    args = getattr(exc, "args", ()) or ()
+    estado = str(args[0]) if args else ""
+    detalhe = str(args[1]) if len(args) > 1 else ""
+    if "1222" in detalhe or "Lock request" in detalhe:
+        return "bloqueio"
+    if estado.startswith("HYT") or "timeout" in type(exc).__name__.lower():
+        return "tempo"
+    if estado.startswith("08") or "Communication link" in detalhe:
+        return "conexao"
+    return ""
+
+
 def _literal(v) -> str:
     if isinstance(v, bool):
         raise ValorRecusado("Booleano não suportado.")
@@ -69,6 +89,8 @@ def executar(catalogo, sql_tsql: str, params: tuple, limite: int, timeout_s: int
         conn.timeout = timeout_s  # pyodbc: tempo máximo por comando
         cur = conn.cursor()
         try:
+            # Comando fixo de sessão (não vem do plano): espera no máximo alguns segundos por registro travado.
+            cur.execute(f"SET LOCK_TIMEOUT {int(min(LOCK_TIMEOUT_S, timeout_s) * 1000)}")
             cur.execute(sql_final)
             linhas = [tuple(r) for r in cur.fetchmany(limite + 1)]
         finally:

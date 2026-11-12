@@ -4,6 +4,13 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **plano proposto em `PLANO.md` §8, aguardando aprovação.** Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M27 — a verificação se corrige sozinha (2026-11-12)
+
+- O erro "OperationalError" era a busca em lote estourando o tempo no Protheus. Agora o lote é dividido, o registro problemático é repetido e, se ainda falhar, fica inconclusivo com o motivo; o resto da lista é verificado.
+- Toda etapa tenta de novo e mostra no cartão o que corrigiu ("↻ ..."); só desiste depois de 3 tentativas e de pedir outro caminho ao modelo.
+- Barra do compositor some ao terminar; botão de enviar vira "parar" enquanto a verificação roda.
+- Testes: 547 aprovados e 10 pulados no Windows.
+
 ## Mudança M26 — continuar até a verificação; "Pensando" ao vivo (2026-11-12)
 
 - "Verifique se os demitidos tiveram matrícula nova": refaz a lista e já agenda a verificação de todos, sem nova mensagem.
