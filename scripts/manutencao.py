@@ -41,6 +41,7 @@ CONFIG = Path(os.environ.get("IATIVA_MANUTENCAO_CONFIG", "/etc/iativa/manutencao
 
 PERMITIDOS = ("iativa/", "tests/", "templates/", "static/")
 PROIBIDOS = ("iativa/accounts/", "iativa/core/saude.py", "iativa/manutencao/", "iativa/audit/",
+             "iativa/agent/codex_", "iativa/agent/claude_", "iativa/agent/conexoes.py",
              "iativa/metadata/erp_sqlserver.py", "iativa/query/validador.py", "tests/conftest.py",
              "tests/test_segredos.py", "tests/test_acessos.py", "tests/test_manutencao.py")
 MAX_ARQUIVOS, MAX_LINHAS = 6, 250
@@ -229,12 +230,17 @@ def contador_do_dia(incrementar=False) -> int:
     return n
 
 
+def pasta_var() -> str:
+    r = rodar(["docker", "volume", "inspect", "-f", "{{.Mountpoint}}", "iativa_iativa_var"], verificar=False)
+    return r.stdout.strip() if r.returncode == 0 and r.stdout.strip() else ''
+
+
 def pasta_claude(c: dict) -> str:
     """Conexão do "Agente de manutenção" feita na tela do IAtiva (M33), salvo se configurada à mão."""
     if c.get("MANUTENCAO_CLAUDE_DIR"):
         return c["MANUTENCAO_CLAUDE_DIR"]
-    r = rodar(["docker", "volume", "inspect", "-f", "{{.Mountpoint}}", "iativa_iativa_var"], verificar=False)
-    return str(Path(r.stdout.strip()) / "claude-manutencao") if r.returncode == 0 and r.stdout.strip() else ""
+    root = pasta_var()
+    return str(Path(root) / "claude-manutencao") if root else ""
 
 
 def modelo_e_esforco(pasta: str) -> list[str]:
@@ -248,6 +254,57 @@ def modelo_e_esforco(pasta: str) -> list[str]:
     modelo = pref.get("modelo") if pref.get("modelo") in ("opus", "sonnet", "haiku") else "opus"
     esforco = pref.get("esforco") if pref.get("esforco") in ("low", "medium", "high", "xhigh", "max") else ""
     return ["--model", modelo] + (["--effort", esforco] if esforco else [])
+
+
+def provedor_manutencao(c: dict) -> str:
+    if c.get('MANUTENCAO_PROVEDOR'):
+        p = c['MANUTENCAO_PROVEDOR']
+    else:
+        raiz = Path(pasta_var() or '/nao-configurado')
+        try:
+            dados = json.loads((raiz / 'conexoes/manutencao.json').read_text())
+            p = dados.get('provedor', 'claude') if isinstance(dados, dict) else 'claude'
+        except (OSError, ValueError):
+            p = 'claude'
+    if p not in ('claude', 'chatgpt'):
+        raise Recusa('provedor de manutenção inválido')
+    return p
+
+
+def pasta_codex(c: dict) -> str:
+    if c.get('MANUTENCAO_CODEX_DIR'):
+        return c['MANUTENCAO_CODEX_DIR']
+    root = pasta_var()
+    return str(Path(root) / 'chatgpt/manutencao') if root else ''
+
+
+def modelo_codex(pasta: str) -> list[str]:
+    try:
+        dados = json.loads((Path(pasta) / 'iativa-preferencias.json').read_text())
+    except (OSError, ValueError):
+        dados = {}
+    if not isinstance(dados, dict):
+        dados = {}
+    modelo, esforco = dados.get('modelo', ''), dados.get('esforco', '')
+    args = ['--model', modelo] if isinstance(modelo, str) and re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]{0,99}', modelo) else []
+    if esforco in ('none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra'):
+        args += ['-c', f'model_reasoning_effort="{esforco}"']
+    return args
+
+
+def comando_agente(wt: Path, pasta_diag: Path, imagem: str, c: dict, diag: dict) -> list[str]:
+    if provedor_manutencao(c) == 'claude':
+        return comando_claude(wt, pasta_diag, imagem, c, diag)
+    return ['docker', 'run', '--rm', '--cpus', '2', '--memory', '3g', '--pids-limit', '512',
+            '-e', 'CODEX_HOME=/codex', '-v', f'{pasta_codex(c)}:/codex',
+            '-v', f'{wt}:/app/trabalho', '-v', f'{pasta_diag}:/diag:ro', '-w', '/app/trabalho',
+            '--entrypoint', 'codex', imagem, 'exec', '--ephemeral', '--ignore-user-config', '--ignore-rules',
+            '--skip-git-repo-check', '--sandbox', 'workspace-write',
+            '--disable', 'apps', '--disable', 'plugins', '--disable', 'hooks', '--disable', 'multi_agent',
+            '-c', 'forced_login_method="chatgpt"', '-c', 'cli_auth_credentials_store="file"',
+            '-c', 'shell_environment_policy.inherit="none"', '-c', 'web_search="disabled"',
+            '-c', 'shell_environment_policy.set.PATH="/opt/venv/bin:/usr/local/bin:/usr/bin:/bin"',
+            *modelo_codex(pasta_codex(c)), prompt(diag)]
 
 
 def comando_claude(wt: Path, pasta_diag: Path, imagem: str, c: dict, diag: dict) -> list[str]:
@@ -274,7 +331,7 @@ def corrigir(diag: dict, c: dict) -> str:
     pasta_diag = TRABALHO / f"inc-{inc}-diag"
     pasta_diag.mkdir(exist_ok=True)
     (pasta_diag / "diagnostico.json").write_text(json.dumps(diag, ensure_ascii=False))
-    saida = rodar(comando_claude(wt, pasta_diag, imagem, c, diag), timeout=int(c["MANUTENCAO_TEMPO_S"]),
+    saida = rodar(comando_agente(wt, pasta_diag, imagem, c, diag), timeout=int(c["MANUTENCAO_TEMPO_S"]),
                   verificar=False)
     if "NAO_REPRODUZIDO" in (saida.stdout or ""):
         raise Recusa("não reproduzido: nada publicado")
@@ -310,10 +367,13 @@ def corrigir(diag: dict, c: dict) -> str:
 def principal(argv) -> int:
     c = cfg()
     if "--estado" in argv:
+        prov = provedor_manutencao(c)
+        pasta = pasta_codex(c) if prov == 'chatgpt' else pasta_claude(c)
+        modelo = modelo_codex(pasta) if prov == 'chatgpt' else modelo_e_esforco(pasta)
         print(f"ativa={c['MANUTENCAO_ATIVA']} publicar={c['MANUTENCAO_PUBLICAR']} "
               f"credencial={'sim' if c.get('MANUTENCAO_GIT_SSH_KEY') else 'não'} "
-              f"agente_manutencao={'conectado' if (Path(pasta_claude(c) or '/x') / 'iativa-ativado').is_file() else 'não conectado'} "
-              f"modelo={' '.join(modelo_e_esforco(pasta_claude(c) or '/x'))} hoje={contador_do_dia()}")
+              f"agente_manutencao={'conectado' if (Path(pasta or '/x') / 'iativa-ativado').is_file() else 'não conectado'} "
+              f"provedor={prov} modelo={' '.join(modelo) or 'padrão da conta/CLI'} hoje={contador_do_dia()}")
         return 0
     if c["MANUTENCAO_ATIVA"] != "1":
         return 0
@@ -328,7 +388,8 @@ def principal(argv) -> int:
     if contador_do_dia() >= int(c["MANUTENCAO_MAX_POR_DIA"]):
         log("limite diário de correções atingido")
         return 0
-    pasta = pasta_claude(c)
+    c = {**c, 'MANUTENCAO_PROVEDOR': provedor_manutencao(c)}
+    pasta = pasta_codex(c) if c['MANUTENCAO_PROVEDOR'] == 'chatgpt' else pasta_claude(c)
     if not pasta or not (Path(pasta) / "iativa-ativado").is_file():
         log("o agente de manutenção não está conectado (tela Conexões Claude); nada feito")
         return 0

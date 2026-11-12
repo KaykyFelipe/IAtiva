@@ -23,7 +23,7 @@
     </details>
   </nav>
   <div class="lateral-rodape">
-    {% if lateral.claude %}<a href="{% url 'claude-conta' %}" class="conta-claude">{% include "chat/_icone.html" with nome="conexao" %}<span>Conectar Claude</span></a>{% endif %}
+    {% if lateral.claude %}<a href="{% url 'claude-conta' %}" class="conta-claude">{% include "chat/_icone.html" with nome="conexao" %}<span>Conectar Claude / ChatGPT</span></a>{% endif %}
     <div class="perfil"><span class="avatar" aria-hidden="true">{{ perfil.iniciais }}</span><span class="quem"><strong>{{ perfil.nome }}</strong><span>{{ perfil.setor }}</span></span><form method="post" action="{% url 'logout' %}">{% csrf_token %}<button type="submit" class="icone" title="Sair" aria-label="Sair">{% include "chat/_icone.html" with nome="sair" %}</button></form></div>
   </div>
   <div class="divisoria-lateral" data-redimensionar role="separator" aria-label="Ajustar largura da lateral" aria-orientation="vertical" aria-valuemin="224" aria-valuemax="430" aria-valuenow="278" tabindex="0" title="Arraste para ajustar. Duplo clique para restaurar."></div>

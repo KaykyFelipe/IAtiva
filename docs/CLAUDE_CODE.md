@@ -1,5 +1,9 @@
 # Conexões Claude: atendimento e manutenção
 
+A mesma tela oferece agora **Conta ChatGPT** para os dois agentes, com login, modelo e seleção
+de provedor próprios. Veja [CHATGPT.md](CHATGPT.md). A conexão Claude continua disponível;
+alternar provedor não apaga a outra conexão.
+
 Integração opcional com o executável oficial, inspirada nas chamadas isoladas de
 `server/drivers/claude-background.ts` do OpenMausBot. Não depende de OpenMausBot
 rodando, de Node como serviço, de cookies de navegador ou de API não oficial.

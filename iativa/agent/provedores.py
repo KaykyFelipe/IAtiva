@@ -285,6 +285,8 @@ def _contexto_agente(entrada) -> str:
         contexto["observacoes_desta_mensagem"] = entrada.observacoes
     if getattr(entrada, "tabelas_para_aprender", None):
         contexto["tabelas_para_aprender"] = entrada.tabelas_para_aprender
+    if getattr(entrada, "lista_anterior", None):
+        contexto["lista_anterior"] = entrada.lista_anterior
     return (
         "<contexto>\n" + json.dumps(contexto, ensure_ascii=False) + "\n</contexto>\n"
         "<mensagem_do_usuario>\n" + entrada.mensagem + "\n</mensagem_do_usuario>"
@@ -553,7 +555,14 @@ FakeProvider.decidir = _decidir_fake
 
 def obter_provedor(usuario=None) -> LLMProvider:
     if usuario is not None:
+        from .conexoes import selecionado
+        escolha = selecionado(usuario)
+        if escolha == "chatgpt":
+            from .codex_provider import CodexProvider
+            return CodexProvider(usuario)
         from .claude_login import ativa, config_usuario
+        if escolha == "claude" and not ativa(usuario):
+            raise ImproperlyConfigured("Reconecte a conta Claude selecionada em Conexões IA.")
 
         if ativa(usuario) or settings.IATIVA_AGENTE["provedor"] == "claude-code":
             from .claude_code import ClaudeCodeProvider

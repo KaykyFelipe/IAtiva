@@ -22,9 +22,11 @@ def _perfil(valor):
 
 
 def _cartao(request, perfil, estado=None, erro=""):
+    from . import codex_login, conexoes
     cfg = config_usuario(request.user, perfil)
     return {"perfil": perfil, **PERFIS[perfil], "estado": estado, "erro": erro, "claude_ativo": ativa(request.user, perfil),
-            "modelo_atual": cfg["claude_modelo"], "esforco_atual": cfg["claude_esforco"]}
+            "modelo_atual": cfg["claude_modelo"], "esforco_atual": cfg["claude_esforco"],
+            "chatgpt": codex_login.cartao(request.user, perfil), "provedor_atual": conexoes.selecionado(request.user, perfil)}
 
 
 def _contexto(request, perfil="atendimento", estado=None, erro=""):

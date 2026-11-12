@@ -1,13 +1,18 @@
 {% extends "base.html" %}
-{% block title %}Conexões Claude · IAtiva{% endblock %}
+{% block title %}Conexões IA · IAtiva{% endblock %}
 {% block content %}
 <p><a href="{% url 'chat:index' %}">← Voltar ao chat</a></p>
 {% for c in cartoes %}
 <section class="cartao">
   <h1>{{ c.titulo }}</h1>
+  <p><strong>Provedor em uso: {% if c.provedor_atual == "chatgpt" %}ChatGPT{% elif c.provedor_atual == "claude" %}Claude{% else %}padrão do servidor{% endif %}</strong></p>
+  <h2>Conta Claude</h2>
   <p>{{ c.descricao }} Conecte a assinatura pelo login oficial do Claude; cada agente tem a sua própria conexão.</p>
   {% if c.perfil == "manutencao" %}<p class="sutil">Esta conexão é compartilhada pelo sistema e gerenciada pela TI. O modelo escolhido aqui é independente do atendimento.</p>{% endif %}
   {% include "agent/_claude_estado.html" %}
+  {% if c.claude_ativo and c.provedor_atual != "claude" %}
+    <form method="post" action="{% url 'chatgpt-conta' %}">{% csrf_token %}<input type="hidden" name="perfil" value="{{ c.perfil }}"><input type="hidden" name="provedor" value="claude"><button name="acao" value="usar">Usar Claude neste agente</button></form>
+  {% endif %}
   <hr>
   <h2>Modelo e esforço</h2>
   <form method="post" action="{% url 'claude-conta' %}" class="preferencias-claude">
@@ -28,6 +33,22 @@
     <p class="sutil">Conectar ou trocar o modelo não ativa correções nem publicação automática. A ativação do executor é feita separadamente no servidor. Ele recebe apenas diagnósticos técnicos, sem dados do ERP.</p>
   {% endif %}
   <p class="sutil">A assinatura tem limites. Confira na sua conta Claude se o uso extra pago está desativado.</p>
+  <hr>
+  <h2>Conta ChatGPT</h2>
+  <p>Conecte pelo Codex oficial, usando o código na página da OpenAI. Conta e modelo são separados do outro agente e da Claude.</p>
+  {% include "agent/_chatgpt_estado.html" with g=c.chatgpt perfil=c.perfil %}
+  <h3>Modelo e esforço do ChatGPT</h3>
+  <form method="post" action="{% url 'chatgpt-conta' %}">
+    {% csrf_token %}<input type="hidden" name="perfil" value="{{ c.perfil }}"><input type="hidden" name="acao" value="preferencias">
+    <label for="chatgpt-modelo-{{ c.perfil }}">Modelo</label>
+    <select id="chatgpt-modelo-{{ c.perfil }}" name="modelo"><option value="">Padrão da conta/CLI</option>{% for m in c.chatgpt.modelos %}<option value="{{ m.id }}"{% if m.id == c.chatgpt.preferencias.modelo %} selected{% endif %}>{{ m.nome }}</option>{% endfor %}</select>
+    <label for="chatgpt-esforco-{{ c.perfil }}">Esforço</label>
+    <select id="chatgpt-esforco-{{ c.perfil }}" name="esforco"><option value="">Padrão do modelo</option>{% for e in c.chatgpt.esforcos %}<option value="{{ e }}"{% if e == c.chatgpt.preferencias.esforco %} selected{% endif %}>{{ e }}</option>{% endfor %}</select>
+    <p class="sutil">O catálogo vem da conta conectada. O esforço escolhido precisa ser compatível com o modelo.</p>
+    <button type="submit">Salvar ChatGPT</button>
+  </form>
+  <form method="post" action="{% url 'chatgpt-conta' %}">{% csrf_token %}<input type="hidden" name="perfil" value="{{ c.perfil }}"><button name="acao" value="modelos" type="submit" class="secundario">Atualizar modelos ChatGPT</button></form>
+  <p class="sutil">O acesso depende do plano e das permissões da conta. Sem chave de API ou troca automática para outro provedor. Conectar não habilita publicação da manutenção.</p>
 </section>
 {% endfor %}
 {% endblock %}

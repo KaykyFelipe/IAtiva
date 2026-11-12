@@ -226,7 +226,7 @@ def conversar(user, c, texto: str, provedor=None, mensagem_usuario_id=None, inte
     try:
         provedor = provedor or obter_provedor(usuario=user)
     except ImproperlyConfigured:
-        return Saida("A conexão de IA precisa de configuração. Confira Conectar Claude e a liberação de privacidade do IAtiva.",
+        return Saida("A conexão de IA precisa de configuração. Confira Conexões IA e a liberação de privacidade do IAtiva.",
                      ficha={"tipo": "falha_modelo"})
     # Ciclo: agir → observar → corrigir (falha recuperável) ou concluir. Limites configuráveis.
     # O prazo é total: conferido antes de cada chamada ao modelo e antes de cada ação; as chamadas
@@ -262,7 +262,7 @@ def _ciclo_agente(user, c, texto, provedor, interrompido, entrada, objetivos, co
             if saida is not None or prazo.esgotado():
                 break  # a correção não veio (ou o tempo acabou): vale a resposta da tentativa anterior
             registrar("modelo_falhou", "agente", usuario=user, estado_novo=provedor.nome, resultado="erro")
-            if provedor.nome == "claude-code":
+            if provedor.nome in ("claude-code", "chatgpt"):
                 return Saida(str(exc), ficha={"tipo": "falha_modelo"})
             if exc.temporaria:
                 return Saida("A IA (Gemini) está sobrecarregada ou no limite de uso do plano gratuito neste momento. "

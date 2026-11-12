@@ -313,3 +313,25 @@ def test_atendimento_continua_sem_ferramentas():
     fonte = (Path(settings.BASE_DIR) / "iativa" / "agent" / "claude_code.py").read_text(encoding="utf-8")
     assert "--tools" in fonte or "--safe-mode" in fonte
     assert "--allowedTools" not in fonte and "acceptEdits" not in fonte
+
+
+def test_manutencao_le_selecao_chatgpt_da_interface(tmp_path, monkeypatch):
+    root = tmp_path / 'var'
+    (root / 'conexoes').mkdir(parents=True)
+    (root / 'conexoes/manutencao.json').write_text('{"provedor":"chatgpt"}')
+    monkeypatch.setattr(mx, 'pasta_var', lambda: str(root))
+    assert mx.provedor_manutencao({}) == 'chatgpt'
+    assert mx.pasta_codex({}) == str(root / 'chatgpt/manutencao')
+    # Uma pasta manual da Claude não muda onde a seleção da interface é lida.
+    assert mx.provedor_manutencao({'MANUTENCAO_CLAUDE_DIR':'/outra/conta-claude'}) == 'chatgpt'
+
+
+def test_codex_manutencao_usa_modelo_e_isolamento(tmp_path):
+    (tmp_path / 'iativa-preferencias.json').write_text('{"modelo":"modelo-teste","esforco":"high"}')
+    c = {'MANUTENCAO_PROVEDOR':'chatgpt', 'MANUTENCAO_CODEX_DIR':str(tmp_path)}
+    cmd = mx.comando_agente(tmp_path / 'wt', tmp_path / 'diag', 'imagem-teste', c,
+        {'codigo':'teste', 'componente':'agente', 'operacao':'teste'})
+    assert cmd[cmd.index('--entrypoint') + 1] == 'codex'
+    assert cmd[cmd.index('--model') + 1] == 'modelo-teste'
+    assert 'workspace-write' in cmd and '--ephemeral' in cmd and 'model_reasoning_effort="high"' in cmd
+    assert not any('docker.sock' in x or '.ssh' in x or 'OPENAI_API_KEY' in x or 'danger-full-access' in x for x in cmd)

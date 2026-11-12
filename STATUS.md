@@ -4,6 +4,13 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **plano proposto em `PLANO.md` §8, aguardando aprovação.** Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M36 — ChatGPT nos dois agentes (2026-11-12)
+
+- Conta ChatGPT via Codex oficial, por device code na página da OpenAI, na mesma tela das conexões Claude. Conta, modelo/esforço e provedor independentes por agente.
+- Catálogo de modelos obtido da conta conectada, sem inventar IDs. Seleção explícita de Claude/ChatGPT; contas Claude e interruptores do servidor preservados.
+- Atendimento efêmero, sem ambiente/ferramentas, credenciais herdadas ou linhas do ERP; manutenção com Codex isolado e gates existentes. CLI 0.167.0 fixada na imagem.
+- Fluxo oficial de device code iniciado/cancelado em pasta nova sem credenciais existentes. Validação: 632 testes aprovados, 10 pulados no Windows (bash/git/flock); Django check sem problemas e nenhuma migração pendente. Implantação pela atualização azul/verde, com drenagem antes de desligar a versão antiga. Conta real será conectada pela pessoa na interface; inferência autenticada depende desse login.
+
 ## Mudança M35 — histórico de cargos com consulta encadeada (2026-11-12)
 
 - Corrigido o encerramento após buscar matrículas: nome → vínculos autorizados por filial → SR7 filtrada por matrícula/filial → descrições SRJ/SQ3 → histórico e função cadastrada no vínculo mais recente.
@@ -11,7 +18,7 @@
 - Resultados ficam só na resposta, sem envio ao modelo ou persistência. Restrições de tabela/campo, filiais, cancelamento e prazo reconferidos. Homônimos não são unificados; troca de matrícula não comprova mudança de cargo/efetivação.
 - Período completo por padrão; período explícito filtra a SR7 sem perder matrículas antigas. Data de admissão identificada como tal, sem atribuir a ela uma alteração não comprovada.
 - Dicionário e consulta encadeada conferidos no servidor autorizado (SRA/SR7/SRJ/SQ3), com permissões do usuário da conversa de origem e transação desfeita ao final. Sem resultados ou dados pessoais registrados nesta documentação. A data R7_DATA é permitida como data de evento mesmo com descrição "Data Alteracao Salarial"; restrições explícitas continuam prevalecendo e valores de salário não são consultados.
-- Validação: 609 testes aprovados, 10 pulados no Windows (dependem de bash/git/flock); check Django sem problemas e nenhuma migração pendente de geração. Consulta encadeada validada em leitura no Protheus com a autorização da conversa de origem; teste integrado com modelo real após implantação ainda pendente.
+- Validação: 609 testes aprovados, 10 pulados no Windows (dependem de bash/git/flock); check Django sem problemas e nenhuma migração pendente de geração. Consulta encadeada validada no Protheus e, após implantação da M35, pedido e continuação aprovados com a Claude real, sob transação desfeita ao final.
 - Operação: manutenção e publicação foram ativadas por pedido de Diego no servidor-bots (192.168.80.237), com login confirmado e timer ativo. Não acessar outro servidor.
 
 ## Mudanças M33/M34 — conexões separadas e revisão (2026-11-12)

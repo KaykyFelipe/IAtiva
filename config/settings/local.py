@@ -45,6 +45,9 @@ IATIVA_AGENTE = {
     **IATIVA_AGENTE,  # noqa: F405
     "provedor": env("IATIVA_AGENTE_PROVEDOR", "teste"),
     "claude_cli": env("IATIVA_CLAUDE_CLI", "claude"),
+    "codex_cli": env("IATIVA_CODEX_CLI", "codex"),
+    "codex_contas_dir": env("IATIVA_CODEX_CONTAS_DIR", ""),
+    "codex_timeout_s": int(env("IATIVA_CODEX_TIMEOUT_S", "120")),
     "claude_config_dir": env("IATIVA_CLAUDE_CONFIG_DIR", ""),
     "claude_modelo": env("IATIVA_CLAUDE_MODELO", "sonnet"),
     "claude_esforco": env("IATIVA_CLAUDE_ESFORCO", ""),

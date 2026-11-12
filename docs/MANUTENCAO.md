@@ -2,6 +2,10 @@
 
 ## Visão geral
 
+M36: também é possível usar conta ChatGPT pelo Codex oficial, separada da conta de atendimento.
+Em **Conectar Claude / ChatGPT**, conecte e selecione o provedor no agente de manutenção.
+Veja [CHATGPT.md](CHATGPT.md). Conexões Claude existentes e interruptores são preservados.
+
 | Componente | Faz | Não tem |
 |---|---|---|
 | Agente de atendimento (chat + worker) | resolve pedidos; quando algo quebra, registra um **incidente sanitizado** | Git, Docker, escrita no código, ferramentas do Claude (`--tools ""`) |
