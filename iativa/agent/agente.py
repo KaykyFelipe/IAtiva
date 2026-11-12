@@ -777,9 +777,8 @@ def _investigar(user, c, d, texto, ficha) -> Saida:
     t = tarefas.criar(user, c, base, d.investigacao or {}, plano, objetivo, criterios)
     andamento.avisar("Verificação de toda a lista agendada em segundo plano")
     registrar("interpretacao", "agente", usuario=user, estado_novo="tarefa_criada", entidade_id=t.pk)
-    base_txt = (d.resposta.strip() + " ") if d.resposta.strip() else ""
-    return Saida(base_txt + "Vou verificar todas as pessoas da lista, não só o exemplo. Pode fechar a página: "
-                 "a verificação continua e o andamento aparece aqui.",
+    inicio = d.resposta.strip() or "Vou verificar todas as pessoas da lista, não só o exemplo."
+    return Saida(inicio + " O andamento aparece abaixo; pode fechar a página que a verificação continua.",
                  {**ficha, "tipo": "tarefa", "tarefa": t.pk, "opcoes": []},
                  observacao=Observacao("investigar_lista", SUCESSO))
 

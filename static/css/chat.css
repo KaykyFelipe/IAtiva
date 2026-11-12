@@ -271,15 +271,7 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 .pensando-passos:empty { display: none; }
 .pensando-passos li::before { content: "✓ "; color: var(--acento); }
 @keyframes surgir { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: none; } }
-/* M26: barra fixa acima do compositor com a tarefa em segundo plano */
-.atividade-fixa { display: flex; align-items: center; gap: 10px; margin: 0 auto 8px; max-width: 820px; width: 100%;
-  padding: 8px 12px; border: 1px solid var(--borda, #e3e7ec); border-radius: 10px; font-size: 13px; color: var(--sutil);
-  background: var(--fundo-suave, #f6f8fa); box-sizing: border-box; }
-.atividade-fixa:empty { display: none; }
-.atividade-fixa .atividade-texto { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.atividade-fixa .atividade-link { white-space: nowrap; }
-.tarefa .etapas { margin: 6px 0; padding-left: 18px; font-size: 13px; }
-.tarefa .etapas li[data-estado="em_andamento"] { font-weight: 600; }
+
 .pontos { display: inline-flex; gap: 4px; }
 .pontos i { width: 7px; height: 7px; border-radius: 50%; background: var(--acento); opacity: .35; animation: pulsar 1.2s infinite ease-in-out; }
 .pontos i:nth-child(2) { animation-delay: .15s; }

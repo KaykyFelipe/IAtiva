@@ -1,32 +1,44 @@
-{# Tarefa em segundo plano (M25): só estado persistido (etapas, contagens, situação). Sem dados do ERP. #}
-<article class="ficha tarefa {% if tarefa.situacao == 'concluida' %}pronta{% elif tarefa.terminal %}bloqueada{% else %}proposta{% endif %}"
-         id="tarefa-{{ tarefa.pk }}"
-         {% if not tarefa.terminal %}hx-get="{% url 'chat:tarefa' tarefa.pk %}?acompanhando=1" hx-trigger="every 2s" hx-swap="outerHTML"{% endif %}
-         aria-live="polite">
-  <header><strong>{{ tarefa.objetivo }}</strong><span class="estado">{{ tarefa.get_situacao_display }}</span></header>
-  {% if tarefa.progresso %}<p>{{ tarefa.progresso }}</p>{% endif %}
-  {% if tarefa.motivo %}<p class="{% if tarefa.situacao == 'concluida' %}nota{% else %}erro{% endif %}">{{ tarefa.motivo }}</p>{% endif %}
-  <ol class="etapas">
+{# Tarefa em segundo plano (M25/M26): só estado persistido (etapas, contagens, situação). Sem dados do ERP. #}
+<section class="tarefa-card {{ tarefa.situacao }}" id="tarefa-{{ tarefa.pk }}" aria-live="polite"
+         {% if not tarefa.terminal %}hx-get="{% url 'chat:tarefa' tarefa.pk %}?acompanhando=1" hx-trigger="every 2s" hx-swap="outerHTML"{% endif %}>
+  <div class="tarefa-topo">
+    {% if tarefa.terminal %}
+      <span class="tarefa-icone {% if tarefa.situacao == 'concluida' %}ok{% else %}alerta{% endif %}" aria-hidden="true"></span>
+    {% else %}
+      <span class="giro" aria-hidden="true"></span>
+    {% endif %}
+    <div class="tarefa-titulos">
+      <p class="tarefa-titulo">{{ tarefa.objetivo }}</p>
+      <p class="tarefa-agora">{{ tarefa.progresso|default:tarefa.get_situacao_display }}</p>
+    </div>
+    <span class="tarefa-selo">{{ tarefa.get_situacao_display }}</span>
+  </div>
+
+  <ol class="tarefa-etapas">
     {% for e in tarefa.etapas %}
-      <li data-estado="{{ e.estado }}">{% if e.estado == "concluida" %}✓{% elif e.estado == "em_andamento" %}…{% elif e.estado == "bloqueada" %}✕{% else %}○{% endif %} {{ e.nome }}</li>
+      <li class="{{ e.estado }}"><span class="marca" aria-hidden="true"></span><span>{{ e.nome }}</span></li>
     {% endfor %}
   </ol>
+
+  {% if tarefa.motivo and tarefa.situacao != "concluida" %}<p class="tarefa-motivo">{{ tarefa.motivo }}</p>{% endif %}
   {% if tarefa.cobertura.total %}
-    <p class="nota">Cobertura: {{ tarefa.cobertura.verificados }} verificada(s) e {{ tarefa.cobertura.inconclusivos }} inconclusiva(s), de {{ tarefa.cobertura.total }}.</p>
+    <p class="tarefa-cobertura"><strong>{{ tarefa.cobertura.verificados }}</strong> verificada(s) · <strong>{{ tarefa.cobertura.inconclusivos }}</strong> inconclusiva(s) · {{ tarefa.cobertura.total }} na lista</p>
   {% endif %}
-  <p class="nota">Critério de conclusão: {{ tarefa.criterio_conclusao }}{% if tarefa.reconstruida %} A execução foi retomada e a lista foi consultada de novo.{% endif %}</p>
-  <footer>
+
+  <div class="tarefa-rodape">
+    <span class="tarefa-criterio">{% if tarefa.reconstruida %}Retomada após reinício: a lista foi consultada de novo. {% endif %}Termina quando todos da lista tiverem classificação ou motivo de inconclusão.</span>
     {% if not tarefa.terminal %}
       <form method="post" action="{% url 'chat:tarefa_cancelar' tarefa.pk %}"
             hx-post="{% url 'chat:tarefa_cancelar' tarefa.pk %}" hx-target="#tarefa-{{ tarefa.pk }}" hx-swap="outerHTML">
-        {% csrf_token %}<button type="submit" class="texto">Cancelar verificação</button>
+        {% csrf_token %}<button type="submit" class="tarefa-botao">Cancelar</button>
       </form>
     {% elif tarefa.situacao == "concluida" or tarefa.situacao == "limite" %}
-      <div id="conclusao-{{ tarefa.pk }}"
-           {% if acompanhando %}hx-get="{% url 'chat:tarefa_conclusao' tarefa.pk %}" hx-trigger="load" hx-swap="innerHTML"{% endif %}>
-        <button type="button" class="secundario" hx-get="{% url 'chat:tarefa_conclusao' tarefa.pk %}"
-                hx-target="#conclusao-{{ tarefa.pk }}" hx-swap="innerHTML">Ver a conclusão (consulta de novo)</button>
-      </div>
+      <button type="button" class="tarefa-botao principal" hx-get="{% url 'chat:tarefa_conclusao' tarefa.pk %}"
+              hx-target="#conclusao-{{ tarefa.pk }}" hx-swap="innerHTML">Ver conclusão</button>
     {% endif %}
-  </footer>
-</article>
+  </div>
+  {% if tarefa.situacao == "concluida" or tarefa.situacao == "limite" %}
+    <div class="tarefa-conclusao" id="conclusao-{{ tarefa.pk }}"
+         {% if acompanhando %}hx-get="{% url 'chat:tarefa_conclusao' tarefa.pk %}" hx-trigger="load" hx-swap="innerHTML"{% endif %}></div>
+  {% endif %}
+</section>

@@ -90,7 +90,9 @@ def test_barra_fixa_acompanha_a_tarefa(base, client):
     client.force_login(base["u"])
     html = client.get(reverse("chat:conversa", args=[c.pk])).content.decode()
     t = Tarefa.objects.get()
-    assert 'id="atividade-fixa"' in html and f'href="#tarefa-{t.pk}"' in html
+    assert 'id="atividade-fixa"' in html and f'id="tarefa-{t.pk}"' in html and "acompanhar" not in html
+    assert html.index(f'id="tarefa-{t.pk}"') > html.index("data-resultado-de")  # cartão abaixo do resultado
+    assert html.index('id="atividade-fixa"') > html.index('class="compositor"')  # barra dentro do compositor
     tarefas.processar_proxima()
     barra = client.get(reverse("chat:atividade", args=[c.pk])).content.decode()
     assert "Concluída" in barra and "hx-trigger" not in barra  # parou de consultar

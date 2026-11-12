@@ -179,3 +179,70 @@ button.secundario:hover { background: #f0f5f1; }
 .conversa .renomear:hover { background: #dfe8e3; color: #244c3a; }
 .conversa input.renomeando { flex: 1; min-width: 0; font: inherit; padding: 2px 6px; border: 1px solid #9db8a8; border-radius: 5px; background: #fff; }
 @media (hover: none) { .conversa.ativa .renomear { display: inline-flex; } }
+
+/* --- M26: tarefa em segundo plano (cartão, barra no compositor, "Pensando" ao vivo) --------------- */
+@keyframes girar { to { transform: rotate(360deg); } }
+.giro { flex: none; width: 15px; height: 15px; border-radius: 50%; border: 2px solid #d5e1da; border-top-color: var(--acento);
+  animation: girar .8s linear infinite; }
+.tarefa-icone { flex: none; width: 16px; height: 16px; border-radius: 50%; display: inline-flex; align-items: center;
+  justify-content: center; font-size: 10px; font-weight: 700; color: #fff; }
+.tarefa-icone.ok { background: var(--verde-texto); }
+.tarefa-icone.ok::before { content: "✓"; }
+.tarefa-icone.alerta { background: var(--pendente); }
+.tarefa-icone.alerta::before { content: "!"; }
+
+.tarefa-card { align-self: stretch; background: #fff; border: 1px solid var(--linha); border-radius: 14px;
+  padding: 14px 16px 12px; box-shadow: 0 2px 10px #223c2a08; display: flex; flex-direction: column; gap: 10px; }
+.tarefa-topo { display: flex; align-items: flex-start; gap: 11px; }
+.tarefa-topo .giro, .tarefa-topo .tarefa-icone { margin-top: 2px; }
+.tarefa-titulos { flex: 1; min-width: 0; }
+.tarefa-titulo { margin: 0; font-size: 13px; font-weight: 600; color: var(--texto); line-height: 1.4; }
+.tarefa-agora { margin: 2px 0 0; font-size: 12px; color: var(--sutil); }
+.tarefa-card:not(.concluida):not(.cancelada):not(.falhou):not(.bloqueada):not(.limite) .tarefa-agora { animation: surgir .25s ease-out; }
+.tarefa-selo { flex: none; font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 999px;
+  background: var(--acento-claro); color: var(--acento); }
+.tarefa-card.concluida .tarefa-selo { background: #e6f3e4; color: var(--verde-texto); }
+.tarefa-card.limite .tarefa-selo, .tarefa-card.bloqueada .tarefa-selo, .tarefa-card.falhou .tarefa-selo,
+.tarefa-card.aguardando_usuario .tarefa-selo { background: var(--pendente-claro); color: var(--pendente); }
+.tarefa-card.cancelada .tarefa-selo { background: #eef1ef; color: var(--sutil); }
+
+.tarefa-etapas { list-style: none; margin: 0 0 0 7px; padding: 0 0 0 16px; border-left: 1px solid var(--linha);
+  display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: var(--sutil); }
+.tarefa-etapas li { display: flex; align-items: center; gap: 8px; position: relative; }
+.tarefa-etapas .marca { position: absolute; left: -21px; width: 9px; height: 9px; border-radius: 50%;
+  background: #fff; border: 1.5px solid #c9d4ce; }
+.tarefa-etapas li.concluida { color: var(--texto); }
+.tarefa-etapas li.concluida .marca { background: var(--verde-texto); border-color: var(--verde-texto); }
+.tarefa-etapas li.em_andamento { color: var(--texto); font-weight: 600; }
+.tarefa-etapas li.em_andamento .marca { border-color: var(--acento); border-top-color: transparent; animation: girar .8s linear infinite; }
+.tarefa-etapas li.bloqueada .marca { background: var(--pendente); border-color: var(--pendente); }
+
+.tarefa-motivo { margin: 0; font-size: 12px; color: var(--pendente); background: var(--pendente-claro);
+  padding: 7px 10px; border-radius: 8px; }
+.tarefa-cobertura { margin: 0; font-size: 12px; color: var(--sutil); }
+.tarefa-cobertura strong { color: var(--texto); }
+.tarefa-rodape { display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding-top: 10px; border-top: 1px solid var(--linha); }
+.tarefa-rodape form { margin: 0; }
+.tarefa-criterio { font-size: 11px; color: #8a998f; line-height: 1.4; }
+.tarefa-botao { flex: none; font-size: 12px; font-weight: 600; padding: 6px 12px; border-radius: 8px;
+  background: #fff; color: var(--texto); border: 1px solid var(--linha); }
+.tarefa-botao:hover { border-color: #a7bfb0; }
+.tarefa-botao.principal { background: var(--acento); color: #fff; border-color: var(--acento); }
+.tarefa-conclusao:empty { display: none; }
+.tarefa-conclusao .msg.resultado { margin: 0; }
+
+/* Barra dentro do compositor: o que está rodando agora, sem precisar subir a conversa. */
+.atividade-fixa { display: flex; align-items: center; gap: 9px; margin: 0 4px 8px; padding: 7px 12px;
+  border: 1px solid var(--linha); border-radius: 12px; background: #f6f9f7; font-size: 12px; color: var(--sutil); }
+.atividade-fixa:empty { display: none; }
+.atividade-fixa.terminada { background: #fff; }
+.atividade-fixa .atividade-texto { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.msg.pensando { gap: 3px; }
+.pensando-linha { display: flex; align-items: center; gap: 10px; font-size: 13px; }
+.pensando-passos { font-size: 12px; }
+@media (max-width: 680px) {
+  .tarefa-rodape { flex-direction: column; align-items: stretch; }
+  .tarefa-selo { display: none; }
+}
