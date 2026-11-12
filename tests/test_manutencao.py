@@ -338,5 +338,6 @@ def test_codex_manutencao_usa_modelo_e_isolamento(tmp_path):
     assert cmd[cmd.index('--security-opt') + 1] == 'no-new-privileges'
     assert cmd[cmd.index('--tmpfs') + 1] == '/tmp:rw,nosuid,nodev,size=256m'
     assert 'approval_policy="never"' in cmd
+    assert 'code_mode_host' in cmd and 'code_mode' in cmd
     assert '--privileged' not in cmd and '--network=host' not in cmd
     assert not any('docker.sock' in x or '.ssh' in x or 'OPENAI_API_KEY' in x  for x in cmd)

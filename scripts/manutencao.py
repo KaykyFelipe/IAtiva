@@ -305,6 +305,7 @@ def comando_agente(wt: Path, pasta_diag: Path, imagem: str, c: dict, diag: dict)
             '--entrypoint', 'codex', imagem, 'exec', '--ephemeral', '--ignore-user-config', '--ignore-rules',
             '--skip-git-repo-check', '--sandbox', 'danger-full-access', '-c', 'approval_policy="never"',
             '--disable', 'apps', '--disable', 'plugins', '--disable', 'hooks', '--disable', 'multi_agent',
+            '--disable', 'code_mode', '--disable', 'code_mode_host',
             '-c', 'forced_login_method="chatgpt"', '-c', 'cli_auth_credentials_store="file"',
             '-c', 'shell_environment_policy.inherit="none"', '-c', 'web_search="disabled"',
             '-c', 'shell_environment_policy.set.PATH="/opt/venv/bin:/usr/local/bin:/usr/bin:/bin"',

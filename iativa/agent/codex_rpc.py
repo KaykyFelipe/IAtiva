@@ -49,7 +49,7 @@ class AppServer:
         config = {'cli_auth_credentials_store': 'file', 'forced_login_method': 'chatgpt',
                   'log_dir': self.cwd, 'history.persistence': 'none', 'analytics.enabled': False,
                   'features.shell_tool': False, 'features.multi_agent': False, 'features.apps': False,
-                  'features.plugins': False, 'features.hooks': False, 'features.code_mode': False,
+                  'features.plugins': False, 'features.hooks': False, 'features.code_mode': False, 'features.code_mode_host': False,
                   'features.browser_use': False, 'features.computer_use': False,
                   'features.skill_search': False, 'features.memories': False, 'web_search': 'disabled'}
         config['model_provider'] = 'openai'
