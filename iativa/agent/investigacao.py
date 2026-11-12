@@ -196,6 +196,7 @@ class Contexto:
     relacionados: dict = field(default_factory=dict)  # ident -> [Registro]
     lotes: int = 0
     lotes_feitos: int = 0
+    lote_usado: int = 0  # menor lote que respondeu: vai para o plano e acelera a próxima vez
     ultima_data: str = ""
     _sal: bytes = field(default_factory=lambda: secrets.token_bytes(16))
     _documentos: dict = field(default_factory=dict)  # ident -> documento (só até a busca em lote)
@@ -408,7 +409,8 @@ def buscar_relacionados(user, base, plano_inv, ctx: Contexto, ctl: Controle):
 
     campo = plano_inv["documento"] if plano_inv["identidade"] == "documento" else plano_inv["nome"]
     ctx.relacionados = {}
-    lote = max(1, int(ctl.limites.get("lote", 40)))
+    lote = max(1, int(plano_inv.get("lote") or ctl.limites.get("lote", 40)))
+    ctx.lote_usado = lote
     limite = int(ctl.limites.get("registros", 2000))
     with _Sessao() as ses:
         t = ses.cat.tabelas([plano_inv["tabela"]], com_campos=True)[plano_inv["tabela"]]
@@ -454,6 +456,7 @@ def buscar_relacionados(user, base, plano_inv, ctx: Contexto, ctl: Controle):
                     # Lote lento: os próximos lotes (de todas as filiais) também ficam menores. O banco do
                     # Protheus responde na hora a buscas pequenas e pode travar com listas grandes.
                     lote = max(1, len(parte) // 2)
+                    ctx.lote_usado = min(ctx.lote_usado or lote, lote)
                     pendentes = [(f, parte)] + fila
                     fila = [(ff, pp[i:i + lote]) for ff, pp in pendentes for i in range(0, len(pp), lote)]
                     ctx.lotes = ctx.lotes_feitos + len(fila)
@@ -605,7 +608,8 @@ def concluir(plano_inv, ctx: Contexto, extra_limitacoes=()) -> Conclusao:
     ref = f"Data de referência: {hoje:%d/%m/%Y}." + (
         f" Data mais recente vista nesses registros: {_fmt(ctx.ultima_data)} (a base pode estar atrasada em relação "
         "a hoje)." if ctx.ultima_data else "")
-    return Conclusao(ctx.itens, cob, sorted(resumo.items(), key=lambda x: -x[1]), ref, limitacoes,
+    itens = sorted(ctx.itens, key=lambda it: (bool(it.verificado), it.reg.nome))  # inconclusivos primeiro
+    return Conclusao(itens, cob, sorted(resumo.items(), key=lambda x: -x[1]), ref, limitacoes,
                      f"{timezone.localtime():%d/%m/%Y %H:%M}", plano_inv["titulos"])
 
 

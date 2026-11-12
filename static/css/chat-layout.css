@@ -249,3 +249,34 @@ button.secundario:hover { background: #f0f5f1; }
   .tarefa-rodape { flex-direction: column; align-items: stretch; }
   .tarefa-selo { display: none; }
 }
+
+/* Conclusão da verificação: legível sem rolar para o lado */
+.tarefa-carregando { display: flex; align-items: center; gap: 9px; margin: 0; font-size: 12px; color: var(--sutil); }
+.conclusao { display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--linha); padding-top: 12px; }
+.conclusao-resumo { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { font-size: 11px; padding: 3px 9px; border-radius: 999px; background: #f1f4f2; color: var(--texto); }
+.chip.ok { background: #e6f3e4; color: var(--verde-texto); font-weight: 600; }
+.chip.alerta { background: var(--pendente-claro); color: var(--pendente); font-weight: 600; }
+.conclusao-ref { margin: 0; font-size: 11px; color: var(--sutil); }
+.conclusao-tabela { border: 1px solid var(--linha); border-radius: 10px; overflow: hidden; }
+.conclusao-tabela table { width: 100%; table-layout: fixed; border-collapse: collapse; }
+.conclusao-tabela th { font-size: 11px; text-align: left; padding: 8px 10px; background: #f6f9f7; color: var(--sutil); }
+.conclusao-tabela th:nth-child(1) { width: 32%; }
+.conclusao-tabela th:nth-child(2) { width: 15%; }
+.conclusao-tabela td { white-space: normal; vertical-align: top; padding: 9px 10px; font-size: 12px; line-height: 1.45;
+  border-top: 1px solid var(--linha); overflow-wrap: anywhere; }
+.conclusao-tabela tr.inconclusivo td { background: #fffbf3; }
+.conclusao-tabela .pessoa strong { display: block; font-weight: 600; color: var(--texto); }
+.conclusao-tabela .pessoa span { font-size: 11px; color: var(--sutil); }
+.selo-linha { display: inline-block; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px; }
+.selo-linha.ok { background: #e6f3e4; color: var(--verde-texto); }
+.selo-linha.alerta { background: var(--pendente-claro); color: var(--pendente); }
+.conclusao-tabela details { margin-top: 5px; }
+.conclusao-tabela summary { cursor: pointer; font-size: 11px; color: var(--acento); }
+.conclusao-tabela details ul { margin: 5px 0 0; padding-left: 16px; color: var(--sutil); font-size: 11px; }
+@media (max-width: 680px) {
+  .conclusao-tabela thead { display: none; }
+  .conclusao-tabela tr, .conclusao-tabela td { display: block; width: auto; }
+  .conclusao-tabela td { border-top: 0; padding: 4px 10px; }
+  .conclusao-tabela tr { border-top: 1px solid var(--linha); padding: 6px 0; }
+}

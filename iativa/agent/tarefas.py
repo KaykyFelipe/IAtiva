@@ -213,6 +213,8 @@ def executar(t: Tarefa):
                     elif e["id"] == "relacionados":
                         inv.conferir_permissao(user, base)
                         inv.buscar_relacionados(user, base, t.plano, ctx, ctl)
+                        if ctx.lote_usado and ctx.lote_usado != t.plano.get("lote"):
+                            _salvar(t, plano={**t.plano, "lote": ctx.lote_usado})  # só o tamanho, sem dados
                     elif e["id"] == "classificar":
                         inv.classificar(t.plano, ctx)
                         cob = inv.cobertura(ctx)
@@ -347,7 +349,7 @@ def conclusao(user, t: Tarefa):
     lim = {**(t.limites or limites())}
     with prazo.definir(float(lim["prazo_s"])):
         ctl = inv.Controle(lim)
-        plano = inv.validar_plano(user, t.solicitacao_base, t.proposta)
+        plano = {**inv.validar_plano(user, t.solicitacao_base, t.proposta), "lote": (t.plano or {}).get("lote")}
         c = inv.investigar(user, t.solicitacao_base, plano, ctl)
     if t.cobertura and t.cobertura.get("total") != c.cobertura["total"]:
         c.limitacoes.insert(0, f"A lista tinha {t.cobertura.get('total')} pessoas na verificação e agora tem "

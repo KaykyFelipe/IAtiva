@@ -1,6 +1,6 @@
 {# Tarefa em segundo plano (M25/M26): só estado persistido (etapas, contagens, situação). Sem dados do ERP. #}
 <section class="tarefa-card {{ tarefa.situacao }}" id="tarefa-{{ tarefa.pk }}" aria-live="polite"
-         {% if not tarefa.terminal %}hx-get="{% url 'chat:tarefa' tarefa.pk %}?acompanhando=1" hx-trigger="every 2s" hx-swap="outerHTML"{% endif %}>
+         {% if not tarefa.terminal %}hx-get="{% url 'chat:tarefa' tarefa.pk %}" hx-trigger="every 2s" hx-target="this" hx-swap="outerHTML"{% endif %}>
   <div class="tarefa-topo">
     {% if tarefa.terminal %}
       <span class="tarefa-icone {% if tarefa.situacao == 'concluida' %}ok{% else %}alerta{% endif %}" aria-hidden="true"></span>
@@ -37,13 +37,13 @@
             hx-post="{% url 'chat:tarefa_cancelar' tarefa.pk %}" hx-target="#tarefa-{{ tarefa.pk }}" hx-swap="outerHTML">
         {% csrf_token %}<button type="submit" class="tarefa-botao">Cancelar</button>
       </form>
-    {% elif tarefa.situacao == "concluida" or tarefa.situacao == "limite" %}
-      <button type="button" class="tarefa-botao principal" hx-get="{% url 'chat:tarefa_conclusao' tarefa.pk %}"
-              hx-target="#conclusao-{{ tarefa.pk }}" hx-swap="innerHTML">Ver conclusão</button>
     {% endif %}
   </div>
   {% if tarefa.situacao == "concluida" or tarefa.situacao == "limite" %}
+    {# A conclusão com os dados não fica salva: é consultada de novo e aparece sozinha aqui. #}
     <div class="tarefa-conclusao" id="conclusao-{{ tarefa.pk }}"
-         {% if acompanhando %}hx-get="{% url 'chat:tarefa_conclusao' tarefa.pk %}" hx-trigger="load" hx-swap="innerHTML"{% endif %}></div>
+         hx-get="{% url 'chat:tarefa_conclusao' tarefa.pk %}" hx-trigger="load" hx-target="this" hx-swap="innerHTML">
+      <p class="tarefa-carregando"><span class="giro" aria-hidden="true"></span>Montando a conclusão de cada pessoa (consultando o ERP de novo)…</p>
+    </div>
   {% endif %}
 </section>

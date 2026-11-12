@@ -353,7 +353,7 @@ def _tarefa(request, tarefa_id):
 def tarefa(request, tarefa_id):
     """Estado da tarefa (persistido, sem dados do ERP). O navegador consulta a cada poucos segundos."""
     t = _tarefa(request, tarefa_id)
-    return render(request, "chat/_tarefa.html", {"tarefa": t, "acompanhando": request.GET.get("acompanhando") == "1"})
+    return render(request, "chat/_tarefa.html", {"tarefa": t})
 
 
 @require_POST

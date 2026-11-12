@@ -1,29 +1,38 @@
 {# Conclusão da verificação (M25): consultada agora e mostrada só nesta resposta. Não é salva. #}
-<div class="msg ia resultado conclusao-tarefa">
+<div class="conclusao">
   {% if erro %}
-    <p class="erro">{{ erro }}</p>
+    <p class="tarefa-motivo">{{ erro }}</p>
   {% else %}
-    <p><strong>Conclusão — consultada em {{ c.consultado_em }}.</strong> {{ c.referencia }}</p>
-    <p>Cobertura: {{ c.cobertura.verificados }} de {{ c.cobertura.total }} pessoas verificadas; {{ c.cobertura.inconclusivos }} inconclusiva(s){% if not c.cobertura.lista_completa %}; a lista passou do limite e não está completa{% endif %}.</p>
-    <ul>{% for rotulo, n in c.resumo %}<li>{{ rotulo }}: {{ n }}</li>{% endfor %}</ul>
-    <div class="tabela-rolagem">
+    <div class="conclusao-resumo">
+      <span class="chip ok">{{ c.cobertura.verificados }} verificada(s)</span>
+      {% if c.cobertura.inconclusivos %}<span class="chip alerta">{{ c.cobertura.inconclusivos }} inconclusiva(s)</span>{% endif %}
+      {% for rotulo, n in c.resumo %}<span class="chip">{{ rotulo }}: {{ n }}</span>{% endfor %}
+    </div>
+    <p class="conclusao-ref">Consultado em {{ c.consultado_em }}. {{ c.referencia }}</p>
+    <div class="conclusao-tabela">
       <table>
-        <thead><tr><th>Pessoa</th><th>Classificação</th><th>Conclusão</th><th>Evidências</th></tr></thead>
+        <thead><tr><th>Pessoa</th><th>Situação</th><th>Conclusão</th></tr></thead>
         <tbody>
           {% for it in c.itens %}
-            <tr>
-              <td>{{ it.reg.nome|default:"—" }}<br><span class="nota">{{ it.reg.chave|join:"/" }}</span></td>
-              <td>{% if it.verificado %}Verificado{% else %}<strong>Inconclusivo</strong>{% endif %}</td>
-              <td>{{ it.texto }}</td>
-              <td><ul>{% for e in it.evidencias %}<li>{{ e }}</li>{% endfor %}</ul></td>
+            <tr class="{% if it.verificado %}verificado{% else %}inconclusivo{% endif %}">
+              <td class="pessoa"><strong>{{ it.reg.nome|default:"—" }}</strong><span>{{ it.reg.chave|join:"/" }}</span></td>
+              <td><span class="selo-linha {% if it.verificado %}ok{% else %}alerta{% endif %}">{% if it.verificado %}Verificado{% else %}Inconclusivo{% endif %}</span></td>
+              <td class="texto">
+                {{ it.texto }}
+                {% if it.evidencias|length > 1 %}
+                  <details><summary>Ver registros comparados ({{ it.evidencias|length }})</summary>
+                    <ul>{% for e in it.evidencias %}<li>{{ e }}</li>{% endfor %}</ul>
+                  </details>
+                {% endif %}
+              </td>
             </tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
     {% if c.limitacoes %}
-      <details class="premissas" open><summary>Limitações</summary><ul>{% for l in c.limitacoes %}<li>{{ l }}</li>{% endfor %}</ul></details>
+      <details class="premissas"><summary>Limitações</summary><ul>{% for l in c.limitacoes %}<li>{{ l }}</li>{% endfor %}</ul></details>
     {% endif %}
-    <p class="nota">Estes dados não ficam salvos. Para ver de novo, use “Ver a conclusão”: a consulta é refeita.</p>
+    <p class="nota">Estes dados não ficam salvos: ao reabrir a conversa, a conclusão é consultada de novo.</p>
   {% endif %}
 </div>

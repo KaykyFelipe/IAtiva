@@ -2,7 +2,7 @@
 {% if tarefa_fixa and not tarefa_fixa.terminal %}
 <div class="atividade-fixa" id="atividade-fixa" role="status" aria-live="polite"
      data-tarefa-ativa data-cancelar-url="{% url 'chat:tarefa_cancelar' tarefa_fixa.pk %}" data-tarefa-id="{{ tarefa_fixa.pk }}"
-     hx-get="{% url 'chat:atividade' conversa.pk %}" hx-trigger="every 2s" hx-swap="outerHTML">
+     hx-get="{% url 'chat:atividade' conversa.pk %}" hx-trigger="every 2s" hx-target="this" hx-swap="outerHTML">
   <span class="giro" aria-hidden="true"></span>
   <span class="atividade-texto">{{ tarefa_fixa.progresso|default:tarefa_fixa.get_situacao_display }}</span>
 </div>

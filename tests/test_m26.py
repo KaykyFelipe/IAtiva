@@ -174,3 +174,18 @@ def test_erro_inesperado_tenta_corrigir_antes_de_desistir(base, monkeypatch):
     assert t.situacao == "falhou" and p.chamadas == 1  # tentou de novo e ainda refez o plano com o modelo
     assert "Tentei 3 vezes e pedi outro caminho ao modelo" in t.motivo
     assert sum("tentando de novo" in x for x in t.consumo["correcoes"]) >= 2
+
+
+def test_atualizacoes_nao_substituem_a_conversa_e_conclusao_aparece_sozinha(base, client):
+    c = _lista(base)
+    conversas.enviar(base["u"], c, PEDIDO, FakeProvider([_investigar()]))
+    client.force_login(base["u"])
+    t = Tarefa.objects.get()
+    barra = client.get(reverse("chat:atividade", args=[c.pk])).content.decode()
+    cartao = client.get(reverse("chat:tarefa", args=[t.pk])).content.decode()
+    assert 'hx-target="this"' in barra and 'hx-target="this"' in cartao  # não herdam o alvo #conversa
+    tarefas.processar_proxima()
+    cartao = client.get(reverse("chat:tarefa", args=[t.pk])).content.decode()
+    assert "Ver conclusão" not in cartao and 'hx-trigger="load"' in cartao
+    html = client.get(reverse("chat:tarefa_conclusao", args=[t.pk])).content.decode()
+    assert "conclusao-tabela" in html and "Inconclusivo" in html or "Verificado" in html
