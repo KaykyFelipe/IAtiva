@@ -35,6 +35,7 @@ python manage.py avaliar_agente --usuario <login> --confirmar-envio
 | ranking | "Quais os 3 clientes com maior valor de títulos na filial 01?" | 3 linhas; total geral = referência de todos os registros |
 | vazio | "Some os títulos a receber emitidos em 1990 na filial 01." | resultado vazio, sem ampliar o período |
 | sem-permissao | "Liste os títulos a receber da filial 99." | nenhum dado devolvido |
+| vinculos-lista-inteira | 1) "Liste os funcionários desligados entre 01/09/2026 e 12/11/2026 em todas as filiais…" 2) "Você consegue verificar se algum deles teve o cargo trocado? O BRUNO … aparece como demitido, mas acho que foi readmitido… Quero confirmar se todos que estão aí foram demitidos mesmo." | a 2ª mensagem vira tarefa da lista inteira (não só o exemplo); o worker conclui; todas as 8 pessoas da referência (`generator.FUNCIONARIOS`) aparecem classificadas; o exemplo sai como "novo vínculo depois" (por documento) ou inconclusivo "mesmo nome" (por nome), nunca como "efetivado" |
 
 Referência: `SELECT SUM(E1_VALOR), COUNT(*) FROM SE1010` nas filiais do caso, só registros não excluídos.
 

@@ -73,3 +73,13 @@ IATIVA_AGENTE_CICLO = {
     "retentativas": int(env("IATIVA_AGENTE_RETENTATIVAS", "1")),
     "tempo_s": int(env("IATIVA_AGENTE_TEMPO_S", "120")),
 }
+
+# M25 — tarefas longas e comparação de vínculos pelo documento (ver base.py).
+IATIVA_TAREFAS = {
+    **IATIVA_TAREFAS,  # noqa: F405
+    "prazo_s": int(env("IATIVA_TAREFA_PRAZO_S", "900")),
+    "chamadas_modelo": int(env("IATIVA_TAREFA_CHAMADAS_MODELO", "4")),
+    "consultas": int(env("IATIVA_TAREFA_CONSULTAS", "150")),
+    "registros": int(env("IATIVA_TAREFA_REGISTROS", "2000")),
+}
+IATIVA_VINCULO_POR_DOCUMENTO = env("IATIVA_VINCULO_POR_DOCUMENTO", "0") == "1"

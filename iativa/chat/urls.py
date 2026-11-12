@@ -22,4 +22,7 @@ urlpatterns = [
     path("layout/", views.layout, name="layout"),
     path("parar/", views.parar, name="parar"),
     path("memoria/decidir/", views.memoria_decidir, name="memoria_decidir"),
+    path("tarefa/<int:tarefa_id>/", views.tarefa, name="tarefa"),
+    path("tarefa/<int:tarefa_id>/cancelar/", views.tarefa_cancelar, name="tarefa_cancelar"),
+    path("tarefa/<int:tarefa_id>/conclusao/", views.tarefa_conclusao, name="tarefa_conclusao"),
 ]

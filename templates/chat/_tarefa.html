@@ -1,0 +1,32 @@
+{# Tarefa em segundo plano (M25): só estado persistido (etapas, contagens, situação). Sem dados do ERP. #}
+<article class="ficha tarefa {% if tarefa.situacao == 'concluida' %}pronta{% elif tarefa.terminal %}bloqueada{% else %}proposta{% endif %}"
+         id="tarefa-{{ tarefa.pk }}"
+         {% if not tarefa.terminal %}hx-get="{% url 'chat:tarefa' tarefa.pk %}?acompanhando=1" hx-trigger="every 2s" hx-swap="outerHTML"{% endif %}
+         aria-live="polite">
+  <header><strong>{{ tarefa.objetivo }}</strong><span class="estado">{{ tarefa.get_situacao_display }}</span></header>
+  {% if tarefa.progresso %}<p>{{ tarefa.progresso }}</p>{% endif %}
+  {% if tarefa.motivo %}<p class="{% if tarefa.situacao == 'concluida' %}nota{% else %}erro{% endif %}">{{ tarefa.motivo }}</p>{% endif %}
+  <ol class="etapas">
+    {% for e in tarefa.etapas %}
+      <li data-estado="{{ e.estado }}">{% if e.estado == "concluida" %}✓{% elif e.estado == "em_andamento" %}…{% elif e.estado == "bloqueada" %}✕{% else %}○{% endif %} {{ e.nome }}</li>
+    {% endfor %}
+  </ol>
+  {% if tarefa.cobertura.total %}
+    <p class="nota">Cobertura: {{ tarefa.cobertura.verificados }} verificada(s) e {{ tarefa.cobertura.inconclusivos }} inconclusiva(s), de {{ tarefa.cobertura.total }}.</p>
+  {% endif %}
+  <p class="nota">Critério de conclusão: {{ tarefa.criterio_conclusao }}{% if tarefa.reconstruida %} A execução foi retomada e a lista foi consultada de novo.{% endif %}</p>
+  <footer>
+    {% if not tarefa.terminal %}
+      <form method="post" action="{% url 'chat:tarefa_cancelar' tarefa.pk %}"
+            hx-post="{% url 'chat:tarefa_cancelar' tarefa.pk %}" hx-target="#tarefa-{{ tarefa.pk }}" hx-swap="outerHTML">
+        {% csrf_token %}<button type="submit" class="texto">Cancelar verificação</button>
+      </form>
+    {% elif tarefa.situacao == "concluida" or tarefa.situacao == "limite" %}
+      <div id="conclusao-{{ tarefa.pk }}"
+           {% if acompanhando %}hx-get="{% url 'chat:tarefa_conclusao' tarefa.pk %}" hx-trigger="load" hx-swap="innerHTML"{% endif %}>
+        <button type="button" class="secundario" hx-get="{% url 'chat:tarefa_conclusao' tarefa.pk %}"
+                hx-target="#conclusao-{{ tarefa.pk }}" hx-swap="innerHTML">Ver a conclusão (consulta de novo)</button>
+      </div>
+    {% endif %}
+  </footer>
+</article>

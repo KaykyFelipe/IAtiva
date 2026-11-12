@@ -131,6 +131,8 @@ def _populate(conn: sqlite3.Connection, seed: int) -> dict:
                 })
                 counts["SE5010"] += 1
 
+    counts["SRA010"] = _funcionarios(conn, recno)
+
     for tabela, linhas in dicionario.linhas().items():
         for linha in linhas:
             _insert(conn, dicionario.nome_fisico(tabela), {"D_E_L_E_T_": " ", **linha})
@@ -143,6 +145,39 @@ def _populate(conn: sqlite3.Connection, seed: int) -> dict:
     ):
         conn.execute(f'INSERT INTO "{schema.MARKER_TABLE}" ("CHAVE", "VALOR") VALUES (?, ?)', (chave, valor))
     return counts
+
+
+# Funcionários: (filial, matrícula, nome, cpf, admissão, demissão, situação, função, categoria, excluído).
+# Casos para a investigação de vínculos (M25). CPF fictício (prefixo 9000).
+FUNCIONARIOS = [
+    ("01", "000101", "ANA SINTETICA SOUZA", "90000000001", "20250301", "20260915", "D", "00010", "M", False),
+    ("01", "000180", "ANA SINTETICA SOUZA", "90000000001", "20261001", "", " ", "00010", "M", True),  # excluído
+    ("01", "000102", "BRUNO SINTETICO LIMA", "90000000002", "20260201", "20261001", "D", "00004", "E", False),
+    ("01", "000150", "BRUNO SINTETICO LIMA", "90000000002", "20261002", "", " ", "00175", "M", False),
+    ("01", "000103", "CARLA SINTETICA ROCHA", "90000000003", "20240501", "20260920", "D", "00020", "M", False),
+    ("02", "000201", "CARLA SINTETICA ROCHA", "90000000003", "20260921", "", " ", "00020", "M", False),
+    ("01", "000104", "DANIEL SINTETICO MELO", "90000000004", "20230110", "20261010", "D", "00030", "M", False),
+    ("03", "000301", "DANIEL SINTETICO MELO", "90000000099", "20220301", "", " ", "00031", "M", False),
+    ("02", "000202", "ELISA SINTETICA DIAS", "90000000005", "20250110", "20261005", "D", "00040", "M", False),
+    ("01", "000099", "ELISA SINTETICA DIAS", "90000000005", "20200101", "20220630", "D", "00040", "M", False),
+    ("02", "000203", "FABIO SINTETICO REIS", "90000000006", "20240801", "20260930", "D", "00050", "M", False),
+    ("03", "000302", "FABIO SINTETICO REIS", "90000000006", "20260110", "", " ", "00051", "H", False),
+    ("01", "000105", "GABRIELA SINTETICA NUNES", "90000000007", "20210201", "", " ", "00010", "M", False),
+    ("02", "000204", "HUGO SINTETICO PRADO", "90000000008", "20230401", "", " ", "00020", "M", False),
+    ("03", "000303", "IARA SINTETICA COSTA", "90000000009", "20250601", "20261020", "D", "00060", "M", False),
+    ("02", "000205", "JOAO SINTETICO VAZ", "90000000010", "20240101", "20260905", "D", "00070", "M", False),
+]
+
+
+def _funcionarios(conn, recno) -> int:
+    for fil, mat, nome, cpf, adm, dem, sit, func, cat, excluido in FUNCIONARIOS:
+        r = recno.next()
+        _insert(conn, "SRA010", {
+            "RA_FILIAL": fil, "RA_MAT": mat, "RA_NOME": nome.ljust(30), "RA_CIC": cpf, "RA_ADMISSA": adm,
+            "RA_DEMISSA": dem.ljust(8), "RA_SITFOLH": sit, "RA_CODFUNC": func, "RA_CATFUNC": cat,
+            "D_E_L_E_T_": "*" if excluido else " ", "R_E_C_N_O_": r, "R_E_C_D_E_L_": r if excluido else 0,
+        })
+    return len(FUNCIONARIOS)
 
 
 def generate(path: Path, seed: int = DEFAULT_SEED, replace: bool = False) -> dict:

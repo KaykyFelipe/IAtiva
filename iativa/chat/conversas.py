@@ -346,6 +346,10 @@ def mensagens_com_interacao(user, c: ConversationContext) -> list[dict]:
     from iativa.agent.models import ConsultaModelo
 
     msgs = list(c.mensagens.select_related("autor", "solicitacao"))
+    from iativa.agent.models import Tarefa
+
+    tarefas = {t.pk: t for t in Tarefa.objects.filter(
+        usuario=user, pk__in=[m.ficha.get("tarefa") for m in msgs if m.ficha.get("tipo") == "tarefa"])}
     modelos = {cm.pk: cm for cm in ConsultaModelo.objects.filter(
         pk__in=[m.ficha.get("modelo") for m in msgs if m.ficha.get("modelo")])}
     ultima_modelo = {}
@@ -369,6 +373,7 @@ def mensagens_com_interacao(user, c: ConversationContext) -> list[dict]:
             "repetivel": ultima_dono and m.ficha.get("tipo") in ("executada", "falha_execucao"),
             "aprendivel": administrador and m.ficha.get("tipo") == "aprendizado" and m.pk == msgs[-1].pk,
             "ultima": m.pk == msgs[-1].pk,
+            "tarefa": tarefas.get(m.ficha.get("tarefa")) if m.ficha.get("tipo") == "tarefa" else None,
             "aprovavel": bool(m.ficha.get("modelo") and ultima_modelo.get(m.ficha["modelo"]) == m.pk
                               and m.ficha["modelo"] in modelos and pode_aprovar(user, modelos[m.ficha["modelo"]])),
         })

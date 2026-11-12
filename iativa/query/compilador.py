@@ -80,6 +80,12 @@ class _Montador:
         if f.op in OPERADORES:
             params.append(self.valor(f.campo, f.valor))
             return f"{esquerda} {OPERADORES[f.op]} ?"
+        if f.op == "IN":  # busca em lote (M25)
+            itens = [self.valor(f.campo, v) for v in f.valor]
+            if not itens:
+                raise PlanoInvalido("Lista de valores vazia.")
+            params.extend(itens)
+            return f"{esquerda} IN ({', '.join('?' for _ in itens)})"
         if f.op == "NOT_IN":
             itens = [self.valor(f.campo, v) for v in f.valor]
             params.extend(itens)

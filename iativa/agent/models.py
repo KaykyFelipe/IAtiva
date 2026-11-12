@@ -60,6 +60,64 @@ class SituacaoNota(models.TextChoices):
     SUBSTITUIDA = "substituida", "Substituída"
 
 
+class SituacaoTarefa(models.TextChoices):
+    PENDENTE = "pendente", "Na fila"
+    EXECUTANDO = "executando", "Em execução"
+    CONCLUIDA = "concluida", "Concluída"
+    LIMITE = "limite", "Parou num limite"
+    BLOQUEADA = "bloqueada", "Bloqueada"
+    AGUARDANDO = "aguardando_usuario", "Aguardando você"
+    CANCELADA = "cancelada", "Cancelada"
+    FALHOU = "falhou", "Falhou"
+
+
+TERMINAIS = (SituacaoTarefa.CONCLUIDA, SituacaoTarefa.LIMITE, SituacaoTarefa.BLOQUEADA, SituacaoTarefa.AGUARDANDO,
+             SituacaoTarefa.CANCELADA, SituacaoTarefa.FALHOU)
+
+
+class Tarefa(models.Model):
+    """Tarefa longa do agente (M25), executada pelo worker fora da requisição HTTP.
+
+    Guarda só o permitido: objetivo estruturado, critérios já exibidos no histórico, plano (nomes de
+    campos), estado das etapas, limites, consumo, contagens de cobertura e códigos de situação.
+    Nunca linhas, nomes, documentos ou números do ERP: as evidências ficam só na memória da execução."""
+
+    usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="+")
+    conversa = models.ForeignKey("iativa_chat.ConversationContext", on_delete=models.CASCADE, related_name="tarefas")
+    solicitacao_base = models.ForeignKey("iativa_chat.RequestContext", on_delete=models.SET_NULL, null=True,
+                                         related_name="+")
+    tipo = models.CharField(max_length=30, default="investigar_vinculos")
+    objetivo = models.CharField(max_length=300)
+    escopo = models.JSONField(default=dict)  # consulta de origem e critérios (os mesmos do histórico)
+    criterio_conclusao = models.CharField(max_length=300)
+    proposta = models.JSONField(default=dict)  # escolha do modelo (nomes de campos)
+    plano = models.JSONField(default=dict)  # plano validado no dicionário
+    etapas = models.JSONField(default=list)
+    limites = models.JSONField(default=dict)
+    consumo = models.JSONField(default=dict)
+    cobertura = models.JSONField(default=dict)  # só contagens
+    situacao = models.CharField(max_length=20, choices=SituacaoTarefa.choices, default=SituacaoTarefa.PENDENTE)
+    motivo = models.CharField(max_length=400, blank=True)
+    progresso = models.CharField(max_length=300, blank=True)
+    cancelar_solicitado = models.BooleanField(default=False)
+    execucao = models.CharField(max_length=32, blank=True)  # identifica quem está executando agora
+    lease_ate = models.DateTimeField(null=True, blank=True)
+    execucoes = models.PositiveIntegerField(default=0)
+    reconstruida = models.BooleanField(default=False)
+    criado_em = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+    iniciado_em = models.DateTimeField(null=True, blank=True)
+    concluido_em = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-id"]
+        indexes = [models.Index(fields=["situacao", "lease_ate"])]
+
+    @property
+    def terminal(self) -> bool:
+        return self.situacao in TERMINAIS
+
+
 class TipoNota(models.TextChoices):
     PREFERENCIA = "preferencia", "Preferência de apresentação"
     TERMO = "termo", "Definição de termo"

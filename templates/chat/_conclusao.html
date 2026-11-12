@@ -1,0 +1,29 @@
+{# Conclusão da verificação (M25): consultada agora e mostrada só nesta resposta. Não é salva. #}
+<div class="msg ia resultado conclusao-tarefa">
+  {% if erro %}
+    <p class="erro">{{ erro }}</p>
+  {% else %}
+    <p><strong>Conclusão — consultada em {{ c.consultado_em }}.</strong> {{ c.referencia }}</p>
+    <p>Cobertura: {{ c.cobertura.verificados }} de {{ c.cobertura.total }} pessoas verificadas; {{ c.cobertura.inconclusivos }} inconclusiva(s){% if not c.cobertura.lista_completa %}; a lista passou do limite e não está completa{% endif %}.</p>
+    <ul>{% for rotulo, n in c.resumo %}<li>{{ rotulo }}: {{ n }}</li>{% endfor %}</ul>
+    <div class="tabela-rolagem">
+      <table>
+        <thead><tr><th>Pessoa</th><th>Classificação</th><th>Conclusão</th><th>Evidências</th></tr></thead>
+        <tbody>
+          {% for it in c.itens %}
+            <tr>
+              <td>{{ it.reg.nome|default:"—" }}<br><span class="nota">{{ it.reg.chave|join:"/" }}</span></td>
+              <td>{% if it.verificado %}Verificado{% else %}<strong>Inconclusivo</strong>{% endif %}</td>
+              <td>{{ it.texto }}</td>
+              <td><ul>{% for e in it.evidencias %}<li>{{ e }}</li>{% endfor %}</ul></td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if c.limitacoes %}
+      <details class="premissas" open><summary>Limitações</summary><ul>{% for l in c.limitacoes %}<li>{{ l }}</li>{% endfor %}</ul></details>
+    {% endif %}
+    <p class="nota">Estes dados não ficam salvos. Para ver de novo, use “Ver a conclusão”: a consulta é refeita.</p>
+  {% endif %}
+</div>

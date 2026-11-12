@@ -68,6 +68,46 @@ class Command(BaseCommand):
             ok = ok and len(res.linhas) == 3
         return ok, f"{medida.rotulo} = {medida.texto} (referência {alvo}); registros {res.totais.registros}/{n}"
 
+    def _cenario_vinculos(self, user, provedor):
+        """M25: lista de desligados → pergunta com um exemplo de possível readmissão → a IA precisa
+        investigar TODOS (tarefa), não só o exemplo. Referência: generator.FUNCIONARIOS."""
+        from iativa.agent import tarefas
+        from iativa.agent.models import Tarefa
+        from iativa.chat import conversas
+        from iativa.synthetic_erp.generator import FUNCIONARIOS
+
+        lista = {n for _, _, n, _, _, dem, _, _, _, exc in FUNCIONARIOS if not exc and "20260901" <= dem <= "20261112"}
+        with transaction.atomic():
+            try:
+                c = conversas.nova_individual(user)
+                _, res = conversas.enviar(user, c, "Liste os funcionários desligados entre 01/09/2026 e 12/11/2026 em "
+                                          "todas as filiais, com nome, admissão e demissão.", provedor)
+                if res is None or not res.ok or len(res.linhas) != len(lista):
+                    transaction.set_rollback(True)
+                    return False, "a lista inicial não veio completa"
+                msg, _ = conversas.enviar(user, c, "Você consegue verificar se algum deles teve o cargo trocado? O BRUNO "
+                                          "SINTETICO LIMA aparece como demitido, mas acho que foi readmitido porque era "
+                                          "estagiário e foi efetivado. Quero confirmar se todos que estão aí foram "
+                                          "demitidos mesmo.", provedor)
+                t = Tarefa.objects.filter(conversa=c).first()
+                if t is None:
+                    transaction.set_rollback(True)
+                    return False, f"não virou tarefa da lista inteira: {msg.texto[:160]}"
+                tarefas.executar(tarefas.reivindicar())
+                t.refresh_from_db()
+                concl = tarefas.conclusao(user, t)
+                nomes = {it.reg.nome for it in concl.itens}
+                bruno = next((it for it in concl.itens if it.reg.nome.startswith("BRUNO")), None)
+                ok = (t.situacao == "concluida" and nomes == lista and concl.cobertura["sem_classificacao"] == 0
+                      and bruno is not None and bruno.classe in ("novo_vinculo_posterior", "mesmo_nome")
+                      and "efetivado" not in bruno.texto.lower())
+                detalhe = (f"situação {t.situacao}; cobertura {concl.cobertura['verificados']}+"
+                           f"{concl.cobertura['inconclusivos']} de {len(lista)}; exemplo: {bruno.classe if bruno else '-'}")
+            except Exception as exc:
+                ok, detalhe = False, f"erro: {type(exc).__name__}"
+            transaction.set_rollback(True)
+        return ok, detalhe
+
     def handle(self, *args, **opts):
         from iativa.accounts.authz import Permissao, filiais_autorizadas, setor_do_usuario
         from iativa.agent.provedores import obter_provedor
@@ -101,7 +141,11 @@ class Command(BaseCommand):
                 transaction.set_rollback(True)  # nada do roteiro fica gravado
             aprovados += ok
             self.stdout.write(f"[{'OK' if ok else 'FALHOU'}] {caso['id']}: {detalhe}")
-        self.stdout.write(f"{aprovados}/{len(CASOS)} casos conferidos com a referência. Permissão usada: "
+        ok, detalhe = self._cenario_vinculos(user, provedor)
+        aprovados += ok
+        self.stdout.write(f"[{'OK' if ok else 'FALHOU'}] vinculos-lista-inteira: {detalhe}")
+        total = len(CASOS) + 1
+        self.stdout.write(f"{aprovados}/{total} casos conferidos com a referência. Permissão usada: "
                           f"{Permissao.CONSULTAR}; provedor: {provedor.nome}.")
-        if aprovados != len(CASOS):
+        if aprovados != total:
             raise CommandError("Avaliação com falhas.")

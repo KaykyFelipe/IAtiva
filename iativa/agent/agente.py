@@ -36,7 +36,7 @@ from iativa.memory.resolucao import RESOLVIDO, resolver
 
 from . import memoria
 from . import orquestrador as orq
-from . import prazo
+from . import investigacao, prazo
 from . import aprendizado
 from .aprendizado import candidatos, pode_aprender, pode_aprender_sozinho
 from .contratos import BUSCA, OBJETIVOS, objetivos_para
@@ -91,7 +91,7 @@ def _ciclo() -> dict:
 
 
 def _assinatura(d) -> str:
-    return json.dumps([d.acao, d.objetivo, sorted(d.parametros), d.alvo, d.nota, d.consulta, d.regra],
+    return json.dumps([d.acao, d.objetivo, sorted(d.parametros), d.alvo, d.nota, d.consulta, d.regra, d.investigacao],
                       sort_keys=True, ensure_ascii=False, default=str)
 
 
@@ -204,7 +204,10 @@ def conversar(user, c, texto: str, provedor=None, mensagem_usuario_id=None, inte
     if administrador:
         aprendidos = [{"codigo": cm.codigo, "nome": cm.nome, "tabela": cm.tabela, "situacao": cm.get_situacao_display()}
                       for cm in ConsultaModelo.objects.exclude(situacao=SituacaoModelo.REMOVIDA)]
+    base_lista = _lista_vista(user, c) if INVESTIGAR_RE.search(_norm(texto)) else None
+    lista = investigacao.contexto_para_modelo(user, base_lista) if base_lista is not None else None
     entrada = EntradaAgente(
+        lista_anterior=lista,
         mensagem=texto, hoje=timezone.localdate().isoformat(), historico=_historico(c, mensagem_usuario_id),
         objetivos=_catalogo(user, objetivos, defs), solicitacao_atual=_estado(user, atual, defs),
         notas=_notas(user, texto), aprendidos=aprendidos, trechos=trechos, administrador=administrador,
@@ -219,16 +222,17 @@ def conversar(user, c, texto: str, provedor=None, mensagem_usuario_id=None, inte
     # O prazo é total: conferido antes de cada chamada ao modelo e antes de cada ação; as chamadas
     # e as consultas usam no máximo o tempo que resta (M24).
     cfg = _ciclo()
+    cobertura = base_lista if (lista is not None and COBERTURA_RE.search(_norm(texto))) else None
     with prazo.definir(float(cfg["tempo_s"])):
         return _ciclo_agente(user, c, texto, provedor, interrompido, entrada, objetivos, codigos_par, defs, atual,
-                             administrador, cfg)
+                             administrador, cfg, cobertura)
 
 
 SEM_TEMPO = "O tempo total para responder esta mensagem acabou antes de eu concluir."
 
 
 def _ciclo_agente(user, c, texto, provedor, interrompido, entrada, objetivos, codigos_par, defs, atual,
-                  administrador, cfg) -> Saida:
+                  administrador, cfg, cobertura=None) -> Saida:
     feitas, observacoes, saida = set(), [], None
     for _ in range(max(1, int(cfg["passos"]))):
         if prazo.esgotado():
@@ -260,7 +264,8 @@ def _ciclo_agente(user, c, texto, provedor, interrompido, entrada, objetivos, co
         feitas.add(assinatura)
         registrar("interpretacao", "agente", usuario=user, estado_novo=d.acao, entidade_id=atual.pk if atual else None,
                   linhas=len(d.parametros))
-        saida = _agir(user, c, d, atual, defs, texto, provedor, entrada_passo, objetivos, administrador)
+        reduz = _reduz_escopo(d, cobertura)
+        saida = reduz or _agir(user, c, d, atual, defs, texto, provedor, entrada_passo, objetivos, administrador)
         if saida.observacao is None or not saida.observacao.recuperavel:
             return saida
         observacoes.append(saida.observacao)
@@ -280,7 +285,35 @@ def _ciclo_agente(user, c, texto, provedor, interrompido, entrada, objetivos, co
     return saida
 
 
-ROTULO_ACAO = {"preparar_consulta": "consultar", "executar_consulta": "executar a consulta",
+# M25: pedidos sobre a lista inteira geram obrigação de cobertura verificada pelo backend.
+INVESTIGAR_RE = re.compile(r"\b(todos|todas|cada|demais|lista|confir|verific|confer|chec|algum|alguma|readmit|"
+                           r"vinculo|mesmo)\w*")
+COBERTURA_RE = re.compile(r"\b(todos|todas|cada um|cada uma|demais|a lista|da lista|na lista|essa lista|esses|"
+                          r"essas|eles|elas|o resto)\b")
+
+
+def _lista_vista(user, c):
+    """Última lista concluída nesta conversa (a que a pessoa está vendo)."""
+    s = c.solicitacoes.filter(usuario=user, estado=E.CONCLUIDA).exclude(objetivo="").order_by("-id").first()
+    return s if s is not None and s.objetivo in OBJETIVOS and OBJETIVOS[s.objetivo].modelo_id else None
+
+
+def _reduz_escopo(d, cobertura) -> "Saida | None":
+    """Pedido cobre a lista inteira, mas a ação consulta só um exemplo (busca por nome/filtro) ou só
+    responde sem agir: devolve ao modelo, sem executar, para investigar todos."""
+    if cobertura is None:
+        return None
+    exemplo = d.acao == "preparar_consulta" and any(cod in (BUSCA, "filtro-campo") for cod, _ in d.parametros)
+    adia = d.acao == "conversar" and not d.resposta.strip().endswith("?")
+    if not (exemplo or adia):
+        return None
+    motivo = ("O pedido vale para TODOS os integrantes da lista anterior; consultar só o exemplo (ou deixar para "
+              "depois) não atende. Use investigar_lista com os campos de lista_anterior.")
+    return Saida("Esse pedido vale para a lista inteira; não consultei só o exemplo.",
+                 observacao=Observacao(d.acao, ERRO_PARAMETROS, motivo))
+
+
+ROTULO_ACAO = {"investigar_lista": "verificar a lista inteira", "preparar_consulta": "consultar", "executar_consulta": "executar a consulta",
                "aprender_tabela": "procurar a tabela no dicionário", "criar_consulta": "criar uma consulta nova",
                "lembrar": "guardar na memória"}
 
@@ -316,6 +349,8 @@ def _agir(user, c, d, atual, defs, texto, provedor, entrada, objetivos, administ
         return _lembrar(user, d, ficha)
     if acao == "listar_memorias":
         return _listar_memorias(user, ficha)
+    if acao == "investigar_lista":
+        return _investigar(user, c, d, texto, ficha)
     if acao == "esquecer_memoria":
         return _esquecer(user, d, ficha)
     if acao == "listar_pendencias":
@@ -673,6 +708,32 @@ def _lembrar(user, d, ficha) -> Saida:
     nivel = f"do setor {n.setor.nome}" if n.setor else "da empresa"
     return Saida(f"Registrei como proposta para a memória {nivel}: “{nota}”. Ela só vale depois de aprovada por "
                  f"quem aprova definições nesse nível.{extra}", ficha)
+
+
+def _investigar(user, c, d, texto, ficha) -> Saida:
+    """Cria a tarefa que verifica a lista inteira em segundo plano (worker). Aqui só se valida o plano
+    no dicionário, para o modelo poder corrigir na mesma mensagem."""
+    from . import tarefas
+
+    base = _lista_vista(user, c)
+    try:
+        plano = investigacao.validar_plano(user, base, d.investigacao or {})
+    except investigacao.InvestigacaoInvalida as exc:
+        return Saida(str(exc), ficha, observacao=Observacao("investigar_lista", ERRO_PARAMETROS, str(exc)))
+    except investigacao.SemPermissao as exc:
+        return Saida(str(exc), ficha, observacao=Observacao("investigar_lista", SEM_PERMISSAO, str(exc)))
+    except investigacao.Transitoria as exc:
+        return Saida(str(exc) + " Tente de novo em instantes.", ficha,
+                     observacao=Observacao("investigar_lista", TEMPO_ESGOTADO, str(exc)))
+    criterios = [{"nome": x.nome, "valor": x.valor} for x in orq.avaliar_criterios(user, base)]
+    objetivo = f"Verificar os vínculos de todos os integrantes da lista “{OBJETIVOS[base.objetivo].nome}”."
+    t = tarefas.criar(user, c, base, d.investigacao or {}, plano, objetivo, criterios)
+    registrar("interpretacao", "agente", usuario=user, estado_novo="tarefa_criada", entidade_id=t.pk)
+    base_txt = (d.resposta.strip() + " ") if d.resposta.strip() else ""
+    return Saida(base_txt + "Vou verificar todas as pessoas da lista, não só o exemplo. Pode fechar a página: "
+                 "a verificação continua e o andamento aparece aqui.",
+                 {**ficha, "tipo": "tarefa", "tarefa": t.pk, "opcoes": []},
+                 observacao=Observacao("investigar_lista", SUCESSO))
 
 
 def _listar_memorias(user, ficha) -> Saida:

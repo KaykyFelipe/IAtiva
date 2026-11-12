@@ -143,6 +143,15 @@ IATIVA_APRENDIZADO_AUTOAPROVACAO = False
 # Etapa 5 — execução somente leitura: linhas e tempo máximos por consulta.
 IATIVA_CONSULTA = {"limite_linhas": 500, "timeout_s": 30}
 
+# M25 — tarefas longas (worker): prazo total, chamadas ao modelo, consultas, tentativas por etapa,
+# registros por consulta, tamanho do lote da busca e validade do lease de execução.
+IATIVA_TAREFAS = {"prazo_s": 900, "chamadas_modelo": 4, "consultas": 150, "tentativas": 2, "registros": 2000,
+                  "lote": 40, "lease_s": 90}
+# Comparar vínculos pelo documento (CPF) da própria tabela, só dentro da consulta, nunca exibido nem
+# gravado. Desligado por padrão: exige decisão de privacidade (LGPD). Sem ele, a comparação é por nome
+# e casos com o mesmo nome ficam inconclusivos.
+IATIVA_VINCULO_POR_DOCUMENTO = False
+
 # M22 — ciclo do agente em uma mensagem: quantas ações diferentes ele pode tentar quando a primeira
 # não resolve, quantas vezes repete uma consulta que caiu por erro transitório e o tempo total.
 IATIVA_AGENTE_CICLO = {

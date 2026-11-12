@@ -14,6 +14,7 @@ ACOES = (
     "cancelar_consulta",    # abandonar a solicitação atual
     "aprender_tabela",      # procurar tabelas no dicionário para criar sozinha uma consulta nova (M18)
     "criar_consulta",       # M18: montar a consulta nova a partir de "tabelas_para_aprender"
+    "investigar_lista",     # M25: verificar TODOS os integrantes da lista anterior (tarefa em segundo plano)
     "listar_aprendizados",  # mostrar consultas aprendidas
     "remover_aprendizado",  # administrador: tirar de uso uma consulta aprendida (pede confirmação)
     "lembrar",              # guardar na memória do agente algo que o usuário ensinou
@@ -50,6 +51,8 @@ class EntradaAgente:
     tabelas_para_aprender: list[dict] = field(default_factory=list)
     # M22: o que já foi tentado NESTA mensagem e como terminou (situação e motivo, sem dados do ERP).
     observacoes: list[dict] = field(default_factory=list)
+    # M25: a lista que a pessoa está vendo (só metadados: consulta, tabela e campos do dicionário).
+    lista_anterior: dict | None = None
 
 
 @dataclass(frozen=True)
@@ -67,6 +70,7 @@ class Decisao:
     tipo_nota: str = ""
     regra: dict | None = None
     validade: str = ""
+    investigacao: dict | None = None
 
 
 def esquema(codigos_objetivo, codigos_parametro) -> dict:
@@ -103,6 +107,18 @@ def esquema(codigos_objetivo, codigos_parametro) -> dict:
                                "valor": {"type": "string"}},
                 "required": ["tabela", "campo", "operador", "valor"],
             },
+            "investigacao": {
+                "type": "object",
+                "description": "Ação investigar_lista: campos de lista_anterior que representam o vínculo de cada registro.",
+                "properties": {
+                    "campos": {"type": "object", "properties": {
+                        "inicio": {"type": "string"}, "fim": {"type": "string"}, "situacao": {"type": "string"},
+                        "cargo": {"type": "string"}, "categoria": {"type": "string"}},
+                        "required": ["inicio", "fim"]},
+                    "identidade": {"type": "string", "enum": ["documento", "nome"]},
+                },
+                "required": ["campos"],
+            },
             "validade": {"type": "string", "description": "Ação lembrar: até quando vale (DD/MM/AAAA); vazio = sem prazo."},
             "consulta": {
                 "type": "object",
@@ -135,7 +151,7 @@ def validar(saida, codigos_objetivo, codigos_parametro) -> Decisao:
     if not isinstance(saida, dict):
         raise DecisaoInvalida("formato")
     extras = set(saida) - {"resposta", "acao", "objetivo", "parametros", "alvo", "nota", "confirmado", "opcoes",
-                           "alcance", "consulta", "tipo_nota", "regra", "validade"}
+                           "alcance", "consulta", "tipo_nota", "regra", "validade", "investigacao"}
     if extras:
         raise DecisaoInvalida("campos extras")
     acao = saida.get("acao")
@@ -171,7 +187,17 @@ def validar(saida, codigos_objetivo, codigos_parametro) -> Decisao:
         if not isinstance(regra, dict) or set(regra) - {"tabela", "campo", "operador", "valor"}:
             raise DecisaoInvalida("regra")
         regra = {k: _texto(regra.get(k, ""), 40, k) for k in ("tabela", "campo", "operador", "valor")}
+    investigacao = saida.get("investigacao") or None
+    if investigacao is not None:
+        if not isinstance(investigacao, dict) or set(investigacao) - {"campos", "identidade"}:
+            raise DecisaoInvalida("investigacao")
+        campos = investigacao.get("campos") or {}
+        if not isinstance(campos, dict) or set(campos) - {"inicio", "fim", "situacao", "cargo", "categoria"}:
+            raise DecisaoInvalida("investigacao.campos")
+        investigacao = {"campos": {k: _texto(v, 20, k).upper() for k, v in campos.items() if v},
+                        "identidade": "documento" if investigacao.get("identidade") == "documento" else "nome"}
     return Decisao(
+        investigacao=investigacao,
         tipo_nota=tipo_nota, regra=regra, validade=_texto(saida.get("validade", "") or "", 10, "validade"),
         consulta=consulta,
         resposta=_texto(saida.get("resposta", ""), MAX_RESPOSTA, "resposta"),

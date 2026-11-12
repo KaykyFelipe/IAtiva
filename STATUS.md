@@ -4,6 +4,13 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **plano proposto em `PLANO.md` §8, aguardando aprovação.** Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M25 — tarefas longas com conclusão verificável (2026-11-12)
+
+- "Todos foram demitidos mesmo?" sobre uma lista: a IA verifica todas as pessoas em segundo plano (worker), não só o exemplo, e mostra a conclusão de cada uma.
+- Cartão de andamento com etapas, cobertura e cancelamento; fechar a página não interrompe.
+- Comparação por CPF só com `IATIVA_VINCULO_POR_DOCUMENTO=1` (**decisão pendente de privacidade**); sem isso, nome igual fica inconclusivo.
+- Testes: 537 aprovados e 10 pulados no Windows. **Não validado:** modelo real (roteiro `avaliar_agente`, cenário novo) e campos reais da SRA no Protheus.
+
 ## Mudança M24 — correções do ciclo (2026-11-12)
 
 - "Some X" sem consulta aprendida: cria a consulta já com o cálculo, sem cair na escolha manual de tabela.

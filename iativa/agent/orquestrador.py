@@ -303,6 +303,20 @@ def avaliar(user, s: RequestContext, erros=None) -> Resposta:
                     criterios=criterios, **base)
 
 
+def avaliar_criterios(user, s) -> list[Criterio]:
+    """Critérios resolvidos de uma solicitação, no formato já mostrado no histórico (sem dados do ERP)."""
+    out = []
+    obj = OBJETIVOS[s.objetivo]
+    for d in _definicoes(obj.parametros).values():
+        if d.codigo == "agregacao":
+            continue
+        r = resolver(d, user, s)
+        if r.situacao == "resolvido":
+            out.append(Criterio(d.nome, "[informado]" if d.contem_dado_pessoal else _exibir(d, r.valor),
+                                ORIGENS.get(r.escopo, r.escopo)))
+    return out
+
+
 def _exibir(definicao, valor) -> str:
     if definicao.tipo == TipoValor.FILIAL:
         from iativa.accounts.filiais import rotulo

@@ -10,7 +10,7 @@ e não inferidos pelo prefixo do nome.
 """
 
 MARKER_TABLE = "IATIVA_SINTETICO"
-SCHEMA_VERSION = "3"  # 2: dicionário sintético (SX2, SX3, SIX, SX9); 3: X2_MODOUN e X2_MODOEMP
+SCHEMA_VERSION = "4"  # 2: dicionário sintético (SX2, SX3, SIX, SX9); 3: X2_MODOUN e X2_MODOEMP
 
 # Descrição das tabelas: usada pelos testes e, futuramente, pelo adaptador de metadados sintético.
 TABLES = {
@@ -64,6 +64,22 @@ TABLES = {
             "E5_RECPAG": {"tipo": "CHAR(1)", "descricao": "'R' receber"},
             "E5_SITUACA": {"tipo": "CHAR(1)", "descricao": "' ' normal; 'C' cancelado"},
         },
+    },
+}
+
+TABLES["SRA010"] = {
+    "descricao": "Funcionários (sintético). Exclusivo por filial. Casos: readmissão, homônimo, transferência.",
+    "chave": ["RA_FILIAL", "RA_MAT"],
+    "campos": {
+        "RA_FILIAL": {"tipo": "CHAR(2)"},
+        "RA_MAT": {"tipo": "CHAR(6)"},
+        "RA_NOME": {"tipo": "CHAR(30)"},
+        "RA_CIC": {"tipo": "CHAR(11)", "descricao": "CPF (sintético)"},
+        "RA_ADMISSA": {"tipo": "CHAR(8)", "descricao": "AAAAMMDD"},
+        "RA_DEMISSA": {"tipo": "CHAR(8)", "descricao": "AAAAMMDD ou em branco"},
+        "RA_SITFOLH": {"tipo": "CHAR(1)", "descricao": "Situação na folha (código)"},
+        "RA_CODFUNC": {"tipo": "CHAR(5)", "descricao": "Código da função"},
+        "RA_CATFUNC": {"tipo": "CHAR(1)", "descricao": "Categoria (código)"},
     },
 }
 

@@ -30,6 +30,7 @@ services:
 
   app:
     build: .
+    image: iativa-app:latest
     restart: unless-stopped
     depends_on:
       db:
@@ -50,6 +51,22 @@ services:
         exec python manage.py runserver 0.0.0.0:8000 --noreload
     ports:
       - "127.0.0.1:8000:8000"
+    volumes:
+      - iativa_var:/app/var
+
+  # M25: tarefas longas do agente, fora do processo web. Mesma imagem e mesmo .env do app.
+  worker:
+    image: iativa-app:latest
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_started
+    env_file: .env
+    environment:
+      IATIVA_DB_HOST: db
+      IATIVA_DB_PORT: "5432"
+      IATIVA_SYNTHETIC_ERP_PATH: /app/var/erp_sintetico.sqlite3
+    command: ["python", "manage.py", "executar_tarefas"]
     volumes:
       - iativa_var:/app/var
 

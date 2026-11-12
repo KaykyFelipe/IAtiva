@@ -335,3 +335,47 @@ def parar(request):
         return HttpResponse(status=400)
     conversas.interromper(request.user, pedido)
     return HttpResponse(status=204)
+
+
+# --- tarefas longas (M25) -------------------------------------------------------------------------
+
+def _tarefa(request, tarefa_id):
+    from iativa.agent.models import Tarefa
+
+    t = Tarefa.objects.select_related("conversa").filter(pk=tarefa_id, usuario=request.user).first()
+    if t is None or not conversas.pode_ver(request.user, t.conversa):
+        raise Http404
+    return t
+
+
+@require_GET
+def tarefa(request, tarefa_id):
+    """Estado da tarefa (persistido, sem dados do ERP). O navegador consulta a cada poucos segundos."""
+    t = _tarefa(request, tarefa_id)
+    return render(request, "chat/_tarefa.html", {"tarefa": t, "acompanhando": request.GET.get("acompanhando") == "1"})
+
+
+@require_POST
+def tarefa_cancelar(request, tarefa_id):
+    from iativa.agent import tarefas
+
+    t = tarefas.cancelar(request.user, _tarefa(request, tarefa_id).pk)
+    return render(request, "chat/_tarefa.html", {"tarefa": t})
+
+
+@require_GET
+def tarefa_conclusao(request, tarefa_id):
+    """Conclusão com os dados: refeita agora, com as permissões de agora, e nunca gravada (R3)."""
+    from iativa.agent import investigacao, tarefas
+
+    t = _tarefa(request, tarefa_id)
+    if t.situacao not in ("concluida", "limite"):
+        return HttpResponse("A verificação ainda não terminou.", status=409)
+    try:
+        conclusao = tarefas.conclusao(request.user, t)
+    except investigacao.SemPermissao as exc:
+        return render(request, "chat/_conclusao.html", {"tarefa": t, "erro": str(exc)})
+    except Exception as exc:  # sem detalhes: podem conter dados
+        return render(request, "chat/_conclusao.html",
+                      {"tarefa": t, "erro": f"Não consegui consultar de novo agora ({type(exc).__name__})."})
+    return render(request, "chat/_conclusao.html", {"tarefa": t, "c": conclusao})

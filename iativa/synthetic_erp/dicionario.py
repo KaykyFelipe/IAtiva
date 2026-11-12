@@ -22,11 +22,12 @@ DICT_TABLES = {
     "SX9": ["X9_DOM", "X9_IDENT", "X9_CDOM", "X9_EXPDOM", "X9_EXPCDOM"],
 }
 
-NOMES_TABELAS = {"SA1": "Clientes", "SE1": "Contas a Receber", "SE5": "Movimentação Bancária"}
+NOMES_TABELAS = {"SA1": "Clientes", "SE1": "Contas a Receber", "SE5": "Movimentação Bancária",
+                 "SRA": "Funcionários"}
 # (X2_MODO, X2_MODOUN, X2_MODOEMP): 'C' compartilhado, 'E' exclusivo. Mesmo padrão da
 # homologação: clientes compartilhados; títulos e movimentos exclusivos por filial.
-MODOS = {"SA1": ("C", "C", "C"), "SE1": ("E", "E", "E"), "SE5": ("E", "E", "E")}
-CAMPOS_DATA = {"E1_EMISSAO", "E1_VENCTO", "E1_VENCREA", "E1_BAIXA", "E5_DATA"}
+MODOS = {"SA1": ("C", "C", "C"), "SE1": ("E", "E", "E"), "SE5": ("E", "E", "E"), "SRA": ("E", "E", "E")}
+CAMPOS_DATA = {"E1_EMISSAO", "E1_VENCTO", "E1_VENCREA", "E1_BAIXA", "E5_DATA", "RA_ADMISSA", "RA_DEMISSA"}
 TITULOS = {
     "A1_FILIAL": "Filial", "A1_COD": "Código", "A1_LOJA": "Loja", "A1_NOME": "Nome",
     "A1_NREDUZ": "N Fantasia", "A1_MSBLQL": "Bloqueado", "A1_XSEGMEN": "Segmento",
@@ -38,6 +39,8 @@ TITULOS = {
     "E5_NUMERO": "Número", "E5_PARCELA": "Parcela", "E5_TIPO": "Tipo", "E5_CLIFOR": "Cli/For",
     "E5_LOJA": "Loja", "E5_SEQ": "Sequência", "E5_VALOR": "Valor", "E5_RECPAG": "Rec/Pag",
     "E5_SITUACA": "Situação",
+    "RA_FILIAL": "Filial", "RA_MAT": "Matricula", "RA_NOME": "Nome", "RA_CIC": "CPF", "RA_ADMISSA": "Data Admis.",
+    "RA_DEMISSA": "Dt. Demissao", "RA_SITFOLH": "Sit. Folha", "RA_CODFUNC": "Cod. Funcao", "RA_CATFUNC": "Categoria",
 }
 # (domínio, contradomínio, expressão no domínio, expressão no contradomínio)
 RELACIONAMENTOS = [
