@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # Atualiza o ambiente de DESENVOLVIMENTO do IAtiva a partir do GitHub (branch main).
 #
-# Fluxo: busca a branch -> se houver commits novos, avança (fast-forward) -> reconstrói a imagem
-# -> roda os testes -> recria o container -> confere se o chat responde.
-# Qualquer falha volta o código e o container para a versão anterior.
+# Fluxo: busca a branch -> se houver commits novos, avança (fast-forward) -> constrói a imagem
+# iativa-app:<commit> -> roda os testes nela (isolada, sem rede, CPU/memória limitadas) ->
+# scripts/implantar.sh troca para ela sem derrubar consultas (azul/verde, M31).
+# Falha antes da troca: o código volta e a versão no ar continua atendendo.
 #
 # Roda no HOST (terminal Ubuntu/WSL), não dentro de container. Pode ser chamado à mão ou pelo
 # agendamento instalado por scripts/instalar_agendamento.sh.
@@ -15,7 +16,6 @@
 # Variáveis opcionais:
 #   IATIVA_UPDATE_BRANCH         branch acompanhada (padrão: main)
 #   IATIVA_UPDATE_LOG_DIR        pasta de logs (padrão: var/atualizacao)
-#   IATIVA_UPDATE_HEALTH_TRIES   tentativas da verificação final, a cada 2 s (padrão: 30)
 #   DOCKER                       comando do Docker (padrão: docker; ex.: "sudo docker")
 #
 # Os logs registram apenas horários, commits e o resultado de cada passo. Não registram
@@ -25,7 +25,6 @@ set -Eeuo pipefail
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BRANCH="${IATIVA_UPDATE_BRANCH:-main}"
 LOG_DIR="${IATIVA_UPDATE_LOG_DIR:-$REPO_DIR/var/atualizacao}"
-HEALTH_TRIES="${IATIVA_UPDATE_HEALTH_TRIES:-30}"
 read -r -a DOCKER_CMD <<< "${DOCKER:-docker}"
 MODE="${1:-}"
 
@@ -82,32 +81,29 @@ fi
 log "INFO atualizando ${OLD:0:7} -> ${NEW:0:7}."
 
 rollback() {
+    # Só o código volta: o tráfego nunca saiu da versão em uso (implantar.sh só troca no fim, já validado).
     local reason="$1"
-    log "ERRO $reason. Voltando para ${OLD:0:7}."
+    log "ERRO $reason. Código de volta para ${OLD:0:7}; a versão no ar não mudou."
     git reset --quiet --hard "$OLD"
-    if dc build app && dc up -d --remove-orphans; then
-        log "INFO versão anterior ${OLD:0:7} restaurada. Detalhes da falha: $RUN_OUTPUT"
-    else
-        log "ERRO falha ao restaurar a versão anterior; verificar manualmente. Detalhes: $RUN_OUTPUT"
-    fi
     exit 1
 }
 
 git merge --quiet --ff-only "$NEW" || rollback "falha no git merge"
 
-dc build app || rollback "falha ao construir a imagem"
-dc run --rm app pytest -q -p no:cacheprovider || rollback "testes falharam na nova versão"
-dc up -d --remove-orphans || rollback "falha ao recriar os containers"
+# Imagem imutável do commit, construída e testada com limites (não disputa CPU com as consultas).
+IMAGEM="iativa-app:${NEW:0:12}"
+nice -n 15 ionice -c3 "${DOCKER_CMD[@]}" build --build-arg "IATIVA_VERSAO=${NEW:0:12}" -t "$IMAGEM" . >> "$RUN_OUTPUT" 2>&1 \
+    || rollback "falha ao construir a imagem"
+"${DOCKER_CMD[@]}" run --rm --network none --cpus 1.5 --memory 2g "$IMAGEM" pytest -q -p no:cacheprovider \
+    >> "$RUN_OUTPUT" 2>&1 || rollback "testes falharam na nova versão"
 
-healthy=0
-for ((i = 1; i <= HEALTH_TRIES; i++)); do
-    if dc exec -T app python -c \
-        "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/entrar/', timeout=5)"; then
-        healthy=1
-        break
-    fi
-    sleep 2
-done
-[[ "$healthy" == 1 ]] || rollback "o chat não respondeu após a atualização"
-
-log "OK atualizado para ${NEW:0:7}."
+# A mesma imagem testada é a implantada (azul/verde, com drenagem).
+set +e
+"$REPO_DIR/scripts/implantar.sh" "$IMAGEM"
+codigo=$?
+set -e
+case "$codigo" in
+    0) log "OK atualizado para ${NEW:0:7}." ;;
+    3) rollback "migração não aditiva: publicação automática bloqueada" ;;
+    *) rollback "implantação falhou (código $codigo; ver var/implantacao/implantacao.log)" ;;
+esac

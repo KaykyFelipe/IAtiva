@@ -4,6 +4,13 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **plano proposto em `PLANO.md` §8, aguardando aprovação.** Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudanças M30–M32 — correções, atualização sem interrupção, manutenção automática (2026-11-12)
+
+- M30: verificação só termina com evidência; conclusão perdida refeita pelo worker uma vez; datas futuras/inválidas; pergunta pendente retoma a mesma tarefa.
+- M31: azul/verde com drenagem e reversão. Teste real no servidor (`scripts/testar_implantacao.sh`): consulta longa iniciada na versão A terminou em A; novas foram para B; 31/31 requisições 200 durante a troca; tarefa do worker concluída uma vez pela versão que a pegou; prontidão ruim e migração incompatível bloquearam a troca; reversão voltou para A.
+- M32: incidentes sanitizados e executor de manutenção. **Publicação automática desligada**: faltam credencial de push e login Claude próprios da manutenção no servidor (docs/MANUTENCAO.md).
+- Testes: 586 aprovados e 10 pulados no Windows.
+
 ## Mudança M29 — conclusão da verificação fica salva (2026-11-12)
 
 - Ao recarregar, a conclusão aparece na hora, sem consultar o ERP de novo. **Muda a R3 para tarefas** (decisão do Diego): nomes e matrículas da conclusão ficam gravados com a conversa, sem prazo; CPF nunca.

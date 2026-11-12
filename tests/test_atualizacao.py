@@ -20,6 +20,11 @@ pytestmark = pytest.mark.skipif(
     reason="requer bash, git e flock",
 )
 
+FAKE_IMPLANTAR = """#!/usr/bin/env bash
+echo "implantar $*" >> "$FAKE_DOCKER_LOG"
+exit "${FAKE_IMPLANTAR_CODIGO:-0}"
+"""
+
 FAKE_DOCKER = """#!/usr/bin/env bash
 echo "$*" >> "$FAKE_DOCKER_LOG"
 if [[ -n "${FAKE_DOCKER_FAIL:-}" && "$*" == *"$FAKE_DOCKER_FAIL"* ]]; then
@@ -46,6 +51,8 @@ def ambiente(tmp_path):
     _git(tmp_path, "clone", "-q", str(remoto), str(autor))
     (autor / "scripts").mkdir()
     shutil.copy(SCRIPT, autor / "scripts" / "atualizar.sh")
+    (autor / "scripts" / "implantar.sh").write_text(FAKE_IMPLANTAR)
+    (autor / "scripts" / "implantar.sh").chmod(0o755)
     (autor / ".gitignore").write_text("var/\n")
     (autor / "app.txt").write_text("v1\n")
     _git(autor, "add", "-A")
@@ -67,9 +74,9 @@ def ambiente(tmp_path):
         _git(autor, "push", "-q", "origin", "HEAD:main")
         return _git(autor, "rev-parse", "HEAD")
 
-    def rodar(*args, falhar=""):
+    def rodar(*args, falhar="", implantar="0"):
         env = {**os.environ, "DOCKER": str(docker), "FAKE_DOCKER_LOG": str(chamadas),
-               "FAKE_DOCKER_FAIL": falhar, "IATIVA_UPDATE_HEALTH_TRIES": "2"}
+               "FAKE_DOCKER_FAIL": falhar, "FAKE_IMPLANTAR_CODIGO": implantar}
         return subprocess.run(
             ["bash", str(servidor / "scripts" / "atualizar.sh"), *args],
             cwd=servidor, env=env, capture_output=True, text=True, timeout=60,
@@ -104,29 +111,33 @@ def test_checar_nao_altera_nada(ambiente):
     assert ambiente.chamadas() == []
 
 
-def test_atualiza_testa_e_recria(ambiente):
+def test_atualiza_testa_e_implanta_a_mesma_imagem(ambiente):
     novo = ambiente.publicar("v2\n")
     resultado = ambiente.rodar()
     assert resultado.returncode == 0, resultado.stdout + resultado.stderr
     assert ambiente.head() == novo
     assert (ambiente.servidor / "app.txt").read_text() == "v2\n"
     chamadas = ambiente.chamadas()
-    assert chamadas[0] == "compose build app"
-    assert chamadas[1].startswith("compose run --rm app pytest")
-    assert chamadas[2] == "compose up -d --remove-orphans"
-    assert chamadas[3].startswith("compose exec -T app python")
+    imagem = f"iativa-app:{novo[:12]}"
+    assert chamadas[0] == f"build --build-arg IATIVA_VERSAO={novo[:12]} -t {imagem} ."
+    assert chamadas[1].startswith(f"run --rm --network none --cpus 1.5 --memory 2g {imagem} pytest")
+    assert chamadas[2] == f"implantar {imagem}"  # a imagem testada é a implantada
     assert f"OK atualizado para {novo[:7]}" in ambiente.log()
 
 
-@pytest.mark.parametrize("etapa", ["build app", "pytest", "up -d", "exec -T app"])
-def test_falha_volta_para_versao_anterior(ambiente, etapa):
+@pytest.mark.parametrize("etapa,implantar", [("build", "0"), ("pytest", "0"), ("", "1"), ("", "3")])
+def test_falha_volta_o_codigo_sem_mexer_no_ar(ambiente, etapa, implantar):
     antes = ambiente.head()
     ambiente.publicar("v2\n")
-    resultado = ambiente.rodar(falhar=etapa)
+    resultado = ambiente.rodar(falhar=etapa, implantar=implantar)
     assert resultado.returncode == 1
     assert ambiente.head() == antes
     assert (ambiente.servidor / "app.txt").read_text() == "v1\n"
-    assert f"Voltando para {antes[:7]}" in ambiente.log()
+    assert f"Código de volta para {antes[:7]}" in ambiente.log()
+    if etapa:
+        assert not any(c.startswith("implantar") for c in ambiente.chamadas())  # nada implantado
+    if implantar == "3":
+        assert "migração não aditiva" in ambiente.log()
 
 
 def test_alteracao_local_bloqueia_atualizacao(ambiente):

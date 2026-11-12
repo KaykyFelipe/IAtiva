@@ -34,9 +34,11 @@ INSTALLED_APPS = [
     "iativa.agent",
     "iativa.query",
     "iativa.synthetic_erp",
+    "iativa.manutencao",
 ]
 
 MIDDLEWARE = [
+    "iativa.core.saude.VersaoEContadorMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",

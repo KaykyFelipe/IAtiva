@@ -47,4 +47,9 @@ RUN curl -fsSL --retry 3 https://claude.ai/install.sh -o /tmp/iativa-claude-inst
 
 COPY . .
 
+# M31: versão imutável da imagem (commit) e servidor de aplicação. Migrações rodam à parte
+# (serviço `migrar`), nunca na partida de cada instância.
+ARG IATIVA_VERSAO=dev
+ENV IATIVA_VERSAO=$IATIVA_VERSAO
 EXPOSE 8000
+CMD ["gunicorn", "-c", "config/gunicorn.py", "config.wsgi:application"]

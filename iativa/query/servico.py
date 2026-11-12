@@ -366,6 +366,10 @@ def executar_solicitacao(user, s: RequestContext) -> Resultado:
         return _encerrar(user, s, E.FALHOU, inicio, 0, f"Consulta recusada pelo validador: {exc}",
                          ERRO_PARAMETROS if isinstance(exc, PlanoInvalido) else ERRO_METADADOS)
     except Exception as exc:  # rede, tempo, banco: sem detalhes (podem conter dados)
+        from iativa.manutencao import incidentes
+
+        incidentes.registrar("consulta", "executar", exc, condicoes={
+            "objetivo_tipo": "aprendido" if s.objetivo.startswith("aprendido-") else s.objetivo})
         return _encerrar(user, s, E.FALHOU, inicio, 0,
                          f"A consulta não pôde ser concluída ({type(exc).__name__}). Tente de novo em instantes.",
                          _situacao_da_falha(exc))

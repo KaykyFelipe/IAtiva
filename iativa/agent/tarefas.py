@@ -193,8 +193,31 @@ def _fim(t, situacao, motivo=""):
     _salvar(t, situacao=situacao, motivo=motivo[:400], concluido_em=timezone.now(), lease_ate=None)
 
 
+def _executar_teste_espera(t: Tarefa):
+    """Só no teste de implantação (M31): tarefa que dura `plano.s` segundos renovando o lease, para
+    provar que o worker antigo termina o que pegou e ninguém processa em dobro."""
+    from iativa.core.saude import _teste_ligado
+
+    if not _teste_ligado():
+        return _fim(t, S.FALHOU, "Tipo de tarefa só existe no teste de implantação.")
+    ctl = _Controle(t)
+    fim = time.monotonic() + float(t.plano.get("s", 10))
+    while time.monotonic() < fim:
+        ctl.checar()
+        time.sleep(1)
+    import os
+
+    _salvar(t, progresso=f"feita por {os.environ.get('IATIVA_VERSAO', 'dev')}")
+    _fim(t, S.CONCLUIDA)
+
+
 def executar(t: Tarefa):
     """Roda as etapas até concluir, precisar da pessoa, bater num bloqueio ou num limite."""
+    if t.tipo == "teste_espera":
+        try:
+            return _executar_teste_espera(t)
+        except (PerdeuExecucao, inv.Cancelada):
+            return
     lim = t.limites or limites()
     if t.execucoes > 1:
         # Reinício: a execução anterior morreu e levou as evidências; refaz o que depende delas.
@@ -280,6 +303,7 @@ def executar(t: Tarefa):
                         _salvar(t, etapas=t.etapas)
                         continue
                     _etapa(t, e["id"], estado="bloqueada")
+                    _incidente(t, e["id"], exc, passageira)
                     return _fim(t, S.FALHOU, f"{e['nome']}: {o_que}. Tentei {tent} vezes"
                                              + (" e pedi outro caminho ao modelo, sem solução" if not passageira else "")
                                              + "; nada foi concluído pela metade. Tente de novo em alguns minutos.")
@@ -304,6 +328,7 @@ def executar(t: Tarefa):
         _fim(t, S.LIMITE, str(exc) or "O prazo total da tarefa acabou.")
     except Exception as exc:  # sem detalhes: podem conter dados
         logger.warning("tarefa %s falhou: %s", t.pk, type(exc).__name__)
+        _incidente(t, "inesperado", exc, False)
         try:
             _marcar_atual(t, "bloqueada")
             _fim(t, S.FALHOU, f"Erro inesperado ({type(exc).__name__}).")
@@ -313,6 +338,36 @@ def executar(t: Tarefa):
         ctx.itens.clear()
         ctx.relacionados.clear()
     _avisar(t, int((time.monotonic() - inicio) * 1000))
+
+
+def _incidente(t, etapa, exc, passageira):
+    """Falha que derrubou a tarefa vira incidente (sanitizado). Só o erro técnico é elegível a correção."""
+    from iativa.manutencao import incidentes
+    from iativa.manutencao.models import Categoria
+
+    inc = incidentes.registrar("worker", f"tarefa.{etapa}", exc,
+                               categoria=Categoria.TRANSITORIA if passageira else "",
+                               condicoes={"etapa": etapa, "tipo_tarefa": t.tipo})
+    if inc is not None:
+        try:
+            _salvar(t, consumo={**t.consumo, "incidente": inc.pk})
+        except PerdeuExecucao:
+            pass
+
+
+def retomar_apos_correcao(incidente_id: int) -> int:
+    """Depois de uma correção publicada e conferida, retoma UMA vez as tarefas que falharam por esse
+    incidente. O worker reconfere permissões e critérios e refaz as evidências."""
+    n = 0
+    for t in Tarefa.objects.filter(situacao=S.FALHOU, consumo__incidente=incidente_id):
+        if t.consumo.get("retomada_pos_correcao"):
+            continue
+        n += Tarefa.objects.filter(pk=t.pk, situacao=S.FALHOU).update(
+            situacao=S.PENDENTE, execucao="", lease_ate=None, motivo="", concluido_em=None,
+            progresso="Retomada depois de uma correção publicada.",
+            consumo={**t.consumo, "retomada_pos_correcao": True},
+            etapas=[dict(e, estado="pendente", evidencia="", tentativas=0) for e in t.etapas])
+    return n
 
 
 def _marcar_atual(t, estado):

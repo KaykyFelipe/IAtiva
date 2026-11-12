@@ -310,6 +310,11 @@ def _ciclo_agente(user, c, texto, provedor, interrompido, entrada, objetivos, co
             "campos indicam o vínculo (por exemplo, admissão e demissão), e eu verifico todas as pessoas.",
             {**previa.ficha, "verificacao_pendente": True}))
         registrar("modelo_falhou", "agente", usuario=user, estado_novo="verificacao_nao_feita", resultado="erro")
+        from iativa.manutencao import incidentes
+        from iativa.manutencao.models import Categoria
+
+        incidentes.registrar("agente", "verificar_lista", categoria=Categoria.CAPACIDADE,
+                             condicoes={"acao": "investigar_lista", "situacao": "verificacao_nao_feita"})
         return saida
     if saida is None:
         registrar("modelo_falhou", "agente", usuario=user, estado_novo="prazo_esgotado", resultado="erro")
