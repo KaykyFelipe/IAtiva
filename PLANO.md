@@ -110,3 +110,22 @@ Conforme `docs/PEDIDO_INICIAL.md` §17: 0 Levantamento → 1 Fundação localhos
 - [ ] Usuário sem "consultar" num setor não vê o bloco desse setor.
 - [ ] Todas as aprovações, rejeições e substituições ficam na auditoria (só códigos).
 - [ ] `pytest` passa.
+
+
+## 8. Etapa 7 — piloto local (proposta, aguardando aprovação)
+
+**Objetivo:** usar o IAtiva com perguntas reais, conferir as respostas contra relatórios confiáveis do Protheus e corrigir o que falhar, antes de liberar a mais pessoas.
+
+**Escopo:**
+
+1. **Grupo do piloto:** Diego (TI) e 1–2 pessoas do Financeiro (cobrança), cada uma com usuário, setor e filiais próprios.
+2. **Roteiro de perguntas reais** (20–30), cobrindo: inadimplência, títulos a vencer, posição de cliente, faturamento por período/filial, busca por nome, "todas as filiais", consultas aprendidas sozinhas (M18), memória do setor e chat mestre. Período de teste dentro da base disponível (até 08/09/2026).
+3. **Conferência com relatórios do Protheus:** para cada pergunta com número, comparar com o relatório oficial equivalente (ex.: posição de títulos a receber). Diferença = falha registrada. Fecha a pendência T29.
+4. **Avaliação da interpretação:** a IA entendeu a pergunta, escolheu a consulta certa e os critérios certos? Registrar acerto/erro por pergunta (sem guardar resultados).
+5. **Latência e consumo:** tempo de resposta por pergunta (meta: até 20 s) e uso do modelo de IA, em uma tela/relatório só para TI.
+6. **Auditoria de não armazenamento:** script que confere banco, logs e arquivos do servidor e prova que não há SQL gerado nem linhas do ERP guardados (R3).
+7. **Correções** das falhas encontradas, com teste automatizado para cada uma.
+
+**Fora do escopo:** gravar no ERP (Etapa 8) e acesso fora da rede (Etapa 9).
+
+**Critérios de aceite:** ≥ 90% das perguntas do roteiro interpretadas certo; 100% dos números conferidos iguais ao relatório (ou diferença explicada e aceita); auditoria de não armazenamento sem achados; latência média dentro da meta.

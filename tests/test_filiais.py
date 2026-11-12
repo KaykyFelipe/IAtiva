@@ -9,7 +9,7 @@ from iativa.memory.models import TipoValor
 @pytest.mark.parametrize("texto,esperado", [
     ("Cuiabá", "001002"), ("cuiaba", "001002"), ("filial de Ribeirão Preto", "001008"),
     ("na filial Campo Grande", "001005"), ("001004", "001004"), ("001004 · Limeira", "001004"),
-    ("Araçatuba.", "001006"), ("Matriz", "001001"), ("Curitiba", None), ("009999", None), ("", None),
+    ("Araçatuba.", "001006"), ("Eficaz Araçatuba", "002002"), ("eficaz londrina matriz", "002001"), ("Matriz", "001001"), ("Curitiba", None), ("009999", None), ("", None),
 ])
 def test_codigo_por_texto(texto, esperado):
     assert codigo_por_texto(texto) == esperado

@@ -15,6 +15,7 @@ Formato: `ID | data | decisão | situação | aprovado por | observações`
 | 3 — Plano de conhecimento e metadados (início autorizado, só fontes sintéticas) | 2026-11-10 | Diego (chat: "Aprovo a Etapa 3") — Protheus real só após liberação explícita e informações 4–8 |
 | 3 — Conhecimento e metadados (entrega validada, inclui T14–T19; fonte real de homologação) | 2026-11-10 | Diego (chat: "Aprovo a Etapa 3") |
 | 4 — Agente e esclarecimentos (entrega validada, inclui T20–T24 e M8) | 2026-11-10 | Diego (chat: "aprovo a etapa 4") |
+| 6 — Memórias setoriais e chat consolidado (entrega validada, inclui M11–M18) | 2026-11-12 | Diego (chat: "Aprovo a etapa 6") — base do ERP sem movimento após 08/09/2026 confirmada como esperada; T29 segue pendente |
 | 6 — Plano de memórias setoriais e chat consolidado (`PLANO.md` §7, implementação autorizada) | 2026-11-11 | Diego (chat: "Aprovo, pode fazer") |
 | 5 — Consulta de leitura (entrega validada, inclui T25–T28, T30, M9 e M10) | 2026-11-11 | Diego (chat: "aprovo a etapa 5") — conferência dos números com o Financeiro e premissas T29 seguem como pendência |
 | 5 — Consulta de leitura (início autorizado; homologação, somente leitura) | 2026-11-10 | Diego (chat: "Vamos começar a Etapa 5") |

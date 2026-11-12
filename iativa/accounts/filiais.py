@@ -17,6 +17,8 @@ NOMES = {
     "001006": "Araçatuba",
     "001007": "Londrina",
     "001008": "Ribeirão Preto",
+    "002001": "Eficaz Londrina Matriz",
+    "002002": "Eficaz Araçatuba",
 }
 
 

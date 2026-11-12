@@ -1,8 +1,8 @@
 # STATUS — IAtiva
 
-**Atualizado em:** 2026-11-11
-**Etapa atual:** 6 — Memórias setoriais e chat consolidado
-**Situação:** **implementada, aguardando validação.** Plano aprovado em 2026-11-11. Etapa 5 aprovada em 2026-11-11 por Diego; conferência dos números com o Financeiro e premissas T29 seguem pendentes.
+**Atualizado em:** 2026-11-12
+**Etapa atual:** 7 — Piloto local
+**Situação:** **plano proposto em `PLANO.md` §8, aguardando aprovação.** Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
 ## Mudança M18 — IA aprende consultas sozinha (2026-11-11)
 
