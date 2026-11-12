@@ -158,6 +158,8 @@ def validar_plano(user, base, proposta: dict) -> dict:
         elif not documento:
             identidade = "nome"
             aviso = "A tabela não tem campo de documento no dicionário; usei o nome, que não confirma identidade."
+    if nome in chave and len(chave) > 1:
+        chave = [c for c in chave if c != nome]  # no Protheus o índice 1 da SRA inclui o nome: a matrícula basta
     if identidade == "nome" and not nome:
         raise InvestigacaoInvalida("Sem campo de nome nem de documento para achar outros vínculos da mesma pessoa.")
     return {"tabela": tabela, "chave": chave, "nome": nome, "papeis": papeis, "identidade": identidade,
