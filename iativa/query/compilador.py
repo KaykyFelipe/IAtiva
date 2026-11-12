@@ -98,8 +98,12 @@ class _Montador:
         selecao, agrupar = [], []
         for i, c in enumerate(p.colunas):
             r = self.ref(c.campo)
+            if c.transformacao:
+                if c.transformacao not in ("MES", "ANO"):
+                    raise PlanoInvalido("Transformação inválida.")
+                r = f"SUBSTRING({r}, 1, {6 if c.transformacao == 'MES' else 4})"
             if c.agregacao:
-                if c.agregacao not in ("SUM", "COUNT", "MIN", "MAX"):
+                if c.agregacao not in ("SUM", "COUNT", "MIN", "MAX", "AVG"):
                     raise PlanoInvalido("Agregação inválida.")
                 selecao.append(f"{c.agregacao}({r}) AS c{i}")
             else:
@@ -129,7 +133,7 @@ class _Montador:
         rotulos = [c.rotulo for c in p.colunas]
         ordem = [f"c{rotulos.index(r)} {'DESC' if desc else 'ASC'}" for r, desc in p.ordenar]
         sql = (
-            f"SELECT TOP {self.limite + 1} {', '.join(selecao)} FROM {base.fisica} AS e1 "
+            f"SELECT TOP {min(self.limite + 1, p.top) if p.top else self.limite + 1} {', '.join(selecao)} FROM {base.fisica} AS e1 "
             + " ".join(juncoes)
             + (" WHERE " + " AND ".join(where) if where else "")
             + (" GROUP BY " + ", ".join(agrupar) if p.agrupar and agrupar else "")

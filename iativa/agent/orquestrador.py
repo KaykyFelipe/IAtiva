@@ -94,6 +94,13 @@ def _catalogo(objetivos, defs: dict) -> list[dict]:
             d = defs.get(codigo)
             if d is not None:
                 descricao = d.descricao
+                if codigo == "agregacao" and o.modelo_id:
+                    from .models import ConsultaModelo
+
+                    spec = ConsultaModelo.objects.get(pk=o.modelo_id).spec
+                    descricao += " Campos desta consulta: " + ", ".join(
+                        f"{c['campo']} ({c['rotulo']}, {c['tipo']})" for c in spec["colunas"]) + (
+                        ". Pode agrupar por mes/ano." if spec.get("campo_data") else ".")
                 if codigo == "filtro-campo" and o.filtraveis:
                     descricao += " Campos desta consulta: " + ", ".join(f"{c} ({r})" for c, r in o.filtraveis) + "."
                 params.append({"codigo": codigo, "nome": d.nome, "descricao": descricao, "tipo": d.tipo,
@@ -136,6 +143,17 @@ def _registrar_parametro(user, s: RequestContext, definicao, texto: str):
             valor = "; ".join(f"{c}={v}" for c, v in ler_filtros(valor, permitidos))
         except ValueError as exc:
             raise ValidationError(f"{exc}. Campos aceitos: {', '.join(sorted(permitidos)) or 'nenhum'}.") from None
+    if definicao.codigo == "agregacao":
+        from iativa.agent.models import ConsultaModelo
+        from iativa.query.plano import ler_agregacao
+
+        obj = OBJETIVOS[s.objetivo]
+        if not obj.modelo_id:
+            raise ValidationError("Cálculos só valem para consultas aprendidas.")
+        try:
+            ler_agregacao(valor, ConsultaModelo.objects.get(pk=obj.modelo_id).spec)
+        except ValueError as exc:
+            raise ValidationError(f"Cálculo inválido: {exc}.") from None
     if definicao.tipo == TipoValor.FILIAL and valor == "TODAS" and filiais_autorizadas(user, s.setor):
         pass  # todas as filiais autorizadas; cada uma é conferida de novo na execução
     elif definicao.tipo == TipoValor.FILIAL and valor not in filiais_autorizadas(user, s.setor):

@@ -13,6 +13,7 @@ from dataclasses import dataclass
 PREFIXO_APRENDIDO = "aprendido-"
 BUSCA = "texto-busca"  # opcional: filtra pelo nome (cliente, fornecedor, funcionário...)
 FILTRO = "filtro-campo"  # opcional: CAMPO=valor exato num campo filtrável da consulta aprendida
+AGREGACAO = "agregacao"  # opcional: soma/média/contagem/maior/menor, por grupo, top N (consultas aprendidas)
 MAX_FILTRAVEIS = 6
 DOMINIO_APRENDIDO = "aprendido"
 
@@ -93,7 +94,7 @@ def campos_filtraveis(spec: dict) -> list[tuple[str, str]]:
 def de_modelo(cm) -> Objetivo:
     obrig = ["filial-analise"] + (["periodo-analise"] if cm.spec.get("campo_data") else [])
     filtraveis = tuple(campos_filtraveis(cm.spec))
-    opcionais = ((BUSCA,) if campo_busca(cm.spec) else ()) + ((FILTRO,) if filtraveis else ())
+    opcionais = ((BUSCA,) if campo_busca(cm.spec) else ()) + ((FILTRO,) if filtraveis else ()) + (AGREGACAO,)
     return Objetivo(
         codigo=cm.codigo, dominio=DOMINIO_APRENDIDO, nome=cm.nome, descricao=cm.descricao,
         tabelas=(cm.tabela,), obrigatorios=tuple(obrig), modelo_id=cm.pk,

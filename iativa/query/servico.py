@@ -49,11 +49,11 @@ class Resultado:
 
     @property
     def cabecalho(self):
-        return [(c, "num" if t in ("dinheiro", "inteiro") else "") for c, t in zip(self.colunas, self.tipos)]
+        return [(c, "num" if t in ("dinheiro", "inteiro", "valor", "numero") else "") for c, t in zip(self.colunas, self.tipos)]
 
     @property
     def linhas_tela(self):
-        classes = ["num" if t in ("dinheiro", "inteiro") else "" for t in self.tipos]
+        classes = ["num" if t in ("dinheiro", "inteiro", "valor", "numero") else "" for t in self.tipos]
         return [list(zip(linha, classes)) for linha in self.linhas]
 
 
@@ -87,6 +87,11 @@ def _fmt(valor, tipo):
         return f"{t[6:8]}/{t[4:6]}/{t[0:4]}" if len(t) == 8 else ""
     if tipo == "inteiro":
         return str(int(valor))
+    if tipo == "valor":
+        return _numero_br(valor)
+    if tipo == "mes":
+        t = str(valor).strip()
+        return f"{t[4:6]}/{t[0:4]}" if len(t) == 6 else t
     if tipo == "numero":
         d = Decimal(str(valor)).normalize()
         return format(d, "f").replace(".", ",")
@@ -156,11 +161,11 @@ def executar_solicitacao(user, s: RequestContext) -> Resultado:
         i = tipos.index("dinheiro")
         total_valor = sum((Decimal(str(l[i] or 0)) for l in linhas), Decimal(0))
         total = _fmt(total_valor, "dinheiro")
-    elif "numero" in tipos and linhas:
+    elif ("numero" in tipos or "valor" in tipos) and linhas:
         # Consultas aprendidas: soma cada coluna numérica (ex.: valor bruto e valor da mercadoria).
         partes = []
         for i, t in enumerate(tipos):
-            if t == "numero":
+            if t in ("numero", "valor"):
                 soma = sum((Decimal(str(l[i] or 0)) for l in linhas), Decimal(0))
                 total_valor = soma if total_valor is None else total_valor
                 partes.append(f"{comp.rotulos[i]} {_numero_br(soma)}")

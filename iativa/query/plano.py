@@ -32,8 +32,9 @@ class Filtro:
 class Coluna:
     rotulo: str
     campo: Campo
-    agregacao: str = ""  # "" | SUM | COUNT | MIN | MAX
-    tipo: str = "texto"  # texto | data | dinheiro | inteiro
+    agregacao: str = ""  # "" | SUM | COUNT | MIN | MAX | AVG
+    tipo: str = "texto"  # texto | data | dinheiro | inteiro | numero | valor | mes | ano
+    transformacao: str = ""  # "" | MES | ANO (prefixo da data AAAAMMDD, para agrupar)
 
 
 @dataclass(frozen=True)
@@ -55,6 +56,7 @@ class Plano:
     premissas: list[str] = field(default_factory=list)
     chave_unica: tuple[str, ...] = ()  # rótulos que não podem repetir (detecção de duplicação)
     filial: str = ""
+    top: int = 0  # "top N": limita as linhas (ranking)
 
 
 def _aaaammdd(iso: str) -> str:
@@ -116,6 +118,90 @@ def ler_filtros(texto: str, permitidos) -> list[tuple[str, str]]:
     return out[:6]
 
 
+AGREGACAO = "agregacao"
+FUNCOES = {"soma": "SUM", "media": "AVG", "contagem": "COUNT", "maximo": "MAX", "minimo": "MIN"}
+NOME_FUNCAO = {"SUM": "Soma", "AVG": "Média", "COUNT": "Quantidade", "MAX": "Maior", "MIN": "Menor"}
+
+
+def _sem_acento(t: str) -> str:
+    return unicodedata.normalize("NFKD", t or "").encode("ascii", "ignore").decode().lower()
+
+
+def ler_agregacao(texto: str, spec: dict):
+    """"soma:F2_VALBRUT, media:F2_VALBRUT por F2_CLIENTE top 10" -> ([(SUM, campo)...], grupo, top).
+    Grupo: campo da consulta, "MES"/"ANO" (do campo de data) ou vazio. Fora disso: ValueError."""
+    t = _sem_acento(texto).strip()
+    top = 0
+    if m := re.search(r"\btop\s*(\d{1,3})\b", t):
+        top = max(1, min(100, int(m.group(1))))
+        t = (t[:m.start()] + t[m.end():]).strip()
+    metricas_txt, _, grupo = t.partition(" por ")
+    tipos = {c["campo"]: c["tipo"] for c in spec.get("colunas", [])}
+    metricas = []
+    for parte in metricas_txt.split(","):
+        parte = parte.strip()
+        if not parte:
+            continue
+        func, _, campo = parte.partition(":")
+        func, campo = func.strip(), campo.strip().upper()
+        if func not in FUNCOES:
+            raise ValueError(f"cálculo desconhecido: {func or parte}")
+        if FUNCOES[func] == "COUNT" and campo in ("", "*"):
+            campo = "*"
+        elif campo not in tipos:
+            raise ValueError(f"campo fora da consulta: {campo or parte}")
+        elif FUNCOES[func] in ("SUM", "AVG") and tipos[campo] != "numero":
+            raise ValueError(f"{func} precisa de um campo numérico: {campo}")
+        metricas.append((FUNCOES[func], campo))
+    if not metricas or len(metricas) > 4:
+        raise ValueError("informe de 1 a 4 cálculos (ex.: soma:CAMPO)")
+    grupo = grupo.strip().upper()
+    if grupo in ("MES", "ANO"):
+        if not spec.get("campo_data"):
+            raise ValueError("a consulta não tem campo de data para agrupar por mês/ano")
+    elif grupo and grupo not in tipos:
+        raise ValueError(f"agrupamento por campo fora da consulta: {grupo}")
+    return metricas, grupo, top
+
+
+def _aplicar_agregacao(plano, spec: dict, texto: str):
+    try:
+        metricas, grupo, top = ler_agregacao(texto, spec)
+    except ValueError as exc:
+        from .compilador import PlanoInvalido
+
+        raise PlanoInvalido(str(exc)) from None
+    e1 = "e1"
+    rotulos = {c["campo"]: c["rotulo"] for c in spec["colunas"]}
+    tipos = {c["campo"]: c["tipo"] for c in spec["colunas"]}
+    colunas = []
+    if grupo in ("MES", "ANO"):
+        colunas.append(Coluna("Mês" if grupo == "MES" else "Ano", Campo(e1, spec["campo_data"]),
+                              tipo=grupo.lower(), transformacao=grupo))
+    elif grupo:
+        colunas.append(Coluna(rotulos[grupo], Campo(e1, grupo), tipo=tipos[grupo]))
+    filial = next(f.campo for f in plano.filtros if f.campo.nome.endswith("_FILIAL"))
+    for func, campo in metricas:
+        if campo == "*":
+            colunas.append(Coluna("Quantidade", filial, agregacao="COUNT", tipo="inteiro"))
+        elif func == "COUNT":
+            colunas.append(Coluna(f"Quantidade de {rotulos[campo]}", Campo(e1, campo), agregacao=func, tipo="inteiro"))
+        else:
+            tipo = "valor" if tipos[campo] == "numero" else tipos[campo]
+            colunas.append(Coluna(f"{NOME_FUNCAO[func]} de {rotulos[campo]}", Campo(e1, campo), agregacao=func,
+                                  tipo=tipo))
+    plano.colunas, plano.agrupar, plano.top = colunas, bool(grupo), top
+    primeira_metrica = colunas[1 if grupo else 0].rotulo
+    if top:
+        plano.ordenar = [(primeira_metrica, True)]
+    elif grupo:
+        plano.ordenar = [(colunas[0].rotulo, False)]
+    else:
+        plano.ordenar = []
+    plano.premissas.append("Cálculo: " + ", ".join(c.rotulo for c in colunas if c.agregacao)
+                           + (f", por {colunas[0].rotulo}" if grupo else "") + (f", top {top}" if top else "") + ".")
+
+
 def _comuns(plano, filial):
     e1 = "e1"
     plano.filial = filial
@@ -170,6 +256,8 @@ def montar_modelo(tabela: str, spec: dict, valores: dict, codigo: str) -> Plano:
     rotulos = [c.rotulo for c in plano.colunas]
     ordem = next((c["rotulo"] for c in spec["colunas"] if c["campo"] == campo_data), rotulos[0])
     plano.ordenar = [(ordem, bool(campo_data))]
+    if valores.get(AGREGACAO):
+        _aplicar_agregacao(plano, spec, valores[AGREGACAO])
     plano.premissas += ["Consulta aprendida e aprovada (M9).", "Registros excluídos (D_E_L_E_T_) ignorados."]
     return plano
 

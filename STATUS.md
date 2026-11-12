@@ -4,6 +4,11 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **plano proposto em `PLANO.md` §8, aguardando aprovação.** Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M20 — cálculos no banco (2026-11-12)
+
+- "Total", "média", "top 10 clientes", "por mês", "por filial": a IA pede o cálculo e o banco devolve pronto.
+- Testes: 488 aprovados e 10 pulados no Windows.
+
 ## Mudança M19 — somas sob pedido (2026-11-12)
 
 - Totais das colunas numéricas calculados e não exibidos; vão à IA só na pergunta seguinte ("some os valores").
