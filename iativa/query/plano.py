@@ -208,6 +208,54 @@ def _aplicar_agregacao(plano, spec: dict, texto: str):
                            + (f", por {colunas[0].rotulo}" if grupo else "") + (f", top {top}" if top else "") + ".")
 
 
+REGRAS = "_regras"  # regras da memória (M22): [(campo, operador, valor, origem)] já confirmadas
+
+
+def medidas_do_plano(plano) -> list[tuple]:
+    """O que totalizar sobre todos os registros: (rótulo, função, tipo, campo).
+    Consulta que já é cálculo: as próprias medidas. Lista: a soma de cada coluna de valor."""
+    if any(c.agregacao for c in plano.colunas):
+        return [(c.rotulo, c.agregacao, c.tipo, c.campo) for c in plano.colunas if c.agregacao]
+    return [(c.rotulo, "SUM", "dinheiro" if c.tipo == "dinheiro" else "valor", c.campo)
+            for c in plano.colunas if c.tipo in ("dinheiro", "numero")]
+
+
+def plano_total(plano, medidas, campo_filial: str, moeda=None) -> "Plano":
+    """Mesmos filtros do plano, sem agrupar por item e sem limite de exibição: uma linha (ou uma por
+    moeda) com a quantidade de registros e cada medida. Soma e média levam junto a contagem de
+    valores preenchidos, para combinar filiais sem média de médias e distinguir "sem valor" de zero.
+    Junções que não entram em filtro nem em medida ficam de fora: não podem inflar o total."""
+    usados = {c.alias for _, _, _, c in medidas}
+    for f in plano.filtros:
+        usados.add(f.campo.alias)
+        if isinstance(f.valor, Campo):
+            usados.add(f.valor.alias)
+    total = Plano(objetivo=plano.objetivo, base=plano.base, filial=plano.filial, filtros=list(plano.filtros),
+                  juncoes=[j for j in plano.juncoes if j.alias in usados])
+    colunas = [Coluna("moeda", moeda)] if moeda else []
+    colunas.append(Coluna("registros", Campo("e1", campo_filial), "COUNT", "inteiro"))
+    for i, (_, func, tipo, campo) in enumerate(medidas):
+        if func in ("SUM", "AVG"):
+            colunas += [Coluna(f"s{i}", campo, "SUM", tipo), Coluna(f"n{i}", campo, "COUNT", "inteiro")]
+        else:
+            colunas.append(Coluna(f"v{i}", campo, func, tipo))
+    total.colunas, total.agrupar = colunas, bool(moeda)
+    return total
+
+
+def plano_chave(juncao, campo_filial: str, filial: str) -> "Plano":
+    """Confere a cardinalidade de uma junção: a combinação de campos usada para ligar não pode se
+    repetir na outra tabela (dentro da filial). Devolve no máximo uma linha; a última coluna é a
+    maior quantidade de repetições."""
+    campos = [a for a, _ in juncao.pares]
+    p = Plano(objetivo="verificacao", base=juncao.tabela, filial=filial)
+    if campo_filial:
+        p.filtros.append(Filtro(Campo("e1", campo_filial), "=", filial))
+    p.colunas = [Coluna(c, Campo("e1", c)) for c in campos] + [Coluna("repeticoes", Campo("e1", campos[0]), "COUNT", "inteiro")]
+    p.agrupar, p.ordenar, p.top = True, [("repeticoes", True)], 1
+    return p
+
+
 def _comuns(plano, filial):
     e1 = "e1"
     plano.filial = filial
@@ -243,6 +291,11 @@ def montar_modelo(tabela: str, spec: dict, valores: dict, codigo: str) -> Plano:
         plano.premissas.append(f"Período aplicado ao campo {campo_data}.")
     for f in spec.get("filtros_fixos", []):
         plano.premissas.append(f"Filtro fixo: {f['campo']} = {f['valor']}.")
+    for campo, op, valor, origem in valores.get(REGRAS) or []:
+        if op not in ("=", "<>"):
+            continue
+        plano.filtros.append(Filtro(Campo(e1, campo), op, valor))
+        plano.premissas.append(f"Regra da memória ({origem}): {campo} {'igual a' if op == '=' else 'diferente de'} “{valor}”.")
     from iativa.agent.contratos import campo_busca  # noqa: I001
 
     if campo_busca(spec):

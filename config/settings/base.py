@@ -143,6 +143,14 @@ IATIVA_APRENDIZADO_AUTOAPROVACAO = False
 # Etapa 5 — execução somente leitura: linhas e tempo máximos por consulta.
 IATIVA_CONSULTA = {"limite_linhas": 500, "timeout_s": 30}
 
+# M22 — ciclo do agente em uma mensagem: quantas ações diferentes ele pode tentar quando a primeira
+# não resolve, quantas vezes repete uma consulta que caiu por erro transitório e o tempo total.
+IATIVA_AGENTE_CICLO = {
+    "passos": 3,
+    "retentativas": 1,
+    "tempo_s": 120,
+}
+
 IATIVA_AGENTE = {
     "provedor": "teste",
     "modelo": "claude-opus-5-5",

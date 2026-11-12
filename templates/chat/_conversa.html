@@ -57,7 +57,6 @@
           data-compositor data-parar-url="{% url 'chat:parar' %}">
       {% csrf_token %}
       <input type="hidden" name="pedido" value="" data-pedido>
-      <input type="hidden" name="resultados" value="" data-resultados>
       {% if erro %}<p class="erro" role="alert">{{ erro }}</p>{% endif %}
       {% for e in form.mensagem.errors %}<p class="erro" role="alert">{{ e }}</p>{% endfor %}
       <label class="sr" for="campo-mensagem">Mensagem</label>

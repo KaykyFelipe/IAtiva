@@ -318,11 +318,6 @@
     const texto = campo ? campo.value.trim() : "";
     if (!texto) return;
     form.querySelector("[data-pedido]").value = novoId();
-    // Resumos (contagem e totais) dos resultados na tela vão só nesta pergunta; o servidor não guarda (R3).
-    const resumos = Array.from(document.querySelectorAll("[data-resumo-resultado]")).slice(-3)
-      .map((el) => el.dataset.resumoResultado);
-    const campoResultados = form.querySelector("[data-resultados]");
-    if (campoResultados) campoResultados.value = JSON.stringify(resumos);
     atual = { form, texto, elementos: mostrarPensando(texto) };
     botao(form, true);
   }, true);

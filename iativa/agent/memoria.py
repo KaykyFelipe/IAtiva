@@ -32,7 +32,7 @@ from iativa.memory.validadores import contem_cpf_cnpj
 
 from . import aprendizado
 from .conversao import exibir
-from .models import ConsultaModelo, EscopoNota, NotaAgente, SituacaoModelo, SituacaoNota
+from .models import ConsultaModelo, EscopoNota, NotaAgente, SituacaoModelo, SituacaoNota, TipoNota
 
 PALAVRAS_VAZIAS = {"para", "nos", "nós", "a", "o", "os", "as", "que", "aqui", "no", "na", "do", "da", "de",
                    "um", "uma", "lembre", "lembrar", "guarde", "anote"}
@@ -65,11 +65,138 @@ def _pode_decidir(user, setor, criado_por_id) -> bool:
 # --- notas ---------------------------------------------------------------------------------------
 
 def notas_validas(user, setor=None):
+    """Notas que valem para o usuário agora: dele, do setor dele e da empresa; aprovadas, ativas e
+    dentro da validade. Nota de outro usuário ou de outro setor nunca entra."""
     setor = setor if setor is not None else setor_do_usuario(user)
     filtro = Q(escopo=EscopoNota.EMPRESA) | Q(escopo=EscopoNota.USUARIO, usuario=user)
     if setor is not None:
         filtro |= Q(escopo=EscopoNota.SETOR, setor=setor)
-    return NotaAgente.objects.filter(ativo=True, situacao=SituacaoNota.APROVADA).filter(filtro)
+    vigente = Q(valido_ate__isnull=True) | Q(valido_ate__gte=timezone.localdate())
+    return NotaAgente.objects.filter(ativo=True, situacao=SituacaoNota.APROVADA).filter(filtro).filter(vigente)
+
+
+PRECEDENCIA = {EscopoNota.USUARIO: 0, EscopoNota.SETOR: 1, EscopoNota.EMPRESA: 2}  # o mais específico vence
+MAX_NOTAS_CONTEXTO = 12
+MAX_CARACTERES_CONTEXTO = 2400
+
+
+def _radicais(texto: str) -> set[str]:
+    vazias = {_norm(x) for x in PALAVRAS_VAZIAS} | {"quando", "como", "qual", "quais", "sobre", "para", "com"}
+    return {p[:5] for p in re.findall(r"\w+", _norm(texto)) if len(p) >= 4 and p not in vazias}
+
+
+def rotulo_nota(n) -> str:
+    """Texto que vai ao modelo: o tipo vem junto, e a hipótese vai marcada como não confirmada."""
+    marca = {TipoNota.PREFERENCIA: "preferência", TipoNota.TERMO: "termo", TipoNota.REGRA: "regra aplicada pelo sistema",
+             TipoNota.CORRECAO: "correção", TipoNota.HIPOTESE: "hipótese NÃO confirmada: não aplique, pergunte"}[n.tipo]
+    return f"[{marca}] {n.texto}"
+
+
+def notas_relevantes(user, texto: str, limite: int = MAX_NOTAS_CONTEXTO,
+                     max_caracteres: int = MAX_CARACTERES_CONTEXTO) -> list[NotaAgente]:
+    """Notas para o contexto do modelo, da mais ligada ao pedido para a menos. Preferências e regras
+    valem em qualquer pedido; as demais entram pela proximidade das palavras. Dentro de um mesmo
+    termo, vale a mais específica (usuário, depois setor, depois empresa). Respeita os limites."""
+    alvo = _radicais(texto)
+    candidatas, termos = [], set()
+    for n in sorted(notas_validas(user), key=lambda n: (PRECEDENCIA[n.escopo], -n.pk)):
+        t = termo(n.texto)
+        if t and n.tipo != TipoNota.HIPOTESE:
+            if t in termos:
+                continue  # já há definição mais específica do mesmo termo
+            termos.add(t)
+        pontos = len(alvo & _radicais(n.texto))
+        fixa = n.tipo in (TipoNota.PREFERENCIA, TipoNota.REGRA)
+        candidatas.append((-(pontos * 2 + fixa), PRECEDENCIA[n.escopo], -n.pk, n))
+    out, usados = [], 0
+    for _, _, _, n in sorted(candidatas, key=lambda x: x[:3]):
+        if len(out) >= limite or usados + len(n.texto) > max_caracteres:
+            break
+        out.append(n)
+        usados += len(n.texto)
+    return out
+
+
+# --- regras estruturadas (M22) --------------------------------------------------------------------
+
+OPERADORES_REGRA = {"=": "=", "igual": "=", "<>": "<>", "diferente": "<>", "!=": "<>"}
+
+
+def validar_regra(user, regra: dict) -> dict:
+    """Confere o critério proposto contra o que existe: tabela de uma consulta que a pessoa usa,
+    campo consultável do dicionário, operador e valor permitidos. Nada é presumido."""
+    from iativa.query.plano import VALOR_FILTRO_RE
+
+    from .contratos import objetivos_para
+
+    tabela = str(regra.get("tabela", "")).strip().upper()
+    campo = str(regra.get("campo", "")).strip().upper()
+    op = OPERADORES_REGRA.get(str(regra.get("operador", regra.get("op", ""))).strip().lower())
+    valor = str(regra.get("valor", "")).strip()
+    if not tabela or not campo or op is None:
+        raise ValidationError("Para virar regra, preciso da tabela, do campo e se é igual ou diferente.")
+    if not any(o.modelo_id and o.tabelas[0] == tabela for o in objetivos_para(user)):
+        raise ValidationError(f"Você não tem consulta aprendida sobre a tabela {tabela}; a regra não teria onde valer.")
+    if not VALOR_FILTRO_RE.match(valor):
+        raise ValidationError("O valor da regra precisa ser um código simples (letras, números, espaço ou hífen).")
+    from iativa.metadata.catalogo import abrir_catalogo
+
+    try:
+        with abrir_catalogo() as cat:
+            t = cat.tabelas([tabela], com_campos=True).get(tabela)
+    except Exception:
+        raise ValidationError("Não consegui conferir o campo no dicionário do ERP agora.") from None
+    achado = next((c for c in (t.campos if t else ()) if c.nome == campo and c.consultavel), None)
+    if achado is None or campo.endswith("_FILIAL") or aprendizado.sensivel(achado):
+        raise ValidationError(f"O campo {campo} não existe (ou não pode ser consultado) na tabela {tabela}.")
+    return {"tabela": tabela, "campo": campo, "op": op, "valor": valor}
+
+
+def regras_aplicaveis(user, setor, tabela: str) -> list[tuple]:
+    """Regras confirmadas e aprovadas que valem para o usuário nesta tabela: (campo, op, valor, origem).
+    Hipóteses e propostas ficam de fora. No mesmo campo, a mais específica vence."""
+    origem = {EscopoNota.USUARIO: "sua", EscopoNota.SETOR: "do setor", EscopoNota.EMPRESA: "da empresa"}
+    out, vistos = [], set()
+    notas = notas_validas(user, setor).filter(tipo=TipoNota.REGRA)
+    for n in sorted(notas, key=lambda n: (PRECEDENCIA[n.escopo], -n.pk)):
+        c = n.criterios or {}
+        if c.get("tabela") != tabela or c.get("op") not in ("=", "<>") or c.get("campo") in vistos:
+            continue
+        vistos.add(c["campo"])
+        out.append((c["campo"], c["op"], c["valor"], origem[n.escopo]))
+    return out
+
+
+def minhas_memorias(user) -> list[NotaAgente]:
+    return sorted(notas_validas(user), key=lambda n: (PRECEDENCIA[n.escopo], -n.pk))
+
+
+def pode_desativar(user, nota) -> bool:
+    if nota.escopo == EscopoNota.USUARIO:
+        return nota.usuario_id == user.pk
+    return tem_permissao(user, Permissao.APROVAR_CONHECIMENTO, nota.setor)
+
+
+def achar_memoria(user, alvo: str) -> list[NotaAgente]:
+    alvo_n = _norm(alvo).strip()
+    m = re.fullmatch(r"(?:nota|memoria)?[-\s]*(\d+)", alvo_n)
+    notas = minhas_memorias(user)
+    if m:
+        return [n for n in notas if n.pk == int(m.group(1))]
+    palavras = _radicais(alvo_n)
+    return [n for n in notas if palavras and palavras <= _radicais(n.texto)]
+
+
+@transaction.atomic
+def desativar(user, nota) -> NotaAgente:
+    nota = _travar_nota(nota)
+    if not pode_desativar(user, nota):
+        raise PermissaoNegada("Você só desativa as suas notas; as do setor e da empresa dependem de quem aprova definições.")
+    nota.ativo = False
+    nota.save(update_fields=["ativo"])
+    registrar("parametro_revogado", "agente", usuario=user, setor=nota.setor, entidade_id=nota.pk,
+              estado_novo="nota_desativada")
+    return nota
 
 
 def _conflitante(escopo, setor, usuario, texto):
@@ -84,15 +211,38 @@ def _conflitante(escopo, setor, usuario, texto):
     return None
 
 
+def _regra_igual(a: dict, b: dict) -> bool:
+    return all((a or {}).get(k) == (b or {}).get(k) for k in ("tabela", "campo", "op", "valor"))
+
+
 @transaction.atomic
-def lembrar(user, texto: str, alcance: str = "") -> NotaAgente:
-    """Guarda uma nota. `alcance` vazio: empresa para administradores (como na M10), usuário para os demais."""
+def lembrar(user, texto: str, alcance: str = "", tipo: str = "", regra: dict | None = None,
+            confirmado: bool = False, valido_ate=None) -> NotaAgente:
+    """Guarda uma nota. `alcance` vazio: empresa para administradores (como na M10), usuário para os demais.
+
+    Regra de negócio (M22): só vira critério aplicado pelo backend quando vem com o mapeamento
+    (`regra`: tabela, campo, operador, valor), conferido no dicionário, e a pessoa confirmou. Sem
+    mapeamento, ou sem confirmação, fica como hipótese só do usuário: vai ao modelo como dúvida e
+    nunca filtra consulta."""
     texto = (texto or "").strip()[:300]
     if not texto:
         raise ValidationError("Nada para guardar.")
     if contem_cpf_cnpj(texto):
         raise ValidationError("Não guardo CPF ou CNPJ na memória.")
     setor_user = setor_do_usuario(user)
+    tipo = tipo if tipo in TipoNota.values else TipoNota.TERMO
+    criterios = validar_regra(user, regra) if regra else {}
+    if criterios:
+        tipo = TipoNota.REGRA
+    if tipo == TipoNota.REGRA and not (criterios and confirmado):
+        tipo, alcance = TipoNota.HIPOTESE, EscopoNota.USUARIO
+    if tipo == TipoNota.HIPOTESE:
+        alcance = EscopoNota.USUARIO
+    if criterios and tipo == TipoNota.REGRA:  # confirmada: a hipótese equivalente sai de cena
+        for h in NotaAgente.objects.filter(ativo=True, tipo=TipoNota.HIPOTESE, usuario=user):
+            if _regra_igual(h.criterios, criterios):
+                h.ativo = False
+                h.save(update_fields=["ativo"])
     if not alcance:
         alcance = EscopoNota.EMPRESA if aprendizado.pode_aprender(user) else EscopoNota.USUARIO
     if alcance not in EscopoNota.values:
@@ -106,10 +256,17 @@ def lembrar(user, texto: str, alcance: str = "") -> NotaAgente:
         if alcance == EscopoNota.SETOR:
             setor = setor_user
     anterior = _conflitante(alcance, setor, usuario, texto)
-    if anterior is not None and _norm(anterior.texto) == _norm(texto):
+    if criterios:  # regra nova sobre o mesmo campo, no mesmo nível, substitui a anterior
+        anterior = next((n for n in NotaAgente.objects.filter(
+            ativo=True, situacao=SituacaoNota.APROVADA, escopo=alcance, setor=setor, usuario=usuario, tipo=tipo)
+            if (n.criterios or {}).get("tabela") == criterios["tabela"]
+            and (n.criterios or {}).get("campo") == criterios["campo"]), None)
+    if anterior is not None and _norm(anterior.texto) == _norm(texto) and _regra_igual(anterior.criterios, criterios) \
+            and anterior.tipo == tipo:
         raise ValidationError("Isso já está na memória.")
     privado = alcance == EscopoNota.USUARIO
     nota = NotaAgente.objects.create(
+        tipo=tipo, criterios=criterios, valido_ate=valido_ate,
         texto=texto, escopo=alcance, usuario=usuario, setor=setor, criado_por=user, substitui=anterior,
         situacao=SituacaoNota.APROVADA if privado else SituacaoNota.PROPOSTA,
         aprovado_por=user if privado else None, aprovado_em=timezone.now() if privado else None,

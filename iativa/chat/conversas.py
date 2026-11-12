@@ -196,9 +196,12 @@ def limpar_interrupcao(user, pedido) -> None:
 
 
 @transaction.atomic
-def enviar(user, c: ConversationContext, texto: str, provedor=None, pedido=None, resultados=None) -> None:
+def enviar(user, c: ConversationContext, texto: str, provedor=None, pedido=None) -> None:
     """`pedido`: id do envio gerado no navegador; se a pessoa clicar em "parar" antes da IA agir,
-    `agente.Interrompido` é lançado e a transação desfaz tudo (inclusive a mensagem dela)."""
+    `agente.Interrompido` é lançado e a transação desfaz tudo (inclusive a mensagem dela).
+
+    M22: o histórico guarda só `saida.texto` (intenção, critérios, estado). A resposta com números
+    vai em `resultado.mensagem`, que existe só nesta resposta HTTP e nunca é gravada."""
     if not pode_escrever(user, c):
         raise PermissaoNegada("Somente leitura nesta conversa.")
     from iativa.agent import agente
@@ -206,7 +209,7 @@ def enviar(user, c: ConversationContext, texto: str, provedor=None, pedido=None,
     texto = _validar_texto(texto)
     m = Mensagem.objects.create(conversa=c, papel=Papel.USUARIO, autor=user, texto=texto)
     saida = agente.conversar(user, c, texto, provedor=provedor, mensagem_usuario_id=m.pk,
-                             interrompido=_verificador(user, pedido), resultados=resultados or [])
+                             interrompido=_verificador(user, pedido))
     msg = Mensagem.objects.create(conversa=c, papel=Papel.IA, texto=saida.texto[:MAX_TEXTO], ficha=saida.ficha,
                                   solicitacao=saida.solicitacao)
     _tocar(c, texto)
@@ -252,8 +255,8 @@ def _executar_e_registrar(user, c, s):
     from iativa.query.consolidado import talvez_consolidar
 
     exibido = talvez_consolidar(user, s, res)
-    if exibido is not res:  # chat mestre: um bloco por setor (Etapa 6)
-        texto += f" Setores: {len(exibido.blocos)}. {exibido.resumo}"
+    if exibido is not res:  # chat mestre: um bloco por setor; o resumo com valores fica só na tela (M22)
+        texto += f" Setores: {len(exibido.blocos)}."
     msg = Mensagem.objects.create(conversa=c, papel=Papel.IA, texto=texto[:MAX_TEXTO], ficha=ficha,
                                   solicitacao=res.solicitacao)
     _tocar(c, "")

@@ -4,6 +4,17 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **plano proposto em `PLANO.md` §8, aguardando aprovação.** Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M22 — a IA executa, confere e corrige (2026-11-12)
+
+- Ciclo fechado: se a primeira tentativa falha por motivo corrigível (cálculo inválido, campo que não existe, consulta sem o campo), a IA recebe o motivo e tenta outro caminho na mesma mensagem. Limites: 3 passos, 1 retentativa de erro transitório, 120 s.
+- A resposta com o número sai junto com a consulta ("Soma de …: …, N registros") e não é salva no histórico.
+- Total sempre calculado no banco sobre todos os registros, mesmo com a lista cortada em 500 linhas. Subtotal, ranking e total geral aparecem separados.
+- O navegador não envia mais resumos de resultados; o modelo não vê nenhum número.
+- Memória: notas por relevância, com tipo e validade; regra de negócio só vale com campo e valor conferidos e confirmados; "o que você lembra?" e "esqueça nota-N".
+- Testes: 515 aprovados e 10 pulados no Windows.
+- **Não validado:** interpretação com o modelo real (roteiro em `docs/AVALIACAO_MODELO.md`, ainda não executado) e comportamento no Protheus real (login do IAtiva sem acesso ao banco no momento).
+- Migração nova: `iativa_agent.0004_nota_tipo_regra`.
+
 ## Mudança M21 — juntar tabelas (2026-11-12)
 
 - A IA traz nomes/descrições de outra tabela (ex.: nome do cliente no faturamento) pela chave do dicionário.

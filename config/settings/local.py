@@ -66,3 +66,10 @@ IATIVA_AGENTE = {
 IATIVA_APRENDIZADO_AUTOAPROVACAO = env("IATIVA_APRENDIZADO_AUTOAPROVACAO", "0") == "1"
 
 SYNTHETIC_ERP_PATH = Path(env("IATIVA_SYNTHETIC_ERP_PATH", str(BASE_DIR / "var" / "erp_sintetico.sqlite3")))
+
+# M22 — limites do ciclo do agente por mensagem (opcionais; padrão em base.py).
+IATIVA_AGENTE_CICLO = {
+    "passos": int(env("IATIVA_AGENTE_PASSOS", "3")),
+    "retentativas": int(env("IATIVA_AGENTE_RETENTATIVAS", "1")),
+    "tempo_s": int(env("IATIVA_AGENTE_TEMPO_S", "120")),
+}

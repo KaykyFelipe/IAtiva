@@ -17,6 +17,8 @@ ACOES = (
     "listar_aprendizados",  # mostrar consultas aprendidas
     "remover_aprendizado",  # administrador: tirar de uso uma consulta aprendida (pede confirmação)
     "lembrar",              # guardar na memória do agente algo que o usuário ensinou
+    "listar_memorias",      # M22: mostrar o que a memória guarda e vale para a pessoa
+    "esquecer_memoria",     # M22: desativar uma nota da memória (pede confirmação)
     "listar_pendencias",    # Etapa 6: mostrar propostas aguardando aprovação
     "aprovar_pendencia",    # Etapa 6: aprovar uma proposta (pede confirmação)
     "rejeitar_pendencia",   # Etapa 6: rejeitar uma proposta (pede confirmação)
@@ -26,6 +28,7 @@ MAX_RESPOSTA = 2000
 MAX_NOTA = 300
 MAX_PARAMETROS = 8
 MAX_OPCOES = 6
+TIPOS_NOTA = ("", "preferencia", "termo", "regra", "correcao")
 
 
 class DecisaoInvalida(ValueError):
@@ -45,7 +48,8 @@ class EntradaAgente:
     administrador: bool = False
     pendencias: list[dict] = field(default_factory=list)
     tabelas_para_aprender: list[dict] = field(default_factory=list)
-    resultados_na_tela: list[str] = field(default_factory=list)  # contagem/totais, transitório (R3)
+    # M22: o que já foi tentado NESTA mensagem e como terminou (situação e motivo, sem dados do ERP).
+    observacoes: list[dict] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -60,6 +64,9 @@ class Decisao:
     opcoes: tuple[str, ...]
     alcance: str = ""
     consulta: dict | None = None
+    tipo_nota: str = ""
+    regra: dict | None = None
+    validade: str = ""
 
 
 def esquema(codigos_objetivo, codigos_parametro) -> dict:
@@ -86,6 +93,17 @@ def esquema(codigos_objetivo, codigos_parametro) -> dict:
             "opcoes": {"type": "array", "items": {"type": "string"}},
             "alcance": {"type": "string", "enum": list(ALCANCES),
                         "description": "Ação lembrar: usuario, setor ou empresa; vazio = padrão."},
+            "tipo_nota": {"type": "string", "enum": list(TIPOS_NOTA),
+                          "description": "Ação lembrar: preferencia (apresentação), termo (definição), regra (regra de negócio) ou correcao (correção reutilizável)."},
+            "regra": {
+                "type": "object",
+                "description": "Ação lembrar, só quando a pessoa disse o campo e o valor: critério que o sistema aplica nas consultas da tabela.",
+                "properties": {"tabela": {"type": "string"}, "campo": {"type": "string"},
+                               "operador": {"type": "string", "enum": ["igual", "diferente"]},
+                               "valor": {"type": "string"}},
+                "required": ["tabela", "campo", "operador", "valor"],
+            },
+            "validade": {"type": "string", "description": "Ação lembrar: até quando vale (DD/MM/AAAA); vazio = sem prazo."},
             "consulta": {
                 "type": "object",
                 "description": "Só na ação criar_consulta: a consulta nova montada com os campos de tabelas_para_aprender.",
@@ -117,7 +135,7 @@ def validar(saida, codigos_objetivo, codigos_parametro) -> Decisao:
     if not isinstance(saida, dict):
         raise DecisaoInvalida("formato")
     extras = set(saida) - {"resposta", "acao", "objetivo", "parametros", "alvo", "nota", "confirmado", "opcoes",
-                           "alcance", "consulta"}
+                           "alcance", "consulta", "tipo_nota", "regra", "validade"}
     if extras:
         raise DecisaoInvalida("campos extras")
     acao = saida.get("acao")
@@ -145,7 +163,16 @@ def validar(saida, codigos_objetivo, codigos_parametro) -> Decisao:
         consulta = _consulta(consulta)
     if acao == "criar_consulta" and consulta is None:
         raise DecisaoInvalida("consulta")
+    tipo_nota = saida.get("tipo_nota") or ""
+    if tipo_nota not in TIPOS_NOTA:
+        raise DecisaoInvalida("tipo_nota")
+    regra = saida.get("regra") or None
+    if regra is not None:
+        if not isinstance(regra, dict) or set(regra) - {"tabela", "campo", "operador", "valor"}:
+            raise DecisaoInvalida("regra")
+        regra = {k: _texto(regra.get(k, ""), 40, k) for k in ("tabela", "campo", "operador", "valor")}
     return Decisao(
+        tipo_nota=tipo_nota, regra=regra, validade=_texto(saida.get("validade", "") or "", 10, "validade"),
         consulta=consulta,
         resposta=_texto(saida.get("resposta", ""), MAX_RESPOSTA, "resposta"),
         acao=acao,

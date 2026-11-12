@@ -60,6 +60,14 @@ class SituacaoNota(models.TextChoices):
     SUBSTITUIDA = "substituida", "Substituída"
 
 
+class TipoNota(models.TextChoices):
+    PREFERENCIA = "preferencia", "Preferência de apresentação"
+    TERMO = "termo", "Definição de termo"
+    REGRA = "regra", "Regra de negócio"
+    CORRECAO = "correcao", "Correção reutilizável"
+    HIPOTESE = "hipotese", "Hipótese não confirmada"
+
+
 class NotaAgente(models.Model):
     """Memória do agente (M10/Etapa 6): frases curtas que o usuário ensinou (termos, preferências,
     como interpretar perguntas). Vão ao modelo como referência. Nunca resultados, SQL ou CPF/CNPJ.
@@ -83,6 +91,11 @@ class NotaAgente(models.Model):
     aprovado_em = models.DateTimeField(null=True, blank=True)
     ativo = models.BooleanField(default=True)
     criado_em = models.DateTimeField(auto_now_add=True)
+    # M22: o que a nota é, até quando vale e, nas regras, o critério estruturado que o backend aplica
+    # ({"tabela", "campo", "op", "valor"}). Hipótese nunca é aplicada: só vai ao modelo como dúvida.
+    tipo = models.CharField(max_length=12, choices=TipoNota.choices, default=TipoNota.TERMO)
+    criterios = models.JSONField(default=dict, blank=True)
+    valido_ate = models.DateField(null=True, blank=True)
 
     class Meta:
         ordering = ["-criado_em"]
