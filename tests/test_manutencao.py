@@ -333,5 +333,10 @@ def test_codex_manutencao_usa_modelo_e_isolamento(tmp_path):
         {'codigo':'teste', 'componente':'agente', 'operacao':'teste'})
     assert cmd[cmd.index('--entrypoint') + 1] == 'codex'
     assert cmd[cmd.index('--model') + 1] == 'modelo-teste'
-    assert 'workspace-write' in cmd and '--ephemeral' in cmd and 'model_reasoning_effort="high"' in cmd
-    assert not any('docker.sock' in x or '.ssh' in x or 'OPENAI_API_KEY' in x or 'danger-full-access' in x for x in cmd)
+    assert 'danger-full-access' in cmd and '--ephemeral' in cmd and 'model_reasoning_effort="high"' in cmd
+    assert '--read-only' in cmd and cmd[cmd.index('--cap-drop') + 1] == 'ALL'
+    assert cmd[cmd.index('--security-opt') + 1] == 'no-new-privileges'
+    assert cmd[cmd.index('--tmpfs') + 1] == '/tmp:rw,nosuid,nodev,size=256m'
+    assert 'approval_policy="never"' in cmd
+    assert '--privileged' not in cmd and '--network=host' not in cmd
+    assert not any('docker.sock' in x or '.ssh' in x or 'OPENAI_API_KEY' in x  for x in cmd)

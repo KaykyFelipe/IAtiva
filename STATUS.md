@@ -8,7 +8,7 @@
 
 - Conta ChatGPT via Codex oficial, por device code na página da OpenAI, na mesma tela das conexões Claude. Conta, modelo/esforço e provedor independentes por agente.
 - Catálogo de modelos obtido da conta conectada, sem inventar IDs. Seleção explícita de Claude/ChatGPT; contas Claude e interruptores do servidor preservados.
-- Atendimento efêmero, sem ambiente/ferramentas, credenciais herdadas ou linhas do ERP; manutenção com Codex isolado e gates existentes. CLI 0.167.0 fixada na imagem.
+- Atendimento efêmero, sem ambiente/ferramentas, credenciais herdadas ou linhas do ERP; manutenção com Codex em sandbox externa Docker (raiz imutável, sem capabilities/privilégios) e gates existentes. CLI 0.167.0 fixada na imagem.
 - Fluxo oficial de device code iniciado/cancelado em pasta nova sem credenciais existentes. Validação: 632 testes aprovados, 10 pulados no Windows (bash/git/flock); Django check sem problemas e nenhuma migração pendente. Implantação pela atualização azul/verde, com drenagem antes de desligar a versão antiga. Conta real será conectada pela pessoa na interface; inferência autenticada depende desse login.
 
 ## Mudança M35 — histórico de cargos com consulta encadeada (2026-11-12)

@@ -295,11 +295,15 @@ def modelo_codex(pasta: str) -> list[str]:
 def comando_agente(wt: Path, pasta_diag: Path, imagem: str, c: dict, diag: dict) -> list[str]:
     if provedor_manutencao(c) == 'claude':
         return comando_claude(wt, pasta_diag, imagem, c, diag)
+    # Docker é a sandbox externa: sem privilégios, raiz imutável e só volumes explícitos.
+    # Bubblewrap/user namespaces internos não estão disponíveis no Docker deste servidor.
     return ['docker', 'run', '--rm', '--cpus', '2', '--memory', '3g', '--pids-limit', '512',
+            '--read-only', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges',
+            '--tmpfs', '/tmp:rw,nosuid,nodev,size=256m',
             '-e', 'CODEX_HOME=/codex', '-v', f'{pasta_codex(c)}:/codex',
             '-v', f'{wt}:/app/trabalho', '-v', f'{pasta_diag}:/diag:ro', '-w', '/app/trabalho',
             '--entrypoint', 'codex', imagem, 'exec', '--ephemeral', '--ignore-user-config', '--ignore-rules',
-            '--skip-git-repo-check', '--sandbox', 'workspace-write',
+            '--skip-git-repo-check', '--sandbox', 'danger-full-access', '-c', 'approval_policy="never"',
             '--disable', 'apps', '--disable', 'plugins', '--disable', 'hooks', '--disable', 'multi_agent',
             '-c', 'forced_login_method="chatgpt"', '-c', 'cli_auth_credentials_store="file"',
             '-c', 'shell_environment_policy.inherit="none"', '-c', 'web_search="disabled"',
@@ -345,7 +349,8 @@ def corrigir(diag: dict, c: dict) -> str:
         raise Recusa("a suíte não passa com a correção")
     git("-c", "user.name=IAtiva Manutenção", "-c", "user.email=manutencao@iativa.invalid", "commit", "-q", "-m",
         f"fix(manutenção): incidente #{inc} {diag['codigo']}\n\nIncidente: #{inc}\nTestes novos: {', '.join(novos)}\n\n"
-        "Co-Authored-By: Claude <noreply@anthropic.com>", cwd=wt)
+        + ("Co-Authored-By: OpenAI Codex <noreply@openai.com>" if provedor_manutencao(c) == "chatgpt"
+         else "Co-Authored-By: Claude <noreply@anthropic.com>"), cwd=wt)
     if c["MANUTENCAO_PUBLICAR"] != "1" or not c.get("MANUTENCAO_GIT_SSH_KEY"):
         manage("concluir", inc, "pronto_publicar", "--motivo",
                f"Validada no branch manutencao/inc-{inc}; publicação automática desligada ou sem credencial.")

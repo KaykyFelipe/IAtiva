@@ -45,8 +45,11 @@ Pedidos de ferramentas/aprovações são negados pelo cliente. Resultados do ERP
 modelo; a validação e execução das consultas ficam no backend.
 
 O executor da manutenção lê a seleção e preferências do volume persistente no começo do trabalho.
-Com ChatGPT selecionado, chama `codex exec` em container isolado, com sandbox `workspace-write`,
-sem `.env`, credenciais Git ou socket Docker. Continua sujeito a teste de regressão, suíte,
+Com ChatGPT selecionado, chama `codex exec` em container isolado, com sandbox externa Docker: usuário sem privilégios, raiz somente leitura, capabilities removidas,
+`no-new-privileges` e temporários em tmpfs. Apenas worktree e pasta própria da conta são graváveis;
+sem `.env`, credenciais Git ou socket Docker. A CLI usa `--sandbox danger-full-access` **apenas dentro
+desse container isolado**, pois o Bubblewrap interno não funciona nos namespaces Docker deste host.
+Não se libera `--privileged`, namespaces do host nem se muda a política de segurança do servidor. Continua sujeito a teste de regressão, suíte,
 lista de arquivos, tamanho, publicação e implantação azul/verde existentes. Os arquivos de
 autenticação/seleção e adaptadores ficam protegidos contra alteração pela própria manutenção.
 
