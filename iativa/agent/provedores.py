@@ -16,6 +16,7 @@ import time
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 
+from . import prazo
 from .decisao import esquema as esquema_decisao
 from .esquema import EntradaModelo, esquema_json
 
@@ -99,6 +100,7 @@ class AnthropicProvider(LLMProvider):
         objetivos, parametros = _codigos(entrada)
         try:
             resposta = self.cliente.beta.messages.create(
+                timeout=prazo.limitar(settings.IATIVA_AGENTE["timeout_s"]),
                 model=self.modelo,
                 max_tokens=4000,
                 betas=["server-side-fallback-2026-07-01"],
@@ -251,6 +253,7 @@ Como agir:
 - Filial: se a pessoa pedir todas as filiais ("de todas", "geral", "no total", "a empresa toda"), use o valor TODAS no parâmetro de filial (quando estiver entre as opções). Nunca peça para ela escolher uma filial quando ela já disse todas.
 - Filtrar por nome: quando a pessoa citar um nome (empresa, cliente, fornecedor, funcionário, produto: "a Alcans lançou conta?", "e da Dell?"), preencha o parâmetro "texto-busca" com SÓ o nome (ex.: "Alcans"), se o objetivo tiver esse parâmetro. É opcional: nunca pergunte por ele. Para trocar o nome numa consulta já feita ("e da Dell?"), use "preparar_consulta" com o mesmo objetivo, repita os demais parâmetros do histórico e troque o "texto-busca". Se ela pedir todos de novo, não envie "texto-busca".
 - Contas (consultas aprendidas): para total, soma, média, quantidade, maior/menor, ranking ("top 10 clientes") ou agrupamento ("por filial", "por mês", "por cliente"), preencha o parâmetro "agregacao" no formato FUNCAO:CAMPO [por CAMPO|mes|ano] [top N], com funções soma, media, contagem, maximo, minimo e só campos listados na descrição dele (ex.: "soma:F2_VALBRUT", "soma:F2_VALBRUT por mes", "soma:F2_VALBRUT,contagem:* por F2_CLIENTE top 10"). O banco faz a conta e o resultado já vem pronto. Se a consulta não tiver o campo necessário, use "aprender_tabela" para criar outra que tenha. Para "por filial", use a filial TODAS: cada filial vem numa linha.
+- Lista x conta: "quantos", "total", "some" pedem "agregacao". "Quais foram", "quem são", "me diga os nomes", "liste" pedem a LISTA: não envie "agregacao" (o cálculo do pedido anterior não continua sozinho). Mantenha os mesmos critérios (filial, período, filtros). Se a pessoa quer nomes ou descrições e a consulta não tem essa coluna (veja os campos na descrição de "agregacao"), não repita a mesma consulta: use "aprender_tabela" com a tabela e peça uma consulta nova que tenha a coluna de nome (ou junção com a tabela do cadastro). Entregue o que foi pedido, não o resultado anterior de novo.
 - Filtrar por código (consultas aprendidas): se a pessoa citar matrícula, código de função, cargo, fornecedor etc. e o objetivo tiver o parâmetro "filtro-campo", preencha-o como CAMPO=valor usando só os campos listados na descrição dele (ex.: "R7_MAT=000123"; vários separados por ";"). Opcional: nunca pergunte por ele.
 - Você não vê as linhas do resultado; por isso filtre a consulta em vez de pedir para a pessoa procurar na lista.
 - Nunca invente valores de parâmetros. Datas relativas ("mês passado", "últimos 30 dias") devem ser convertidas com a data de hoje.
@@ -405,7 +408,7 @@ class OpenRouterProvider(LLMProvider):
                      "X-Title": "IAtiva"},
         )
         try:
-            with urllib.request.urlopen(req, timeout=self.timeout) as r:  # noqa: S310 - URL fixa
+            with urllib.request.urlopen(req, timeout=prazo.limitar(self.timeout)) as r:  # noqa: S310 - URL fixa
                 return r.status, json.loads(r.read() or b"{}")
         except urllib.error.HTTPError as exc:
             try:

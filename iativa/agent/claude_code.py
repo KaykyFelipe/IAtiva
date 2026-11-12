@@ -166,7 +166,9 @@ class ClaudeCodeProvider(LLMProvider):
         self.esforco = cfg.get("claude_esforco", "")
 
     def _executar(self, args, prompt="", timeout=None):
-        return executar_cli([self.cli, *args], prompt, env=self.env, timeout=timeout or self.timeout)
+        from . import prazo
+
+        return executar_cli([self.cli, *args], prompt, env=self.env, timeout=prazo.limitar(timeout or self.timeout))
 
     def checar_cli(self):
         code, help_text, _ = self._executar(["--help"], timeout=10)

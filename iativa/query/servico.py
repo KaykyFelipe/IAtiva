@@ -104,7 +104,12 @@ class Resultado:
 
 
 def _cfg():
-    return settings.IATIVA_CONSULTA
+    """Tempo de cada consulta: o configurado ou o que resta do prazo da mensagem (M24)."""
+    from iativa.agent import prazo
+
+    cfg = dict(settings.IATIVA_CONSULTA)
+    cfg["timeout_s"] = prazo.limitar(cfg["timeout_s"])
+    return cfg
 
 
 def _valores(user, s) -> dict:
@@ -298,6 +303,11 @@ def executar_solicitacao(user, s: RequestContext) -> Resultado:
 
         valores[REGRAS] = memoria_agente.regras_aplicaveis(user, s.setor, OBJETIVOS[s.objetivo].tabelas[0])
 
+    from iativa.agent import prazo
+
+    if prazo.esgotado():
+        return Resultado(False, "O tempo total desta mensagem acabou antes de consultar o ERP.", estado=s.estado,
+                         solicitacao=s, situacao=TEMPO_ESGOTADO)
     s = transicionar(user, s, E.EXECUTANDO)
     cfg = _cfg()
     limite = cfg["limite_linhas"]

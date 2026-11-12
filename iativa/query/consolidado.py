@@ -45,12 +45,24 @@ class Consolidado:
     consolidado = True  # o template diferencia do resultado simples
 
 
+REGRAS_MEMORIA = "_regras_memoria"
+
+
 def _valores(user, s) -> dict:
+    """Premissas do bloco: parâmetros resolvidos e as regras estruturadas da memória que a execução
+    aplica neste setor (M24). Regras diferentes = premissas diferentes: não se soma."""
     defs = orq._definicoes(OBJETIVOS[s.objetivo].parametros)
     out = {}
     for codigo, d in defs.items():
         r = resolver(d, user, s)
         out[codigo] = (d.nome, exibir(r.valor) if r.situacao == RESOLVIDO else "")
+    obj = OBJETIVOS[s.objetivo]
+    if obj.modelo_id:
+        from iativa.agent import memoria as memoria_agente
+
+        regras = memoria_agente.regras_aplicaveis(user, s.setor, obj.tabelas[0])
+        out[REGRAS_MEMORIA] = ("Regras da memória", "; ".join(
+            sorted(f"{campo} {op} {valor}" for campo, op, valor, _ in regras)) or "nenhuma")
     return out
 
 

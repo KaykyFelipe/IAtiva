@@ -36,6 +36,7 @@ from iativa.memory.resolucao import RESOLVIDO, resolver
 
 from . import memoria
 from . import orquestrador as orq
+from . import prazo
 from . import aprendizado
 from .aprendizado import candidatos, pode_aprender, pode_aprender_sozinho
 from .contratos import BUSCA, OBJETIVOS, objetivos_para
@@ -50,6 +51,7 @@ class Interrompido(Exception):
 
 HISTORICO = 12
 TENTATIVAS = 2
+PARAMETROS_APRENDIDOS = ("filial-analise", "periodo-analise", "texto-busca", "filtro-campo", "agregacao")
 
 
 # Situações de uma observação (as de consulta vêm de `iativa.query.servico`).
@@ -181,7 +183,9 @@ def conversar(user, c, texto: str, provedor=None, mensagem_usuario_id=None, inte
         registrar("acesso_negado", "agente", usuario=user, estado_novo="dominio", resultado="negado")
         return Saida("Seu usuário ainda não tem acesso a consultas. Fale com o administrador.")
 
-    codigos_par = sorted({cod for o in objetivos for cod in o.parametros} | {"filial-analise"})
+    # Parâmetros das consultas aprendidas valem mesmo antes de existir a primeira (M24): a IA pode
+    # pedir "some X" e criar a consulta já com o cálculo.
+    codigos_par = sorted({cod for o in objetivos for cod in o.parametros} | set(PARAMETROS_APRENDIDOS))
     defs = orq._definicoes(codigos_par)
     atual = _ativa(user, c)
     direta = _resposta_direta(user, atual, texto, defs)
@@ -212,17 +216,32 @@ def conversar(user, c, texto: str, provedor=None, mensagem_usuario_id=None, inte
         return Saida("A conexão de IA precisa de configuração. Confira Conectar Claude e a liberação de privacidade do IAtiva.",
                      ficha={"tipo": "falha_modelo"})
     # Ciclo: agir → observar → corrigir (falha recuperável) ou concluir. Limites configuráveis.
+    # O prazo é total: conferido antes de cada chamada ao modelo e antes de cada ação; as chamadas
+    # e as consultas usam no máximo o tempo que resta (M24).
     cfg = _ciclo()
-    inicio = time.monotonic()
+    with prazo.definir(float(cfg["tempo_s"])):
+        return _ciclo_agente(user, c, texto, provedor, interrompido, entrada, objetivos, codigos_par, defs, atual,
+                             administrador, cfg)
+
+
+SEM_TEMPO = "O tempo total para responder esta mensagem acabou antes de eu concluir."
+
+
+def _ciclo_agente(user, c, texto, provedor, interrompido, entrada, objetivos, codigos_par, defs, atual,
+                  administrador, cfg) -> Saida:
     feitas, observacoes, saida = set(), [], None
     for _ in range(max(1, int(cfg["passos"]))):
+        if prazo.esgotado():
+            break
         entrada_passo = entrada if not observacoes else replace(
             entrada, solicitacao_atual=_estado(user, atual, defs), observacoes=[o.para_modelo() for o in observacoes])
         try:
             d = _interpretar(provedor, entrada_passo, [o.codigo for o in objetivos], codigos_par)
+        except prazo.PrazoEsgotado:
+            break
         except FalhaModelo as exc:
-            if saida is not None:
-                break  # a correção não veio: vale a resposta da tentativa anterior
+            if saida is not None or prazo.esgotado():
+                break  # a correção não veio (ou o tempo acabou): vale a resposta da tentativa anterior
             registrar("modelo_falhou", "agente", usuario=user, estado_novo=provedor.nome, resultado="erro")
             if provedor.nome == "claude-code":
                 return Saida(str(exc), ficha={"tipo": "falha_modelo"})
@@ -233,6 +252,8 @@ def conversar(user, c, texto: str, provedor=None, mensagem_usuario_id=None, inte
                          ficha={"tipo": "falha_modelo"})
         if interrompido is not None and interrompido():
             raise Interrompido  # antes de qualquer ação (e de consultar o ERP)
+        if prazo.esgotado():
+            break  # o modelo respondeu tarde: a ação não é executada com o prazo vencido
         assinatura = _assinatura(d)
         if assinatura in feitas:
             break  # a mesma ação com os mesmos dados já falhou: não repete
@@ -243,9 +264,13 @@ def conversar(user, c, texto: str, provedor=None, mensagem_usuario_id=None, inte
         if saida.observacao is None or not saida.observacao.recuperavel:
             return saida
         observacoes.append(saida.observacao)
-        if time.monotonic() - inicio > float(cfg["tempo_s"]):
-            break
         atual = _ativa(user, c)
+    if saida is None:
+        registrar("modelo_falhou", "agente", usuario=user, estado_novo="prazo_esgotado", resultado="erro")
+        return Saida(SEM_TEMPO + " Nada foi consultado. Tente de novo; se repetir, a IA está lenta agora.",
+                     ficha={"tipo": "falha_modelo"}, observacao=Observacao("", TEMPO_ESGOTADO, "prazo total"))
+    if prazo.esgotado() and saida.observacao is not None and saida.observacao.recuperavel:
+        saida.texto = f"{saida.texto} {SEM_TEMPO}".strip()
     if len(observacoes) > 1:
         # Limite atingido sem resolver: diz o que foi tentado, em vez de uma recusa genérica.
         saida.texto = (f"{saida.texto} Tentei {len(observacoes)} caminhos nesta mensagem ("
@@ -350,7 +375,9 @@ def _herdar_criterios(user, origem, destino):
                                              situacao=Situacao.APROVADA).select_related("definicao"):
         if b.definicao.codigo == BUSCA or b.definicao.codigo not in OBJETIVOS[destino.objetivo].parametros:
             continue
-        if falhou and b.definicao.codigo in ("agregacao", "filtro-campo"):
+        if b.definicao.codigo == "agregacao":
+            continue  # o cálculo vale só para o pedido em que foi feito: "quais os nomes?" volta a listar
+        if falhou and b.definicao.codigo == "filtro-campo":
             continue
         try:
             memoria_valores.registrar_valor(user, b.definicao, Escopo.SOLICITACAO, b.valor, solicitacao=destino)
@@ -371,6 +398,12 @@ def _preparar(user, c, d, atual, defs, ficha, texto="") -> Saida:
         if anterior is not None and anterior.objetivo == objetivo:
             _herdar_criterios(user, anterior, atual)
     pares = list(d.parametros)
+    if any(cod == "agregacao" for cod, _ in pares) and "agregacao" not in OBJETIVOS[objetivo].parametros:
+        # Consulta fixa não faz cálculo sob pedido: em vez de devolver a lista calada, a IA é avisada
+        # e pode criar uma consulta aprendida com o cálculo.
+        msg = (f"A consulta “{OBJETIVOS[objetivo].nome}” não faz cálculos sob pedido. Para somar, contar ou agrupar, "
+               "crie uma consulta aprendida sobre a tabela (aprender_tabela).")
+        return Saida(msg, ficha, atual, observacao=Observacao("preparar_consulta", ERRO_PARAMETROS, msg))
     if "periodo-analise" in OBJETIVOS[objetivo].parametros and not any(c == "periodo-analise" for c, _ in pares):
         # O modelo não mandou período: usa o que a mensagem diz ("desde janeiro"), se disser.
         from .periodo import periodo_da_mensagem
@@ -530,7 +563,7 @@ def _aprender_sozinho(user, c, d, texto, ficha, provedor, entrada, atual, motivo
             return None
         entrada2 = replace(entrada, tabelas_para_aprender=tabelas)
         codigos_par = sorted({p["codigo"] for o in entrada.objetivos for p in o.get("parametros", [])}
-                             | {"filial-analise", "periodo-analise", "texto-busca", "filtro-campo"})
+                             | set(PARAMETROS_APRENDIDOS))
         d2 = _interpretar(provedor, entrada2, [o["codigo"] for o in entrada.objetivos], codigos_par)
         if d2.acao != "criar_consulta" or d2.consulta is None:
             motivo.append("as tabelas encontradas (" + ", ".join(t["tabela"] for t in tabelas) + ") não serviram")

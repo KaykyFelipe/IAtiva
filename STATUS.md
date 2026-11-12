@@ -4,6 +4,14 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **plano proposto em `PLANO.md` §8, aguardando aprovação.** Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M24 — correções do ciclo (2026-11-12)
+
+- "Some X" sem consulta aprendida: cria a consulta já com o cálculo, sem cair na escolha manual de tabela.
+- Chat mestre não soma setores com regras da memória diferentes.
+- Prazo total da mensagem vale antes de cada chamada ao modelo e de cada consulta.
+- "Quantos foram demitidos?" seguido de "quais os nomes?": a segunda volta a listar (o cálculo não é herdado). Se a consulta não tiver o nome, a IA é instruída a criar outra com ele.
+- Testes: 522 aprovados e 10 pulados no Windows. Não validado com o modelo real.
+
 ## Mudança M23 — junção pelo campo certo (2026-11-12)
 
 - Com duas ligações para a mesma tabela, a IA usa a da chave da tabela base (cliente da nota, fornecedor do título).
