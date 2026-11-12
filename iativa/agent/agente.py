@@ -274,6 +274,15 @@ def _ciclo_agente(user, c, texto, provedor, interrompido, entrada, objetivos, co
         if prazo.esgotado():
             break  # o modelo respondeu tarde: a ação não é executada com o prazo vencido
         assinatura = _assinatura(d)
+        from . import diagnostico
+        if diagnostico.solicitado(texto) and diagnostico.reutilizavel(texto) and d.acao == 'conversar':
+            anterior = _ultima(user, c)
+            if (anterior is not None and anterior.objetivo in {o.codigo for o in objetivos}
+                    and OBJETIVOS[anterior.objetivo].modelo_id):
+                from iativa.query.servico import repetir
+                atual = repetir(user, anterior, conversa=c)
+                d = replace(d, acao='executar_consulta', objetivo=atual.objetivo, resposta='')
+                assinatura = _assinatura(d)
         from . import historico_funcional
         if historico_funcional.solicitado(texto) and d.acao in (
                 "conversar", "preparar_consulta", "executar_consulta", "aprender_tabela", "criar_consulta", "historico_cargo"):
@@ -289,6 +298,25 @@ def _ciclo_agente(user, c, texto, provedor, interrompido, entrada, objetivos, co
         reduz = _reduz_escopo(d, cobertura)
         saida = reduz or _agir(user, c, d, atual, defs, texto, provedor, entrada_passo, objetivos, administrador,
                                interrompido=interrompido)
+        if ((d.acao == 'investigar_divergencia' or diagnostico.solicitado(texto)) and saida.solicitacao is not None
+                and (getattr(saida.resultado, 'ok', False) or getattr(saida.resultado, 'consolidado', False))):
+            andamento.avisar('A soma inicial não conclui o pedido; investigando as causas da divergência')
+            try:
+                saida.resultado = diagnostico.investigar(user, saida.solicitacao, saida.resultado, interrompido)
+                saida.texto = 'Investiguei a divergência. As verificações, evidências e limitações estão na resposta abaixo.'
+                saida.ficha = {**saida.ficha, 'tipo': 'diagnostico',
+                               'investigacao_completa': saida.resultado.completo, 'conclusao_validada': False}
+            except PermissaoNegada:
+                return Saida('A investigação foi interrompida por uma restrição de acesso.',
+                             {**saida.ficha, 'tipo': 'bloqueada'})
+            except (ValidationError, prazo.PrazoEsgotado):
+                from .diagnostico import Diagnostico, Bloco
+                saida.resultado = Diagnostico([Bloco('Consulta inicial', saida.resultado)],
+                    'A investigação não foi concluída por indisponibilidade de metadados ou prazo. '
+                    'A consulta inicial não comprova a causa da divergência.', completo=False)
+                saida.texto = 'A investigação ficou incompleta; não apresentei a soma inicial como conclusão.'
+                saida.ficha = {**saida.ficha, 'tipo': 'diagnostico', 'investigacao_completa': False}
+            return saida
         if previa is not None:
             saida = _juntar(previa, saida)
         if (verificar and previa is None and d.acao in ("preparar_consulta", "executar_consulta", "criar_consulta",
@@ -413,7 +441,7 @@ def _agir(user, c, d, atual, defs, texto, provedor, entrada, objetivos, administ
                      {**ficha, "tipo": "historico_cargo", "busca": nome}, resultado=resultado)
     if acao == "remover_aprendizado" and not administrador:
         return Saida("Essa ação é só para administradores.", ficha)
-    if acao == "preparar_consulta":
+    if acao in ("preparar_consulta", "investigar_divergencia"):
         return _preparar(user, c, d, atual, defs, ficha, texto)
     if acao == "executar_consulta":
         if atual is None:

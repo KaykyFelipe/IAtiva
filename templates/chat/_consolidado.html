@@ -3,9 +3,13 @@
   {% if resultado.resumo %}<p><strong>{{ resultado.resumo }}</strong></p>{% endif %}
   {% for bloco in resultado.blocos %}
     <section class="bloco-setor">
-      <h3>Setor {{ bloco.setor }}</h3>
+      <h3>{% if bloco.titulo %}{{ bloco.titulo }}{% else %}Setor {{ bloco.setor }}{% endif %}</h3>
       {% if bloco.resultado %}
-        {% include "chat/_resultado.html" with resultado=bloco.resultado %}
+        {% if bloco.resultado.consolidado %}
+          {% include "chat/_consolidado.html" with resultado=bloco.resultado %}
+        {% else %}
+          {% include "chat/_resultado.html" with resultado=bloco.resultado %}
+        {% endif %}
       {% else %}
         <p class="nota">{{ bloco.mensagem }}</p>
       {% endif %}

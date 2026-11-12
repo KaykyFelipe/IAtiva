@@ -11,6 +11,7 @@ ACOES = (
     "conversar",            # só responder (dúvida, saudação, explicação, pedir informação)
     "preparar_consulta",    # escolher/trocar objetivo e/ou informar parâmetros
     "executar_consulta",    # rodar a consulta que já está completa
+    "investigar_divergencia", # somar é etapa: decompor, confrontar fontes e apresentar evidências
     "cancelar_consulta",    # abandonar a solicitação atual
     "aprender_tabela",      # procurar tabelas no dicionário para criar sozinha uma consulta nova (M18)
     "criar_consulta",       # M18: montar a consulta nova a partir de "tabelas_para_aprender"

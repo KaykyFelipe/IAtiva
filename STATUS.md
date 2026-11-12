@@ -4,6 +4,13 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **plano proposto em `PLANO.md` §8, aguardando aprovação.** Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M37 — investigação de divergências (2026-11-12)
+
+- Sucesso de uma consulta não encerra investigação: ação semântica `investigar_divergencia`, decomposições e confronto de fontes antes da conclusão, sem depender de nova mensagem.
+- Diagnóstico genérico de consultas aprendidas e adaptador SF2/SD2/SF4: moedas separadas, critérios originais, junções sem multiplicar cabeçalhos e evidências transitórias. Não ajusta filtros a um valor esperado, não salva resultados e não aprova regra financeira automaticamente.
+- Conferido no servidor autorizado com permissões da conversa original: 12 etapas concluídas em cerca de 16 segundos, transação da aplicação desfeita ao final; dados exibidos somente na resposta da aplicação. Sem alterações no ERP ou nas contas/modelos de IA.
+- Validação: 649 testes aprovados, 10 pulados no Windows; Django check sem problemas e nenhuma migração pendente. Implantação pelo fluxo azul/verde com testes e drenagem. Detalhes: `docs/DIAGNOSTICO_DIVERGENCIAS.md`.
+
 ## Mudança M36 — ChatGPT nos dois agentes (2026-11-12)
 
 - Conta ChatGPT via Codex oficial, por device code na página da OpenAI, na mesma tela das conexões Claude. Conta, modelo/esforço e provedor independentes por agente.
