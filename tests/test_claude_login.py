@@ -321,8 +321,60 @@ def test_duas_conexoes_separadas(client, admin, fake, settings, tmp_path):
     assert not cl.ativa(admin)  # conectar a manutenção não liga o Claude no chat
 
 
-def test_perfil_desconhecido_vira_atendimento(client, admin):
+def test_perfil_desconhecido_nao_altera_atendimento(client, admin, fake):
     client.force_login(admin)
+    cl.salvar_preferencias(admin, "opus", "high")
     r = client.post(reverse("claude-conta"), {"acao": "preferencias", "perfil": "../../etc", "modelo": "sonnet",
                                               "esforco": ""})
-    assert r.status_code == 200 and cl.config_usuario(admin)["claude_modelo"] == "sonnet"
+    assert r.status_code == 400 and "desconhecida" in r.content.decode()
+    assert cl.config_usuario(admin)["claude_modelo"] == "opus"
+    assert cl.config_usuario(admin)["claude_esforco"] == "high"
+
+
+def test_verificar_remove_marcador_expirado_so_da_manutencao(client, admin, fake, settings, tmp_path):
+    settings.IATIVA_AGENTE["claude_manutencao_dir"] = str(tmp_path / "manutencao")
+    for perfil in cl.PERFIS:
+        cl._marcar(cl.config_usuario(admin, perfil), True)
+    client.force_login(admin)
+    r = client.post(reverse("claude-conta"), {"acao": "verificar", "perfil": "manutencao"})
+    assert r.status_code == 200
+    assert "Nenhuma conta Claude conectada neste agente" in r.content.decode()
+    assert not cl.ativa(admin, "manutencao") and cl.ativa(admin)
+
+
+def test_verificar_login_existente_ativa_so_manutencao(client, admin, fake, settings, tmp_path):
+    settings.IATIVA_AGENTE["claude_manutencao_dir"] = str(tmp_path / "manutencao")
+    pasta = Path(cl.config_usuario(admin, "manutencao")["claude_config_dir"])
+    pasta.mkdir()
+    (pasta / "fake-auth").touch()
+    client.force_login(admin)
+    r = client.post(reverse("claude-conta"), {"acao": "verificar", "perfil": "manutencao"})
+    assert "login verificado" in r.content.decode()
+    assert cl.ativa(admin, "manutencao") and not cl.ativa(admin)
+
+
+def test_preferencias_independentes_e_compartilhadas_so_na_manutencao(admin, fake, settings, tmp_path,
+                                                                  django_user_model):
+    settings.IATIVA_AGENTE.update(claude_manutencao_dir=str(tmp_path / "manutencao"), claude_esforco="low")
+    outro = _ti(django_user_model.objects.create_user("outro-ti", password="senha-ficticia"))
+    assert cl.config_usuario(admin, "manutencao")["claude_esforco"] == ""
+    cl.salvar_preferencias(admin, "haiku", "medium", "atendimento")
+    cl.salvar_preferencias(admin, "sonnet", "high", "manutencao")
+    assert cl.config_usuario(outro, "manutencao")["claude_modelo"] == "sonnet"
+    assert cl.config_usuario(outro, "manutencao")["claude_esforco"] == "high"
+    assert cl.config_usuario(admin)["claude_modelo"] == "haiku"
+    assert cl.config_usuario(outro)["claude_esforco"] == "low"
+    assert list((tmp_path / "manutencao").iterdir()) == [tmp_path / "manutencao" / cl.PREFERENCIAS]
+
+
+def test_outra_ti_nao_desconecta_durante_login_compartilhado(admin, fake, settings, tmp_path,
+                                                         django_user_model):
+    settings.IATIVA_AGENTE["claude_manutencao_dir"] = str(tmp_path / "manutencao")
+    outro = _ti(django_user_model.objects.create_user("outra-ti", password="senha-ficticia"))
+    state = fake.manager.iniciar(admin, "sessao-a", "manutencao")
+    fluxo = fake.manager.obter(admin, "sessao-a", state["id"], "manutencao")
+    esperar(lambda: fluxo.estado()["fase"] == "aguardando")
+    with pytest.raises(FalhaModelo, match="Outra pessoa"):
+        fake.manager.desconectar(outro, "sessao-b", "manutencao")
+    assert fluxo.estado()["fase"] == "aguardando"
+    assert not any("logout" in args for args, _ in fake.calls)

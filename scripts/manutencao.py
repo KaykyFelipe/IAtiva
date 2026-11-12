@@ -243,6 +243,8 @@ def modelo_e_esforco(pasta: str) -> list[str]:
         pref = json.loads((Path(pasta) / "iativa-preferencias.json").read_text())
     except (OSError, ValueError):
         pref = {}
+    if not isinstance(pref, dict):
+        pref = {}
     modelo = pref.get("modelo") if pref.get("modelo") in ("opus", "sonnet", "haiku") else "opus"
     esforco = pref.get("esforco") if pref.get("esforco") in ("low", "medium", "high", "xhigh", "max") else ""
     return ["--model", modelo] + (["--effort", esforco] if esforco else [])

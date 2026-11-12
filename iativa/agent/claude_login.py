@@ -11,7 +11,7 @@ import os
 from pathlib import Path
 import re
 import subprocess
-from tempfile import TemporaryDirectory
+from tempfile import NamedTemporaryFile, TemporaryDirectory
 from threading import RLock, Thread, Timer
 from urllib.parse import urlsplit
 import uuid
@@ -82,6 +82,7 @@ def config_usuario(user, perfil="atendimento"):
     if perfil == "manutencao":
         cfg["claude_config_dir"] = str(pasta_manutencao())
         cfg["claude_modelo"] = "opus"  # padrão da manutenção; a escolha salva vale por cima
+        cfg["claude_esforco"] = ""  # não herda o esforço configurado para o atendimento
     else:
         root = Path(cfg.get("claude_contas_dir") or Path(settings.BASE_DIR) / "var/claude-pessoal")
         if not root.is_absolute():
@@ -111,7 +112,16 @@ def salvar_preferencias(user, modelo, esforco, perfil="atendimento"):
         raise FalhaModelo("Modelo ou esforço inválido.")
     pasta = Path(config_usuario(user, perfil)["claude_config_dir"])
     pasta.mkdir(parents=True, exist_ok=True, mode=0o700)
-    (pasta / PREFERENCIAS).write_text(json.dumps({"modelo": modelo, "esforco": esforco}), encoding="utf-8")
+    # O executor pode ler enquanto TI salva: substituição atômica evita um JSON pela metade.
+    temporario = None
+    try:
+        with NamedTemporaryFile(mode="w", encoding="utf-8", dir=pasta, delete=False) as arq:
+            temporario = Path(arq.name)
+            arq.write(json.dumps({"modelo": modelo, "esforco": esforco}))
+        temporario.replace(pasta / PREFERENCIAS)
+    finally:
+        if temporario is not None:
+            temporario.unlink(missing_ok=True)
 
 
 def ativa(user, perfil="atendimento"):
@@ -332,6 +342,11 @@ class LoginPessoal:
     def desconectar(self, user, sessao, perfil="atendimento"):
         cfg = config_usuario(user, perfil)
         with self.lock:
+            if perfil == "manutencao":
+                for (dono, p), outro in self.fluxos.items():
+                    if p == perfil and dono != user.pk and outro.estado()["aguardando"]:
+                        raise FalhaModelo("Outra pessoa de TI está conectando o agente de manutenção. "
+                                          "Aguarde a conclusão ou o cancelamento desse login.")
             fluxo = self.fluxos.get((user.pk, perfil))
             if fluxo and fluxo.estado()["aguardando"]:
                 if fluxo.sessao != sessao:
@@ -341,7 +356,8 @@ class LoginPessoal:
             provider = provedor_login(user, perfil)
             code, _, _ = provider._executar(["--safe-mode", "auth", "logout"], timeout=10)
             if code or conectado(provider):
-                raise FalhaModelo("O uso no chat foi desativado, mas a CLI não confirmou a desconexão. Tente novamente.")
+                raise FalhaModelo("A conexão deste agente foi desativada, mas a CLI não confirmou a desconexão. "
+                                  "Tente novamente.")
 
     def fechar(self):
         with self.lock:

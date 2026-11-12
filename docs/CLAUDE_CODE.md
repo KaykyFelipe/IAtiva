@@ -1,34 +1,46 @@
-# Claude Code pessoal
+# Conexões Claude: atendimento e manutenção
 
 Integração opcional com o executável oficial, inspirada nas chamadas isoladas de
 `server/drivers/claude-background.ts` do OpenMausBot. Não depende de OpenMausBot
 rodando, de Node como serviço, de cookies de navegador ou de API não oficial.
 
-## Conectar pela interface (M12)
+## Conectar pela interface (M12/M33/M34)
 
-1. Entre no IAtiva com seu superusuário pessoal.
+1. Entre no IAtiva com um usuário ativo com função **TI**. Superusuário sem essa função não basta.
 2. Na lateral, abra **Conectar Claude** (rota `/configuracoes/claude/`).
-3. Clique em **Conectar Claude** e aguarde o link oficial.
+3. Escolha o cartão **Agente de atendimento** ou **Agente de manutenção**, clique em **Conectar Claude** e aguarde o link oficial.
 4. Use **Abrir login do Claude**, entre na sua própria conta e copie o código
    exibido pelo Claude.
 5. Cole o código no campo oculto e clique em **Concluir**. Aguarde a confirmação.
+6. No mesmo cartão, escolha **Opus**, **Sonnet** ou **Haiku**, selecione o esforço e clique em **Salvar**.
 
-O provedor fica selecionado apenas para suas mensagens; outras contas mantêm o
+O atendimento usa uma conta por pessoa de TI em `var/claude-pessoal/usuario-ID`.
+A manutenção usa uma conta única do sistema em `var/claude-manutencao`, gerenciada pela TI,
+com padrão Opus e esforço padrão da CLI. As preferências são independentes e valem no próximo uso.
+A assinatura precisa permitir o modelo escolhido; salvar a seleção não comprova disponibilidade.
+
+Conectar a manutenção **não ativa** o executor e **não libera publicação**. A ativação é separada,
+por `MANUTENCAO_ATIVA` e `MANUTENCAO_PUBLICAR`; veja [MANUTENCAO.md](MANUTENCAO.md).
+
+No cartão de atendimento, o provedor fica selecionado apenas para suas mensagens; outras contas mantêm o
 provedor configurado anteriormente. O envio pelo chat continua dependendo de
 `IATIVA_AGENTE_ENVIO_LIBERADO=1`. O login sozinho não libera dados para o modelo.
 Quando essa liberação estiver ausente, o chat informa o bloqueio em vez de falhar.
 
-**Verificar conexão** confere a autenticação sem enviar uma pergunta. **Cancelar**
-encerra um login pendente. **Desconectar** desativa a seleção para seu chat e pede
-à CLI que encerre a conta exclusiva do IAtiva.
+**Verificar conexão** confere a autenticação sem enviar uma pergunta e atualiza só o cartão
+escolhido. **Conexão salva** indica um marcador local, não uma verificação recente do login.
+Se a CLI confirmar que não há login, o marcador é removido e o botão de conectar reaparece.
+Uma falha temporária da verificação não apaga a conexão.
+**Cancelar** encerra um login pendente. **Desconectar** desativa apenas a conexão escolhida.
+Uma pessoa de TI não pode desconectar a manutenção enquanto outra estiver concluindo seu login.
 
 Cada usuário possui um diretório próprio em `var/claude-pessoal/usuario-ID`,
 ignorado pelo Git. O único estado adicional do IAtiva é um marcador vazio de
-ativação; o código de login não é salvo em arquivo, banco, sessão ou histórico.
+ativação e as preferências de modelo/esforço; o código de login não é salvo em arquivo, banco, sessão ou histórico.
 A CLI oficial gerencia suas próprias credenciais nesse diretório. Não copie nem
 publique essa pasta. A conexão não usa o diretório padrão do OpenMausBot.
 
-Somente superusuários ativos podem gerenciar ou usar essa conexão pessoal.
+Somente usuários ativos com função TI podem gerenciar essas conexões.
 `IATIVA_CLAUDE_USUARIO` pode restringir também a um username específico.
 `IATIVA_CLAUDE_CONTAS_DIR` troca a raiz por um caminho absoluto persistente.
 Estas permissões não concedem acesso ao ERP: continuam valendo as políticas
@@ -60,16 +72,15 @@ O build precisa de acesso HTTPS ao instalador e aos downloads da Anthropic e
 confere a versão e a presença de `--safe-mode`; se a instalação falhar, o build falha.
 `CLAUDE_CODE_VERSION` é um argumento de build para atualizar a versão explicitamente.
 
-Na pasta do repositório no servidor, atualize o código e reconstrua somente o app:
+No servidor com azul/verde (M31), atualize pelo fluxo de implantação com drenagem:
 
 ```bash
-git pull --ff-only
-docker compose up -d --build --no-deps app
-docker compose exec app claude --version
+scripts/atualizar.sh
+scripts/implantar.sh --estado
 ```
 
 Se seu `.env` tiver `IATIVA_CLAUDE_CLI` apontando para o caminho NVM do OpenMausBot,
-troque por `IATIVA_CLAUDE_CLI=claude` antes de recriar o container. Um caminho
+troque por `IATIVA_CLAUDE_CLI=claude` antes da próxima implantação. Um caminho
 explícito errado tem prioridade sobre a detecção automática.
 
 Depois, use **Conectar Claude** no site. O login continua exclusivo por usuário e

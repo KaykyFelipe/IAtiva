@@ -2,7 +2,10 @@
   {% if c.erro %}<p class="erro" role="alert">{{ c.erro }}</p>{% endif %}
   {% if c.estado.mensagem %}<p role="status">{{ c.estado.mensagem }}</p>{% endif %}
   {% if not c.estado and not c.claude_ativo %}<p class="aviso">Nenhuma conta Claude conectada neste agente.</p>{% endif %}
-  {% if c.claude_ativo %}<p class="estado estado-pronta">Conectado</p>{% endif %}
+  {% if c.claude_ativo %}
+    {% if c.estado.fase == "conectado" %}<p class="estado estado-pronta">Conectado · login verificado</p>
+    {% else %}<p class="estado estado-pronta">Conexão salva</p><p class="sutil">Use “Verificar conexão” para conferir se o login continua válido.</p>{% endif %}
+  {% endif %}
 
   {% if c.estado.fase == "aguardando" %}
     <p><strong>1. Entre na sua conta na página oficial</strong></p>

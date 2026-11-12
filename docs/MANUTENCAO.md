@@ -84,8 +84,25 @@ no automático: a versão anterior continua funcionando com o esquema novo e a r
 ## Para ligar a publicação automática (pendente)
 
 1. Uma chave SSH com **escrita** no repositório, só para o executor (deploy key), em
-   `MANUTENCAO_GIT_SSH_KEY` — o servidor hoje não tem credencial de push.
+   `MANUTENCAO_GIT_SSH_KEY`. Diego informou em 2026-11-12 que o push simulado foi aceito
+   e o executor reconhece a credencial. Isso não equivale a uma publicação real.
 2. O login do Claude **só da manutenção**: na tela **Conexões Claude** do IAtiva (TI), cartão
    "Agente de manutenção" → Conectar Claude, e escolher o modelo (padrão Opus). Fica em
    `var/claude-manutencao` do volume do app; o executor encontra sozinho (ou use `MANUTENCAO_CLAUDE_DIR`).
 3. `MANUTENCAO_ATIVA=1` e, depois de acompanhar algumas correções preparadas, `MANUTENCAO_PUBLICAR=1`.
+
+### Escolher o modelo da manutenção
+
+Em **Conectar Claude / Conexões Claude**, use o cartão **Agente de manutenção**.
+Conecte pelo link oficial, conclua com o código e use **Verificar conexão**.
+Escolha Opus, Sonnet ou Haiku e o esforço e clique em **Salvar**. O executor lê essas
+preferências no próximo uso; o modelo do atendimento continua independente.
+
+O padrão é Opus com esforço padrão da CLI, sem herdar o esforço do atendimento.
+As escolhas ficam em `iativa-preferencias.json` da pasta de manutenção, com gravação
+atômica. Preferências inválidas não derrubam o executor: ele usa o padrão. A indicação
+**Conexão salva** não comprova que a sessão ainda é válida; **Verificar conexão** consulta a CLI.
+
+Conectar ou salvar o modelo não altera os interruptores em `/etc/iativa/manutencao.env`.
+Primeiro habilite somente preparação/validação (`MANUTENCAO_ATIVA=1`, `MANUTENCAO_PUBLICAR=0`);
+habilite publicação posteriormente.

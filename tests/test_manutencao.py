@@ -290,6 +290,24 @@ def test_manutencao_usa_modelo_escolhido_na_tela(tmp_path):
     assert mx.modelo_e_esforco(str(tmp_path)) == ["--model", "opus"]
 
 
+@pytest.mark.parametrize("conteudo", ['[]', 'null', '"opus"', '42', '{'])
+def test_preferencias_invalidas_nao_derrubam_executor(tmp_path, conteudo):
+    (tmp_path / "iativa-preferencias.json").write_text(conteudo)
+    assert mx.modelo_e_esforco(str(tmp_path)) == ["--model", "opus"]
+
+
+def test_modelo_salvo_pela_tela_chega_ao_executor(tmp_path, settings, django_user_model):
+    from iativa.accounts.models import Department, Funcao, UserProfile
+    from iativa.agent import claude_login as cl
+
+    setor = Department.objects.create(codigo="ti-modelo", nome="TI")
+    user = django_user_model.objects.create_user("ti-modelo")
+    UserProfile.objects.create(user=user, department=setor, funcao=Funcao.TI)
+    settings.IATIVA_AGENTE = {**settings.IATIVA_AGENTE, "claude_manutencao_dir": str(tmp_path)}
+    cl.salvar_preferencias(user, "sonnet", "medium", "manutencao")
+    assert mx.modelo_e_esforco(str(tmp_path)) == ["--model", "sonnet", "--effort", "medium"]
+
+
 def test_atendimento_continua_sem_ferramentas():
     """O adaptador de atendimento (claude_code.py) segue com ferramentas desligadas."""
     fonte = (Path(settings.BASE_DIR) / "iativa" / "agent" / "claude_code.py").read_text(encoding="utf-8")

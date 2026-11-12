@@ -5,7 +5,7 @@ from django.views.decorators.http import require_GET, require_http_methods
 
 from .claude_login import (
     ESFORCOS, MODELOS, PERFIS, ativa, chave_sessao, conectado, config_usuario, login, permitido, provedor_login,
-    salvar_preferencias,
+    salvar_preferencias, _marcar,
 )
 from .provedores import FalhaModelo
 
@@ -16,7 +16,9 @@ def _autorizar(request):
 
 
 def _perfil(valor):
-    return valor if valor in PERFIS else "atendimento"
+    if valor not in PERFIS:
+        raise FalhaModelo("Conexão desconhecida. Escolha atendimento ou manutenção.")
+    return valor
 
 
 def _cartao(request, perfil, estado=None, erro=""):
@@ -36,7 +38,10 @@ def _contexto(request, perfil="atendimento", estado=None, erro=""):
 def conta(request):
     _autorizar(request)
     estado, erro, sessao = None, "", ""
-    perfil = _perfil(request.POST.get("perfil", "atendimento"))
+    try:
+        perfil = _perfil(request.POST.get("perfil", "atendimento"))
+    except FalhaModelo as exc:
+        return render(request, "agent/claude_conta.html", _contexto(request, erro=str(exc)), status=400)
     if request.method == "POST":
         try:
             sessao = chave_sessao(request)
@@ -58,6 +63,7 @@ def conta(request):
                 provider = provedor_login(request.user, perfil)
                 provider.checar_cli()
                 ok = conectado(provider)
+                _marcar(config_usuario(request.user, perfil), ok)
                 estado = {"fase": "conectado" if ok else "desconectado",
                           "mensagem": "Login Claude confirmado." if ok else "Nenhuma conta Claude conectada neste agente."}
             else:
@@ -76,7 +82,11 @@ def conta(request):
 @require_GET
 def estado(request, fluxo_id):
     _autorizar(request)
-    perfil = _perfil(request.GET.get("perfil", "atendimento"))
+    try:
+        perfil = _perfil(request.GET.get("perfil", "atendimento"))
+    except FalhaModelo:
+        return render(request, "agent/_claude_estado.html",
+                      {"c": {"perfil": "invalido", "erro": "Conexão desconhecida."}}, status=400)
     try:
         atual = login.obter(request.user, chave_sessao(request), str(fluxo_id), perfil).estado()
         c = _cartao(request, perfil, atual)

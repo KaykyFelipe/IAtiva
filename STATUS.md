@@ -4,14 +4,24 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **plano proposto em `PLANO.md` §8, aguardando aprovação.** Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudanças M33/M34 — conexões separadas e revisão (2026-11-12)
+
+- M33 já implementada: cartões de atendimento e manutenção com login, modelo e esforço próprios. Manutenção com conta do sistema (padrão Opus), separada do atendimento.
+- M34: perfil desconhecido não altera o atendimento; verificação da CLI atualiza só o marcador do cartão escolhido; conexão salva não é apresentada como login recém-verificado.
+- Preferências independentes, gravação atômica e teste de integração com o executor. JSON inválido não derruba o executor; login da manutenção protegido contra desconexão por outra pessoa de TI.
+- Documentação das conexões atualizada, inclusive função TI e implantação azul/verde.
+- Diego informou que a deploy key foi reconhecida e o push simulado aceito; não foi feito novo teste no servidor nesta revisão.
+- Pendente: concluir login real no cartão de manutenção e habilitar os interruptores no servidor em etapas. Conectar ou salvar modelo não os habilita.
+- Validação: 599 testes aprovados e 10 pulados no Windows (exigem bash/git/flock); 70 testes direcionados aprovados. Django check sem problemas e nenhuma migração pendente de geração. Login real e implantação no servidor não executados nesta revisão.
+
 ## Mudanças M30–M32 — correções, atualização sem interrupção, manutenção automática (2026-11-12)
 
 - M30: verificação só termina com evidência; conclusão perdida refeita pelo worker uma vez; datas futuras/inválidas; pergunta pendente retoma a mesma tarefa.
 - M31: azul/verde com drenagem e reversão. Teste real no servidor (`scripts/testar_implantacao.sh`): consulta longa iniciada na versão A terminou em A; novas foram para B; 31/31 requisições 200 durante a troca; tarefa do worker concluída uma vez pela versão que a pegou; prontidão ruim e migração incompatível bloquearam a troca; reversão voltou para A.
-- M32: incidentes sanitizados e executor de manutenção. **Publicação automática desligada**: faltam credencial de push e login Claude próprios da manutenção no servidor (docs/MANUTENCAO.md).
+- M32: incidentes sanitizados e executor de manutenção. **Publicação automática desligada**: login Claude e ativação em etapas pendentes; credencial de push reconhecida segundo relato do Diego (docs/MANUTENCAO.md).
 - Testes: 586 aprovados e 10 pulados no Windows; no servidor, 576 na imagem + 37 com git (atualização e manutenção).
 - Implantado no servidor (2026-11-12): saída única do layout antigo com 1 amostra sem resposta (~1 s, o servidor antigo não drenava); a partir daí, trocas azul/verde com drenagem.
-- **Pendente (Diego):** instalar o agendamento da manutenção (`sudo scripts/instalar_manutencao.sh`), criar chave de push só do executor e login Claude da manutenção; ligar em `/etc/iativa/manutencao.env`.
+- **Pendente (Diego):** confirmar o agendamento da manutenção, concluir login Claude da manutenção e ligar em etapas em `/etc/iativa/manutencao.env`.
 
 ## Mudança M29 — conclusão da verificação fica salva (2026-11-12)
 
