@@ -174,7 +174,16 @@ def juncoes_possiveis(user, alias: str) -> list[dict]:
     restritas = _restritas(user)
     out, vistos = [], set()
     with abrir_catalogo() as cat:
-        for r in cat.relacionados(alias):
+        # Duas ligações para a mesma tabela (ex.: SF2 -> SA1 pelo cliente da nota e pelo remetente):
+        # vale primeiro a que usa campos da chave da própria base, que é a ligação principal.
+        base = cat.tabelas([alias], com_campos=True).get(alias)
+        chave_base = set(base.chave) if base is not None and base.chave else set()
+
+        def principal(r):
+            campos = [b for b in r.campos_destino if not b.endswith("_FILIAL")]
+            return 0 if campos and set(campos) <= chave_base else 1
+
+        for r in sorted(cat.relacionados(alias), key=principal):
             dom = r.origem  # tabela referenciada (X9_DOM)
             if dom in vistos or not ALIAS_RE.match(dom) or dom.startswith(SISTEMA) or dom in restritas:
                 continue

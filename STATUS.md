@@ -4,6 +4,12 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **plano proposto em `PLANO.md` §8, aguardando aprovação.** Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M23 — junção pelo campo certo (2026-11-12)
+
+- Com duas ligações para a mesma tabela, a IA usa a da chave da tabela base (cliente da nota, fornecedor do título).
+- M22 conferida no Protheus real (contas a pagar e faturamento): total, quantidade, agrupado e média entre filiais batem entre si. Falta a conferência do Financeiro (T29) e a avaliação com o modelo real.
+- Testes: 516 aprovados e 10 pulados no Windows.
+
 ## Mudança M22 — a IA executa, confere e corrige (2026-11-12)
 
 - Ciclo fechado: se a primeira tentativa falha por motivo corrigível (cálculo inválido, campo que não existe, consulta sem o campo), a IA recebe o motivo e tenta outro caminho na mesma mensagem. Limites: 3 passos, 1 retentativa de erro transitório, 120 s.

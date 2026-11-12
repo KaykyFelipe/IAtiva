@@ -35,6 +35,18 @@ def test_sem_juncao_que_duplica(ana):
     assert aprendizado.juncoes_possiveis(ana, "SA1") == []
 
 
+def test_duas_ligacoes_prefere_a_da_chave_da_base(ana, monkeypatch):
+    """SX9 com duas ligações SE1 -> SA1: a que usa campos da chave do SE1 vem antes da outra."""
+    from iativa.metadata.catalogo import Catalogo
+    from iativa.metadata.tipos import Relacionamento
+
+    secundaria = Relacionamento("SA1", "SE1", ("A1_COD", "A1_LOJA"), ("E1_CLIENTE", "E1_LOJA"))
+    principal = Relacionamento("SA1", "SE1", ("A1_COD", "A1_LOJA"), ("E1_NUM", "E1_PARCELA"))  # campos da chave
+    monkeypatch.setattr(Catalogo, "relacionados", lambda self, alias: [secundaria, principal])
+    js = aprendizado.juncoes_possiveis(ana, "SE1")
+    assert len(js) == 1 and sorted(map(tuple, js[0]["pares"])) == [("A1_COD", "E1_NUM"), ("A1_LOJA", "E1_PARCELA")]
+
+
 def _d(**kw):
     base = {"resposta": "", "acao": "conversar", "objetivo": "", "parametros": [], "alvo": "", "nota": "",
             "confirmado": False, "opcoes": []}
