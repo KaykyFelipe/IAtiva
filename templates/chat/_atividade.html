@@ -1,0 +1,9 @@
+{# Barra fixa acima do compositor (M26): o que a verificação em segundo plano está fazendo agora. Sem dados do ERP. #}
+<div class="atividade-fixa{% if tarefa_fixa.terminal %} terminada{% endif %}" id="atividade-fixa" role="status" aria-live="polite"
+     {% if tarefa_fixa and not tarefa_fixa.terminal %}hx-get="{% url 'chat:atividade' conversa.pk %}" hx-trigger="every 2s" hx-swap="outerHTML"{% endif %}>
+  {% if tarefa_fixa %}
+    {% if not tarefa_fixa.terminal %}<span class="pontos" aria-hidden="true"><i></i><i></i><i></i></span>{% endif %}
+    <span class="atividade-texto">{% if tarefa_fixa.terminal %}{{ tarefa_fixa.get_situacao_display }}: {% endif %}{{ tarefa_fixa.progresso|default:tarefa_fixa.get_situacao_display }}</span>
+    <a href="#tarefa-{{ tarefa_fixa.pk }}" class="atividade-link">{% if tarefa_fixa.terminal %}ver conclusão{% else %}acompanhar{% endif %}</a>
+  {% endif %}
+</div>

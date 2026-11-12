@@ -208,8 +208,12 @@ def enviar(user, c: ConversationContext, texto: str, provedor=None, pedido=None)
 
     texto = _validar_texto(texto)
     m = Mensagem.objects.create(conversa=c, papel=Papel.USUARIO, autor=user, texto=texto)
-    saida = agente.conversar(user, c, texto, provedor=provedor, mensagem_usuario_id=m.pk,
-                             interrompido=_verificador(user, pedido))
+    from iativa.agent import andamento
+
+    with andamento.acompanhar(user.pk, pedido):
+        saida = agente.conversar(user, c, texto, provedor=provedor, mensagem_usuario_id=m.pk,
+                                 interrompido=_verificador(user, pedido))
+        andamento.avisar("Escrevendo a resposta")
     msg = Mensagem.objects.create(conversa=c, papel=Papel.IA, texto=saida.texto[:MAX_TEXTO], ficha=saida.ficha,
                                   solicitacao=saida.solicitacao)
     _tocar(c, texto)

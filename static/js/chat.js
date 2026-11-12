@@ -257,16 +257,58 @@
     const pensando = document.createElement("div");
     pensando.className = "msg ia pensando";
     pensando.setAttribute("role", "status");
-    pensando.innerHTML = '<span class="pontos" aria-hidden="true"><i></i><i></i><i></i></span><span>Pensando…</span>';
+    pensando.setAttribute("aria-live", "polite");
+    pensando.innerHTML = '<ol class="pensando-passos" data-pensando-passos></ol>' +
+      '<div class="pensando-linha"><span class="pontos" aria-hidden="true"><i></i><i></i><i></i></span>' +
+      '<span class="pensando-atual" data-pensando-atual>Pensando…</span></div>';
     lista.append(bolha, pensando);
     rolarParaFim();
     return [bolha, pensando];
+  }
+
+  // M26: o "Pensando…" mostra o que a IA está fazendo agora (texto operacional vindo do servidor).
+  let acompanhamento = null;
+  function acompanhar(form, pedido) {
+    pararAcompanhamento();
+    const base = form.dataset.andamentoUrl;
+    if (!base || !pedido) return;
+    const url = base.replace("00000000-0000-0000-0000-000000000000", pedido);
+    let vistos = 0;
+    const ler = () => fetch(url, { credentials: "same-origin", cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((dados) => {
+        if (!dados || !atual) return;
+        const bolha = document.querySelector(".msg.pensando");
+        if (!bolha) return;
+        const passos = dados.passos || [];
+        if (passos.length === vistos) return;
+        const lista = bolha.querySelector("[data-pensando-passos]");
+        const agora = bolha.querySelector("[data-pensando-atual]");
+        for (let i = Math.max(0, vistos - 1); i < passos.length - 1; i++) {
+          if (i < vistos - 1) continue;
+          const li = document.createElement("li");
+          li.textContent = passos[i]; // texto puro
+          lista.append(li);
+        }
+        while (lista.children.length > 5) lista.firstElementChild.remove();
+        agora.textContent = passos[passos.length - 1] + "…";
+        agora.classList.remove("trocou"); void agora.offsetWidth; agora.classList.add("trocou");
+        vistos = passos.length;
+        rolarParaFim();
+      })
+      .catch(() => {});
+    acompanhamento = setInterval(ler, 700);
+  }
+  function pararAcompanhamento() {
+    if (acompanhamento) clearInterval(acompanhamento);
+    acompanhamento = null;
   }
 
   function encerrar(restaurar) {
     if (!atual) return;
     const { form, texto, elementos } = atual;
     atual = null;
+    pararAcompanhamento();
     elementos.forEach((el) => el.remove());
     const vazio = document.querySelector(".mensagens .vazio");
     if (vazio) {
@@ -317,9 +359,11 @@
     const campo = form.querySelector("[data-campo]");
     const texto = campo ? campo.value.trim() : "";
     if (!texto) return;
-    form.querySelector("[data-pedido]").value = novoId();
+    const pedido = novoId();
+    form.querySelector("[data-pedido]").value = pedido;
     atual = { form, texto, elementos: mostrarPensando(texto) };
     botao(form, true);
+    acompanhar(form, pedido);
   }, true);
 
   document.body.addEventListener("htmx:beforeRequest", (e) => {
@@ -362,7 +406,7 @@
   }
   document.body.addEventListener("htmx:afterSwap", () => {
     restaurarResultados();
-    if (atual && !atual.form.isConnected) atual = null;
+    if (atual && !atual.form.isConnected) { atual = null; pararAcompanhamento(); }
     atualizarSaudacao();
     prepararLateral();
     rolarParaFim();

@@ -68,6 +68,7 @@ def _contexto(request, c=None, form=None, erro="", resultado=None, resultado_msg
         "perfil": {"nome": nome, "primeiro_nome": (request.user.first_name.strip() or request.user.get_username()).split()[0],
                    "iniciais": iniciais or "?", "setor": setor.nome if setor else "Sem setor"},
         "layout": _layout(request),
+        "tarefa_fixa": tarefa_ativa(request.user, c),
         "frase_inicio": FRASES_INICIO[request.session.get("inicio_frase", 0) % len(FRASES_INICIO)],
     }
 
@@ -379,3 +380,41 @@ def tarefa_conclusao(request, tarefa_id):
         return render(request, "chat/_conclusao.html",
                       {"tarefa": t, "erro": f"Não consegui consultar de novo agora ({type(exc).__name__})."})
     return render(request, "chat/_conclusao.html", {"tarefa": t, "c": conclusao})
+
+
+@require_GET
+def andamento(request, pedido):
+    """O que a IA está fazendo agora neste envio (M26). Só textos operacionais, só do próprio usuário."""
+    from django.http import JsonResponse
+
+    from iativa.agent import andamento as ao_vivo
+
+    resposta = JsonResponse(ao_vivo.ler(request.user.pk, pedido))
+    resposta["Cache-Control"] = "no-store"
+    return resposta
+
+
+def tarefa_ativa(user, c):
+    """Tarefa da conversa para a barra fixa: a em andamento ou a que acabou há pouco."""
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    from iativa.agent.models import Tarefa
+
+    if c is None:
+        return None
+    qs = Tarefa.objects.filter(usuario=user, conversa=c).order_by("-id")
+    t = qs.first()
+    if t is None:
+        return None
+    if t.terminal and (t.concluido_em is None or timezone.now() - t.concluido_em > timedelta(minutes=10)):
+        return None
+    return t
+
+
+@require_GET
+def atividade(request, conversa_id):
+    """Barra fixa acima do compositor com o andamento da tarefa em segundo plano (M26)."""
+    c = _obter(request, conversa_id)
+    return render(request, "chat/_atividade.html", {"conversa": c, "tarefa_fixa": tarefa_ativa(request.user, c)})

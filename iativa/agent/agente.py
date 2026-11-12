@@ -36,7 +36,7 @@ from iativa.memory.resolucao import RESOLVIDO, resolver
 
 from . import memoria
 from . import orquestrador as orq
-from . import investigacao, prazo
+from . import andamento, investigacao, prazo
 from . import aprendizado
 from .aprendizado import candidatos, pode_aprender, pode_aprender_sozinho
 from .contratos import BUSCA, OBJETIVOS, objetivos_para
@@ -204,6 +204,7 @@ def conversar(user, c, texto: str, provedor=None, mensagem_usuario_id=None, inte
     if administrador:
         aprendidos = [{"codigo": cm.codigo, "nome": cm.nome, "tabela": cm.tabela, "situacao": cm.get_situacao_display()}
                       for cm in ConsultaModelo.objects.exclude(situacao=SituacaoModelo.REMOVIDA)]
+    andamento.avisar("Lendo o pedido e o histórico da conversa")
     base_lista = _lista_vista(user, c) if INVESTIGAR_RE.search(_norm(texto)) else None
     lista = investigacao.contexto_para_modelo(user, base_lista) if base_lista is not None else None
     entrada = EntradaAgente(
@@ -222,23 +223,28 @@ def conversar(user, c, texto: str, provedor=None, mensagem_usuario_id=None, inte
     # O prazo é total: conferido antes de cada chamada ao modelo e antes de cada ação; as chamadas
     # e as consultas usam no máximo o tempo que resta (M24).
     cfg = _ciclo()
-    cobertura = base_lista if (lista is not None and COBERTURA_RE.search(_norm(texto))) else None
+    t_norm = _norm(texto)
+    pede_cobertura = bool(COBERTURA_RE.search(t_norm) or (VERIFICAR_RE.search(t_norm) and REFERENCIA_RE.search(t_norm)))
+    cobertura = base_lista if (lista is not None and pede_cobertura) else None
     with prazo.definir(float(cfg["tempo_s"])):
         return _ciclo_agente(user, c, texto, provedor, interrompido, entrada, objetivos, codigos_par, defs, atual,
-                             administrador, cfg, cobertura)
+                             administrador, cfg, cobertura, pede_cobertura or bool(VERIFICAR_RE.search(t_norm)))
 
 
 SEM_TEMPO = "O tempo total para responder esta mensagem acabou antes de eu concluir."
 
 
 def _ciclo_agente(user, c, texto, provedor, interrompido, entrada, objetivos, codigos_par, defs, atual,
-                  administrador, cfg, cobertura=None) -> Saida:
+                  administrador, cfg, cobertura=None, verificar=False) -> Saida:
     feitas, observacoes, saida = set(), [], None
+    previa = None  # etapa intermediária concluída (ex.: a lista) que a próxima etapa completa
     for _ in range(max(1, int(cfg["passos"]))):
         if prazo.esgotado():
             break
         entrada_passo = entrada if not observacoes else replace(
             entrada, solicitacao_atual=_estado(user, atual, defs), observacoes=[o.para_modelo() for o in observacoes])
+        andamento.avisar("Decidindo o que fazer" if not observacoes else
+                         "Ajustando o caminho: " + observacoes[-1].detalhe[:110])
         try:
             d = _interpretar(provedor, entrada_passo, [o.codigo for o in objetivos], codigos_par)
         except prazo.PrazoEsgotado:
@@ -264,8 +270,26 @@ def _ciclo_agente(user, c, texto, provedor, interrompido, entrada, objetivos, co
         feitas.add(assinatura)
         registrar("interpretacao", "agente", usuario=user, estado_novo=d.acao, entidade_id=atual.pk if atual else None,
                   linhas=len(d.parametros))
-        reduz = _reduz_escopo(d, cobertura)
+        reduz = _reduz_escopo(d, cobertura, aceita_conversa=previa is not None)
         saida = reduz or _agir(user, c, d, atual, defs, texto, provedor, entrada_passo, objetivos, administrador)
+        if previa is not None:
+            saida = _juntar(previa, saida)
+        if (verificar and previa is None and d.acao in ("preparar_consulta", "executar_consulta", "criar_consulta",
+                                                        "aprender_tabela")
+                and getattr(saida.resultado, "ok", False) and not getattr(saida.resultado, "consolidado", False)):
+            # A lista é etapa, não resposta: o pedido era verificar cada integrante. Segue sem nova mensagem.
+            base = _lista_vista(user, c)
+            lista = investigacao.contexto_para_modelo(user, base) if base is not None else None
+            if lista is not None:
+                previa, cobertura = saida, base
+                entrada = replace(entrada, lista_anterior=lista)
+                observacoes.append(Observacao(d.acao, "etapa_concluida", (
+                    f"A lista “{lista['nome']}” foi consultada; isso é só a primeira etapa. O pedido é verificar cada "
+                    "integrante: siga com investigar_lista usando os campos de lista_anterior. Se a lista sozinha já "
+                    "responde ao pedido, use conversar e diga por quê.")))
+                andamento.avisar("Lista pronta; agora vou verificar cada pessoa")
+                atual = _ativa(user, c)
+                continue
         if saida.observacao is None or not saida.observacao.recuperavel:
             return saida
         observacoes.append(saida.observacao)
@@ -292,19 +316,35 @@ COBERTURA_RE = re.compile(r"\b(todos|todas|cada um|cada uma|demais|a lista|da li
                           r"essas|eles|elas|o resto)\b")
 
 
+VERIFICAR_RE = re.compile(r"\b(verifi|confir|confer|chec|investig|descubr)\w*")
+REFERENCIA_RE = re.compile(r"\b(deles|delas|eles|elas|esses|essas|cada|todos|todas|lista|demitid|desligad|admitid|"
+                           r"readmit|matricula|vinculo|funcionari|pessoas)\w*")
+
+
+def _juntar(previa: "Saida", saida: "Saida") -> "Saida":
+    """A resposta final inclui a etapa anterior (ex.: a lista que foi mostrada) e o passo seguinte."""
+    if saida.resultado is None:
+        saida.resultado = previa.resultado
+    if previa.texto and previa.texto not in saida.texto:
+        saida.texto = f"{previa.texto}\n\n{saida.texto}".strip()
+    if saida.solicitacao is None:
+        saida.solicitacao = previa.solicitacao
+    return saida
+
+
 def _lista_vista(user, c):
     """Última lista concluída nesta conversa (a que a pessoa está vendo)."""
     s = c.solicitacoes.filter(usuario=user, estado=E.CONCLUIDA).exclude(objetivo="").order_by("-id").first()
     return s if s is not None and s.objetivo in OBJETIVOS and OBJETIVOS[s.objetivo].modelo_id else None
 
 
-def _reduz_escopo(d, cobertura) -> "Saida | None":
+def _reduz_escopo(d, cobertura, aceita_conversa=False) -> "Saida | None":
     """Pedido cobre a lista inteira, mas a ação consulta só um exemplo (busca por nome/filtro) ou só
     responde sem agir: devolve ao modelo, sem executar, para investigar todos."""
     if cobertura is None:
         return None
     exemplo = d.acao == "preparar_consulta" and any(cod in (BUSCA, "filtro-campo") for cod, _ in d.parametros)
-    adia = d.acao == "conversar" and not d.resposta.strip().endswith("?")
+    adia = d.acao == "conversar" and not d.resposta.strip().endswith("?") and not aceita_conversa
     if not (exemplo or adia):
         return None
     motivo = ("O pedido vale para TODOS os integrantes da lista anterior; consultar só o exemplo (ou deixar para "
@@ -432,6 +472,7 @@ def _preparar(user, c, d, atual, defs, ficha, texto="") -> Saida:
         atual = criar_solicitacao(user, OBJETIVOS[objetivo].dominio, objetivo, conversa=c)
         if anterior is not None and anterior.objetivo == objetivo:
             _herdar_criterios(user, anterior, atual)
+    andamento.avisar(f"Preparando a consulta “{OBJETIVOS[objetivo].nome}”")
     pares = list(d.parametros)
     if any(cod == "agregacao" for cod, _ in pares) and "agregacao" not in OBJETIVOS[objetivo].parametros:
         # Consulta fixa não faz cálculo sob pedido: em vez de devolver a lista calada, a IA é avisada
@@ -504,6 +545,7 @@ def _avaliar_e_executar(user, s, resposta_modelo, erros, ficha) -> Saida:
     while not res.ok and res.situacao in TRANSITORIAS and repeticoes < int(_ciclo()["retentativas"]):
         # Erro transitório (rede, tempo): repete a mesma consulta, com as mesmas permissões reconferidas.
         repeticoes += 1
+        andamento.avisar("A consulta não respondeu a tempo; tentando de novo")
         nova = servico.repetir(user, res.solicitacao or s, conversa=s.conversa)
         if orq.avaliar(user, nova).tipo != "pronta":
             break
@@ -535,6 +577,7 @@ def _aprender(user, c, d, texto, ficha, provedor=None, entrada=None, atual=None)
     """M18: a IA acha a tabela, monta a consulta, o sistema cria/aprova sozinho e já executa.
     Se algo falhar, cai na lista de tabelas para escolher à mão (administrador)."""
     motivo = []
+    andamento.avisar("Procurando no dicionário do Protheus a tabela certa")
     if provedor is not None and entrada is not None and pode_aprender_sozinho(user):
         try:
             saida = _aprender_sozinho(user, c, d, texto, ficha, provedor, entrada, atual, motivo)
@@ -596,6 +639,7 @@ def _aprender_sozinho(user, c, d, texto, ficha, provedor, entrada, atual, motivo
         if not tabelas:
             motivo.append(f"nenhuma tabela utilizável para “{(d.alvo or texto)[:60]}”")
             return None
+        andamento.avisar("Montando a consulta nova com os campos de " + ", ".join(t["tabela"] for t in tabelas))
         entrada2 = replace(entrada, tabelas_para_aprender=tabelas)
         codigos_par = sorted({p["codigo"] for o in entrada.objetivos for p in o.get("parametros", [])}
                              | set(PARAMETROS_APRENDIDOS))
@@ -606,6 +650,7 @@ def _aprender_sozinho(user, c, d, texto, ficha, provedor, entrada, atual, motivo
         d, consulta = d2, d2.consulta
     consulta = {**consulta, "campo_data": consulta.get("campo_data", "").upper(),
                 "campo_busca": consulta.get("campo_busca", "").upper()}
+    andamento.avisar(f"Criando a consulta “{consulta.get('nome', '')}” ({consulta.get('tabela', '')})")
     try:
         cm = aprendizado.criar_automatico(user, consulta)
     except (ValidationError, PermissaoNegada) as exc:
@@ -666,6 +711,7 @@ def _remover(user, d, ficha) -> Saida:
 
 
 def _lembrar(user, d, ficha) -> Saida:
+    andamento.avisar("Guardando na memória")
     nota = d.nota.strip()
     if not nota:
         return Saida(d.resposta or "O que você quer que eu guarde?", ficha)
@@ -715,6 +761,7 @@ def _investigar(user, c, d, texto, ficha) -> Saida:
     no dicionário, para o modelo poder corrigir na mesma mensagem."""
     from . import tarefas
 
+    andamento.avisar("Conferindo no dicionário os campos para a verificação")
     base = _lista_vista(user, c)
     try:
         plano = investigacao.validar_plano(user, base, d.investigacao or {})
@@ -728,6 +775,7 @@ def _investigar(user, c, d, texto, ficha) -> Saida:
     criterios = [{"nome": x.nome, "valor": x.valor} for x in orq.avaliar_criterios(user, base)]
     objetivo = f"Verificar os vínculos de todos os integrantes da lista “{OBJETIVOS[base.objetivo].nome}”."
     t = tarefas.criar(user, c, base, d.investigacao or {}, plano, objetivo, criterios)
+    andamento.avisar("Verificação de toda a lista agendada em segundo plano")
     registrar("interpretacao", "agente", usuario=user, estado_novo="tarefa_criada", entidade_id=t.pk)
     base_txt = (d.resposta.strip() + " ") if d.resposta.strip() else ""
     return Saida(base_txt + "Vou verificar todas as pessoas da lista, não só o exemplo. Pode fechar a página: "

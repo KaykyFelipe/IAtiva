@@ -33,8 +33,8 @@
           {% endif %}
         {% else %}
           {% include "chat/_resposta.html" with m=m editavel=item.editavel executavel=item.executavel repetivel=item.repetivel aprendivel=item.aprendivel aprovavel=item.aprovavel ultima=item.ultima %}
-          {% if item.tarefa %}{% include "chat/_tarefa.html" with tarefa=item.tarefa %}{% endif %}
           <div class="resultado-de" data-resultado-de="{{ m.pk }}">{% if resultado and resultado_msg == m.pk %}{% if resultado.consolidado %}{% include "chat/_consolidado.html" %}{% else %}{% include "chat/_resultado.html" %}{% endif %}{% endif %}</div>
+          {% if item.tarefa %}{% include "chat/_tarefa.html" with tarefa=item.tarefa %}{% endif %}
         {% endif %}
         {% endwith %}
       {% empty %}
@@ -50,12 +50,13 @@
     </div>
   </div>
 
+  {% if tarefa_fixa %}{% include "chat/_atividade.html" %}{% endif %}
   {% if pode_escrever %}
     <form class="compositor" method="post"
           action="{% if conversa %}{% url 'chat:mensagem' conversa.pk %}{% else %}{% url 'chat:nova' %}{% endif %}"
           hx-post="{% if conversa %}{% url 'chat:mensagem' conversa.pk %}{% else %}{% url 'chat:nova' %}{% endif %}"
           hx-target="#conversa" hx-swap="outerHTML"
-          data-compositor data-parar-url="{% url 'chat:parar' %}">
+          data-compositor data-parar-url="{% url 'chat:parar' %}" data-andamento-url="{% url 'chat:andamento' '00000000-0000-0000-0000-000000000000' %}">
       {% csrf_token %}
       <input type="hidden" name="pedido" value="" data-pedido>
       {% if erro %}<p class="erro" role="alert">{{ erro }}</p>{% endif %}

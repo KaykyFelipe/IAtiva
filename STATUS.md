@@ -4,6 +4,13 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **plano proposto em `PLANO.md` §8, aguardando aprovação.** Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M26 — continuar até a verificação; "Pensando" ao vivo (2026-11-12)
+
+- "Verifique se os demitidos tiveram matrícula nova": refaz a lista e já agenda a verificação de todos, sem nova mensagem.
+- O "Pensando…" troca de texto conforme a IA trabalha; uma barra fixa acima do campo de mensagem mostra a verificação em segundo plano.
+- Comparação de vínculos mantida por nome (decisão do Diego, 2026-11-12).
+- Testes: 544 aprovados e 10 pulados no Windows. Não validado com o modelo real nem no navegador.
+
 ## Mudança M25 — tarefas longas com conclusão verificável (2026-11-12)
 
 - "Todos foram demitidos mesmo?" sobre uma lista: a IA verifica todas as pessoas em segundo plano (worker), não só o exemplo, e mostra a conclusão de cada uma.

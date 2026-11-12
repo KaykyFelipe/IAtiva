@@ -316,11 +316,16 @@ def executar_solicitacao(user, s: RequestContext) -> Resultado:
     acumulador, totais_ok = None, True
     try:
         with abrir_catalogo() as cat:
+            from iativa.agent import andamento
+
             for filial in filiais:  # "todas as filiais": uma consulta por filial autorizada, mesmo validador
+                andamento.avisar(f"Consultando o ERP — {rotulo(filial)}")
                 plano = montar(s.objetivo, {**valores, "filial-analise": filial})
                 comp = compilar(plano, cat, limite)
                 permitidas = {t.fisica for t in cat.tabelas([plano.base] + [j.tabela for j in plano.juncoes]).values()}
                 validar(comp.sql, permitidas, limite + 1)
+                if plano.juncoes:
+                    andamento.avisar("Conferindo se as junções não duplicam registros")
                 if plano.juncoes and not _juncoes_sem_duplicar(cat, plano, cfg, permitidas):
                     return _encerrar(user, s, E.NAO_VALIDADA, inicio, 0,
                                      "A junção desta consulta repete registros e inflaria os valores; por isso o "
@@ -338,6 +343,7 @@ def executar_solicitacao(user, s: RequestContext) -> Resultado:
                 com_moeda = bool(specs) and _campo_moeda(base) is not None  # moedas nunca se misturam
                 registros = None
                 if calculo or cortou or com_moeda:
+                    andamento.avisar("Calculando o total no banco, sobre todos os registros")
                     try:
                         registros = _total_no_banco(cat, plano, specs, acumulador, cfg, permitidas)
                     except (ConsultaRecusada, PlanoInvalido, ValorRecusado):
