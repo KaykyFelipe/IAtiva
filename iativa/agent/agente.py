@@ -274,13 +274,21 @@ def _ciclo_agente(user, c, texto, provedor, interrompido, entrada, objetivos, co
         if prazo.esgotado():
             break  # o modelo respondeu tarde: a ação não é executada com o prazo vencido
         assinatura = _assinatura(d)
+        from . import historico_funcional
+        if historico_funcional.solicitado(texto) and d.acao in (
+                "conversar", "preparar_consulta", "executar_consulta", "aprender_tabela", "criar_consulta", "historico_cargo"):
+            # Histórico funcional exige encadear fontes: listar matrículas não conclui esse pedido.
+            nome = historico_funcional.nome_contexto(user, c, texto, d)
+            d = replace(d, acao="historico_cargo", alvo=nome)
+            assinatura = _assinatura(d)
         if assinatura in feitas:
             break  # a mesma ação com os mesmos dados já falhou: não repete
         feitas.add(assinatura)
         registrar("interpretacao", "agente", usuario=user, estado_novo=d.acao, entidade_id=atual.pk if atual else None,
                   linhas=len(d.parametros))
         reduz = _reduz_escopo(d, cobertura)
-        saida = reduz or _agir(user, c, d, atual, defs, texto, provedor, entrada_passo, objetivos, administrador)
+        saida = reduz or _agir(user, c, d, atual, defs, texto, provedor, entrada_passo, objetivos, administrador,
+                               interrompido=interrompido)
         if previa is not None:
             saida = _juntar(previa, saida)
         if (verificar and previa is None and d.acao in ("preparar_consulta", "executar_consulta", "criar_consulta",
@@ -380,11 +388,29 @@ ROTULO_ACAO = {"investigar_lista": "verificar a lista inteira", "preparar_consul
                "lembrar": "guardar na memória"}
 
 
-def _agir(user, c, d, atual, defs, texto, provedor, entrada, objetivos, administrador) -> Saida:
+def _agir(user, c, d, atual, defs, texto, provedor, entrada, objetivos, administrador, interrompido=None) -> Saida:
     """Executa UMA ação já autorizada e devolve a saída com a observação do que aconteceu."""
     ficha = {"provedor": provedor.nome, "opcoes": list(d.opcoes)}
 
     acao = d.acao
+    if acao == "historico_cargo":
+        from . import historico_funcional
+        from .periodo import periodo_da_mensagem
+
+        nome = d.alvo or historico_funcional.nome_contexto(user, c, texto, d)
+        if not nome:
+            return Saida("De qual funcionário você quer o histórico de cargos e funções? Informe o nome.", ficha)
+        try:
+            resultado = historico_funcional.consultar(user, c, nome, periodo_da_mensagem(texto, timezone.localdate()),
+                interrompido=interrompido, filial=next((v for k, v in d.parametros if k == 'filial-analise'), None))
+        except PermissaoNegada as exc:
+            return Saida(str(exc), ficha, observacao=Observacao(acao, SEM_PERMISSAO, "histórico não autorizado"))
+        except ValidationError as exc:
+            return Saida(" ".join(exc.messages), ficha)
+        except prazo.PrazoEsgotado:
+            return Saida("O prazo terminou antes de concluir o histórico. A busca de matrículas não foi tratada como resposta final.", ficha)
+        return Saida("Consultei os vínculos, o histórico funcional e as descrições disponíveis.",
+                     {**ficha, "tipo": "historico_cargo", "busca": nome}, resultado=resultado)
     if acao == "remover_aprendizado" and not administrador:
         return Saida("Essa ação é só para administradores.", ficha)
     if acao == "preparar_consulta":

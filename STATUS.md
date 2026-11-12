@@ -4,6 +4,16 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **plano proposto em `PLANO.md` §8, aguardando aprovação.** Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M35 — histórico de cargos com consulta encadeada (2026-11-12)
+
+- Corrigido o encerramento após buscar matrículas: nome → vínculos autorizados por filial → SR7 filtrada por matrícula/filial → descrições SRJ/SQ3 → histórico e função cadastrada no vínculo mais recente.
+- Continuação como "qual cargo mudou?" reaproveita o nome informado no contexto; não exige que a pessoa copie as linhas nem informe matrículas já localizadas.
+- Resultados ficam só na resposta, sem envio ao modelo ou persistência. Restrições de tabela/campo, filiais, cancelamento e prazo reconferidos. Homônimos não são unificados; troca de matrícula não comprova mudança de cargo/efetivação.
+- Período completo por padrão; período explícito filtra a SR7 sem perder matrículas antigas. Data de admissão identificada como tal, sem atribuir a ela uma alteração não comprovada.
+- Dicionário e consulta encadeada conferidos no servidor autorizado (SRA/SR7/SRJ/SQ3), com permissões do usuário da conversa de origem e transação desfeita ao final. Sem resultados ou dados pessoais registrados nesta documentação. A data R7_DATA é permitida como data de evento mesmo com descrição "Data Alteracao Salarial"; restrições explícitas continuam prevalecendo e valores de salário não são consultados.
+- Validação: 609 testes aprovados, 10 pulados no Windows (dependem de bash/git/flock); check Django sem problemas e nenhuma migração pendente de geração. Consulta encadeada validada em leitura no Protheus com a autorização da conversa de origem; teste integrado com modelo real após implantação ainda pendente.
+- Operação: manutenção e publicação foram ativadas por pedido de Diego no servidor-bots (192.168.80.237), com login confirmado e timer ativo. Não acessar outro servidor.
+
 ## Mudanças M33/M34 — conexões separadas e revisão (2026-11-12)
 
 - M33 já implementada: cartões de atendimento e manutenção com login, modelo e esforço próprios. Manutenção com conta do sistema (padrão Opus), separada do atendimento.

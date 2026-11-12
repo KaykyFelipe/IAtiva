@@ -15,6 +15,7 @@ ACOES = (
     "aprender_tabela",      # procurar tabelas no dicionário para criar sozinha uma consulta nova (M18)
     "criar_consulta",       # M18: montar a consulta nova a partir de "tabelas_para_aprender"
     "investigar_lista",     # M25: verificar TODOS os integrantes da lista anterior (tarefa em segundo plano)
+    "historico_cargo",      # nome → matrículas → histórico de função/cargo → descrições e conclusão
     "listar_aprendizados",  # mostrar consultas aprendidas
     "remover_aprendizado",  # administrador: tirar de uso uma consulta aprendida (pede confirmação)
     "lembrar",              # guardar na memória do agente algo que o usuário ensinou

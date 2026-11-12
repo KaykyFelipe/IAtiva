@@ -9,6 +9,8 @@ Antes de qualquer trabalho, leia nesta ordem:
 
 Regras de trabalho:
 
+- Servidor autorizado exclusivamente: alias SSH `servidor-bots`, IP `192.168.80.237`. Nunca acessar outro servidor, inclusive para diagnóstico ou descoberta. Restrição expressa de Diego.
+
 - Trabalhe somente no escopo da etapa atual indicada em `STATUS.md`; não avance sem aprovação explícita registrada em `DECISOES.md`.
 - Ao terminar uma interação que mude o estado do projeto, atualize `STATUS.md` (e `DECISOES.md` quando houver decisão ou mudança de escopo).
 - Nunca registre nesses arquivos SQL gerado, resultados, dados do ERP, credenciais ou transcrições completas.
