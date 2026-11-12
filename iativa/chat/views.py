@@ -374,6 +374,8 @@ def tarefa_conclusao(request, tarefa_id):
         return HttpResponse("A verificação ainda não terminou.", status=409)
     try:
         conclusao = tarefas.conclusao(request.user, t)
+        if conclusao is None:
+            return render(request, "chat/_conclusao.html", {"tarefa": t, "reconstruindo": True})
     except investigacao.SemPermissao as exc:
         return render(request, "chat/_conclusao.html", {"tarefa": t, "erro": str(exc)})
     except Exception as exc:  # sem detalhes: podem conter dados

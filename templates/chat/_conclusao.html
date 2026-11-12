@@ -1,6 +1,8 @@
 {# Conclusão da verificação (M25): consultada agora e mostrada só nesta resposta. Não é salva. #}
-<div class="conclusao">
-  {% if erro %}
+<div class="conclusao"{% if reconstruindo %} hx-get="{% url 'chat:tarefa_conclusao' tarefa.pk %}" hx-trigger="every 3s" hx-target="closest .tarefa-conclusao" hx-swap="innerHTML"{% endif %}>
+  {% if reconstruindo %}
+    <p class="tarefa-carregando"><span class="giro" aria-hidden="true"></span>Refazendo a conclusão em segundo plano (ela não estava guardada)…</p>
+  {% elif erro %}
     <p class="tarefa-motivo">{{ erro }}</p>
   {% else %}
     <div class="conclusao-resumo">

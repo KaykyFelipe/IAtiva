@@ -237,8 +237,25 @@ def _norm(t) -> str:
 
 
 def _data(v) -> str:
+    """AAAAMMDD de uma data real; vazio para campo em branco ou data impossível (ex.: 20260231)."""
     t = str(v or "").strip()
-    return t if re.fullmatch(r"\d{8}", t) else ""
+    if not re.fullmatch(r"\d{8}", t):
+        return ""
+    try:
+        date(int(t[:4]), int(t[4:6]), int(t[6:]))
+    except ValueError:
+        return ""
+    return t
+
+
+def _invalida(v) -> bool:
+    """Campo preenchido mas que não é uma data real."""
+    t = str(v or "").strip()
+    return bool(t) and not _data(t)
+
+
+def _hoje() -> str:
+    return timezone.localdate().strftime("%Y%m%d")
 
 
 def _fmt(d: str) -> str:
@@ -292,9 +309,11 @@ def _ident(ctx, plano_inv, reg, doc) -> str:
 
 
 def _ver_datas(ctx, reg):
+    """Data mais recente já ocorrida (até hoje) vista nos registros: indica até quando a base está atualizada."""
+    hoje = _hoje()
     for p in ("inicio", "fim"):
         d = _data(reg.valores.get(p))
-        if d and d > ctx.ultima_data:
+        if d and ctx.ultima_data < d <= hoje:
             ctx.ultima_data = d
 
 
@@ -505,6 +524,7 @@ def classificar(plano_inv, ctx: Contexto):
     """Compara datas e campos de cada pessoa com os outros registros. Determinístico; não presume
     motivo (efetivação, promoção) nem trata nome igual como mesma pessoa."""
     por_nome = plano_inv["identidade"] == "nome"
+    hoje = _hoje()
     for it in ctx.itens:
         r = it.reg
         it.evidencias = ["Registro da lista: " + _desc(plano_inv, r)]
@@ -514,9 +534,20 @@ def classificar(plano_inv, ctx: Contexto):
         ini, fim = _data(r.valores.get("inicio")), _data(r.valores.get("fim"))
         outros = [o for o in ctx.relacionados.get(it.ident, []) if (o.filial, o.chave) != (r.filial, r.chave)]
         it.evidencias += [("Mesmo nome: " if por_nome else "Mesmo documento: ") + _desc(plano_inv, o) for o in outros]
+        if _invalida(r.valores.get("inicio")) or _invalida(r.valores.get("fim")) or (ini and fim and fim < ini):
+            it.classe, it.verificado = "datas_inconsistentes", False
+            it.texto = ("Inconclusivo: as datas do registro são inconsistentes (data impossível ou fim antes do "
+                        "início); não dá para afirmar se o vínculo foi encerrado.")
+            continue
         if not fim:
             it.classe, it.verificado = "sem_fim", True
             it.texto = "O registro da lista não tem data de fim: pela base, este vínculo não está encerrado."
+            continue
+        if fim > hoje:
+            # Desligamento lançado com data futura: ainda não aconteceu.
+            it.classe, it.verificado = "fim_futuro", True
+            it.texto = (f"Desligamento registrado para {_fmt(fim)}, data que ainda não chegou: hoje o vínculo continua "
+                        "ativo pela base.")
             continue
         if not outros:
             it.classe, it.verificado = "encerrado_sem_outro", True
@@ -542,9 +573,16 @@ def classificar(plano_inv, ctx: Contexto):
             o = posteriores[0]
             oi, of = _data(o.valores.get("inicio")), _data(o.valores.get("fim"))
             it.classe, it.verificado = "novo_vinculo_posterior", True
+            if oi > hoje:
+                situacao = "com início previsto (ainda não começou)"
+            elif not of:
+                situacao = "sem data de fim (ativo pela base)"
+            elif of > hoje:
+                situacao = f"com fim previsto para {_fmt(of)}"
+            else:
+                situacao = f"encerrado em {_fmt(of)}"
             it.texto = (f"Vínculo encerrado em {_fmt(fim)}; a mesma pessoa (mesmo documento) tem novo vínculo a partir de "
-                        f"{_fmt(oi)}, " + ("sem data de fim (ativo pela base)" if not of else f"encerrado em {_fmt(of)}")
-                        + ".")
+                        f"{_fmt(oi)}, {situacao}.")
             if o.filial != r.filial and (date(int(oi[:4]), int(oi[4:6]), int(oi[6:])) -
                                          date(int(fim[:4]), int(fim[4:6]), int(fim[6:]))).days <= 1:
                 it.texto += " Começou em outra filial logo após o encerramento: pode ser transferência (não confirmado)."
@@ -568,6 +606,8 @@ ROTULO_CLASSE = {
     "vinculo_simultaneo": "Encerrado, com outro vínculo no mesmo período",
     "so_vinculo_anterior": "Encerrado, só com vínculo anterior",
     "sem_fim": "Sem data de fim (não encerrado)",
+    "fim_futuro": "Desligamento com data futura (ainda ativo)",
+    "datas_inconsistentes": "Inconclusivo: datas inconsistentes",
     "mesmo_nome": "Inconclusivo: mesmo nome em outro registro",
     "inconclusivo": "Inconclusivo",
 }

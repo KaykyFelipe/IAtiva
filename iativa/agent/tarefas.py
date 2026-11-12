@@ -63,6 +63,18 @@ def criar(user, conversa, base, proposta: dict, plano: dict, objetivo: str, crit
     )
 
 
+def retomar(t: Tarefa, proposta: dict, plano: dict) -> Tarefa:
+    """Tarefa que aguardava a pessoa volta à fila com a resposta (mesma tarefa, sem duplicar)."""
+    n = Tarefa.objects.filter(pk=t.pk, situacao=S.AGUARDANDO).update(
+        situacao=S.PENDENTE, proposta=proposta, plano=plano, motivo="", execucao="", lease_ate=None,
+        concluido_em=None, progresso="Retomada com a sua resposta.", conclusao={},
+        etapas=[dict(e, estado="pendente", evidencia="", tentativas=0) for e in t.etapas])
+    t.refresh_from_db()
+    if n != 1:
+        raise ValueError("A tarefa não está mais aguardando resposta.")
+    return t
+
+
 def cancelar(user, tarefa_id) -> Tarefa:
     t = Tarefa.objects.get(pk=tarefa_id, usuario=user)
     if t.terminal:
@@ -168,7 +180,8 @@ def _replanejar(t, motivo: str) -> bool:
     except (FalhaModelo, prazo.PrazoEsgotado):
         return False
     if d.acao == "conversar" and d.resposta.strip().endswith("?"):
-        _salvar(t, situacao=S.AGUARDANDO, motivo=d.resposta[:400], concluido_em=timezone.now())
+        _salvar(t, situacao=S.AGUARDANDO, motivo=d.resposta[:400], concluido_em=timezone.now(), lease_ate=None,
+                progresso="Aguardando a sua resposta na conversa.")
         return True
     if d.acao != "investigar_lista" or not d.investigacao or d.investigacao == t.proposta:
         return False  # sem caminho novo: repetir o mesmo plano só repetiria a falha
@@ -234,6 +247,7 @@ def executar(t: Tarefa):
                     _etapa(t, e["id"], estado="pendente")
                     if _replanejar(t, str(exc)):
                         if t.situacao == S.AGUARDANDO:
+                            _avisar(t, 0)  # a pergunta aparece na conversa
                             return
                         t.etapas = [dict(x, estado="pendente", evidencia="") for x in t.etapas]
                         _salvar(t, etapas=t.etapas)
@@ -259,6 +273,7 @@ def executar(t: Tarefa):
                     if not passageira and _replanejar(t, f"A etapa “{e['nome']}” falhou {tent} vezes ({o_que}). "
                                                          "Escolha outros campos ou outro caminho."):
                         if t.situacao == S.AGUARDANDO:
+                            _avisar(t, 0)  # a pergunta aparece na conversa
                             return
                         ctl.corrigir(f"{e['nome']}: refiz o plano depois de {tent} falhas.")
                         t.etapas = [dict(x, estado="pendente", evidencia="", tentativas=0) for x in t.etapas]
@@ -336,10 +351,46 @@ def _avisar(t, duracao_ms):
 
 def processar_proxima() -> bool:
     t = reivindicar()
-    if t is None:
-        return False
-    executar(t)
-    return True
+    if t is not None:
+        executar(t)
+        return True
+    return reconstruir_proxima()
+
+
+def solicitar_reconstrucao(t: Tarefa) -> bool:
+    """Conclusão perdida (tarefa antiga): marca para o worker refazer. Idempotente: várias telas abertas
+    pedindo ao mesmo tempo geram uma reconstrução só."""
+    return Tarefa.objects.filter(pk=t.pk, situacao__in=(S.CONCLUIDA, S.LIMITE), conclusao={},
+                                 reconstruir=False).update(reconstruir=True) == 1
+
+
+def reconstruir_proxima() -> bool:
+    agora = timezone.now()
+    lease = timedelta(seconds=int(limites()["lease_s"]))
+    for t in Tarefa.objects.filter(reconstruir=True).filter(Q(lease_ate__isnull=True) | Q(lease_ate__lt=agora))[:3]:
+        nova = uuid.uuid4().hex
+        if Tarefa.objects.filter(pk=t.pk, execucao=t.execucao, reconstruir=True).filter(
+                Q(lease_ate__isnull=True) | Q(lease_ate__lt=agora)).update(execucao=nova, lease_ate=agora + lease) != 1:
+            continue  # outro worker pegou
+        t.refresh_from_db()
+        lim = t.limites or limites()
+        try:
+            with prazo.definir(float(lim["prazo_s"])):
+                ctl = _Controle(t)
+                plano = {**inv.validar_plano(t.usuario, t.solicitacao_base, t.proposta), "lote": t.plano.get("lote")}
+                c = inv.investigar(t.usuario, t.solicitacao_base, plano, ctl)
+            _salvar(t, conclusao=inv.para_gravar(c), reconstruir=False, lease_ate=None)
+        except PerdeuExecucao:
+            pass
+        except Exception as exc:
+            logger.warning("reconstrução da tarefa %s falhou: %s", t.pk, type(exc).__name__)
+            try:
+                _salvar(t, reconstruir=False, lease_ate=None,
+                        motivo=f"Não consegui refazer a conclusão ({type(exc).__name__}).")
+            except PerdeuExecucao:
+                pass
+        return True
+    return False
 
 
 def conclusao(user, t: Tarefa) -> dict:
@@ -350,14 +401,6 @@ def conclusao(user, t: Tarefa) -> dict:
         raise inv.SemPermissao("Tarefa de outra pessoa.")
     if t.conclusao:
         return t.conclusao
-    lim = {**(t.limites or limites())}
-    with prazo.definir(float(lim["prazo_s"])):
-        ctl = inv.Controle(lim)
-        plano = {**inv.validar_plano(user, t.solicitacao_base, t.proposta), "lote": (t.plano or {}).get("lote")}
-        c = inv.investigar(user, t.solicitacao_base, plano, ctl)
-    if t.cobertura and t.cobertura.get("total") != c.cobertura["total"]:
-        c.limitacoes.insert(0, f"A lista tinha {t.cobertura.get('total')} pessoas na verificação e agora tem "
-                               f"{c.cobertura['total']}: a base mudou nesse meio-tempo.")
-    dados = inv.para_gravar(c)
-    Tarefa.objects.filter(pk=t.pk).update(conclusao=dados)
-    return dados
+    # Nunca refaz a investigação dentro da requisição web: pede ao worker (uma vez só) e a tela espera.
+    solicitar_reconstrucao(t)
+    return None

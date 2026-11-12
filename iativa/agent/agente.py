@@ -205,8 +205,17 @@ def conversar(user, c, texto: str, provedor=None, mensagem_usuario_id=None, inte
         aprendidos = [{"codigo": cm.codigo, "nome": cm.nome, "tabela": cm.tabela, "situacao": cm.get_situacao_display()}
                       for cm in ConsultaModelo.objects.exclude(situacao=SituacaoModelo.REMOVIDA)]
     andamento.avisar("Lendo o pedido e o histórico da conversa")
-    base_lista = _lista_vista(user, c) if INVESTIGAR_RE.search(_norm(texto)) else None
+    from .models import SituacaoTarefa, Tarefa
+
+    aguardando = Tarefa.objects.filter(usuario=user, conversa=c, situacao=SituacaoTarefa.AGUARDANDO).order_by(
+        "-id").first()
+    base_lista = (aguardando.solicitacao_base if aguardando is not None
+                  else (_lista_vista(user, c) if INVESTIGAR_RE.search(_norm(texto)) else None))
     lista = investigacao.contexto_para_modelo(user, base_lista) if base_lista is not None else None
+    if lista is not None and aguardando is not None:
+        lista = {**lista, "pergunta_pendente": aguardando.motivo,
+                 "instrucao": "A mensagem responde à pergunta pendente da verificação: use investigar_lista com o que "
+                              "ela disse para retomar a mesma verificação."}
     entrada = EntradaAgente(
         lista_anterior=lista,
         mensagem=texto, hoje=timezone.localdate().isoformat(), historico=_historico(c, mensagem_usuario_id),
@@ -270,7 +279,7 @@ def _ciclo_agente(user, c, texto, provedor, interrompido, entrada, objetivos, co
         feitas.add(assinatura)
         registrar("interpretacao", "agente", usuario=user, estado_novo=d.acao, entidade_id=atual.pk if atual else None,
                   linhas=len(d.parametros))
-        reduz = _reduz_escopo(d, cobertura, aceita_conversa=previa is not None)
+        reduz = _reduz_escopo(d, cobertura)
         saida = reduz or _agir(user, c, d, atual, defs, texto, provedor, entrada_passo, objetivos, administrador)
         if previa is not None:
             saida = _juntar(previa, saida)
@@ -285,8 +294,8 @@ def _ciclo_agente(user, c, texto, provedor, interrompido, entrada, objetivos, co
                 entrada = replace(entrada, lista_anterior=lista)
                 observacoes.append(Observacao(d.acao, "etapa_concluida", (
                     f"A lista “{lista['nome']}” foi consultada; isso é só a primeira etapa. O pedido é verificar cada "
-                    "integrante: siga com investigar_lista usando os campos de lista_anterior. Se a lista sozinha já "
-                    "responde ao pedido, use conversar e diga por quê.")))
+                    "integrante: siga com investigar_lista usando os campos de lista_anterior. Só pare para perguntar "
+                    "à pessoa (conversar terminando em pergunta) se faltar uma decisão que só ela pode dar.")))
                 andamento.avisar("Lista pronta; agora vou verificar cada pessoa")
                 atual = _ativa(user, c)
                 continue
@@ -294,6 +303,14 @@ def _ciclo_agente(user, c, texto, provedor, interrompido, entrada, objetivos, co
             return saida
         observacoes.append(saida.observacao)
         atual = _ativa(user, c)
+    if previa is not None and saida.ficha.get("tipo") != "tarefa" and not saida.texto.strip().endswith("?"):
+        # Evidência de cumprimento: a verificação pedida não foi feita. Não encerra como se tivesse sido.
+        saida = _juntar(previa, Saida(
+            "A verificação pedida ainda não foi feita: só a lista foi consultada. Peça de novo, ou diga quais "
+            "campos indicam o vínculo (por exemplo, admissão e demissão), e eu verifico todas as pessoas.",
+            {**previa.ficha, "verificacao_pendente": True}))
+        registrar("modelo_falhou", "agente", usuario=user, estado_novo="verificacao_nao_feita", resultado="erro")
+        return saida
     if saida is None:
         registrar("modelo_falhou", "agente", usuario=user, estado_novo="prazo_esgotado", resultado="erro")
         return Saida(SEM_TEMPO + " Nada foi consultado. Tente de novo; se repetir, a IA está lenta agora.",
@@ -338,13 +355,13 @@ def _lista_vista(user, c):
     return s if s is not None and s.objetivo in OBJETIVOS and OBJETIVOS[s.objetivo].modelo_id else None
 
 
-def _reduz_escopo(d, cobertura, aceita_conversa=False) -> "Saida | None":
+def _reduz_escopo(d, cobertura) -> "Saida | None":
     """Pedido cobre a lista inteira, mas a ação consulta só um exemplo (busca por nome/filtro) ou só
     responde sem agir: devolve ao modelo, sem executar, para investigar todos."""
     if cobertura is None:
         return None
     exemplo = d.acao == "preparar_consulta" and any(cod in (BUSCA, "filtro-campo") for cod, _ in d.parametros)
-    adia = d.acao == "conversar" and not d.resposta.strip().endswith("?") and not aceita_conversa
+    adia = d.acao == "conversar" and not d.resposta.strip().endswith("?")
     if not (exemplo or adia):
         return None
     motivo = ("O pedido vale para TODOS os integrantes da lista anterior; consultar só o exemplo (ou deixar para "
@@ -762,7 +779,11 @@ def _investigar(user, c, d, texto, ficha) -> Saida:
     from . import tarefas
 
     andamento.avisar("Conferindo no dicionário os campos para a verificação")
-    base = _lista_vista(user, c)
+    from .models import SituacaoTarefa, Tarefa
+
+    aguardando = Tarefa.objects.filter(usuario=user, conversa=c, situacao=SituacaoTarefa.AGUARDANDO).order_by(
+        "-id").first()
+    base = aguardando.solicitacao_base if aguardando is not None else _lista_vista(user, c)
     try:
         plano = investigacao.validar_plano(user, base, d.investigacao or {})
     except investigacao.InvestigacaoInvalida as exc:
@@ -774,8 +795,14 @@ def _investigar(user, c, d, texto, ficha) -> Saida:
                      observacao=Observacao("investigar_lista", TEMPO_ESGOTADO, str(exc)))
     criterios = [{"nome": x.nome, "valor": x.valor} for x in orq.avaliar_criterios(user, base)]
     objetivo = f"Verificar os vínculos de todos os integrantes da lista “{OBJETIVOS[base.objetivo].nome}”."
-    t = tarefas.criar(user, c, base, d.investigacao or {}, plano, objetivo, criterios)
-    andamento.avisar("Verificação de toda a lista agendada em segundo plano")
+    if aguardando is not None:
+        # A resposta da pessoa retoma a MESMA tarefa: permissões e plano reconferidos acima; o worker
+        # reconsulta a lista e reconstrói as evidências.
+        t = tarefas.retomar(aguardando, d.investigacao or {}, plano)
+        andamento.avisar("Retomando a verificação com a sua resposta")
+    else:
+        t = tarefas.criar(user, c, base, d.investigacao or {}, plano, objetivo, criterios)
+        andamento.avisar("Verificação de toda a lista agendada em segundo plano")
     registrar("interpretacao", "agente", usuario=user, estado_novo="tarefa_criada", entidade_id=t.pk)
     inicio = d.resposta.strip() or "Vou verificar todas as pessoas da lista, não só o exemplo."
     return Saida(inicio + " O andamento aparece abaixo; pode fechar a página que a verificação continua.",

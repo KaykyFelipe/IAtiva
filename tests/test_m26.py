@@ -53,12 +53,29 @@ def test_lista_simples_nao_vira_verificacao(base):
     assert p.chamadas == 1 and not Tarefa.objects.exists() and res.ok
 
 
-def test_modelo_decide_que_a_lista_basta(base):
+def test_modelo_nao_pode_encerrar_so_com_a_lista(base):
+    """Regressão (revisão M30): depois da lista, "a lista basta" não encerra o pedido de verificação."""
     c = conversas.nova_individual(base["u"])
-    p = FakeProvider([_listar(base), _d(resposta="A lista já mostra o que você pediu.")])
+    p = FakeProvider([_listar(base), _d(resposta="A lista já mostra o que você pediu."),
+                      _d(resposta="Não precisa verificar mais nada.")])
     msg, res = conversas.enviar(base["u"], c, PEDIDO, p)
-    assert res.ok and "A lista já mostra" in msg.texto and not Tarefa.objects.exists()
+    assert res.ok and not Tarefa.objects.exists()
+    assert "A lista já mostra" not in msg.texto and "ainda não foi feita" in msg.texto
+    assert msg.ficha.get("verificacao_pendente")
 
+
+def test_depois_de_recusado_o_modelo_investiga(base):
+    c = conversas.nova_individual(base["u"])
+    p = FakeProvider([_listar(base), _d(resposta="A lista já mostra o que você pediu."), _investigar()])
+    msg, res = conversas.enviar(base["u"], c, PEDIDO, p)
+    assert msg.ficha["tipo"] == "tarefa" and Tarefa.objects.count() == 1
+
+
+def test_pergunta_a_pessoa_e_permitida(base):
+    c = conversas.nova_individual(base["u"])
+    p = FakeProvider([_listar(base), _d(resposta="Qual campo indica a recontratação na sua empresa?")])
+    msg, res = conversas.enviar(base["u"], c, PEDIDO, p)
+    assert msg.texto.strip().endswith("?") and "ainda não foi feita" not in msg.texto
 
 def test_pensando_mostra_as_etapas_reais(base, client):
     c = _lista(base)
@@ -207,3 +224,149 @@ def test_conclusao_fica_salva_e_recarregar_nao_consulta_de_novo(base, client, mo
     for _ in range(2):  # recarregar a página
         html = client.get(reverse("chat:tarefa_conclusao", args=[t.pk])).content.decode()
         assert all(n in html for n in LISTA) and "verificação feita em" in html
+
+
+
+# --- revisão M30: datas, reconstrução única, aguardando usuário ---------------------------------------
+
+def _plano_simples(base):
+    from iativa.agent import investigacao as inv
+    from iativa.chat.models import RequestContext
+
+    _lista(base)
+    sol = RequestContext.objects.filter(objetivo=base["cm"].codigo, estado="concluida").latest("id")
+    return inv.validar_plano(base["u"], sol, {"campos": CAMPOS, "identidade": "nome"})
+
+
+def _item(inv, inicio, fim, outros=()):
+    reg = inv.Registro("01", ("000900",), "PESSOA TESTE", {"inicio": inicio, "fim": fim})
+    ctx = inv.Contexto()
+    it = inv.Item(reg, "PESSOA TESTE")
+    ctx.itens = [it]
+    ctx.relacionados = {"PESSOA TESTE": [reg] + [inv.Registro("02", ("000901",), "PESSOA TESTE", o) for o in outros]}
+    return ctx, it
+
+
+def test_desligamento_futuro_nao_e_desligamento_ocorrido(base, monkeypatch):
+    from datetime import date
+
+    from iativa.agent import investigacao as inv
+
+    plano = _plano_simples(base)
+    monkeypatch.setattr(inv.timezone, "localdate", lambda: date(2026, 11, 12))
+    ctx, it = _item(inv, "20250101", "20261231")
+    inv.classificar(plano, ctx)
+    assert it.classe == "fim_futuro" and "ainda não chegou" in it.texto and "encerrado em" not in it.texto
+
+
+def test_datas_impossiveis_ou_invertidas_ficam_inconclusivas(base):
+    from iativa.agent import investigacao as inv
+
+    plano = _plano_simples(base)
+    for ini, fim in (("20260301", "20260101"), ("20260101", "20260231")):
+        ctx, it = _item(inv, ini, fim)
+        inv.classificar(plano, ctx)
+        assert it.classe == "datas_inconsistentes" and it.verificado is False
+
+
+def test_novo_vinculo_futuro_e_dito_como_previsto(base, monkeypatch):
+    from datetime import date
+
+    from iativa.agent import investigacao as inv
+
+    plano = {**_plano_simples(base), "identidade": "documento"}
+    monkeypatch.setattr(inv.timezone, "localdate", lambda: date(2026, 11, 12))
+    ctx, it = _item(inv, "20250101", "20261010", outros=[{"inicio": "20261201", "fim": ""}])
+    inv.classificar(plano, ctx)
+    assert it.classe == "novo_vinculo_posterior" and "ainda não começou" in it.texto
+
+
+def test_ultima_data_da_base_ignora_datas_futuras(base, monkeypatch):
+    from datetime import date
+
+    from iativa.agent import investigacao as inv
+
+    monkeypatch.setattr(inv.timezone, "localdate", lambda: date(2026, 11, 12))
+    ctx = inv.Contexto()
+    inv._ver_datas(ctx, inv.Registro("01", ("1",), "X", {"inicio": "20261101", "fim": "20270101"}))
+    assert ctx.ultima_data == "20261101"
+
+
+def test_conclusao_perdida_e_refeita_no_worker_uma_vez(base, client, monkeypatch):
+    from iativa.agent import investigacao as inv
+
+    t = _tarefa_pronta(base)
+    tarefas.processar_proxima()
+    Tarefa.objects.filter(pk=t.pk).update(conclusao={})  # conclusão perdida (tarefa antiga)
+    client.force_login(base["u"])
+    consultas = {"n": 0}
+    original = inv._consultar
+
+    def contar(*a, **kw):
+        consultas["n"] += 1
+        return original(*a, **kw)
+
+    monkeypatch.setattr(inv, "_consultar", contar)
+    for _ in range(3):  # várias atualizações da tela: nenhuma consulta na requisição web
+        html = client.get(reverse("chat:tarefa_conclusao", args=[t.pk])).content.decode()
+        assert "Refazendo a conclusão" in html
+    assert consultas["n"] == 0 and Tarefa.objects.get(pk=t.pk).reconstruir
+    assert tarefas.processar_proxima()  # o worker refaz uma vez
+    assert not tarefas.reconstruir_proxima()
+    t.refresh_from_db()
+    assert t.conclusao and not t.reconstruir and consultas["n"] > 0
+    html = client.get(reverse("chat:tarefa_conclusao", args=[t.pk])).content.decode()
+    assert all(n in html for n in LISTA)
+
+
+def test_reconstrucao_nao_roda_em_dobro(base):
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    t = _tarefa_pronta(base)
+    tarefas.processar_proxima()
+    Tarefa.objects.filter(pk=t.pk).update(conclusao={})
+    assert tarefas.solicitar_reconstrucao(t) and not tarefas.solicitar_reconstrucao(t)
+    Tarefa.objects.filter(pk=t.pk).update(execucao="outro", lease_ate=timezone.now() + timedelta(seconds=60))
+    assert not tarefas.reconstruir_proxima()  # outro worker está refazendo
+
+
+def test_pergunta_aparece_e_a_resposta_retoma_a_mesma_tarefa(base, monkeypatch):
+    from iativa.chat.models import Mensagem
+
+    t = _tarefa_pronta(base)
+    Tarefa.objects.filter(pk=t.pk).update(proposta={"campos": {**CAMPOS, "fim": "RA_NAOEXISTE"}})
+    pergunta = _d(resposta="Qual campo guarda a data de desligamento?")
+    monkeypatch.setattr(tarefas, "obter_provedor", lambda usuario=None: FakeProvider([pergunta]))
+    tarefas.processar_proxima()
+    t.refresh_from_db()
+    assert t.situacao == "aguardando_usuario"
+    assert Mensagem.objects.filter(conversa=t.conversa, texto__contains="Qual campo guarda").exists()
+
+    vistos = {}
+
+    class Espiao(FakeProvider):
+        def decidir(self, entrada):
+            vistos["lista"] = entrada.lista_anterior
+            return super().decidir(entrada)
+
+    msg, _ = conversas.enviar(base["u"], t.conversa, "é o RA_DEMISSA", Espiao([_investigar()]))
+    assert "Qual campo guarda" in vistos["lista"]["pergunta_pendente"]
+    assert Tarefa.objects.count() == 1 and msg.ficha["tarefa"] == t.pk
+    t.refresh_from_db()
+    assert t.situacao == "pendente" and t.proposta["campos"]["fim"] == "RA_DEMISSA"
+    tarefas.processar_proxima()
+    t.refresh_from_db()
+    assert t.situacao == "concluida" and t.conclusao["cobertura"]["total"] == len(LISTA)
+
+
+def test_retomada_reconfere_permissao(base):
+    from iativa.accounts.models import AccessPolicy
+
+    t = _tarefa_pronta(base)
+    Tarefa.objects.filter(pk=t.pk).update(situacao="aguardando_usuario", motivo="Qual campo?")
+    AccessPolicy.objects.filter(user=base["u"]).update(pode_consultar=False)
+    conversas.enviar(base["u"], t.conversa, "é o RA_DEMISSA", FakeProvider([_investigar()]))
+    t.refresh_from_db()
+    assert t.situacao == "aguardando_usuario"  # não retomou sem permissão
