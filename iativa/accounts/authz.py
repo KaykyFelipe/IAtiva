@@ -56,6 +56,14 @@ def tem_permissao(user, permissao: Permissao, setor: Department | None = None, a
     return qs.exists()
 
 
+def permissao_geral(user) -> bool:
+    """M40: TI/administração com permissão no nível empresa (aprovar conhecimento ou administrar).
+    O que essa pessoa ensina ou ajusta vale na hora, sem esperar outra aprovação."""
+    if not _usuario_valido(user):
+        return False
+    return (tem_permissao(user, Permissao.APROVAR_CONHECIMENTO) or tem_permissao(user, Permissao.ADMINISTRAR))
+
+
 def setores_autorizados(user, permissao: Permissao, agora=None) -> set[int]:
     """Setores (ids) em que o usuário tem a permissão. Base da visão consolidada."""
     qs = politicas_vigentes(user, agora).filter(**{Permissao(permissao).value: True}, department__isnull=False)

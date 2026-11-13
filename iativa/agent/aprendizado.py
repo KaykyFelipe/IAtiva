@@ -352,7 +352,9 @@ def pode_aprovar(user, cm) -> bool:
     if cm.situacao != SituacaoModelo.PROPOSTA:
         return False
     if cm.criado_por_id == user.pk and not _autoaprovacao():
-        return False
+        from iativa.accounts.authz import permissao_geral
+
+        return permissao_geral(user)  # M40: permissão geral (TI) aprova a própria consulta
     if tem_permissao(user, Permissao.APROVAR_CONHECIMENTO):
         return True
     return any(tem_permissao(user, Permissao.APROVAR_CONHECIMENTO, s) for s in cm.setores.all())

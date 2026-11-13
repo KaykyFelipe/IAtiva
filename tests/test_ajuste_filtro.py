@@ -158,3 +158,15 @@ def test_responde_e_guarda_quando_pede_para_guardar(ana):
     msg, res = conversas.enviar(ana, c, "Está errado. O total é a consulta de títulos; guarde isso e me dê o valor", p)
     assert res is not None and any("Soma" in col for col in res.colunas), msg.texto
     assert NotaAgente.objects.filter(texto__icontains="Titulos ajustaveis").exists(), (msg.texto[-300:], list(NotaAgente.objects.values_list("texto", "situacao")), list(__import__("iativa.agent.models", fromlist=["x"]).Objetivo.objects.values_list("trilha", flat=True)))
+
+
+def test_permissao_geral_aprova_na_hora_o_que_ensina(ana, politica):
+    """TI com permissão no nível empresa: a nota que ela manda guardar para a empresa vale na hora."""
+    from iativa.agent import memoria
+    from iativa.agent.models import SituacaoNota
+
+    sem_geral = memoria.lembrar(ana, "Faturamento = itens com TES que gera duplicata", alcance="empresa")
+    assert sem_geral.situacao == SituacaoNota.PROPOSTA  # sem permissão geral, continua proposta
+    politica(ana, None, aprovar_conhecimento=True)
+    nota = memoria.lembrar(ana, "Receita = itens de saída com TES que gera duplicata", alcance="empresa")
+    assert nota.situacao == SituacaoNota.APROVADA and nota.aprovado_por == ana

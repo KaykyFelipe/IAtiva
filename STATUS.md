@@ -8,7 +8,9 @@
 
 - Ações `ajustar_filtro` e `voltar_filtro`: a pessoa pede para mudar o filtro de uma consulta aprendida (inclusive campo de tabela ligada, ex.: TES) e pode voltar como era antes.
 - Regra de faturamento escolhida por Diego: itens de saída cuja TES gera duplicata.
-- Testes: 712 aprovados e 10 pulados no Windows (6 novos em `tests/test_ajuste_filtro.py`).
+- Ciclo: a consulta criada numa etapa fica disponível na seguinte; ação repetida pede outra estratégia; "responda e guarde" faz as duas coisas. Permissão geral (TI) tem aprovação imediata do que ensina.
+- Validado no chat real: com a correção, a IA somou o faturamento de setembro pelos itens com TES que gera duplicata (valor esperado por Diego).
+- Testes: 716 aprovados e 10 pulados no Windows (9 novos em `tests/test_ajuste_filtro.py`).
 
 ## Mudança M39 — correções da autonomia e conexões de IA (2026-11-13)
 
