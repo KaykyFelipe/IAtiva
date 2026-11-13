@@ -87,14 +87,16 @@ def partes(texto: str) -> int:
     return max(1, len(_PERGUNTA_RE.findall(texto or "")))
 
 
-def falta_parte(texto: str, respondidas: int) -> str:
-    """Dica com as perguntas da mensagem, para o modelo atacar a próxima em vez de repetir a anterior."""
+def falta_parte(texto: str, feitas: list[str]) -> str:
+    """Dica com as perguntas da mensagem e as consultas já feitas, para o modelo atacar a pergunta que
+    falta (em qualquer ordem) em vez de repetir uma já respondida."""
     texto = texto or ""
     inicios = [m.start() for m in _PERGUNTA_RE.finditer(texto)] or [0]
     pedacos = [texto[a:b].strip(" ?;,.") for a, b in zip(inicios, inicios[1:] + [len(texto)])]
-    pedacos = [p for p in pedacos if p]
-    lista = " ".join(f"{i}) {p}{' [já respondida]' if i <= respondidas else ''}" for i, p in enumerate(pedacos, 1))
-    return f"{FALTA_PARTE} Perguntas: {lista}. A próxima pede outra consulta ou outros critérios que a anterior."
+    lista = " ".join(f"{i}) {p}" for i, p in enumerate((p for p in pedacos if p), 1))
+    return (f"{FALTA_PARTE} Perguntas: {lista}. Já executado nesta mensagem: {'; '.join(feitas) or 'nada'}. "
+            "Escolha a pergunta que essas consultas NÃO respondem e execute a consulta dela (outro objetivo "
+            "ou outros critérios); se nenhuma consulta existente responde, crie uma.")
 
 
 def pede_memoria(texto: str) -> bool:

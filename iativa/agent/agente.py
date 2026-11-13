@@ -421,8 +421,9 @@ def _ciclo_agente(user, c, texto, provedor, interrompido, entrada, objetivos, co
             ac.cutucadas += 1
             ac.entregue = ac.entregue or ev
             previa = saida
-            observacoes.append(Observacao(d.acao, coord.ETAPA, coord.falta_parte(
-                texto, coord.partes(texto) - ac.partes_faltam)))
+            feita = (f"“{OBJETIVOS[d.objetivo].nome}” com " + ", ".join(f"{k}={v}" for k, v in d.parametros)
+                     if d.objetivo in OBJETIVOS else d.acao)
+            observacoes.append(Observacao(d.acao, coord.ETAPA, coord.falta_parte(texto, [feita])))
             andamento.avisar("Uma pergunta respondida; agora a próxima")
             continue
         if ac.entregue and ev and ev not in (coord.PERGUNTA, coord.BLOQUEIO, coord.DELEGADA, coord.ACAO):
