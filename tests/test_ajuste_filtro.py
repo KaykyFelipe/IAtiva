@@ -206,3 +206,15 @@ def test_permissao_geral_regra_sem_campo_vira_definicao_da_empresa(ana, settings
            alcance="empresa")]))
     n = NotaAgente.objects.get(texto__icontains="TES")
     assert (n.tipo, n.escopo, n.situacao) == ("termo", "empresa", "aprovada")
+
+
+def test_consulta_nova_nasce_com_filtro_de_tabela_ligada(ana):
+    c = conversas.nova_individual(ana)
+    msg, res = conversas.enviar(ana, c, "títulos do comércio", FakeProvider([
+        _d(acao="aprender_tabela", alvo="SE1"),
+        _d(acao="criar_consulta", parametros=FILIAL,
+           consulta={"tabela": "SE1", "nome": "Titulos comercio nascido", "colunas": ["E1_NUM", "E1_VALOR"],
+                     "filtros": [{"campo": "A1_XSEGMEN", "operador": "igual", "valor": "COM"}]})]))
+    cm = ConsultaModelo.objects.get(nome="Titulos comercio nascido")
+    assert [f["campo"] for f in cm.spec["filtros_fixos"]] == ["A1_XSEGMEN"], msg.texto
+    assert res is not None and res.ok

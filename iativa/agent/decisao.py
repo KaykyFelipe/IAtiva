@@ -153,6 +153,12 @@ def esquema(codigos_objetivo, codigos_parametro) -> dict:
                     "colunas": {"type": "array", "items": {"type": "string"}},
                     "campo_data": {"type": "string"}, "campo_busca": {"type": "string"},
                     "filtraveis": {"type": "array", "items": {"type": "string"}},
+                    "filtros": {"type": "array", "description": "Filtros fixos que a consulta já nasce aplicando (ex.: os "
+                                "mesmos da definição do termo na memória, como F4_DUPLIC = S para faturamento).",
+                                "items": {"type": "object", "properties": {
+                                    "campo": {"type": "string"},
+                                    "operador": {"type": "string", "enum": ["igual", "diferente"]},
+                                    "valor": {"type": "string"}}, "required": ["campo", "operador", "valor"]}},
                     "juncoes": {"type": "array", "description": "Outras tabelas de juncoes_possiveis para trazer nomes/descrições.",
                                 "items": {"type": "object", "properties": {
                                     "tabela": {"type": "string"},
@@ -266,7 +272,7 @@ def _ajuste(a) -> dict | None:
 
 def _consulta(c) -> dict:
     if not isinstance(c, dict) or set(c) - {"tabela", "nome", "descricao", "colunas", "campo_data", "campo_busca",
-                                             "filtraveis", "juncoes"}:
+                                             "filtraveis", "juncoes", "filtros"}:
         raise DecisaoInvalida("consulta")
     def lista(chave, maximo):
         v = c.get(chave) or []
@@ -283,6 +289,7 @@ def _consulta(c) -> dict:
         "campo_busca": _texto(c.get("campo_busca", "") or "", 20, "campo_busca"),
         "filtraveis": lista("filtraveis", 10),
         "juncoes": _juncoes(c.get("juncoes") or []),
+        "filtros": (_ajuste({"filtros": c.get("filtros")}) or {}).get("filtros", []) if c.get("filtros") else [],
     }
 
 

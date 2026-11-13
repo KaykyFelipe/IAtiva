@@ -972,6 +972,13 @@ def _aprender_sozinho(user, c, d, texto, ficha, provedor, entrada, atual, motivo
         motivo.append(f"consulta sobre {consulta.get('tabela', '')} recusada: {detalhe}"[:300])
         return None
     registrar("interpretacao", "agente", usuario=user, estado_novo="aprendeu_sozinho", entidade_id=cm.pk)
+    if consulta.get("filtros") and not cm.spec.get("filtros_fixos"):
+        # M40: a consulta nasce com os filtros da definição (ex.: faturamento só com TES que gera duplicata).
+        try:
+            cm = aprendizado.ajustar_filtros(user, cm, consulta["filtros"], [])
+        except (ValidationError, PermissaoNegada) as exc:
+            detalhe = "; ".join(getattr(exc, "messages", None) or [str(exc)])
+            motivo.append(f"filtro da consulta nova recusado: {detalhe}"[:300])
     codigos = set(OBJETIVOS[cm.codigo].parametros)
     defs = orq._definicoes(sorted(codigos))
     d3 = replace(d, acao="preparar_consulta", objetivo=cm.codigo,
