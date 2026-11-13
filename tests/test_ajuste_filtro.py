@@ -275,5 +275,5 @@ def test_usuario_desliga_filtro_fixo_so_para_si(ana, novo_usuario, politica):
     assert _rodar(ana, c, cm) == total
     cm.refresh_from_db()
     assert [f["campo"] for f in cm.spec["filtros_fixos"]] == ["A1_XSEGMEN"]
-    assert "não valem para você" in aprendizado.descrever_filtros(cm, ana)
+    assert "desligados só para você" in aprendizado.descrever_filtros(cm, ana)
     assert 0 < filtrado < total

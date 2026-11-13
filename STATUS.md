@@ -13,7 +13,7 @@
 - Rodada de perguntas no chat real (M40): ranking "todas as filiais" passa a ser geral (grupos somados entre filiais); a resposta diz o maior/menor grupo; consulta nova nasce com os filtros da definição do termo; investigação confere duplicidade (fornecedor/cliente, número, parcela, valor) e natureza, com resumo do assunto certo (sem texto de faturamento fora de SF2/SD2).
 - Definido por Diego: "contas a pagar" é o saldo em aberto (E2_SALDO). Registrado pelo chat como definição da empresa (aprovação imediata); conversa nova já soma o saldo.
 - M41 (rodada de perguntas): inadimplência "10 maiores" sem perguntas extras e com top 10 geral; "quanto vamos receber" pela consulta fixa num passo; "admitidos e saídos no ano" responde as duas partes. A IA tinha tirado sozinha o filtro de demitidos da consulta de admissão; foi restaurado pelo chat e agora ajuste sem pedido é recusado.
-- Limitação conhecida: a consulta de admissão exclui quem já saiu, então "admitidos no ano" não conta quem entrou e saiu no mesmo ano.
+- M42: filtros em duas camadas (fixos do T.I para todos; do usuário só para quem pediu). Validado no chat: "só pra mim, admissões contam também quem já foi demitido" virou filtro só de Diego (254 admitidos no ano); os demais continuam vendo 182.
 - Testes: 716 aprovados e 10 pulados no Windows (9 novos em `tests/test_ajuste_filtro.py`).
 
 ## Mudança M39 — correções da autonomia e conexões de IA (2026-11-13)

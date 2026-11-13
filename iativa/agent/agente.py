@@ -1098,7 +1098,7 @@ def _ajustar_filtro(user, d, ficha, alcance="", objetivos=()) -> Saida:
         motivo = " ".join(getattr(exc, "messages", [str(exc)]))
         return Saida(motivo, ficha, observacao=Observacao(d.acao, ERRO_METADADOS, motivo))
     if so_seu:
-        verbo = "Voltei os seus filtros" if d.acao == "voltar_filtro" else "Criei o filtro só para você"
+        verbo = "Voltei os seus filtros" if d.acao == "voltar_filtro" else "Ajustei só para você"
         return Saida(f"{verbo} na consulta “{cm.nome}”. Antes: {antes}. Agora: {descrever_filtros(cm, user)}. "
                      "Os outros usuários continuam com os filtros fixos. Para desfazer, peça para voltar o filtro.",
                      ficha)

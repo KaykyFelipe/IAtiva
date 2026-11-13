@@ -565,9 +565,10 @@ def descrever_filtros(cm, user=None) -> str:
     fixos = [f for f in cm.spec.get("filtros_fixos", []) if f["campo"] not in desligados]
     if not camada:
         return _texto_filtros(fixos) if fixos else "sem filtros fixos"
-    partes = [("fixos: " + _texto_filtros(fixos)) if fixos else "sem filtros fixos"]
+    partes = [("filtros fixos que valem para você: " + _texto_filtros(fixos)) if fixos
+              else "nenhum filtro fixo vale para você"]
     if camada.get("filtros"):
-        partes.append("só seus: " + _texto_filtros(camada["filtros"]))
+        partes.append("seus filtros: " + _texto_filtros(camada["filtros"]))
     if desligados:
-        partes.append("fixos que não valem para você: " + ", ".join(sorted(desligados)))
+        partes.append("filtros fixos desligados só para você: " + ", ".join(sorted(desligados)))
     return " · ".join(partes)
