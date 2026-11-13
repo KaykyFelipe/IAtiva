@@ -407,6 +407,21 @@ def _ciclo_agente(user, c, texto, provedor, interrompido, entrada, objetivos, co
             observacoes.append(Observacao(d.acao, coord.ETAPA, coord.FALTA_MEMORIA))
             andamento.avisar("Resposta pronta; agora guardando o que você ensinou")
             continue
+        if ac.partes_faltam > 0 and ev and ev not in (coord.PERGUNTA, coord.BLOQUEIO, coord.DELEGADA):
+            ac.partes_faltam -= 1  # M41: mais uma das perguntas da mensagem respondida
+        elif ac.cumprido(ev) and ac.partes_faltam < 0 and d.acao != "lembrar":
+            ac.partes_faltam = coord.partes(texto) - 1
+        if (ac.partes_faltam > 0 and (ac.cumprido(ev) or ac.entregue) and ac.pode_cutucar()
+                and ev not in (coord.PERGUNTA, coord.BLOQUEIO, coord.DELEGADA)):
+            # M41: "quantos entraram? e quantos saíram?": a primeira resposta saiu; falta a outra pergunta.
+            ac.cutucadas += 1
+            ac.entregue = ac.entregue or ev
+            previa = saida
+            observacoes.append(Observacao(d.acao, coord.ETAPA, coord.FALTA_PARTE))
+            andamento.avisar("Uma pergunta respondida; agora a próxima")
+            continue
+        if ac.entregue and ev and ev not in (coord.PERGUNTA, coord.BLOQUEIO, coord.DELEGADA):
+            return _fechar(ac, user, c, mensagem_id, saida, ac.entregue)
         if ac.cumprido(ev) or ev in (coord.PERGUNTA, coord.BLOQUEIO, coord.DELEGADA):
             return _fechar(ac, user, c, mensagem_id, saida, ev)
         if saida.observacao is not None and saida.observacao.recuperavel:

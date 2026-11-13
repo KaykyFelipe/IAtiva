@@ -76,6 +76,17 @@ _MEMORIA_RE = re.compile(r"\b(guard[ae]|lembr[ae]|memoriz|anot[ae]|grav[ae]|daqu
                          r"a partir de agora|de agora em diante|sempre que)", re.I)
 
 
+FALTA_PARTE = ("A mensagem tem mais de uma pergunta e a resposta acima cobriu só parte dela. Responda agora a "
+               "próxima pergunta ainda não respondida (execute a consulta dela; não refaça a anterior). "
+               "Se a resposta acima já cobre tudo, use conversar e diga isso em uma frase.")
+_PERGUNTA_RE = re.compile(r"(?:^|[?;,.]|\be\b)\s*(?:e\s+)?(?:quant[oa]s?|qua(?:l|is)|quem|onde|quando)\b", re.I)
+
+
+def partes(texto: str) -> int:
+    """M41: quantas perguntas a mensagem faz ("quantos entraram? e quantos saíram?" = 2)."""
+    return max(1, len(_PERGUNTA_RE.findall(texto or "")))
+
+
 def pede_memoria(texto: str) -> bool:
     """A mensagem pede para guardar um ensinamento (além de, talvez, responder)."""
     return bool(_MEMORIA_RE.search(texto or ""))
@@ -264,6 +275,7 @@ class Acompanhamento:
     cutucadas: int = 0
     memoria_feita: bool = False  # M40: a ação lembrar já rodou nesta mensagem
     entregue: str = ""  # M40: evidência que já cumpria o pedido antes do passo de memória
+    partes_faltam: int = -1  # M41: perguntas da mensagem ainda sem resposta (-1 = ainda não contadas)
     parado: int = 0  # passos seguidos sem evidência nova
     melhor: str = ""  # melhor evidência obtida
     registro: Objetivo | None = None  # preenchido na continuação pelo worker

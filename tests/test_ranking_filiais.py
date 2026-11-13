@@ -113,3 +113,24 @@ def test_total_da_consulta_fixa_responde_quanto(ana):
     assert res is not None and res.ok, msg.texto
     assert p.chamadas == 1, p.chamadas
     assert not ConsultaModelo.objects.exists()
+
+
+def test_mensagem_com_duas_perguntas_responde_as_duas(ana):
+    """M41: "quanto vamos receber? e quanto está em atraso?" não para na primeira resposta."""
+    from iativa.agent import objetivos as coord
+
+    assert coord.partes("e quantos foram admitidos este ano? e quantos saíram?") == 2
+    assert coord.partes("quantos funcionários ativos temos hoje em cada filial?") == 1
+    c = conversas.nova_individual(ana)
+    comum = [{"codigo": "filial-analise", "valor": "TODAS"},
+             {"codigo": "tratamento-baixa-parcial", "valor": "considerar-saldo"}]
+    p = FakeProvider([
+        _d(acao="preparar_consulta", objetivo="titulos-a-vencer", entrega="calculo",
+           parametros=comum + [{"codigo": "periodo-analise", "valor": "01/01/2020..31/12/2030"}]),
+        _d(acao="preparar_consulta", objetivo="titulos-em-atraso", entrega="calculo",
+           parametros=comum + [{"codigo": "data-corte", "valor": "13/11/2026"},
+                               {"codigo": "dias-tolerancia-atraso", "valor": "0"}]),
+        _d(acao="conversar", resposta="Já respondi as duas.")])
+    msg, res = conversas.enviar(ana, c, "quanto vamos receber? e quanto está em atraso?", p)
+    assert p.chamadas == 2, (p.chamadas, msg.texto)
+    assert res is not None and res.ok
