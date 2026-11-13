@@ -193,7 +193,9 @@ def test_regra_com_campo_de_outra_tabela_vira_definicao(ana):
     assert n.tipo == "termo" and not n.criterios, msg.texto
 
 
-def test_permissao_geral_regra_sem_campo_vira_definicao_da_empresa(ana):
+@pytest.mark.parametrize("autoaprovacao", [False, True])
+def test_permissao_geral_regra_sem_campo_vira_definicao_da_empresa(ana, settings, autoaprovacao):
+    settings.IATIVA_APRENDIZADO_AUTOAPROVACAO = autoaprovacao
     from iativa.agent.models import NotaAgente
 
     ana.is_superuser = True

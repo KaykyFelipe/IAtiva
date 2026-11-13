@@ -57,10 +57,12 @@ def _nivel(setor) -> str:
 
 
 def _pode_decidir(user, setor, criado_por_id) -> bool:
-    if criado_por_id == user.pk and not memoria_valores.autoaprovacao():
-        from iativa.accounts.authz import permissao_geral
+    from iativa.accounts.authz import permissao_geral
 
-        return permissao_geral(user)  # M40: permissão geral (TI) aprova o que ela mesma ensina
+    if permissao_geral(user):
+        return True  # M40: permissão geral (TI) aprova na hora, inclusive o que ela mesma ensina
+    if criado_por_id == user.pk and not memoria_valores.autoaprovacao():
+        return False
     return tem_permissao(user, Permissao.APROVAR_CONHECIMENTO, setor)
 
 
