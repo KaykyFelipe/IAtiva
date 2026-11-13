@@ -61,6 +61,8 @@ def permissao_geral(user) -> bool:
     O que essa pessoa ensina ou ajusta vale na hora, sem esperar outra aprovação."""
     if not _usuario_valido(user):
         return False
+    if user.is_superuser:
+        return True
     return (tem_permissao(user, Permissao.APROVAR_CONHECIMENTO) or tem_permissao(user, Permissao.ADMINISTRAR))
 
 

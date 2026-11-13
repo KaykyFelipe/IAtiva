@@ -170,3 +170,12 @@ def test_permissao_geral_aprova_na_hora_o_que_ensina(ana, politica):
     politica(ana, None, aprovar_conhecimento=True)
     nota = memoria.lembrar(ana, "Receita = itens de saída com TES que gera duplicata", alcance="empresa")
     assert nota.situacao == SituacaoNota.APROVADA and nota.aprovado_por == ana
+
+
+def test_superusuario_tem_permissao_geral(ana):
+    from iativa.accounts.authz import permissao_geral
+
+    assert not permissao_geral(ana)
+    ana.is_superuser = True
+    ana.save(update_fields=["is_superuser"])
+    assert permissao_geral(ana)
