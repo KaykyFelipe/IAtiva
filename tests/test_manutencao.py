@@ -84,6 +84,17 @@ def test_incidente_repetido_nao_gera_ciclo_infinito(monkeypatch):
     assert inc.situacao == SI.BLOQUEADO and not incidentes.elegivel(inc)
 
 
+def test_falha_que_volta_em_versao_posterior_reabre(monkeypatch):
+    """M50: corrigido na v1, voltou na v2: reabre (antes ficava "publicado" e o pedido esperava para sempre)."""
+    monkeypatch.setenv("IATIVA_VERSAO", "v1")
+    inc = incidentes.registrar("worker", "tarefa.z", _falha())
+    Incidente.objects.filter(pk=inc.pk).update(situacao=SI.PUBLICADO, versao_corrigida="v1", tentativas=1)
+    monkeypatch.setenv("IATIVA_VERSAO", "v2")
+    incidentes.registrar("worker", "tarefa.z", _falha())
+    inc.refresh_from_db()
+    assert inc.situacao == SI.ABERTO and inc.reaberturas == 1 and incidentes.elegivel(inc)
+
+
 def test_limite_de_tentativas():
     inc = incidentes.registrar("worker", "tarefa.y", _falha())
     Incidente.objects.filter(pk=inc.pk).update(tentativas=incidentes.MAX_TENTATIVAS)

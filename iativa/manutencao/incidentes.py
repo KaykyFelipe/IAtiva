@@ -133,8 +133,10 @@ def _registrar(componente: str, operacao: str, exc=None, categoria: str = "", co
                     atual = Incidente.objects.select_for_update().get(assinatura=assinatura)
             mudancas = {"ocorrencias": F("ocorrencias") + 1, "correlacao": correlacao, "versao": versao(),
                         "ultima_em": timezone.now()}
-            if atual.situacao == SituacaoIncidente.PUBLICADO and atual.versao_corrigida == versao():
-                # Voltou a acontecer NA versão corrigida: a correção não resolveu.
+            if atual.situacao == SituacaoIncidente.PUBLICADO:
+                # Voltou a acontecer depois da correção publicada (na versão corrigida ou numa posterior):
+                # a correção não resolveu este caso. M50: antes só reabria na mesma versão, e o pedido ficava
+                # parado esperando uma correção que já tinha acontecido.
                 if atual.reaberturas >= MAX_REABERTURAS:
                     mudancas.update(situacao=SituacaoIncidente.BLOQUEADO,
                                     motivo="Voltou a ocorrer depois da correção; precisa de análise humana.")
