@@ -4,6 +4,14 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **plano proposto em `PLANO.md` §8, aguardando aprovação.** Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M48 — resposta no formato pedido e correção automática (2026-11-13)
+
+- A IA declara o formato da resposta pelo que a pessoa pediu, sem palavra fixa: "direto" mostra só o valor montado pelo backend depois de executar (ex.: "195 dias úteis", um total, a medida de uma linha), sem tabela, critérios nem texto extra; "resumo" tira as premissas e limita o texto. Resposta direta fica salva no snapshot e reaparece igual ao reabrir.
+- O modelo recebe "consultas_desta_conversa": as últimas consultas executadas no chat, com consulta, tabelas, critérios, filtros (fixos e do usuário), colunas e premissas. Só metadados; resultado fora das permissões atuais fica de fora e premissas com valores em reais são removidas.
+- Instruções: responder exatamente o que foi pedido, sem extras; preferência de forma para sempre vai à memória do usuário; perguntas sobre uma consulta já feita são respondidas sem rodar de novo; antes de desistir, tentar outros caminhos.
+- Capacidade ausente encaminhada à manutenção (agente Opus) passa a dizer "Não tenho isso ainda, corrigindo…" e que o pedido será refeito e respondido no chat após a correção publicada (fluxo M32/M38 existente).
+- Validação: 800 testes aprovados e 10 pulados no Windows.
+
 ## Mudança M47 — leitura estável e ajustes do mascote (2026-11-13)
 
 - Atualizações de progresso, objetivos e conclusões não reinicializam a sincronização nem levam a rolagem ao final. Histórico autorizado possui versão própria, igual na página inicial e no polling; mudanças somente na lateral não remontam tabelas/cartões nem repetem o carregamento de conclusões.

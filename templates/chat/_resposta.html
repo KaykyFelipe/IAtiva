@@ -1,11 +1,13 @@
 {% load filiais %}{% with f=m.ficha %}
 <div class="msg ia">
   <div class="assinatura-ia">{% include "chat/_mascote.html" %}<span>IAtiva</span></div>
+  {% if f.formato != "direto" or not m.resultado %}{# M48: resposta direta mostra só o valor, abaixo #}
   {% for linha in m.texto.splitlines %}{% if linha %}<p>{{ linha }}</p>{% endif %}{% endfor %}
+  {% endif %}
   {% for e in f.erros %}<p class="erro">{{ e }}</p>{% endfor %}
   {% if f.ambiguidade %}<p><strong>{{ f.ambiguidade }}</strong></p>{% endif %}
 
-  {% if f.criterios and f.tipo == "executada" %}
+  {% if f.criterios and f.tipo == "executada" and f.formato != "direto" %}
     <p class="criterios-linha">Critérios: {% for c in f.criterios %}<span title="{{ c.origem }}">{{ c.nome }} <strong>{{ c.valor }}</strong></span>{% if not forloop.last %} · {% endif %}{% endfor %}</p>
   {% endif %}
 

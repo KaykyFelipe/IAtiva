@@ -304,11 +304,14 @@ class Acompanhamento:
     memoria_feita: bool = False  # M40: a ação lembrar já rodou nesta mensagem
     entregue: str = ""  # M40: evidência que já cumpria o pedido antes do passo de memória
     partes_faltam: int = -1  # M41: perguntas da mensagem ainda sem resposta (-1 = ainda não contadas)
+    formato: str = ""  # M48: como a pessoa quer a resposta ("direto" = só o valor; "resumo")
     parado: int = 0  # passos seguidos sem evidência nova
     melhor: str = ""  # melhor evidência obtida
     registro: Objetivo | None = None  # preenchido na continuação pelo worker
 
     def definir(self, decisao):
+        if getattr(decisao, "formato", ""):
+            self.formato = decisao.formato
         if not self.exig:
             self.exig, self.origem = exigencia(self.texto, decisao)
 

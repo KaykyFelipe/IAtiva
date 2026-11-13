@@ -103,7 +103,7 @@ def test_anuncio_repetido_para_sem_prometer_e_encaminha(base):
                               _d(resposta="Verificando os dados para você."), _listar(base)])
     assert p.chamadas == 2 and len(p.respostas) == 1 and res is None  # parou: não insiste nem executa a 3ª
     assert "Vou consultar" not in msg.texto and "Verificando" not in msg.texto
-    assert "Não vou repetir a mesma tentativa nem dizer que está pronto" in msg.texto
+    assert msg.texto.startswith("Não tenho isso ainda, corrigindo") and msg.ficha["corrigindo"]  # M48
     o = Objetivo.objects.get()
     inc = Incidente.objects.get()
     assert o.situacao == SO.MANUTENCAO and o.incidente_id == inc.pk and f"nº {inc.pk}" in msg.texto

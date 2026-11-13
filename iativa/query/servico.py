@@ -95,10 +95,44 @@ class Resultado:
     escopo: dict = field(default_factory=dict)
     periodos: list = field(default_factory=list)  # intervalos derivados, só no backend/snapshot autorizado
     medida_calculada: str = ''
+    curta_salva: str = ''  # M48: resposta curta gravada no snapshot (os totais não são gravados)
 
     @property
     def cabecalho(self):
         return [(c, "num" if t in ("dinheiro", "inteiro", "valor", "numero") else "") for c, t in zip(self.colunas, self.tipos)]
+
+    @property
+    def curta(self) -> str:
+        """M48: só o valor pedido ("189 dias úteis", "R$ 1.234,00"), para quem pediu a resposta direta.
+        Vazio quando o resultado é uma lista que não cabe numa frase: aí a tabela aparece sem extras."""
+        if self.curta_salva:
+            return self.curta_salva
+        if not self.ok:
+            return ""
+        unidades = {"dias_uteis": "dias úteis", "dias_corridos": "dias corridos", "meses": ""}
+        if self.medida_calculada in unidades and self.linhas:
+            u = unidades[self.medida_calculada]
+            valores = [f"{l[3]} {u}".strip() for l in self.linhas]
+            return valores[0] if len(valores) == 1 else "; ".join(f"{l[0]}: {v}" for l, v in zip(self.linhas, valores))
+        if self.medida_calculada and self.linhas:
+            sufixo = "%" if self.medida_calculada == "percentual" else ""
+            def valor(t):
+                try:
+                    return _numero_br(t) + sufixo
+                except Exception:
+                    return str(t)
+            if len(self.linhas) == 1:
+                return valor(self.linhas[0][1])
+            return "; ".join(f"{l[0]}: {valor(l[1])}" for l in self.linhas)
+        if len(self.linhas) == 1 and self.colunas:
+            pares = [(c, str(v)) for c, v in zip(self.colunas, self.linhas[0])]  # linhas já formatadas
+            numeros = [(c, v) for (c, v), t in zip(pares, self.tipos) if t in ("dinheiro", "valor", "inteiro", "numero")]
+            escolhidos = numeros or pares
+            return escolhidos[0][1] if len(escolhidos) == 1 else "; ".join(f"{c}: {v}" for c, v in escolhidos)
+        if self.totais is not None and self.totais.medidas:
+            m = self.totais.medidas
+            return m[0].texto if len(m) == 1 else "; ".join(f"{x.rotulo}: {x.texto}" for x in m)
+        return ""
 
     @property
     def linhas_tela(self):

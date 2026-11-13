@@ -59,6 +59,8 @@ class EntradaAgente:
     # M25: a lista que a pessoa está vendo (só metadados: consulta, tabela e campos do dicionário).
     lista_anterior: dict | None = None
     resultado_anterior: dict | None = None  # esquema/metadados, nunca linhas
+    # M48: consultas já executadas nesta conversa (critérios, filtros, colunas; nunca linhas ou números).
+    consultas_conversa: list[dict] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -80,8 +82,10 @@ class Decisao:
     entrega: str = ""  # M38: o que o pedido exige para estar cumprido (declarado pelo modelo)
     ajuste: dict | None = None  # M40: {"filtros": [{campo, operador, valor}], "remover": [campo]}
     calculo: dict | None = None
+    formato: str = ""  # M48: "direto" (só o valor pedido), "resumo" (curto) ou "" (completo)
 
 
+FORMATOS = ("", "direto", "resumo")
 ENTREGAS = ("", "resposta", "consulta", "calculo", "verificacao", "investigacao", "historico")
 
 
@@ -116,6 +120,11 @@ def esquema(codigos_objetivo, codigos_parametro) -> dict:
                         "description": "O que o pedido exige para estar cumprido: resposta (só explicar), consulta "
                                        "(lista), calculo (soma/contagem/média), verificacao (conferir cada item de uma "
                                        "lista), investigacao (achar a causa de uma diferença), historico (cargos de uma pessoa)."},
+            "formato": {"type": "string", "enum": list(FORMATOS),
+                        "description": "Como a pessoa quer a resposta: \"direto\" quando ela pede só o valor/dado "
+                                       "(\"apenas os dias úteis\", \"só o total\", \"me diga só o número\"): o sistema "
+                                       "mostra só o valor, sem tabela nem explicação; \"resumo\" quando pede resumo ou "
+                                       "resposta curta; vazio = resposta completa."},
             "alcance": {"type": "string", "enum": list(ALCANCES),
                         "description": "Ação lembrar: usuario, setor ou empresa; vazio = padrão."},
             "tipo_nota": {"type": "string", "enum": list(TIPOS_NOTA),
@@ -194,7 +203,7 @@ def validar(saida, codigos_objetivo, codigos_parametro) -> Decisao:
         raise DecisaoInvalida("formato")
     extras = set(saida) - {"resposta", "acao", "objetivo", "parametros", "alvo", "nota", "confirmado", "opcoes",
                            "alcance", "consulta", "tipo_nota", "regra", "validade", "investigacao", "entrega",
-                           "ajuste", "calculo"}
+                           "ajuste", "calculo", "formato"}
     if extras:
         raise DecisaoInvalida("campos extras")
     acao = saida.get("acao")
@@ -260,7 +269,11 @@ def validar(saida, codigos_objetivo, codigos_parametro) -> Decisao:
                    'campo_final': _texto('' if calculo.get('campo_final') is None else calculo['campo_final'], 120, 'campo_final')}
     if acao == 'calcular_resultado' and calculo is None:
         raise DecisaoInvalida('calculo')
+    formato = saida.get("formato") or ""
+    if formato not in FORMATOS:
+        raise DecisaoInvalida("formato")
     return Decisao(
+        formato=formato,
         calculo=calculo,
         ajuste=ajuste,
         entrega=entrega,

@@ -37,10 +37,10 @@
           <div class="resultado-de" data-resultado-de="{{ m.pk }}">
             {% if m.resultado %}
               {% if item.resultado_salvo %}
-                {% if item.resultado_salvo.consolidado %}{% include "chat/_consolidado.html" with resultado=item.resultado_salvo %}{% else %}{% include "chat/_resultado.html" with resultado=item.resultado_salvo %}{% endif %}
+                {% if item.resultado_salvo.consolidado %}{% include "chat/_consolidado.html" with resultado=item.resultado_salvo %}{% else %}{% include "chat/_resultado.html" with resultado=item.resultado_salvo formato=m.ficha.formato %}{% endif %}
               {% else %}<p class="nota">Resultado indisponível nas suas permissões atuais.</p>{% endif %}
             {% elif resultado and resultado_msg == m.pk %}
-              {% if resultado.consolidado %}{% include "chat/_consolidado.html" %}{% else %}{% include "chat/_resultado.html" %}{% endif %}
+              {% if resultado.consolidado %}{% include "chat/_consolidado.html" %}{% else %}{% include "chat/_resultado.html" with formato=m.ficha.formato %}{% endif %}
             {% endif %}
           </div>
           {% if item.tarefa %}{% include "chat/_tarefa.html" with tarefa=item.tarefa %}{% endif %}

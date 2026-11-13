@@ -136,6 +136,43 @@ def _estado(user, s, defs) -> dict | None:
             "ja_definido": definidos, "faltando": faltando, "completa": not faltando}
 
 
+CONSULTAS_CONTEXTO = 6
+_DINHEIRO_RE = re.compile(r"R\$\s*\d")
+
+
+def _consultas_conversa(user, c, defs) -> list[dict]:
+    """M48: o que já foi consultado NESTA conversa (consulta, tabela, critérios, filtros e colunas), para a IA
+    explicar uma consulta pedida antes ("quais filtros você usou?", "de onde veio esse total?"). Só metadados:
+    nunca linhas, totais ou quantidades do ERP. Resultado fora das permissões atuais da pessoa fica de fora."""
+    from iativa.chat.resultados import restaurar
+    from .aprendizado import descrever_filtros
+
+    out = []
+    msgs = (c.mensagens.filter(papel="ia", solicitacao__isnull=False).select_related("solicitacao")
+            .order_by("-id")[:CONSULTAS_CONTEXTO])
+    for m in msgs:
+        s = m.solicitacao
+        if not s.objetivo or s.objetivo not in OBJETIVOS:
+            continue
+        try:
+            item = _estado(user, s, defs) or {}
+        except Exception:
+            continue
+        obj = OBJETIVOS[s.objetivo]
+        item = {"mensagem": m.pk, "consulta": obj.nome, "codigo": s.objetivo, "descricao": obj.descricao[:300],
+                "tabelas": list(obj.tabelas), "criterios": item.get("ja_definido", {}),
+                "situacao": (m.ficha or {}).get("tipo", "")}
+        cm = ConsultaModelo.objects.filter(codigo=s.objetivo).first() if obj.modelo_id else None
+        if cm is not None:
+            item["filtros"] = descrever_filtros(cm, user)
+        res = restaurar(user, m.resultado) if m.resultado else None
+        if res is not None and not getattr(res, "consolidado", False):
+            item["colunas"] = list(res.colunas)
+            item["premissas"] = [p for p in res.premissas if not _DINHEIRO_RE.search(p)][:12]
+        out.append(item)
+    return out[::-1]
+
+
 def _historico(c, ate=None) -> list[dict]:
     msgs = list(c.mensagens.order_by("-criado_em", "-id")[:HISTORICO + 1])[::-1]
     if ate is not None:
@@ -219,7 +256,12 @@ def conversar(user, c, texto: str, provedor=None, mensagem_usuario_id=None, inte
                  "instrucao": "A mensagem responde à pergunta pendente da verificação: use investigar_lista com o que "
                               "ela disse para retomar a mesma verificação."}
     from . import calculos
+    try:
+        consultas_conversa = _consultas_conversa(user, c, defs)
+    except Exception:
+        consultas_conversa = []  # contexto auxiliar: nunca impede a resposta
     entrada = EntradaAgente(
+        consultas_conversa=consultas_conversa,
         resultado_anterior=calculos.contexto(user, c),
         lista_anterior=lista,
         mensagem=texto, hoje=timezone.localdate().isoformat(), historico=_historico(c, mensagem_usuario_id),
@@ -273,6 +315,20 @@ SEM_TEMPO = "O tempo total para responder esta mensagem acabou antes de eu concl
 
 
 def _ciclo_agente(user, c, texto, provedor, interrompido, entrada, objetivos, codigos_par, defs, atual,
+                  administrador, cfg, cobertura=None, verificar=False, mensagem_id=None, acomp=None,
+                  observacoes=None) -> Saida:
+    """M48: roda o ciclo e marca na ficha o formato que a pessoa pediu ("direto": só o valor)."""
+    from . import objetivos as coord
+
+    ac = acomp or coord.Acompanhamento(texto)
+    saida = _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, codigos_par, defs, atual,
+                          administrador, cfg, cobertura, verificar, mensagem_id, ac, observacoes)
+    if ac.formato and saida is not None:
+        saida.ficha = {**(saida.ficha or {}), "formato": ac.formato}
+    return saida
+
+
+def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, codigos_par, defs, atual,
                   administrador, cfg, cobertura=None, verificar=False, mensagem_id=None, acomp=None,
                   observacoes=None) -> Saida:
     """Ciclo com evidência de cumprimento (M38). Cada passo: decidir → agir → medir o que foi entregue
@@ -562,13 +618,18 @@ def _encerrar_sem_cumprir(ac, user, c, mensagem_id, saida, previa, causa, observ
             o = coord.registrar(ac, user, c, mensagem_id, situacao, f"sem evidência: {causa}", incidente=inc)
             ficha["objetivo"] = o.pk
         tentei = coord.resumo_tentativas(ac)
-        aviso = (f" Registrei o diagnóstico técnico nº {inc.pk} para a manutenção (só códigos do que foi tentado, sem "
-                 "dados da consulta). Se uma correção for publicada, refaço este pedido e respondo aqui."
-                 if situacao == SO.MANUTENCAO else
-                 " Isso já tinha sido encaminhado à manutenção e voltou a acontecer; ficou para análise de uma pessoa da TI."
-                 if retomado else "")
-        final = Saida(f"{texto}\n\n{falta}." + (f" Tentei: {tentei}." if tentei else "")
-                      + " Não vou repetir a mesma tentativa nem dizer que está pronto." + aviso, ficha)
+        if situacao == SO.MANUTENCAO:
+            # M48: fala como uma IA de verdade: avisa que está corrigindo e volta com a resposta sozinha.
+            ficha["corrigindo"] = True
+            parte = f"{falta}. " if texto else ""  # entregou só uma parte: diz qual falta
+            final = Saida(f"{texto}\n\n{parte}Não tenho isso ainda, corrigindo… A manutenção vai ajustar o sistema "
+                          f"(registro nº {inc.pk}) e, assim que a correção entrar no ar, refaço o pedido e "
+                          "respondo aqui, sem você precisar perguntar de novo.", ficha)
+        else:
+            aviso = (" Isso já tinha sido encaminhado à manutenção e voltou a acontecer; ficou para análise de uma "
+                     "pessoa da TI." if retomado else "")
+            final = Saida(f"{texto}\n\n{falta}." + (f" Tentei: {tentei}." if tentei else "")
+                          + " Não vou repetir a mesma tentativa nem dizer que está pronto." + aviso, ficha)
         registrar("modelo_falhou", "agente", usuario=user, estado_novo=f"objetivo_{causa}"[:40], resultado="erro")
     final.texto = final.texto.strip()
     final.solicitacao = saida.solicitacao if saida is not None else None

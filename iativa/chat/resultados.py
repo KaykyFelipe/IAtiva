@@ -29,7 +29,7 @@ def empacotar(res):
             "premissas": [_texto(p) for p in res.premissas], "escopo": res.escopo,
             "periodos": [{k: _texto(v) if isinstance(v, str) else v for k, v in p.items()} for p in res.periodos],
             "truncado": res.truncado, "moedas": res.totais.moedas if res.totais else [],
-            "medida_calculada": res.medida_calculada}
+            "medida_calculada": res.medida_calculada, "curta": _texto(res.curta)}
 
 
 def guardar(msg, res):
@@ -67,4 +67,4 @@ def restaurar(user, dados):
     return Resultado(True, dados["mensagem"], colunas=dados["colunas"], tipos=dados["tipos"],
                      linhas=dados["linhas"], premissas=dados["premissas"], escopo=dados['escopo'],
                      truncado=dados.get('truncado', False), periodos=dados.get('periodos', []),
-                     medida_calculada=dados.get('medida_calculada', ''))
+                     medida_calculada=dados.get('medida_calculada', ''), curta_salva=dados.get('curta', ''))

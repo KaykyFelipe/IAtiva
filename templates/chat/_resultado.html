@@ -1,6 +1,11 @@
 {# Apresentação do resultado ao vivo ou do snapshot autorizado da M44. #}
+{% if formato == "direto" and resultado.curta %}{# M48: a pessoa pediu só o valor #}
+<div class="msg ia resultado direto">
+  <p class="resposta-direta"><strong>{{ resultado.curta }}</strong></p>
+</div>
+{% else %}
 <div class="msg ia resultado">
-  <p><strong>{{ resultado.mensagem }}</strong></p>
+  {% if formato != "direto" %}<p><strong>{{ resultado.mensagem }}</strong></p>{% endif %}
   {% if resultado.linhas %}
     <div class="tabela-rolagem">
       <table>
@@ -13,11 +18,12 @@
       </table>
     </div>
   {% endif %}
-  {% if resultado.premissas %}
+  {% if resultado.premissas and formato != "direto" and formato != "resumo" %}
     <details class="premissas">
       <summary>Critérios e premissas desta consulta</summary>
       <ul>{% for p in resultado.premissas %}<li>{{ p }}</li>{% endfor %}</ul>
     </details>
   {% endif %}
-  <p class="nota">Resultado salvo no histórico, com os dados da execução original. Use “Executar de novo” para atualizar.</p>
+  {% if not formato %}<p class="nota">Resultado salvo no histórico, com os dados da execução original. Use “Executar de novo” para atualizar.</p>{% endif %}
 </div>
+{% endif %}
