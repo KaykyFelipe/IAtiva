@@ -134,6 +134,7 @@ def test_mensagem_com_duas_perguntas_responde_as_duas(ana):
     msg, res = conversas.enviar(ana, c, "quanto vamos receber? e quanto está em atraso?", p)
     assert p.chamadas == 2, (p.chamadas, msg.texto)
     assert res is not None and res.ok
+    assert "títulos, somando" in msg.texto, msg.texto  # o número da 1ª pergunta continua visível
 
 
 def test_segunda_pergunta_sem_consulta_nao_vira_resposta(ana):

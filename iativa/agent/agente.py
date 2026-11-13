@@ -420,7 +420,7 @@ def _ciclo_agente(user, c, texto, provedor, interrompido, entrada, objetivos, co
             # M41: depois da 1ª resposta, texto sem consulta não comprova a outra pergunta ("já rodei as duas"):
             # ficam só as respostas já conferidas, sem a afirmação do modelo.
             return _fechar(ac, user, c, mensagem_id, previa, ac.entregue)
-        if (ac.partes_faltam > 0 and (ac.cumprido(ev) or ac.entregue) and ac.pode_cutucar()
+        if (ac.partes_faltam > 0 and ac.cumprido(ev) and ac.pode_cutucar()
                 and ev not in (coord.PERGUNTA, coord.BLOQUEIO, coord.DELEGADA)):
             # M41: "quantos entraram? e quantos saíram?": a primeira resposta saiu; falta a outra pergunta.
             ac.cutucadas += 1
@@ -641,6 +641,11 @@ def _juntar(previa: "Saida", saida: "Saida") -> "Saida":
     """A resposta final inclui a etapa anterior (ex.: a lista que foi mostrada) e o passo seguinte."""
     if saida.resultado is None:
         saida.resultado = previa.resultado
+    elif previa.resultado is not None and previa.resultado is not saida.resultado:
+        # M41: só a última tabela aparece; o número já conferido da etapa anterior vai no texto.
+        anterior = getattr(previa.resultado, "mensagem", "")
+        if anterior and anterior not in previa.texto:
+            previa.texto = f"{previa.texto}\n\n{anterior}".strip()
     if previa.texto and previa.texto not in saida.texto:
         saida.texto = f"{previa.texto}\n\n{saida.texto}".strip()
     if saida.solicitacao is None:
