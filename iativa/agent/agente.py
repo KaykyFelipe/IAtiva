@@ -417,12 +417,6 @@ def _ciclo_agente(user, c, texto, provedor, interrompido, entrada, objetivos, co
             # Sucesso intermediário: a ação deu certo, mas entregou menos do que o pedido exige.
             if saida.resultado is not None or saida.ficha.get("tipo"):
                 previa = saida
-            if d.acao in ("aprender_tabela", "criar_consulta"):
-                # A consulta recém-aprendida precisa estar no catálogo do próximo passo (ex.: para o cálculo).
-                objetivos = objetivos_para(user)
-                codigos_par = sorted({cod for o in objetivos for cod in o.parametros} | set(PARAMETROS_APRENDIDOS))
-                defs = orq._definicoes(codigos_par)
-                entrada = replace(entrada, objetivos=_catalogo(user, objetivos, defs))
             if ac.exig == coord.VERIFICACAO:
                 base = _lista_vista(user, c)
                 lista = investigacao.contexto_para_modelo(user, base) if base is not None else None
