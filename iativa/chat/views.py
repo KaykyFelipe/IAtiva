@@ -69,6 +69,7 @@ def _contexto(request, c=None, form=None, erro="", resultado=None, resultado_msg
                    "iniciais": iniciais or "?", "setor": setor.nome if setor else "Sem setor"},
         "layout": _layout(request),
         "tarefa_fixa": tarefa_ativa(request.user, c),
+        "objetivo_pendente": objetivo_pendente(request.user, c),
         "frase_inicio": FRASES_INICIO[request.session.get("inicio_frase", 0) % len(FRASES_INICIO)],
     }
 
@@ -410,3 +411,27 @@ def atividade(request, conversa_id):
     """Barra fixa acima do compositor com o andamento da tarefa em segundo plano (M26)."""
     c = _obter(request, conversa_id)
     return render(request, "chat/_atividade.html", {"conversa": c, "tarefa_fixa": tarefa_ativa(request.user, c)})
+
+
+def objetivo_pendente(user, c):
+    """Pedido desta conversa que o worker ainda está continuando (M38)."""
+    from iativa.agent.models import Objetivo, SituacaoObjetivo
+
+    if c is None:
+        return None
+    return Objetivo.objects.filter(usuario=user, conversa=c, situacao=SituacaoObjetivo.CONTINUAR).order_by("-id").first()
+
+
+@require_GET
+def objetivo(request, objetivo_id):
+    """Situação do pedido em continuação. Quando termina, manda o navegador recarregar a conversa."""
+    from iativa.agent.models import Objetivo, SituacaoObjetivo
+
+    o = Objetivo.objects.select_related("conversa").filter(pk=objetivo_id, usuario=request.user).first()
+    if o is None or not conversas.pode_ver(request.user, o.conversa):
+        raise Http404
+    if o.situacao != SituacaoObjetivo.CONTINUAR:
+        resposta = HttpResponse(status=200)
+        resposta["HX-Refresh"] = "true"
+        return resposta
+    return render(request, "chat/_objetivo.html", {"objetivo": o})

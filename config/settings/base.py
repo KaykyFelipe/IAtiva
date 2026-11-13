@@ -157,9 +157,15 @@ IATIVA_VINCULO_POR_DOCUMENTO = False
 # M22 — ciclo do agente em uma mensagem: quantas ações diferentes ele pode tentar quando a primeira
 # não resolve, quantas vezes repete uma consulta que caiu por erro transitório e o tempo total.
 IATIVA_AGENTE_CICLO = {
-    "passos": 3,
+    "passos": 5,
     "retentativas": 1,
     "tempo_s": 120,
+    # M38: avisos ao modelo quando ele só anuncia/repete; passos seguidos sem evidência nova que encerram
+    # o ciclo; quantas vezes o worker continua o mesmo pedido; espera antes de continuar.
+    "cutucadas": 2,
+    "sem_progresso": 2,
+    "continuacoes": 2,
+    "espera_s": 45,
 }
 
 IATIVA_AGENTE = {

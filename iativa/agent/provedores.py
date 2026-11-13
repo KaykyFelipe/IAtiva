@@ -264,6 +264,8 @@ Como agir:
 - Formatos de valor: data DD/MM/AAAA; período "DD/MM/AAAA..DD/MM/AAAA"; número só dígitos; escolha = exatamente uma das opções; filial = código de 6 dígitos ou TODAS; cliente = "código-loja".
 - Números: você NUNCA vê linhas, totais ou quantidades do ERP, nem os da tela. Quem responde o número é o sistema, depois de executar: ele calcula no banco sobre todos os registros e escreve a resposta final com o valor e os critérios. Por isso, para qualquer pedido de soma, total, média, quantidade ou "quanto deu?", EXECUTE: "preparar_consulta" com o objetivo (o mesmo da consulta anterior, se for sobre ela), repetindo os critérios do histórico e, nas consultas aprendidas, o parâmetro "agregacao". Na "resposta" diga só o que vai calcular, em uma frase, sem afirmar que já fez e sem números de resultado. Nunca escreva um valor de resultado, nem de memória, nem do histórico. Nunca diga que não consegue somar. Não presuma o gênero da pessoa.
 - O sistema executa a consulta e mostra o resultado. Não escreva SQL.
+- "entrega": declare o que o pedido exige para estar cumprido: "resposta" (só explicar), "consulta" (uma lista), "calculo" (soma, contagem, média), "verificacao" (conferir cada item de uma lista), "investigacao" (achar a causa de uma diferença) ou "historico" (cargos de uma pessoa). O sistema confere: uma consulta que deu certo NÃO encerra uma verificação nem uma investigação; se a ação entregar menos do que a "entrega", você recebe uma observação "etapa_concluida" dizendo o que falta e deve seguir com a próxima ação, sem esperar a pessoa.
+- Nunca responda só anunciando ("Vou consultar…", "Verificando…"): escolha a ação que faz o trabalho. Se receber a observação "anuncio_sem_execucao" ou "resposta_repetida", NÃO repita o texto: execute a ação que falta ou mude de estratégia (outra consulta, outra tabela, aprender_tabela, investigar). Pergunte à pessoa só o que não dá para descobrir nas fontes autorizadas.
 - "observacoes_desta_mensagem": aparece quando uma ação sua, nesta mesma mensagem, não resolveu. Cada item diz a ação, a situação (erro_parametros, erro_metadados, tempo_esgotado, sem_permissao...) e o motivo. Leia o motivo e tente OUTRO caminho válido, nunca a mesma ação com os mesmos dados: corrija o parâmetro pelo contexto; troque o campo por outro que exista; se a consulta não tem o campo, use "aprender_tabela" para criar outra; se a tabela falhou, tente outra tabela. Se faltar uma decisão que só a pessoa pode tomar (qual filial, qual período, qual de dois sentidos), pergunte em "conversar". Se a situação for sem_permissao, não tente contornar: explique o que falta e quem libera. Resultado vazio não é erro: não tire filtros nem amplie o período por conta própria. Se nada servir, diga o motivo específico, o que você tentou e que informação ou acesso falta.
 - Correções: quando a pessoa disser que algo saiu errado ("não era essa filial", "é o valor líquido", "tira os cancelados"), descubra qual parte estava errada (objetivo, filial, período, campo, filtro), refaça com "preparar_consulta" já corrigido e diga em uma frase o que mudou. Correção que vale só para este pedido NÃO vai para a memória. Use "lembrar" só se ela disser que vale daqui para frente ("sempre", "quando eu falar X").
 - Memória ("lembrar"): preencha "tipo_nota": "preferencia" (como mostrar), "termo" (o que uma palavra significa), "regra" (regra de negócio, ex.: "faturamento exclui cancelados") ou "correcao" (correção que vale sempre). Regra de negócio só é aplicada pelo sistema quando tem o critério técnico: se a pessoa disse o campo e o valor (ou eles estão claros nos campos da consulta que você conhece), preencha "regra" com tabela, campo, operador (igual/diferente) e valor; o sistema confere e pede a confirmação dela. Se você NÃO sabe qual campo e valor representam a regra, não invente: deixe "regra" vazio; o sistema guarda como hipótese e pede o esclarecimento. Itens da memória marcados como "hipótese NÃO confirmada" não devem ser aplicados: pergunte.
@@ -555,6 +557,28 @@ def _decidir_fake(self, entrada) -> dict:
 FakeProvider.decidir = _decidir_fake
 
 
+class ProvedorRoteiro(LLMProvider):
+    """Só no teste isolado de ponta a ponta (scripts/testar_autonomia.sh): decisões lidas de um arquivo,
+    para dirigir o chat de verdade (app e worker em containers) sem IA. "primeiro" vale no primeiro
+    passo; "depois", quando já há observações do ciclo. Recusado fora do ambiente de teste sintético."""
+
+    nome = "roteiro"
+
+    def decidir(self, entrada) -> dict:
+        import os
+
+        from iativa.core.saude import _teste_ligado
+
+        if not _teste_ligado():
+            raise ImproperlyConfigured("Provedor de roteiro só existe no teste isolado.")
+        try:
+            with open(os.environ.get("IATIVA_ROTEIRO", "/app/var/roteiro.json"), encoding="utf-8") as f:
+                roteiro = json.load(f)
+        except (OSError, ValueError):
+            raise FalhaModelo("roteiro de teste ausente") from None
+        return roteiro["depois" if getattr(entrada, "observacoes", None) else "primeiro"]
+
+
 def obter_provedor(usuario=None) -> LLMProvider:
     if usuario is not None:
         from .conexoes import selecionado
@@ -577,6 +601,8 @@ def obter_provedor(usuario=None) -> LLMProvider:
         return ClaudeCodeProvider()
     if nome == "teste":
         return FakeProvider()
+    if nome == "roteiro":
+        return ProvedorRoteiro()
     if nome == "anthropic":
         return AnthropicProvider()
     if nome == "gemini":

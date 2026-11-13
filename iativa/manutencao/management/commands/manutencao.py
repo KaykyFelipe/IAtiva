@@ -53,6 +53,11 @@ class Command(BaseCommand):
                 raise CommandError("situação inválida")
             Incidente.objects.filter(pk=o["id"]).update(situacao=o["situacao"], commit=o["commit"][:40],
                                                          versao_corrigida=o["versao"][:40], motivo=o["motivo"][:300])
+            if o["situacao"] in (SituacaoIncidente.FALHOU, SituacaoIncidente.BLOQUEADO, SituacaoIncidente.NAO_ELEGIVEL):
+                # Sem correção automática: os pedidos que esperavam por ela não ficam pendurados em silêncio.
+                from iativa.agent import objetivos
+
+                objetivos.encerrar_por_incidente(o["id"], o["motivo"])
             self.stdout.write("ok")
             return
         if acao == "retomar":

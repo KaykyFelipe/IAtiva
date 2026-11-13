@@ -29,7 +29,7 @@ Veja [CHATGPT.md](CHATGPT.md). Conexões Claude existentes e interruptores são 
 | Informação/regra de negócio desconhecida | a IA pergunta à pessoa; não mexe no código |
 | Falta de permissão | nunca amplia acesso; nada a corrigir |
 | Limitação da fonte de dados | registrada; não mexe no código |
-| Capacidade técnica ausente | bloqueada para decisão administrativa |
+| Capacidade técnica ausente | com a trilha do pedido (M38): elegível à **triagem** — só é corrigida se a manutenção reproduzir com dados sintéticos; sem trilha, fica para decisão administrativa |
 
 ## Correções automáticas
 

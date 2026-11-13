@@ -62,6 +62,7 @@
       {% for e in form.mensagem.errors %}<p class="erro" role="alert">{{ e }}</p>{% endfor %}
       <label class="sr" for="campo-mensagem">Mensagem</label>
       {% if tarefa_fixa %}{% include "chat/_atividade.html" %}{% endif %}
+      {% if objetivo_pendente %}{% include "chat/_objetivo.html" with objetivo=objetivo_pendente %}{% endif %}
       <div class="caixa-compositor">
         <textarea id="campo-mensagem" name="mensagem" rows="1" maxlength="{{ form.fields.mensagem.max_length }}" placeholder="{% if conversa %}Continue a conversa…{% else %}Pergunte à IAtiva…{% endif %}" required data-campo></textarea>
         <div class="compositor-acoes"><span class="contexto-compositor">{% include "chat/_icone.html" with nome="cadeado" %}{% if conversa.tipo == TipoConversa.SETOR %}Conversa do setor{% elif conversa.tipo == TipoConversa.MESTRE %}Seus setores autorizados{% else %}Somente os dados que você pode consultar{% endif %}</span><button type="submit" class="enviar" aria-label="Enviar" data-botao-enviar>{% include "chat/_icone.html" with nome="enviar" %}</button></div>

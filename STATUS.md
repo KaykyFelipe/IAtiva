@@ -1,8 +1,17 @@
 # STATUS — IAtiva
 
-**Atualizado em:** 2026-11-12
+**Atualizado em:** 2026-11-13
 **Etapa atual:** 7 — Piloto local
 **Situação:** **plano proposto em `PLANO.md` §8, aguardando aprovação.** Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
+
+## Mudança M38 — autonomia geral: objetivo, evidência, continuação e manutenção (2026-11-13)
+
+- O pedido só termina com evidência do que foi pedido; consulta que deu certo não encerra verificação nem investigação. Anúncio sem execução e resposta repetida voltam ao modelo; sem progresso, o ciclo para.
+- No limite de passos/tempo o worker continua sozinho; capacidade ausente sem exceção vai para a manutenção com diagnóstico só de códigos; depois da correção publicada, o pedido original é refeito uma vez.
+- Testes: 678 aprovados e 10 pulados no Windows (28 novos em `tests/test_objetivos.py`).
+- **Comprovado de ponta a ponta** no servidor autorizado, em ambiente isolado com dados sintéticos e defeito injetado só na cópia (`scripts/testar_autonomia.sh`, 12 verificações): pedido parou sem a evidência → incidente elegível → executor reproduziu, corrigiu, validou, publicou num repositório local e implantou por azul/verde → versão conferida → worker refez o pedido → verificação concluída com a lista inteira.
+- **Não comprovado:** decisões do modelo real nesse fluxo (o teste usa roteiros fixos no lugar da IA) e a correção de um incidente de capacidade escrita pela IA de manutenção real. Ver limitações em `docs/AUTONOMIA.md`.
+- Atenção: a manutenção está ligada com publicação no servidor; incidentes de capacidade passam a ser elegíveis à triagem automática, dentro dos limites existentes (3 por dia, 6 arquivos, 250 linhas).
 
 ## Mudança M37 — investigação de divergências (2026-11-12)
 

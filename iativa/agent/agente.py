@@ -176,7 +176,8 @@ def _interpretar(provedor, entrada, codigos_obj, codigos_par):
     raise FalhaModelo("sem decisão válida")
 
 
-def conversar(user, c, texto: str, provedor=None, mensagem_usuario_id=None, interrompido=None) -> Saida:
+def conversar(user, c, texto: str, provedor=None, mensagem_usuario_id=None, interrompido=None, acomp=None,
+              observacoes=None) -> Saida:
     objetivos = objetivos_para(user)
     administrador = pode_aprender(user)
     if not objetivos and not administrador:
@@ -188,7 +189,7 @@ def conversar(user, c, texto: str, provedor=None, mensagem_usuario_id=None, inte
     codigos_par = sorted({cod for o in objetivos for cod in o.parametros} | set(PARAMETROS_APRENDIDOS))
     defs = orq._definicoes(codigos_par)
     atual = _ativa(user, c)
-    direta = _resposta_direta(user, atual, texto, defs)
+    direta = _resposta_direta(user, atual, texto, defs) if acomp is None else None
     if direta is not None:
         # "001001" em resposta a "qual filial?": aplica sem passar pelo modelo (mais rápido e sem erro).
         registrar("interpretacao", "agente", usuario=user, estado_novo="resposta_direta", entidade_id=atual.pk, linhas=1)
@@ -237,18 +238,29 @@ def conversar(user, c, texto: str, provedor=None, mensagem_usuario_id=None, inte
     cobertura = base_lista if (lista is not None and pede_cobertura) else None
     with prazo.definir(float(cfg["tempo_s"])):
         return _ciclo_agente(user, c, texto, provedor, interrompido, entrada, objetivos, codigos_par, defs, atual,
-                             administrador, cfg, cobertura, pede_cobertura or bool(VERIFICAR_RE.search(t_norm)))
+                             administrador, cfg, cobertura, pede_cobertura, mensagem_id=mensagem_usuario_id,
+                             acomp=acomp, observacoes=observacoes)
 
 
 SEM_TEMPO = "O tempo total para responder esta mensagem acabou antes de eu concluir."
 
 
 def _ciclo_agente(user, c, texto, provedor, interrompido, entrada, objetivos, codigos_par, defs, atual,
-                  administrador, cfg, cobertura=None, verificar=False) -> Saida:
-    feitas, observacoes, saida = set(), [], None
+                  administrador, cfg, cobertura=None, verificar=False, mensagem_id=None, acomp=None,
+                  observacoes=None) -> Saida:
+    """Ciclo com evidência de cumprimento (M38). Cada passo: decidir → agir → medir o que foi entregue
+    contra o que o pedido exige (`objetivos.py`). Consulta que deu certo não encerra uma verificação;
+    texto que só anuncia ou repete não é progresso; sem progresso, para e encaminha em vez de insistir."""
+    from . import diagnostico, historico_funcional
+    from . import objetivos as coord
+
+    ac = acomp or coord.Acompanhamento(texto)
+    feitas, observacoes, saida = set(), list(observacoes or []), None
     previa = None  # etapa intermediária concluída (ex.: a lista) que a próxima etapa completa
+    causa = "passos"
     for _ in range(max(1, int(cfg["passos"]))):
         if prazo.esgotado():
+            causa = "prazo"
             break
         entrada_passo = entrada if not observacoes else replace(
             entrada, solicitacao_atual=_estado(user, atual, defs), observacoes=[o.para_modelo() for o in observacoes])
@@ -257,10 +269,12 @@ def _ciclo_agente(user, c, texto, provedor, interrompido, entrada, objetivos, co
         try:
             d = _interpretar(provedor, entrada_passo, [o.codigo for o in objetivos], codigos_par)
         except prazo.PrazoEsgotado:
+            causa = "prazo"
             break
         except FalhaModelo as exc:
-            if saida is not None or prazo.esgotado():
-                break  # a correção não veio (ou o tempo acabou): vale a resposta da tentativa anterior
+            if saida is not None or prazo.esgotado() or ac.trilha:
+                causa = "prazo" if prazo.esgotado() else "modelo_falhou"
+                break  # a correção não veio (ou o tempo acabou): decide abaixo se continua depois
             registrar("modelo_falhou", "agente", usuario=user, estado_novo=provedor.nome, resultado="erro")
             if provedor.nome in ("claude-code", "chatgpt"):
                 return Saida(str(exc), ficha={"tipo": "falha_modelo"})
@@ -272,9 +286,8 @@ def _ciclo_agente(user, c, texto, provedor, interrompido, entrada, objetivos, co
         if interrompido is not None and interrompido():
             raise Interrompido  # antes de qualquer ação (e de consultar o ERP)
         if prazo.esgotado():
+            causa = "prazo"
             break  # o modelo respondeu tarde: a ação não é executada com o prazo vencido
-        assinatura = _assinatura(d)
-        from . import diagnostico
         if diagnostico.solicitado(texto) and diagnostico.reutilizavel(texto) and d.acao == 'conversar':
             anterior = _ultima(user, c)
             if (anterior is not None and anterior.objetivo in {o.codigo for o in objetivos}
@@ -282,15 +295,29 @@ def _ciclo_agente(user, c, texto, provedor, interrompido, entrada, objetivos, co
                 from iativa.query.servico import repetir
                 atual = repetir(user, anterior, conversa=c)
                 d = replace(d, acao='executar_consulta', objetivo=atual.objetivo, resposta='')
-                assinatura = _assinatura(d)
-        from . import historico_funcional
         if historico_funcional.solicitado(texto) and d.acao in (
                 "conversar", "preparar_consulta", "executar_consulta", "aprender_tabela", "criar_consulta", "historico_cargo"):
             # Histórico funcional exige encadear fontes: listar matrículas não conclui esse pedido.
             nome = historico_funcional.nome_contexto(user, c, texto, d)
             d = replace(d, acao="historico_cargo", alvo=nome)
-            assinatura = _assinatura(d)
+        ac.definir(d)
+        # Texto que só anuncia uma ação, ou repete a resposta anterior para outra pergunta, não é progresso.
+        sem_acao = coord.texto_sem_acao(d, c, mensagem_id, texto) if cobertura is None else ""
+        if sem_acao:
+            ac.anotar(d.acao, sem_acao)
+            registrar("interpretacao", "agente", usuario=user, estado_novo=sem_acao, resultado="erro")
+            if ac.pode_cutucar():
+                ac.cutucadas += 1
+                observacoes.append(Observacao(d.acao, sem_acao, coord.TEXTO_OBS[sem_acao]))
+                andamento.avisar("A resposta só anunciava a ação; pedindo a execução" if sem_acao == coord.ANUNCIO
+                                 else "A resposta repetia a anterior; mudando de estratégia")
+                continue
+            causa = sem_acao
+            break
+        assinatura = _assinatura(d)
         if assinatura in feitas:
+            ac.anotar(d.acao, "acao_repetida")
+            causa = "acao_repetida"
             break  # a mesma ação com os mesmos dados já falhou: não repete
         feitas.add(assinatura)
         registrar("interpretacao", "agente", usuario=user, estado_novo=d.acao, entidade_id=atual.pk if atual else None,
@@ -307,8 +334,8 @@ def _ciclo_agente(user, c, texto, provedor, interrompido, entrada, objetivos, co
                 saida.ficha = {**saida.ficha, 'tipo': 'diagnostico',
                                'investigacao_completa': saida.resultado.completo, 'conclusao_validada': False}
             except PermissaoNegada:
-                return Saida('A investigação foi interrompida por uma restrição de acesso.',
-                             {**saida.ficha, 'tipo': 'bloqueada'})
+                saida = Saida('A investigação foi interrompida por uma restrição de acesso.',
+                              {**saida.ficha, 'tipo': 'bloqueada'})
             except (ValidationError, prazo.PrazoEsgotado):
                 from .diagnostico import Diagnostico, Bloco
                 saida.resultado = Diagnostico([Bloco('Consulta inicial', saida.resultado)],
@@ -316,55 +343,160 @@ def _ciclo_agente(user, c, texto, provedor, interrompido, entrada, objetivos, co
                     'A consulta inicial não comprova a causa da divergência.', completo=False)
                 saida.texto = 'A investigação ficou incompleta; não apresentei a soma inicial como conclusão.'
                 saida.ficha = {**saida.ficha, 'tipo': 'diagnostico', 'investigacao_completa': False}
-            return saida
+            ev = coord.evidencia(d, saida)
+            ac.anotar(d.acao, "ok" if ev else "incompleta", ev)
+            # Investigação parcial mostra o que conseguiu, marcada como incompleta (nunca como conclusão).
+            return _fechar(ac, user, c, mensagem_id, saida, ev or coord.INVESTIGACAO, parcial=not ev)
+        ev = coord.evidencia(d, saida)  # o que ESTA ação entregou (antes de juntar com a etapa anterior)
         if previa is not None:
             saida = _juntar(previa, saida)
-        if (verificar and previa is None and d.acao in ("preparar_consulta", "executar_consulta", "criar_consulta",
-                                                        "aprender_tabela")
-                and getattr(saida.resultado, "ok", False) and not getattr(saida.resultado, "consolidado", False)):
-            # A lista é etapa, não resposta: o pedido era verificar cada integrante. Segue sem nova mensagem.
-            base = _lista_vista(user, c)
-            lista = investigacao.contexto_para_modelo(user, base) if base is not None else None
-            if lista is not None:
-                previa, cobertura = saida, base
-                entrada = replace(entrada, lista_anterior=lista)
-                observacoes.append(Observacao(d.acao, "etapa_concluida", (
-                    f"A lista “{lista['nome']}” foi consultada; isso é só a primeira etapa. O pedido é verificar cada "
-                    "integrante: siga com investigar_lista usando os campos de lista_anterior. Só pare para perguntar "
-                    "à pessoa (conversar terminando em pergunta) se faltar uma decisão que só ela pode dar.")))
-                andamento.avisar("Lista pronta; agora vou verificar cada pessoa")
-                atual = _ativa(user, c)
-                continue
-        if saida.observacao is None or not saida.observacao.recuperavel:
-            return saida
-        observacoes.append(saida.observacao)
-        atual = _ativa(user, c)
-    if previa is not None and saida.ficha.get("tipo") != "tarefa" and not saida.texto.strip().endswith("?"):
-        # Evidência de cumprimento: a verificação pedida não foi feita. Não encerra como se tivesse sido.
-        saida = _juntar(previa, Saida(
-            "A verificação pedida ainda não foi feita: só a lista foi consultada. Peça de novo, ou diga quais "
-            "campos indicam o vínculo (por exemplo, admissão e demissão), e eu verifico todas as pessoas.",
-            {**previa.ficha, "verificacao_pendente": True}))
-        registrar("modelo_falhou", "agente", usuario=user, estado_novo="verificacao_nao_feita", resultado="erro")
-        from iativa.manutencao import incidentes
-        from iativa.manutencao.models import Categoria
+        ac.anotar(d.acao, saida.observacao.situacao if saida.observacao else ("ok" if ev else "sem_resultado"), ev)
+        if ac.cumprido(ev) or ev in (coord.PERGUNTA, coord.BLOQUEIO):
+            return _fechar(ac, user, c, mensagem_id, saida, ev)
+        if saida.observacao is not None and saida.observacao.recuperavel:
+            observacoes.append(saida.observacao)
+            atual = _ativa(user, c)
+            continue
+        if ev:
+            # Sucesso intermediário: a ação deu certo, mas entregou menos do que o pedido exige.
+            if saida.resultado is not None or saida.ficha.get("tipo"):
+                previa = saida
+            if ac.exig == coord.VERIFICACAO:
+                base = _lista_vista(user, c)
+                lista = investigacao.contexto_para_modelo(user, base) if base is not None else None
+                if lista is not None:
+                    cobertura = base
+                    entrada = replace(entrada, lista_anterior=lista)
+            observacoes.append(Observacao(d.acao, coord.ETAPA, ac.falta_obs()))
+            andamento.avisar("Etapa concluída; ainda falta parte do pedido" if ac.exig != coord.VERIFICACAO
+                             else "Lista pronta; agora vou verificar cada pessoa")
+            atual = _ativa(user, c)
+            continue
+        causa = saida.observacao.situacao if saida.observacao is not None else "sem_resultado"
+        break
+    return _encerrar_sem_cumprir(ac, user, c, mensagem_id, saida, previa, causa, observacoes)
 
-        incidentes.registrar("agente", "verificar_lista", categoria=Categoria.CAPACIDADE,
-                             condicoes={"acao": "investigar_lista", "situacao": "verificacao_nao_feita"})
-        return saida
-    if saida is None:
+
+PASSAGEIRAS = ("prazo", "passos", "modelo_falhou", TEMPO_ESGOTADO, FALHA_TRANSITORIA)
+
+
+def _fechar(ac, user, c, mensagem_id, saida, ev, parcial=False) -> Saida:
+    """Pedido encerrado por evidência (cumprido), por pergunta à pessoa ou por impedimento real."""
+    from . import objetivos as coord
+    from .models import SituacaoObjetivo as SO
+
+    situacao = (SO.AGUARDANDO if ev == coord.PERGUNTA else SO.IMPEDIDO if (ev == coord.BLOQUEIO or parcial)
+                else SO.CUMPRIDO)
+    if mensagem_id is not None and (ac.registro is not None or len(ac.trilha) > 1 or situacao != SO.CUMPRIDO):
+        o = coord.registrar(ac, user, c, mensagem_id, situacao,
+                            "investigação incompleta" if parcial else ("sem permissão" if ev == coord.BLOQUEIO else ""))
+        saida.ficha = {**saida.ficha, "objetivo": o.pk}
+    return saida
+
+
+def _encerrar_sem_cumprir(ac, user, c, mensagem_id, saida, previa, causa, observacoes) -> Saida:
+    """O ciclo parou sem a evidência exigida. Três saídas honestas, nunca "pronto":
+    continuar em segundo plano (limite/falha passageira com trabalho andando), encaminhar à manutenção
+    (sem progresso: capacidade ausente ou defeito sem exceção) ou impedimento real explicado."""
+    from . import objetivos as coord
+    from .models import SituacaoObjetivo as SO
+
+    if saida is None and not ac.trilha:
         registrar("modelo_falhou", "agente", usuario=user, estado_novo="prazo_esgotado", resultado="erro")
         return Saida(SEM_TEMPO + " Nada foi consultado. Tente de novo; se repetir, a IA está lenta agora.",
                      ficha={"tipo": "falha_modelo"}, observacao=Observacao("", TEMPO_ESGOTADO, "prazo total"))
-    if prazo.esgotado() and saida.observacao is not None and saida.observacao.recuperavel:
-        saida.texto = f"{saida.texto} {SEM_TEMPO}".strip()
-    if len(observacoes) > 1:
+    ficha = dict(saida.ficha) if saida is not None else {}
+    texto = (saida.texto if saida is not None else "").strip()
+    if prazo.esgotado() and saida is not None and saida.observacao is not None and saida.observacao.recuperavel:
+        texto = f"{texto} {SEM_TEMPO}".strip()
+    tentativas = [o for o in observacoes if o.situacao in RECUPERAVEIS]
+    if len(tentativas) > 1:
         # Limite atingido sem resolver: diz o que foi tentado, em vez de uma recusa genérica.
-        saida.texto = (f"{saida.texto} Tentei {len(observacoes)} caminhos nesta mensagem ("
-                       + "; ".join(sorted({ROTULO_ACAO.get(o.acao, o.acao) for o in observacoes}))
-                       + ") e parei no limite de tentativas.").strip()
-        saida.ficha = {**saida.ficha, "tentativas": len(observacoes)}
-    return saida
+        texto = (f"{texto} Tentei {len(tentativas)} caminhos nesta mensagem ("
+                 + "; ".join(sorted({ROTULO_ACAO.get(o.acao, o.acao) for o in tentativas}))
+                 + ") e parei no limite de tentativas.").strip()
+        ficha["tentativas"] = len(tentativas)
+    exig = ac.exig or coord.RESPOSTA
+    falta = coord.FALTA[exig]
+    if exig == coord.VERIFICACAO:
+        ficha["verificacao_pendente"] = True
+    registro = ac.registro
+    feitas = registro.continuacoes if registro is not None else 0
+    andando = not ac.estagnado() or causa in (TEMPO_ESGOTADO, FALHA_TRANSITORIA, "modelo_falhou", "prazo")
+    if (causa in PASSAGEIRAS and andando and mensagem_id is not None and feitas < int(coord.cfg()["continuacoes"])
+            and not (registro is not None and registro.retomado and causa == "passos")):
+        o = coord.registrar(ac, user, c, mensagem_id, SO.CONTINUAR, f"continua: {causa}",
+                            espera_s=int(coord.cfg()["espera_s"]))
+        final = Saida(f"{texto}\n\n{falta}. Continuo em segundo plano e respondo aqui, sem você precisar pedir de novo."
+                      .strip(), {**ficha, "tipo": ficha.get("tipo") or "objetivo", "objetivo": o.pk})
+        registrar("modelo_falhou", "agente", usuario=user, estado_novo="objetivo_continua", resultado="erro")
+    elif causa in PASSAGEIRAS:
+        # Falha passageira que persistiu: não é defeito de código, não vai para a manutenção.
+        if mensagem_id is not None:
+            o = coord.registrar(ac, user, c, mensagem_id, SO.IMPEDIDO, f"falha passageira persistente: {causa}")
+            ficha["objetivo"] = o.pk
+        final = Saida(f"{texto}\n\n{falta}. O ERP ou a IA não responderam a tempo mesmo depois de eu tentar de novo; "
+                      "nada ficou pela metade. Tente outra vez em alguns minutos.".strip(), ficha)
+    else:
+        ultima = _ultima(user, c)
+        tabela = ""
+        if ultima is not None and ultima.objetivo in OBJETIVOS and OBJETIVOS[ultima.objetivo].modelo_id:
+            tabela = OBJETIVOS[ultima.objetivo].tabelas[0]
+        inc = coord.encaminhar_manutencao(ac, causa, tabela)
+        retomado = registro is not None and registro.retomado
+        situacao = SO.MANUTENCAO if (inc is not None and mensagem_id is not None and not retomado) else SO.IMPEDIDO
+        if mensagem_id is not None:
+            o = coord.registrar(ac, user, c, mensagem_id, situacao, f"sem evidência: {causa}", incidente=inc)
+            ficha["objetivo"] = o.pk
+        tentei = coord.resumo_tentativas(ac)
+        aviso = (f" Registrei o diagnóstico técnico nº {inc.pk} para a manutenção (só códigos do que foi tentado, sem "
+                 "dados da consulta). Se uma correção for publicada, refaço este pedido e respondo aqui."
+                 if situacao == SO.MANUTENCAO else
+                 " Isso já tinha sido encaminhado à manutenção e voltou a acontecer; ficou para análise de uma pessoa da TI."
+                 if retomado else "")
+        final = Saida(f"{texto}\n\n{falta}." + (f" Tentei: {tentei}." if tentei else "")
+                      + " Não vou repetir a mesma tentativa nem dizer que está pronto." + aviso, ficha)
+        registrar("modelo_falhou", "agente", usuario=user, estado_novo=f"objetivo_{causa}"[:40], resultado="erro")
+    final.texto = final.texto.strip()
+    final.solicitacao = saida.solicitacao if saida is not None else None
+    final.observacao = saida.observacao if saida is not None else None
+    if saida is not None and saida.resultado is not None:
+        final.resultado = saida.resultado
+    return _juntar(previa, final) if previa is not None and previa is not saida else final
+
+
+def continuar_objetivo(o):
+    """Worker: continua o pedido preservado (M38). Refaz o ciclo com orçamento novo a partir do texto
+    original (que está na mensagem da pessoa); permissões e critérios são reconferidos pelo ciclo.
+    O resultado em memória não é gravado: a mensagem diz como vê-lo de novo."""
+    from django.db import transaction
+
+    from iativa.chat import conversas
+    from iativa.chat.models import Mensagem, Papel
+
+    from . import objetivos as coord
+    from .models import Objetivo, SituacaoObjetivo as SO
+
+    with transaction.atomic():
+        user, c = o.usuario, o.conversa
+        if coord.superado(o) or not conversas.pode_escrever(user, c):
+            Objetivo.objects.filter(pk=o.pk).update(situacao=SO.SUPERADO, execucao="", lease_ate=None)
+            return None
+        Objetivo.objects.filter(pk=o.pk).update(continuacoes=o.continuacoes + 1)
+        o.refresh_from_db()
+        ac = coord.Acompanhamento(o.mensagem.texto, exig=o.exigencia, origem=o.origem, registro=o)
+        feito = ", ".join(o.trilha[-6:]) or "nada concluído"
+        obs = [Observacao("continuacao", "continuacao",
+                          f"Continuação automática do MESMO pedido (a pessoa não mandou nova mensagem). Já tentado "
+                          f"(ação:situação:evidência): {feito}. {coord.FALTA.get(o.exigencia, '')}: {coord.COMO.get(o.exigencia, '')}.")]
+        saida = conversar(user, c, o.mensagem.texto, mensagem_usuario_id=o.mensagem_id, acomp=ac, observacoes=obs)
+        prefixo = ("Depois da correção publicada, refiz o seu pedido. " if o.retomado
+                   else "Continuando o seu pedido, sem você precisar pedir de novo. ")
+        texto = prefixo + saida.texto
+        if saida.resultado is not None and saida.solicitacao is not None:
+            texto += "\n\nOs dados não ficam guardados fora da tela: use “Executar de novo” para vê-los."
+        return Mensagem.objects.create(conversa=c, papel=Papel.IA, texto=texto[:4000], ficha=saida.ficha,
+                                       solicitacao=saida.solicitacao)
 
 
 # M25: pedidos sobre a lista inteira geram obrigação de cobertura verificada pelo backend.

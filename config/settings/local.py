@@ -72,9 +72,12 @@ SYNTHETIC_ERP_PATH = Path(env("IATIVA_SYNTHETIC_ERP_PATH", str(BASE_DIR / "var" 
 
 # M22 — limites do ciclo do agente por mensagem (opcionais; padrão em base.py).
 IATIVA_AGENTE_CICLO = {
-    "passos": int(env("IATIVA_AGENTE_PASSOS", "3")),
+    **IATIVA_AGENTE_CICLO,  # noqa: F405
+    "passos": int(env("IATIVA_AGENTE_PASSOS", "5")),
     "retentativas": int(env("IATIVA_AGENTE_RETENTATIVAS", "1")),
     "tempo_s": int(env("IATIVA_AGENTE_TEMPO_S", "120")),
+    "continuacoes": int(env("IATIVA_AGENTE_CONTINUACOES", "2")),
+    "espera_s": int(env("IATIVA_AGENTE_ESPERA_S", "45")),
 }
 
 # M25 — tarefas longas e comparação de vínculos pelo documento (ver base.py).

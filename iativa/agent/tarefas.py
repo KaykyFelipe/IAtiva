@@ -367,7 +367,9 @@ def retomar_apos_correcao(incidente_id: int) -> int:
             progresso="Retomada depois de uma correção publicada.",
             consumo={**t.consumo, "retomada_pos_correcao": True},
             etapas=[dict(e, estado="pendente", evidencia="", tentativas=0) for e in t.etapas])
-    return n
+    from . import objetivos
+
+    return n + objetivos.retomar_apos_correcao(incidente_id)
 
 
 def _marcar_atual(t, estado):
@@ -409,7 +411,11 @@ def processar_proxima() -> bool:
     if t is not None:
         executar(t)
         return True
-    return reconstruir_proxima()
+    if reconstruir_proxima():
+        return True
+    from . import objetivos
+
+    return objetivos.continuar_proximo()
 
 
 def solicitar_reconstrucao(t: Tarefa) -> bool:

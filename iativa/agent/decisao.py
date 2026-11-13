@@ -73,6 +73,10 @@ class Decisao:
     regra: dict | None = None
     validade: str = ""
     investigacao: dict | None = None
+    entrega: str = ""  # M38: o que o pedido exige para estar cumprido (declarado pelo modelo)
+
+
+ENTREGAS = ("", "resposta", "consulta", "calculo", "verificacao", "investigacao", "historico")
 
 
 def esquema(codigos_objetivo, codigos_parametro) -> dict:
@@ -97,6 +101,10 @@ def esquema(codigos_objetivo, codigos_parametro) -> dict:
             "nota": {"type": "string", "description": "O que guardar na memória (ação lembrar)."},
             "confirmado": {"type": "boolean"},
             "opcoes": {"type": "array", "items": {"type": "string"}},
+            "entrega": {"type": "string", "enum": list(ENTREGAS),
+                        "description": "O que o pedido exige para estar cumprido: resposta (só explicar), consulta "
+                                       "(lista), calculo (soma/contagem/média), verificacao (conferir cada item de uma "
+                                       "lista), investigacao (achar a causa de uma diferença), historico (cargos de uma pessoa)."},
             "alcance": {"type": "string", "enum": list(ALCANCES),
                         "description": "Ação lembrar: usuario, setor ou empresa; vazio = padrão."},
             "tipo_nota": {"type": "string", "enum": list(TIPOS_NOTA),
@@ -153,7 +161,7 @@ def validar(saida, codigos_objetivo, codigos_parametro) -> Decisao:
     if not isinstance(saida, dict):
         raise DecisaoInvalida("formato")
     extras = set(saida) - {"resposta", "acao", "objetivo", "parametros", "alvo", "nota", "confirmado", "opcoes",
-                           "alcance", "consulta", "tipo_nota", "regra", "validade", "investigacao"}
+                           "alcance", "consulta", "tipo_nota", "regra", "validade", "investigacao", "entrega"}
     if extras:
         raise DecisaoInvalida("campos extras")
     acao = saida.get("acao")
@@ -198,7 +206,11 @@ def validar(saida, codigos_objetivo, codigos_parametro) -> Decisao:
             raise DecisaoInvalida("investigacao.campos")
         investigacao = {"campos": {k: _texto(v, 20, k).upper() for k, v in campos.items() if v},
                         "identidade": "documento" if investigacao.get("identidade") == "documento" else "nome"}
+    entrega = saida.get("entrega") or ""
+    if entrega not in ENTREGAS:
+        raise DecisaoInvalida("entrega")
     return Decisao(
+        entrega=entrega,
         investigacao=investigacao,
         tipo_nota=tipo_nota, regra=regra, validade=_texto(saida.get("validade", "") or "", 10, "validade"),
         consulta=consulta,

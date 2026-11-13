@@ -201,6 +201,11 @@ def investigar(user, s, inicial, interrompido=None):
                 out.completo = False
                 motivo = str(exc) if isinstance(exc, ValidationError) else type(exc).__name__
                 out.blocos.append(Bloco(titulo, mensagem='Não concluído: ' + motivo))
+                if not isinstance(exc, ValidationError):
+                    # Etapa que quebrou vira incidente (sanitizado): a manutenção passa a enxergar a falha.
+                    from iativa.manutencao import incidentes
+
+                    incidentes.registrar('agente', 'diagnostico.etapa', exc, condicoes={'acao': 'investigar_divergencia'})
 
         def original(filial):
             return montar(s.objetivo, {**vals, 'filial-analise': filial})

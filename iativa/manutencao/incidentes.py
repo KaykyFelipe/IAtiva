@@ -23,7 +23,9 @@ from .models import Categoria, Incidente, SituacaoIncidente
 logger = logging.getLogger(__name__)
 
 CONDICOES_PERMITIDAS = {"etapa", "tipo_tarefa", "situacao", "acao", "objetivo_tipo", "metodo", "rota", "provedor",
-                        "fonte"}
+                        "fonte", "exigencia", "causa", "tabela"}
+# M38: trilha do pedido que parou sem evidência ("ação:situação:evidência"), só códigos.
+TRILHA_ITEM = re.compile(r"^[a-z_-]{1,40}:[a-z_-]{1,40}:[a-z_-]{1,40}$")
 VALOR_SEGURO = re.compile(r"^[a-z0-9_./:-]{1,60}$")
 MAX_TENTATIVAS = 2
 MAX_REABERTURAS = 1
@@ -48,7 +50,14 @@ def _rastreamento(exc) -> list[str]:
 
 def _condicoes(cond: dict | None) -> dict:
     out = {}
+    trilha = (cond or {}).get("trilha")
+    if isinstance(trilha, (list, tuple)):
+        limpa = [x for x in trilha if isinstance(x, str) and TRILHA_ITEM.match(x)][-30:]
+        if limpa:
+            out["trilha"] = limpa
     for k, v in (cond or {}).items():
+        if k == "trilha":
+            continue
         v = str(v).strip().lower()
         if k in CONDICOES_PERMITIDAS and VALOR_SEGURO.match(v):
             out[k] = v
@@ -83,7 +92,11 @@ def registrar(componente: str, operacao: str, exc=None, categoria: str = "", con
         assinatura = hashlib.sha256(base.encode()).hexdigest()
         codigo = f"{componente}.{operacao}.{tipo}"[:80]
         correlacao = uuid.uuid4().hex
-        elegivel = categoria == Categoria.ERRO_TECNICO and bool(rastro)
+        limpas = _condicoes(condicoes)
+        # Erro técnico com rastreamento, ou capacidade ausente com a trilha do pedido (triagem: a manutenção
+        # só corrige se reproduzir com dados sintéticos; ver scripts/manutencao.py).
+        elegivel = (categoria == Categoria.ERRO_TECNICO and bool(rastro)) or (
+            categoria == Categoria.CAPACIDADE and bool(limpas.get("trilha")))
         with transaction.atomic():
             atual = Incidente.objects.select_for_update().filter(assinatura=assinatura).first()
             if atual is None:
@@ -92,7 +105,7 @@ def registrar(componente: str, operacao: str, exc=None, categoria: str = "", con
                         return Incidente.objects.create(
                             assinatura=assinatura, categoria=categoria, codigo=codigo, componente=componente[:60],
                             operacao=operacao[:80], versao=versao(), correlacao=correlacao, rastreamento=rastro,
-                            condicoes=_condicoes(condicoes),
+                            condicoes=limpas,
                             situacao=SituacaoIncidente.ABERTO if elegivel else SituacaoIncidente.NAO_ELEGIVEL)
                 except IntegrityError:
                     atual = Incidente.objects.select_for_update().get(assinatura=assinatura)
@@ -114,8 +127,11 @@ def registrar(componente: str, operacao: str, exc=None, categoria: str = "", con
 
 
 def elegivel(inc: Incidente) -> bool:
-    return (inc.categoria == Categoria.ERRO_TECNICO and inc.situacao == SituacaoIncidente.ABERTO
-            and inc.tentativas < MAX_TENTATIVAS and bool(inc.rastreamento))
+    if inc.situacao != SituacaoIncidente.ABERTO or inc.tentativas >= MAX_TENTATIVAS:
+        return False
+    if inc.categoria == Categoria.ERRO_TECNICO:
+        return bool(inc.rastreamento)
+    return inc.categoria == Categoria.CAPACIDADE and bool((inc.condicoes or {}).get("trilha"))
 
 
 def diagnostico(inc: Incidente) -> dict:

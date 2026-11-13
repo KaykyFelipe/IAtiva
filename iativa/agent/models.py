@@ -122,6 +122,44 @@ class Tarefa(models.Model):
         return self.situacao in TERMINAIS
 
 
+class SituacaoObjetivo(models.TextChoices):
+    CUMPRIDO = "cumprido", "Cumprido"
+    AGUARDANDO = "aguardando_usuario", "Aguardando a pessoa"
+    IMPEDIDO = "impedido", "Impedimento real"
+    CONTINUAR = "continuar", "Continua em segundo plano"
+    MANUTENCAO = "manutencao", "Aguardando correção da manutenção"
+    SUPERADO = "superado", "A conversa seguiu"
+
+
+class Objetivo(models.Model):
+    """Pedido acompanhado até a conclusão (M38). Guarda só códigos: o que o pedido exige, o que cada
+    ação entregou (trilha "ação:situação:evidência"), situação e contadores. O texto do pedido fica na
+    própria mensagem do usuário; respostas, linhas e números do ERP nunca entram aqui."""
+
+    usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="+")
+    conversa = models.ForeignKey("iativa_chat.ConversationContext", on_delete=models.CASCADE, related_name="objetivos")
+    mensagem = models.ForeignKey("iativa_chat.Mensagem", on_delete=models.CASCADE, related_name="+")
+    exigencia = models.CharField(max_length=20)
+    origem = models.CharField(max_length=10)  # detector | modelo | acao
+    situacao = models.CharField(max_length=20, choices=SituacaoObjetivo.choices)
+    trilha = models.JSONField(default=list)
+    melhor_evidencia = models.CharField(max_length=20, blank=True)
+    motivo = models.CharField(max_length=300, blank=True)
+    passos = models.PositiveIntegerField(default=0)
+    continuacoes = models.PositiveIntegerField(default=0)
+    retomado = models.BooleanField(default=False)  # já voltou uma vez depois de correção publicada
+    incidente = models.ForeignKey("iativa_manutencao.Incidente", on_delete=models.SET_NULL, null=True, blank=True,
+                                  related_name="objetivos")
+    execucao = models.CharField(max_length=32, blank=True)
+    lease_ate = models.DateTimeField(null=True, blank=True)
+    criado_em = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-id"]
+        indexes = [models.Index(fields=["situacao", "lease_ate"])]
+
+
 class TipoNota(models.TextChoices):
     PREFERENCIA = "preferencia", "Preferência de apresentação"
     TERMO = "termo", "Definição de termo"

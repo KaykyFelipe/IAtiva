@@ -269,7 +269,8 @@ def avaliar(user, s: RequestContext, erros=None) -> Resposta:
         s = _bloquear(user, s, motivo)
         return Resposta("bloqueada", MOTIVOS[motivo], **{**base, "solicitacao": s})
 
-    if s.estado == E.PRONTA:
+    if s.estado in (E.PRONTA, E.FALHOU, E.NAO_VALIDADA):
+        # Falhou/não validada e veio nova tentativa (mesmos critérios): volta à preparação em vez de quebrar.
         s = _para_aguardando(user, s)
     avaliacao = avaliar_completude(user, s, [defs[c] for c in objetivo.obrigatorios])
     s.refresh_from_db()
