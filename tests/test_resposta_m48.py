@@ -67,3 +67,18 @@ def test_ia_ve_as_consultas_da_conversa_sem_numeros(base):
     contexto = _contexto_agente(p.entradas[0])
     assert "consultas_desta_conversa" in contexto
     assert not re.search(r"R\$\s*\d", contexto)  # nenhum valor do ERP vai ao modelo
+
+
+def test_contexto_traz_hora_do_servidor():
+    from datetime import datetime
+    from unittest import mock
+
+    from django.utils import timezone
+
+    from iativa.agent.decisao import EntradaAgente
+
+    agora = timezone.make_aware(datetime(2026, 11, 13, 18, 25, 7))
+    with mock.patch("django.utils.timezone.localtime", return_value=agora):
+        ctx = _contexto_agente(EntradaAgente(mensagem="que horas?", hoje="2026-11-13", historico=[], objetivos=[],
+                                             solicitacao_atual=None))
+    assert "13/11/2026 18:25:07 (sexta-feira" in ctx

@@ -4,6 +4,10 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **plano proposto em `PLANO.md` §8, aguardando aprovação.** Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M49 — hora do servidor para a IA (2026-11-13)
+
+- O contexto do modelo traz "agora" (data, hora, dia da semana e fuso do servidor, lido a cada chamada). "Que horas são?" é respondido direto. Sem acesso de shell/Docker ao modelo: só o relógio é exposto.
+
 ## Mudança M48 — resposta no formato pedido e correção automática (2026-11-13)
 
 - A IA declara o formato da resposta pelo que a pessoa pediu, sem palavra fixa: "direto" mostra só o valor montado pelo backend depois de executar (ex.: "195 dias úteis", um total, a medida de uma linha), sem tabela, critérios nem texto extra; "resumo" tira as premissas e limita o texto. Resposta direta fica salva no snapshot e reaparece igual ao reabrir.
