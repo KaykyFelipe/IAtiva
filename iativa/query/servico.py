@@ -12,7 +12,7 @@ filtros e sem limite, traz quantidade, somas, mínimos e máximos. Médias entre
 soma ÷ contagem (nunca média de médias). A soma das linhas exibidas é chamada de subtotal.
 """
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date
 from decimal import Decimal
 
@@ -325,7 +325,10 @@ def executar_solicitacao(user, s: RequestContext) -> Resultado:
             for filial in filiais:  # "todas as filiais": uma consulta por filial autorizada, mesmo validador
                 andamento.avisar(f"Consultando o ERP — {rotulo(filial)}")
                 plano = montar(s.objetivo, {**valores, "filial-analise": filial})
-                comp = compilar(plano, cat, limite)
+                mesclar = todas and len(filiais) > 1 and _pode_mesclar(plano)
+                # O líder geral pode não ser top N em nenhuma filial. Somar todos os grupos
+                # autorizados antes do ranking, mantendo o teto de leitura de cada consulta.
+                comp = compilar(replace(plano, top=0) if mesclar else plano, cat, limite)
                 permitidas = {t.fisica for t in cat.tabelas([plano.base] + [j.tabela for j in plano.juncoes]).values()}
                 validar(comp.sql, permitidas, limite + 1)
                 if plano.juncoes:
@@ -339,6 +342,12 @@ def executar_solicitacao(user, s: RequestContext) -> Resultado:
                     cat, comp.sql, comp.params, limite, cfg["timeout_s"],
                     validar_final=lambda sql, p=permitidas: validar(sql, p, limite + 1),
                 )
+                if mesclar and cortou:
+                    return _encerrar(user, s, E.NAO_VALIDADA, inicio, 0,
+                                     "O número de grupos ultrapassou o limite de leitura. O ranking geral "
+                                     "não foi validado, pois faltariam valores de outras filiais. "
+                                     "Reduza o período ou delimite os critérios para conferir todos os grupos.",
+                                     ERRO_PARAMETROS)
                 specs = medidas_do_plano(plano)
                 calculo = any(c.agregacao for c in plano.colunas)
                 if acumulador is None:
@@ -434,13 +443,18 @@ def executar_solicitacao(user, s: RequestContext) -> Resultado:
     return res
 
 
+def _pode_mesclar(plano):
+    aggs = [c.agregacao for c in plano.colunas]
+    return (plano.agrupar and any(aggs) and not all(aggs)
+            and all(a in ("SUM", "COUNT", "MIN", "MAX") for a in aggs if a))
+
+
 def _mesclar_filiais(plano, comp, linhas):
     """M40: "todas as filiais" roda uma consulta por filial. Agrupado por algo que não é a filial (cliente,
     produto...), o mesmo grupo aparece em várias filiais: soma SUM/COUNT entre elas e aplica o top N geral.
-    MIN/MAX/AVG não se somam: nesses casos mantém uma linha por filial."""
+    MIN/MAX escolhem o extremo entre filiais; AVG mantém uma linha por filial."""
     aggs = [c.agregacao for c in plano.colunas]
-    if (len(aggs) != len(comp.rotulos) or not any(aggs) or all(aggs)
-            or any(a not in ("SUM", "COUNT", "MIN", "MAX") for a in aggs if a)):
+    if len(aggs) != len(comp.rotulos) or not _pode_mesclar(plano):
         return linhas, False
     grupos = {}
     for linha in linhas:

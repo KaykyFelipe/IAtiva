@@ -4,6 +4,15 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **plano proposto em `PLANO.md` §8, aguardando aprovação.** Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Revisão M43 — correções das mudanças M40–M42 (2026-11-13)
+
+- Ranking geral reúne todos os grupos de cada filial antes de aplicar top N; se o teto de leitura impedir a cobertura, o resultado não é validado como ranking geral. Limites de leitura e permissões preservados.
+- Criação e filtros obrigatórios são atômicos: filtro inválido não deixa consulta aprovada sem o critério. Nome já existente com filtros diferentes exige outra consulta, sem alterar a definição compartilhada.
+- Filtros pessoais têm junções próprias; antes de ajustar/desfazer filtros globais, dependências antigas e versões pessoais são preservadas usando apenas metadados. Ajustes pessoais e globais serializam pelo mesmo registro da consulta.
+- Critérios diferentes contam como ações diferentes no ciclo. Pergunta pendente não fica cumprida por uma afirmação sem consulta; memória só conta como registrada após confirmação do backend e não substitui a resposta às demais perguntas.
+- Diagnóstico de possíveis títulos repetidos não afirma que as diferenças se resumem ao prefixo/tipo sem conferir os demais critérios.
+- Validação: 743 testes aprovados e 10 pulados no Windows, incluindo 10 regressões novas; Django check sem problemas e nenhuma migração pendente de geração. Nenhuma consulta ao ERP real nesta revisão.
+
 ## Mudança M40 — ajustar e voltar filtro de consulta a pedido (2026-11-13)
 
 - Ações `ajustar_filtro` e `voltar_filtro`: a pessoa pede para mudar o filtro de uma consulta aprendida (inclusive campo de tabela ligada, ex.: TES) e pode voltar como era antes.
@@ -13,7 +22,7 @@
 - Rodada de perguntas no chat real (M40): ranking "todas as filiais" passa a ser geral (grupos somados entre filiais); a resposta diz o maior/menor grupo; consulta nova nasce com os filtros da definição do termo; investigação confere duplicidade (fornecedor/cliente, número, parcela, valor) e natureza, com resumo do assunto certo (sem texto de faturamento fora de SF2/SD2).
 - Definido por Diego: "contas a pagar" é o saldo em aberto (E2_SALDO). Registrado pelo chat como definição da empresa (aprovação imediata); conversa nova já soma o saldo.
 - M41 (rodada de perguntas): inadimplência "10 maiores" sem perguntas extras e com top 10 geral; "quanto vamos receber" pela consulta fixa num passo; "admitidos e saídos no ano" responde as duas partes. A IA tinha tirado sozinha o filtro de demitidos da consulta de admissão; foi restaurado pelo chat e agora ajuste sem pedido é recusado.
-- M42: filtros em duas camadas (fixos do T.I para todos; do usuário só para quem pediu). Validado no chat: "só pra mim, admissões contam também quem já foi demitido" virou filtro só de Diego (254 admitidos no ano); os demais continuam vendo 182.
+- M42: filtros em duas camadas (fixos do T.I para todos; do usuário só para quem pediu). Validado no chat: "só pra mim, admissões contam também quem já foi demitido" virou filtro só de Diego; os demais continuam com a definição original.
 - Testes: 716 aprovados e 10 pulados no Windows (9 novos em `tests/test_ajuste_filtro.py`).
 
 ## Mudança M39 — correções da autonomia e conexões de IA (2026-11-13)

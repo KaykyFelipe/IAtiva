@@ -10,6 +10,7 @@ Só administradores aprendem. Nada de SQL livre: a consulta-modelo é estrutura 
 compilador e validador das consultas fixas.
 """
 import re
+from copy import deepcopy
 import unicodedata
 
 from django.conf import settings
@@ -227,6 +228,13 @@ def criar_automatico(user, consulta: dict) -> ConsultaModelo:
         raise PermissaoNegada("Sem setor para usar a consulta.")
     igual = ConsultaModelo.objects.filter(tabela=alias, nome=dados["nome"], situacao=SituacaoModelo.APROVADA).first()
     if igual is not None:
+        if consulta.get("filtros"):
+            pedidos = {(f["campo"], OPERADORES_AJUSTE[f["operador"]], f["valor"].strip())
+                       for f in consulta["filtros"]}
+            atuais = {(f["campo"], f.get("op", "="), f["valor"]) for f in igual.spec.get("filtros_fixos", [])}
+            if pedidos != atuais:
+                raise ValidationError("Já existe uma consulta com esse nome e outros filtros. "
+                                      "Use outro nome para criar a consulta com os critérios pedidos.")
         return igual
     cm = salvar_proposta(user, alias, dados, automatico=True)
     pedidas = consulta.get("juncoes") or []
@@ -252,6 +260,9 @@ def criar_automatico(user, consulta: dict) -> ConsultaModelo:
             cm.spec = spec
             cm.save(update_fields=["spec"])
             _testar_compilacao(cm)
+    if consulta.get("filtros"):
+        # Criação e critérios são uma única transação: nunca aprovar/executar a versão sem o filtro.
+        cm = ajustar_filtros(user, cm, consulta["filtros"], [], criacao=True)
     cm.situacao, cm.aprovado_por, cm.aprovado_em = SituacaoModelo.APROVADA, user, timezone.now()
     cm.save(update_fields=["situacao", "aprovado_por", "aprovado_em"])
     registrar("parametro_aprovado", "agente", usuario=user, entidade_id=cm.pk, estado_novo="modelo_aprovado_automatico")
@@ -424,6 +435,36 @@ def camada_usuario(user, cm) -> dict:
     return dict(fu.camada) if fu is not None else {}
 
 
+def _independizar_camadas(cm):
+    """Preserva camadas M42 antigas que reutilizavam aliases da consulta compartilhada.
+    Também preserva versões para desfazer; só metadados existentes, sem consultar o ERP."""
+    from .models import FiltroUsuario
+
+    base = {j["alias"]: j for j in cm.spec.get("juncoes", [])}
+    if not base:
+        return
+    for fu in FiltroUsuario.objects.select_for_update().filter(consulta=cm):
+        camada = deepcopy(fu.camada)
+        mudou = False
+        for versao in [camada] + camada.get("anteriores", []):
+            js = versao.setdefault("juncoes", [])
+            usados = {j["alias"] for j in js}
+            for f in versao.get("filtros", []):
+                antigo = f.get("alias")
+                if antigo not in base or antigo in usados:
+                    continue
+                novo = next(f"u{n}" for n in range(1, 100) if f"u{n}" not in usados)
+                js.append({**deepcopy(base[antigo]), "alias": novo})
+                usados.add(novo)
+                for outro in versao.get("filtros", []):
+                    if outro.get("alias") == antigo:
+                        outro["alias"] = novo
+                mudou = True
+        if mudou:
+            fu.camada = camada
+            fu.save(update_fields=["camada", "atualizado_em"])
+
+
 @transaction.atomic
 def ajustar_filtros(user, cm, filtros: list[dict], remover: list[str], alcance: str = "",
                     criacao: bool = False) -> ConsultaModelo:
@@ -440,6 +481,7 @@ def ajustar_filtros(user, cm, filtros: list[dict], remover: list[str], alcance: 
         raise PermissaoNegada("Só o T.I (permissão geral) muda o filtro que vale para todos. "
                               "Posso criar esse filtro só para você.")
     cm = ConsultaModelo.objects.select_for_update().get(pk=cm.pk)
+    _independizar_camadas(cm)
     spec = dict(cm.spec)
     juncoes = [dict(j) for j in spec.get("juncoes", [])]
     atuais = {f["campo"]: dict(f) for f in spec.get("filtros_fixos", [])}
@@ -461,6 +503,8 @@ def ajustar_filtros(user, cm, filtros: list[dict], remover: list[str], alcance: 
 def _ajustar_do_usuario(user, cm, filtros, remover) -> ConsultaModelo:
     from .models import FiltroUsuario
 
+    cm = ConsultaModelo.objects.select_for_update().get(pk=cm.pk)
+    _independizar_camadas(cm)
     fu, _ = FiltroUsuario.objects.select_for_update().get_or_create(usuario=user, consulta=cm)
     camada = dict(fu.camada)
     atuais = {f["campo"]: dict(f) for f in camada.get("filtros", [])}
@@ -474,7 +518,7 @@ def _ajustar_do_usuario(user, cm, filtros, remover) -> ConsultaModelo:
             desligados.append(campo)  # o filtro do T.I deixa de valer só para esta pessoa
         else:
             raise ValidationError(f"A consulta não tem filtro em {campo}.")
-    _novos_filtros(user, cm, atuais, juncoes, filtros, "u", cm.spec.get("juncoes", []))
+    _novos_filtros(user, cm, atuais, juncoes, filtros, "u", cm.spec.get("juncoes", []), reutilizar_base=False)
     for campo in atuais:
         if campo in fixos and campo not in desligados:
             desligados.append(campo)  # o critério da pessoa substitui o do T.I no mesmo campo
@@ -492,7 +536,7 @@ def _ajustar_do_usuario(user, cm, filtros, remover) -> ConsultaModelo:
 
 
 def _novos_filtros(user, cm, atuais: dict, juncoes: list, filtros: list[dict], prefixo: str,
-                   juncoes_base=()) -> None:
+                   juncoes_base=(), reutilizar_base=True) -> None:
     """Valida e aplica `filtros` em `atuais`/`juncoes`. Campo de tabela ligada pelo dicionário entra com a
     junção pela chave; uma tabela já ligada em `juncoes_base` (camada do T.I) é reaproveitada."""
     por_nome = {c.nome: c for c in campos_da_tabela(user, cm.tabela, automatico=not pode_aprender(user))["campos"]}
@@ -511,9 +555,11 @@ def _novos_filtros(user, cm, atuais: dict, juncoes: list, filtros: list[dict], p
         j = next((j for j in possiveis if any(c.nome == campo for c in j["campos"])), None)
         if j is None:
             raise ValidationError(f"O campo {campo} não está em {cm.tabela} nem numa tabela ligada a ela pelo dicionário.")
-        existente = next((x for x in list(juncoes_base) + juncoes if x["tabela"] == j["tabela"]), None)
+        candidatas = (list(juncoes_base) if reutilizar_base else []) + juncoes
+        existente = next((x for x in candidatas if x["tabela"] == j["tabela"]), None)
         if existente is None:
-            if len(juncoes) + len(juncoes_base) >= MAX_JUNCOES + 1:
+            tabelas = {x["tabela"] for x in list(juncoes_base) + juncoes}
+            if j["tabela"] not in tabelas and len(tabelas) >= MAX_JUNCOES + 1:
                 raise ValidationError("A consulta já tem o máximo de tabelas ligadas.")
             usados = {x["alias"] for x in juncoes}
             apelido = next(f"{prefixo}{n}" for n in range(1, 10) if f"{prefixo}{n}" not in usados)
@@ -541,6 +587,7 @@ def voltar_filtros(user, cm, alcance: str = "") -> ConsultaModelo:
     if not pode_ajustar(user) or alcance_padrao(user) != TODOS:
         raise PermissaoNegada("Só o T.I (permissão geral) muda o filtro que vale para todos.")
     cm = ConsultaModelo.objects.select_for_update().get(pk=cm.pk)
+    _independizar_camadas(cm)
     spec = dict(cm.spec)
     anteriores = list(spec.get("anteriores", []))
     if not anteriores:

@@ -94,7 +94,8 @@ def _ciclo() -> dict:
 
 
 def _assinatura(d) -> str:
-    return json.dumps([d.acao, d.objetivo, sorted(d.parametros), d.alvo, d.nota, d.consulta, d.regra, d.investigacao],
+    return json.dumps([d.acao, d.objetivo, sorted(d.parametros), d.alvo, d.nota, d.consulta, d.regra, d.investigacao,
+                       d.ajuste],
                       sort_keys=True, ensure_ascii=False, default=str)
 
 
@@ -400,29 +401,35 @@ def _ciclo_agente(user, c, texto, provedor, interrompido, entrada, objetivos, co
             saida = _juntar(previa, saida)
         ac.anotar(d.acao, saida.observacao.situacao if saida.observacao else ("ok" if ev else "sem_resultado"), ev)
         if d.acao == "lembrar":
-            ac.memoria_feita = True
-            if ac.entregue:  # a resposta já estava pronta; a memória era o que faltava
+            ac.memoria_feita = bool(saida.ficha.get("memoria_registrada"))
+            if ac.entregue and ac.memoria_feita and ac.partes_faltam <= 0 and ev == coord.ACAO:
                 return _fechar(ac, user, c, mensagem_id, saida, ac.entregue)
+        if ac.cumprido(ev) and d.acao != "lembrar":
+            if ac.partes_faltam < 0:
+                ac.partes_faltam = coord.partes(texto) - 1
+            elif ac.partes_faltam > 0 and ac.entregue:
+                ac.partes_faltam -= 1
         if (ac.cumprido(ev) and coord.pede_memoria(texto) and not ac.memoria_feita and d.acao != "lembrar"
-                and ac.pode_cutucar()):
+                and ac.partes_faltam <= 0):
             # M40: "me dê o valor e guarde isso": a resposta saiu, mas o ensinamento ainda não foi guardado.
+            if not ac.pode_cutucar():
+                causa = "passos"
+                break
             ac.cutucadas += 1
             ac.entregue, previa = ev, saida
             observacoes.append(Observacao(d.acao, coord.ETAPA, coord.FALTA_MEMORIA))
             andamento.avisar("Resposta pronta; agora guardando o que você ensinou")
             continue
-        if ac.partes_faltam > 0 and ac.entregue and ev not in ("", coord.PERGUNTA, coord.BLOQUEIO, coord.DELEGADA,
-                                                               coord.ACAO, coord.RESPOSTA):
-            ac.partes_faltam -= 1  # M41: mais uma das perguntas da mensagem respondida
-        elif ac.cumprido(ev) and ac.partes_faltam < 0 and d.acao != "lembrar":
-            ac.partes_faltam = coord.partes(texto) - 1
         if ac.entregue and ev == coord.RESPOSTA and previa_parte is not None:
             # M41: depois da 1ª resposta, texto sem consulta não comprova a outra pergunta ("já rodei as duas"):
             # ficam só as respostas já conferidas, sem a afirmação do modelo.
-            return _fechar(ac, user, c, mensagem_id, previa, ac.entregue)
-        if (ac.partes_faltam > 0 and ac.cumprido(ev) and ac.pode_cutucar()
+            return _encerrar_sem_cumprir(ac, user, c, mensagem_id, previa, previa, "passos", observacoes)
+        if (ac.partes_faltam > 0 and (ac.cumprido(ev) or (d.acao == "lembrar" and ac.memoria_feita))
                 and ev not in (coord.PERGUNTA, coord.BLOQUEIO, coord.DELEGADA)):
             # M41: "quantos entraram? e quantos saíram?": a primeira resposta saiu; falta a outra pergunta.
+            if not ac.pode_cutucar():
+                causa = "passos"
+                break
             ac.cutucadas += 1
             ac.entregue = ac.entregue or ev
             if previa_parte is None:
@@ -476,6 +483,9 @@ def _fechar(ac, user, c, mensagem_id, saida, ev, parcial=False) -> Saida:
     from . import objetivos as coord
     from .models import SituacaoObjetivo as SO
 
+    if (not parcial and ev not in (coord.DELEGADA, coord.PERGUNTA, coord.BLOQUEIO)
+            and (ac.partes_faltam > 0 or (coord.pede_memoria(ac.texto) and not ac.memoria_feita))):
+        return _encerrar_sem_cumprir(ac, user, c, mensagem_id, saida, None, "passos", [])
     situacao = (SO.TAREFA if ev == coord.DELEGADA else SO.AGUARDANDO if ev == coord.PERGUNTA else SO.IMPEDIDO if (ev == coord.BLOQUEIO or parcial)
                 else SO.CUMPRIDO)
     if mensagem_id is not None and (ac.registro is not None or len(ac.trilha) > 1 or situacao != SO.CUMPRIDO):
@@ -509,7 +519,9 @@ def _encerrar_sem_cumprir(ac, user, c, mensagem_id, saida, previa, causa, observ
                  + ") e parei no limite de tentativas.").strip()
         ficha["tentativas"] = len(tentativas)
     exig = ac.exig or coord.RESPOSTA
-    falta = coord.FALTA[exig]
+    falta = ("Ainda faltam perguntas desta mensagem sem resposta comprovada" if ac.partes_faltam > 0
+             else "O ensinamento pedido ainda não foi guardado" if coord.pede_memoria(ac.texto) and not ac.memoria_feita
+             else coord.FALTA[exig])
     if exig == coord.VERIFICACAO:
         ficha["verificacao_pendente"] = True
     registro = ac.registro
@@ -1010,13 +1022,6 @@ def _aprender_sozinho(user, c, d, texto, ficha, provedor, entrada, atual, motivo
         motivo.append(f"consulta sobre {consulta.get('tabela', '')} recusada: {detalhe}"[:300])
         return None
     registrar("interpretacao", "agente", usuario=user, estado_novo="aprendeu_sozinho", entidade_id=cm.pk)
-    if consulta.get("filtros") and not cm.spec.get("filtros_fixos"):
-        # M40: a consulta nasce com os filtros da definição (ex.: faturamento só com TES que gera duplicata).
-        try:
-            cm = aprendizado.ajustar_filtros(user, cm, consulta["filtros"], [], criacao=True)
-        except (ValidationError, PermissaoNegada) as exc:
-            detalhe = "; ".join(getattr(exc, "messages", None) or [str(exc)])
-            motivo.append(f"filtro da consulta nova recusado: {detalhe}"[:300])
     codigos = set(OBJETIVOS[cm.codigo].parametros)
     defs = orq._definicoes(sorted(codigos))
     d3 = replace(d, acao="preparar_consulta", objetivo=cm.codigo,
@@ -1142,9 +1147,11 @@ def _lembrar(user, d, ficha) -> Saida:
         texto = exc.messages[0]
         if "CPF" in texto:
             texto += " Pode reformular sem esses dados?"
-        return Saida(texto, ficha)
+        return Saida(texto, ficha, observacao=Observacao("lembrar", ERRO_PARAMETROS, "nota recusada"))
     except Exception:  # PermissaoNegada
-        return Saida("Não consegui guardar isso para o setor: seu usuário está sem setor ativo.", ficha)
+        return Saida("Não consegui guardar isso para o setor: seu usuário está sem setor ativo.", ficha,
+                     observacao=Observacao("lembrar", SEM_PERMISSAO, "memória não registrada"))
+    ficha["memoria_registrada"] = True
     c = n.criterios or {}
     criterio = (f"nas consultas sobre {c['tabela']}, só registros com {c['campo']} "
                 f"{'igual a' if c['op'] == '=' else 'diferente de'} “{c['valor']}”") if c else ""

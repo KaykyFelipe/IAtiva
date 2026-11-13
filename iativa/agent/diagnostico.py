@@ -345,7 +345,7 @@ def _duplicidades(evidencias) -> str:
     extra = sum(int(r['Quantidade']) - 1 for r in rep)
     return (f'Encontrei {len(rep)} título(s) com o mesmo fornecedor/cliente, número, parcela e valor lançados mais '
             f'de uma vez ({extra} lançamento(s) a mais, entre os 10 grupos mais repetidos de cada filial); a diferença '
-            'entre eles é só prefixo ou tipo: confira se é duplicidade.')
+            'não comprova duplicidade: confira também loja, prefixo, tipo e demais critérios do título.')
 
 
 def _achados(evidencias):
