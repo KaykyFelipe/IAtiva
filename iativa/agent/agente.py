@@ -395,6 +395,18 @@ def _ciclo_agente(user, c, texto, provedor, interrompido, entrada, objetivos, co
         if previa is not None:
             saida = _juntar(previa, saida)
         ac.anotar(d.acao, saida.observacao.situacao if saida.observacao else ("ok" if ev else "sem_resultado"), ev)
+        if d.acao == "lembrar":
+            ac.memoria_feita = True
+            if ac.entregue:  # a resposta já estava pronta; a memória era o que faltava
+                return _fechar(ac, user, c, mensagem_id, saida, ac.entregue)
+        if (ac.cumprido(ev) and coord.pede_memoria(texto) and not ac.memoria_feita and d.acao != "lembrar"
+                and ac.pode_cutucar()):
+            # M40: "me dê o valor e guarde isso": a resposta saiu, mas o ensinamento ainda não foi guardado.
+            ac.cutucadas += 1
+            ac.entregue, previa = ev, saida
+            observacoes.append(Observacao(d.acao, coord.ETAPA, coord.FALTA_MEMORIA))
+            andamento.avisar("Resposta pronta; agora guardando o que você ensinou")
+            continue
         if ac.cumprido(ev) or ev in (coord.PERGUNTA, coord.BLOQUEIO, coord.DELEGADA):
             return _fechar(ac, user, c, mensagem_id, saida, ev)
         if saida.observacao is not None and saida.observacao.recuperavel:

@@ -68,6 +68,18 @@ PELA_ACAO = {"investigar_lista": VERIFICACAO, "investigar_divergencia": INVESTIG
 TEXTO_REPETIDA_ACAO = ("Essa mesma ação, com os mesmos dados, já foi feita nesta mensagem. Não repita: escolha o "
                        "próximo passo que falta (ex.: ajustar_filtro na consulta criada, ou preparar_consulta com "
                        "agregacao), ou responda com o que já foi verificado.")
+FALTA_MEMORIA = ("A pessoa também pediu para guardar o que ensinou, e isso ainda não foi feito. Use agora a ação "
+                 "lembrar: nota curta e reutilizável (ex.: qual consulta responde ao termo e com qual filtro), "
+                 "tipo_nota termo ou regra, e o alcance pedido (empresa, setor ou usuário). Não refaça a consulta.")
+_MEMORIA_RE = re.compile(r"\b(guard[ae]|lembr[ae]|memoriz|anot[ae]|grav[ae]|daqui (pra|para) frente|"
+                         r"a partir de agora|de agora em diante|sempre que)", re.I)
+
+
+def pede_memoria(texto: str) -> bool:
+    """A mensagem pede para guardar um ensinamento (além de, talvez, responder)."""
+    return bool(_MEMORIA_RE.search(texto or ""))
+
+
 ANUNCIO = "anuncio_sem_execucao"
 REPETIDA = "resposta_repetida"
 ETAPA = "etapa_concluida"
@@ -244,6 +256,8 @@ class Acompanhamento:
     origem: str = ""
     trilha: list = field(default_factory=list)  # "acao:situacao:evidencia"
     cutucadas: int = 0
+    memoria_feita: bool = False  # M40: a ação lembrar já rodou nesta mensagem
+    entregue: str = ""  # M40: evidência que já cumpria o pedido antes do passo de memória
     parado: int = 0  # passos seguidos sem evidência nova
     melhor: str = ""  # melhor evidência obtida
     registro: Objetivo | None = None  # preenchido na continuação pelo worker

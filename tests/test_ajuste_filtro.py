@@ -143,3 +143,18 @@ def test_mesma_mensagem_cria_ajusta_e_soma(ana):
     assert res is not None and res.ok, msg.texto
     assert any("Soma" in col for col in res.colunas), (msg.texto, list(__import__("iativa.agent.models", fromlist=["x"]).Objetivo.objects.values_list("exigencia", "situacao", "trilha")))
     assert "manutenção" not in msg.texto
+
+
+def test_responde_e_guarda_quando_pede_para_guardar(ana):
+    """"Me dê o valor certo e guarde isso": depois da soma, o ciclo ainda guarda o ensinamento."""
+    from iativa.agent.models import NotaAgente
+
+    c = conversas.nova_individual(ana)
+    cm, _ = _consulta(ana, c)
+    soma = _d(acao="preparar_consulta", objetivo=cm.codigo, entrega="calculo",
+              parametros=FILIAL + [{"codigo": "agregacao", "valor": "soma:E1_VALOR"}])
+    p = FakeProvider([soma, _d(acao="lembrar", nota=f"Total de títulos = consulta {cm.nome}", tipo_nota="termo",
+                               alcance="usuario")])
+    msg, res = conversas.enviar(ana, c, "Está errado. O total é a consulta de títulos; guarde isso e me dê o valor", p)
+    assert res is not None and any("Soma" in col for col in res.colunas), msg.texto
+    assert NotaAgente.objects.filter(texto__icontains="Titulos ajustaveis").exists(), (msg.texto[-300:], list(NotaAgente.objects.values_list("texto", "situacao")), list(__import__("iativa.agent.models", fromlist=["x"]).Objetivo.objects.values_list("trilha", flat=True)))
