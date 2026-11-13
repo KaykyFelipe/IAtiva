@@ -57,5 +57,5 @@ def test_consulta_em_todas_as_filiais(erp_sintetico, settings, novo_usuario, pol
                        "confirmado": False, "opcoes": []}])
     msg, res = conversas.enviar(u, c, "e de todas as filiais?", p)
     assert res is not None and res.ok, msg.texto
-    assert res.colunas[0] == "Filial" and len(res.linhas) >= len(um.linhas)
+    assert res.colunas[0] == "Cliente" and len(res.linhas) >= len(um.linhas)  # M41: cliente somado entre filiais
     assert any("Todas as filiais" in x["valor"] for x in msg.ficha["criterios"])

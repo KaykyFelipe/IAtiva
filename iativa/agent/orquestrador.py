@@ -149,11 +149,17 @@ def _registrar_parametro(user, s: RequestContext, definicao, texto: str):
 
         obj = OBJETIVOS[s.objetivo]
         if not obj.modelo_id:
-            raise ValidationError("Cálculos só valem para consultas aprendidas.")
-        try:
-            ler_agregacao(valor, ConsultaModelo.objects.get(pk=obj.modelo_id).spec)
-        except ValueError as exc:
-            raise ValidationError(f"Cálculo inválido: {exc}.") from None
+            from iativa.query.plano import ler_top
+
+            try:
+                valor = f"top {ler_top(valor)}"  # M41: consulta fixa aceita só o ranking
+            except ValueError as exc:
+                raise ValidationError(f"{exc}.") from None
+        else:
+            try:
+                ler_agregacao(valor, ConsultaModelo.objects.get(pk=obj.modelo_id).spec)
+            except ValueError as exc:
+                raise ValidationError(f"Cálculo inválido: {exc}.") from None
     if definicao.tipo == TipoValor.FILIAL and valor == "TODAS" and filiais_autorizadas(user, s.setor):
         pass  # todas as filiais autorizadas; cada uma é conferida de novo na execução
     elif definicao.tipo == TipoValor.FILIAL and valor not in filiais_autorizadas(user, s.setor):

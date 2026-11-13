@@ -46,7 +46,7 @@ FIXOS = {
             descricao="Títulos a receber vencidos e não pagos até uma data de corte, por cliente.",
             tabelas=("SE1", "SA1", "SE5"),
             obrigatorios=("data-corte", "dias-tolerancia-atraso", "tratamento-baixa-parcial", "filial-analise"),
-            opcionais=(BUSCA,),
+            opcionais=(BUSCA, AGREGACAO),  # M41: aqui o cálculo aceita só "top N" (ranking dos maiores)
         ),
         Objetivo(
             codigo="titulos-a-vencer",

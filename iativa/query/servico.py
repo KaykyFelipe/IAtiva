@@ -435,7 +435,7 @@ def _mesclar_filiais(plano, comp, linhas):
     MIN/MAX/AVG não se somam: nesses casos mantém uma linha por filial."""
     aggs = [c.agregacao for c in plano.colunas]
     if (len(aggs) != len(comp.rotulos) or not any(aggs) or all(aggs)
-            or any(a not in ("SUM", "COUNT") for a in aggs if a)):
+            or any(a not in ("SUM", "COUNT", "MIN", "MAX") for a in aggs if a)):
         return linhas, False
     grupos = {}
     for linha in linhas:
@@ -445,8 +445,14 @@ def _mesclar_filiais(plano, comp, linhas):
             grupos[chave] = list(linha)
             continue
         for i, a in enumerate(aggs):
-            if a and linha[i] is not None:
-                atual[i] = (_dec(atual[i]) if atual[i] is not None else Decimal(0)) + _dec(linha[i])
+            if not a or linha[i] is None:
+                continue
+            if atual[i] is None:
+                atual[i] = linha[i]
+            elif a in ("MIN", "MAX"):  # M41: data/valor mais antigo ou maior entre as filiais
+                atual[i] = (min if a == "MIN" else max)(atual[i], linha[i])
+            else:
+                atual[i] = _dec(atual[i]) + _dec(linha[i])
     novas = list(grupos.values())
     ordem = plano.ordenar[0] if plano.ordenar else None
     i = (comp.rotulos.index(ordem[0]) if ordem and ordem[0] in comp.rotulos
@@ -466,7 +472,10 @@ def _destaque(plano, comp, colunas, formatadas, linhas, tipos) -> str:
     aggs = [c.agregacao for c in plano.colunas]
     if len(aggs) != len(comp.rotulos) or not any(aggs):
         return ""
-    i = next(k for k, a in enumerate(aggs) if a)
+    ordem = plano.ordenar[0][0] if plano.ordenar else None
+    # M41: o destaque segue a coluna do ranking (ex.: "Valor em atraso"), não a primeira conta da tabela.
+    i = (comp.rotulos.index(ordem) if ordem in comp.rotulos and aggs[comp.rotulos.index(ordem)] in ("SUM", "COUNT")
+         else next(k for k, a in enumerate(aggs) if a))
     pares = [(_dec(l[i]), f) for l, f in zip(linhas, formatadas) if l[i] is not None]
     def nome(f):
         partes = [f[k] for k in range(len(f)) if k < desloc or not aggs[k - desloc]]

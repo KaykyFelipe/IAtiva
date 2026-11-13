@@ -168,6 +168,14 @@ def ler_agregacao(texto: str, spec: dict):
     return metricas, grupo, top
 
 
+def ler_top(texto: str) -> int:
+    """M41: consulta fixa (ex.: inadimplência) aceita só o ranking: "top 10" -> 10."""
+    m = re.search(r"\btop\s*(\d{1,3})\b", str(texto or ""), re.I)
+    if not m:
+        raise ValueError("Nesta consulta o cálculo aceito é só o ranking dos maiores: \"top N\"")
+    return max(1, min(100, int(m.group(1))))
+
+
 def apelido(spec: dict, campo: str) -> str:
     """Alias SQL do campo na consulta aprendida: e1 (base) ou j1/j2 (tabela juntada)."""
     return next((c.get("alias", "e1") for c in spec.get("colunas", []) if c["campo"] == campo), "e1")
@@ -362,6 +370,9 @@ def montar(objetivo: str, valores: dict) -> Plano:
         plano.agrupar = True
         plano.ordenar = [("Valor em atraso", True)]
         plano.chave_unica = ("Cliente", "Loja")
+        if valores.get(AGREGACAO):
+            plano.top = ler_top(valores[AGREGACAO])
+            plano.premissas.append(f"Ranking: os {plano.top} maiores valores em atraso.")
         plano.premissas.append(
             f"Em atraso: vencimento real antes de {limite:%d/%m/%Y} (corte {corte:%d/%m/%Y} menos a tolerância)."
         )
