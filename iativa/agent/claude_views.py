@@ -24,9 +24,14 @@ def _perfil(valor):
 def _cartao(request, perfil, estado=None, erro=""):
     from . import codex_login, conexoes
     cfg = config_usuario(request.user, perfil)
+    chatgpt = codex_login.cartao(request.user, perfil)
+    nomes = {'none':'Sem esforço extra', 'minimal':'Mínimo', 'low':'Baixo', 'medium':'Médio', 'high':'Alto',
+             'xhigh':'Muito alto', 'max':'Máximo', 'ultra':'Ultra'}
+    chatgpt['esforcos_opcoes'] = [(e, nomes.get(e, e)) for e in chatgpt['esforcos']]
     return {"perfil": perfil, **PERFIS[perfil], "estado": estado, "erro": erro, "claude_ativo": ativa(request.user, perfil),
             "modelo_atual": cfg["claude_modelo"], "esforco_atual": cfg["claude_esforco"],
-            "chatgpt": codex_login.cartao(request.user, perfil), "provedor_atual": conexoes.selecionado(request.user, perfil)}
+            "chatgpt": chatgpt, "provedor_atual": conexoes.selecionado(request.user, perfil),
+            "provedor_definido": bool(conexoes.preferido(request.user, perfil))}
 
 
 def _contexto(request, perfil="atendimento", estado=None, erro=""):
@@ -94,4 +99,4 @@ def estado(request, fluxo_id):
         c = _cartao(request, perfil, atual)
     except FalhaModelo as exc:
         c = _cartao(request, perfil, erro=str(exc))
-    return render(request, "agent/_claude_estado.html", {"c": c})
+    return render(request, "agent/_claude_estado.html", {"c": c, "atualizar_resumo": True})

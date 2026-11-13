@@ -53,6 +53,7 @@ class Diagnostico:
     resumo: str = ''
     consolidado: bool = True
     completo: bool = True
+    incidentes: list = field(default_factory=list)
 
 
 class CatalogoDaInvestigacao:
@@ -151,6 +152,7 @@ def investigar(user, s, inicial, interrompido=None):
             if bloco.resultado is not None and getattr(bloco.resultado, 'ok', False):
                 sub = investigar(user, bloco.resultado.solicitacao, bloco.resultado, interrompido)
                 out.completo = out.completo and sub.completo
+                out.incidentes.extend(sub.incidentes)
                 out.blocos.append(Bloco('Setor ' + bloco.setor, sub))
             else:
                 out.completo = False
@@ -201,11 +203,13 @@ def investigar(user, s, inicial, interrompido=None):
                 out.completo = False
                 motivo = str(exc) if isinstance(exc, ValidationError) else type(exc).__name__
                 out.blocos.append(Bloco(titulo, mensagem='Não concluído: ' + motivo))
-                if not isinstance(exc, ValidationError):
+                if not isinstance(exc, (ValidationError, prazo.PrazoEsgotado)):
                     # Etapa que quebrou vira incidente (sanitizado): a manutenção passa a enxergar a falha.
                     from iativa.manutencao import incidentes
 
-                    incidentes.registrar('agente', 'diagnostico.etapa', exc, condicoes={'acao': 'investigar_divergencia'})
+                    inc = incidentes.registrar('agente', 'diagnostico.etapa', exc, condicoes={'acao': 'investigar_divergencia'})
+                    if inc is not None and inc.pk not in out.incidentes:
+                        out.incidentes.append(inc.pk)
 
         def original(filial):
             return montar(s.objetivo, {**vals, 'filial-analise': filial})

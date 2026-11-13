@@ -37,7 +37,7 @@ def arquivo(user, perfil):
     return pasta() / ('manutencao.json' if perfil == 'manutencao' else f'atendimento-{user.pk}.json')
 
 
-def selecionado(user, perfil='atendimento'):
+def preferido(user, perfil='atendimento'):
     try:
         dado = json.loads(arquivo(user, perfil).read_text(encoding='utf-8'))
     except PermissionDenied:
@@ -46,6 +46,13 @@ def selecionado(user, perfil='atendimento'):
         dado = {}
     p = dado.get('provedor') if isinstance(dado, dict) else None
     if p in ('claude', 'chatgpt'):
+        return p
+    return ''
+
+
+def selecionado(user, perfil='atendimento'):
+    p = preferido(user, perfil)
+    if p:
         return p
     from . import claude_login, codex_login
     if claude_login.ativa(user, perfil):

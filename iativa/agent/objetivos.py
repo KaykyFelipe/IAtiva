@@ -23,7 +23,7 @@ from dataclasses import dataclass, field
 from datetime import timedelta
 
 from django.conf import settings
-from django.db.models import Q
+from django.db.models import Q, F
 from django.utils import timezone
 
 from .models import Objetivo, SituacaoObjetivo as SO
@@ -34,6 +34,7 @@ VERIFICACAO, INVESTIGACAO, HISTORICO = "verificacao", "investigacao", "historico
 EXIGENCIAS = (RESPOSTA, CONSULTA, CALCULO, VERIFICACAO, INVESTIGACAO, HISTORICO)
 # Evidências que não entregam nada, mas encerram legitimamente o turno.
 PERGUNTA, BLOQUEIO, ACAO = "pergunta", "bloqueio", "acao"
+DELEGADA = "tarefa_agendada"
 
 SATISFAZ = {
     RESPOSTA: {RESPOSTA, CONSULTA, CALCULO, VERIFICACAO, INVESTIGACAO, HISTORICO, ACAO},
@@ -91,13 +92,23 @@ def _norm(t: str) -> str:
 def _detectores():
     """(exigência, função do texto normalizado). O backend garante o mínimo mesmo se o modelo errar."""
     from . import diagnostico, historico_funcional
-    from .agente import COBERTURA_RE, REFERENCIA_RE, VERIFICAR_RE
 
     return (
         (INVESTIGACAO, lambda bruto, t: diagnostico.solicitado(bruto)),
         (HISTORICO, lambda bruto, t: historico_funcional.solicitado(bruto)),
-        (VERIFICACAO, lambda bruto, t: bool(COBERTURA_RE.search(t) or (VERIFICAR_RE.search(t) and REFERENCIA_RE.search(t)))),
+        (VERIFICACAO, lambda bruto, t: _verificar_pessoas(t)),
     )
+
+
+def _verificar_pessoas(t):
+    pessoas = re.search(r'\b(demitid|desligad|readmit|funcionari|pessoas|matricula|vinculo)\w*', t)
+    if not pessoas:
+        return False
+    relacao = re.search(r'\bse\b|readmit|matricula\s+nova|nova\s+matricula|\bforam\b.*\bmesmo\b', t)
+    if re.search(r'\b(quantos|quantas|conte|contagem|total|some|soma)\b', t) and not relacao:
+        return False
+    return bool(re.search(r'\b(verifi|confir|confer|chec|investig|descubr)\w*', t) or
+                re.search(r'\b(foram|estao|tiveram)\b.*\b(mesmo|nova|readmit)\w*', t))
 
 
 def exigencia(texto: str, decisao=None) -> tuple[str, str]:
@@ -132,7 +143,7 @@ def evidencia(decisao, saida) -> str:
     if obs is not None and obs.situacao == "sem_permissao":
         return BLOQUEIO
     if tipo == "tarefa":
-        return VERIFICACAO
+        return DELEGADA
     if tipo == "diagnostico":
         return INVESTIGACAO if ficha.get("investigacao_completa") else ""
     if tipo == "historico_cargo" and saida.resultado is not None:
@@ -165,7 +176,7 @@ def cumpre(exig: str, ev: str) -> bool:
 
 # --- texto que não é progresso --------------------------------------------------------------------
 
-_VERBOS = (r"consult|verific|busc|calcul|som|investig|confer|rod|execut|levant|analis|refaz|list|chec|procur|"
+_VERBOS = (r"consult|verific|busc|calcul|cont|som|investig|confer|rod|execut|levant|analis|refaz|list|chec|procur|"
            r"compar|cruz|apur|pesquis")
 _ANUNCIO_INICIO = re.compile(
     rf"^(?:agora |ja |entao |certo[,.]? |ok[,.]? )?(?:vou|irei|vamos|deixa eu|deixe-me|estou|estarei)\s+(?:agora\s+|ja\s+)?"
@@ -266,14 +277,19 @@ def _trilha_segura(trilha) -> list:
 
 
 def registrar(ac: Acompanhamento, user, conversa, mensagem_id, situacao: str, motivo: str = "", incidente=None,
-              espera_s: int = 0) -> Objetivo:
+              espera_s: int = 0, tarefa_id=None) -> Objetivo:
     campos = {"exigencia": ac.exig or RESPOSTA, "origem": ac.origem or "acao", "situacao": situacao,
               "trilha": _trilha_segura(ac.trilha), "motivo": motivo[:300], "melhor_evidencia": ac.melhor,
               "incidente": incidente,
+              "tarefa_id": tarefa_id,
               "lease_ate": timezone.now() + timedelta(seconds=espera_s) if espera_s else None}
     if ac.registro is not None:
-        Objetivo.objects.filter(pk=ac.registro.pk).update(passos=ac.registro.passos + len(ac.trilha), execucao="", **{
+        alteradas = Objetivo.objects.filter(pk=ac.registro.pk, execucao=ac.registro.execucao,
+                                            situacao=SO.CONTINUAR).update(passos=ac.registro.passos + len(ac.trilha), execucao="", **{
             **campos, "incidente": incidente if incidente is not None else ac.registro.incidente})
+        if alteradas != 1:
+            from .agente import Interrompido
+            raise Interrompido()
         ac.registro.refresh_from_db()
         return ac.registro
     return Objetivo.objects.create(usuario=user, conversa=conversa, mensagem_id=mensagem_id, passos=len(ac.trilha), **campos)
@@ -310,9 +326,21 @@ def reivindicar() -> Objetivo | None:
     lease = timedelta(seconds=180)
     fila = Objetivo.objects.filter(situacao=SO.CONTINUAR).filter(Q(lease_ate__isnull=True) | Q(lease_ate__lt=agora))
     for o in fila.order_by("id")[:5]:
+        if o.continuacoes >= int(cfg()['continuacoes']):
+            if Objetivo.objects.filter(pk=o.pk, execucao=o.execucao, situacao=SO.CONTINUAR).filter(
+                    Q(lease_ate__isnull=True) | Q(lease_ate__lt=agora)).update(
+                    situacao=SO.IMPEDIDO, motivo='Limite de continuações atingido.', execucao='', lease_ate=None):
+                from iativa.chat.models import Mensagem, Papel
+                from iativa.chat.conversas import pode_escrever
+                if not superado(o) and pode_escrever(o.usuario, o.conversa):
+                    Mensagem.objects.create(conversa=o.conversa, papel=Papel.IA,
+                        texto='O pedido atingiu o limite de continuações e não foi concluído. Nenhuma nova tentativa foi iniciada.',
+                        ficha={'tipo':'objetivo', 'objetivo':o.pk})
+            continue
         nova = uuid.uuid4().hex
         n = Objetivo.objects.filter(pk=o.pk, situacao=SO.CONTINUAR, execucao=o.execucao).filter(
-            Q(lease_ate__isnull=True) | Q(lease_ate__lt=agora)).update(execucao=nova, lease_ate=agora + lease)
+            Q(lease_ate__isnull=True) | Q(lease_ate__lt=agora)).update(
+                execucao=nova, lease_ate=agora + lease, continuacoes=F('continuacoes') + 1)
         if n == 1:
             o.refresh_from_db()
             return o
@@ -327,7 +355,20 @@ def continuar_proximo() -> bool:
         return False
     from . import agente
 
-    agente.continuar_objetivo(o)
+    token = o.execucao
+    try:
+        agente.continuar_objetivo(o)
+    except Exception as exc:
+        from iativa.manutencao import incidentes
+        inc = incidentes.registrar('worker', 'objetivo.continuar', exc)
+        atualizado = Objetivo.objects.filter(pk=o.pk, execucao=token, situacao=SO.CONTINUAR).update(
+            situacao=SO.MANUTENCAO if inc and incidentes.elegivel(inc) else SO.IMPEDIDO,
+            incidente=inc, motivo='Não foi possível executar a continuação.', execucao='', lease_ate=None)
+        if atualizado and not superado(o):
+            from iativa.chat.models import Mensagem, Papel
+            Mensagem.objects.create(conversa=o.conversa, papel=Papel.IA,
+                texto='A continuação encontrou uma falha técnica. O pedido não foi considerado concluído.',
+                ficha={'tipo':'objetivo', 'objetivo':o.pk})
     return True
 
 
@@ -341,8 +382,48 @@ def retomar_apos_correcao(incidente_id: int) -> int:
     n = 0
     for o in Objetivo.objects.filter(situacao=SO.MANUTENCAO, incidente_id=incidente_id, retomado=False):
         n += Objetivo.objects.filter(pk=o.pk, situacao=SO.MANUTENCAO).update(
-            situacao=SO.CONTINUAR, retomado=True, execucao="", lease_ate=None, motivo="Retomado após correção publicada.")
+            situacao=SO.TAREFA if o.tarefa_id else SO.CONTINUAR, retomado=True, continuacoes=0,
+            execucao="", lease_ate=None, motivo="Retomado após correção publicada.")
     return n
+
+
+def sincronizar_tarefa(t):
+    from .models import SituacaoTarefa as ST
+    from iativa.manutencao.models import Incidente
+    from iativa.manutencao.incidentes import elegivel
+
+    alvos = Objetivo.objects.filter(tarefa=t, situacao__in=(SO.TAREFA, SO.AGUARDANDO))
+    if t.cancelar_solicitado or t.situacao == ST.CANCELADA:
+        alvos.update(situacao=SO.IMPEDIDO, motivo="Verificação cancelada.")
+    elif t.situacao == ST.CONCLUIDA:
+        cob = t.cobertura or {}
+        completa = bool(cob.get('lista_completa')) and cob.get('sem_classificacao', 0) == 0
+        for o in alvos:
+            cumprido = completa and cumpre(o.exigencia, VERIFICACAO)
+            Objetivo.objects.filter(pk=o.pk, situacao__in=(SO.TAREFA, SO.AGUARDANDO)).update(
+                situacao=SO.CUMPRIDO if cumprido else SO.CONTINUAR if completa else SO.IMPEDIDO,
+                melhor_evidencia=VERIFICACAO if completa else '', lease_ate=None,
+                motivo='' if cumprido else 'Etapa concluída; ainda falta a entrega pedida.' if completa
+                else 'Cobertura da verificação incompleta.')
+    elif t.situacao == ST.AGUARDANDO:
+        alvos.update(situacao=SO.AGUARDANDO, motivo='A verificação aguarda uma informação da pessoa.')
+    elif t.situacao in (ST.PENDENTE, ST.EXECUTANDO):
+        alvos.update(situacao=SO.TAREFA, motivo='')
+    elif t.situacao in (ST.FALHOU, ST.BLOQUEADA, ST.LIMITE):
+        inc = Incidente.objects.filter(pk=(t.consumo or {}).get('incidente')).first()
+        if inc and elegivel(inc):
+            alvos.filter(retomado=False).update(situacao=SO.MANUTENCAO, incidente=inc,
+                                                motivo='A verificação não foi concluída.')
+            alvos.filter(retomado=True).update(situacao=SO.IMPEDIDO, incidente=inc,
+                                               motivo='A verificação falhou novamente após a correção.')
+        else:
+            alvos.update(situacao=SO.IMPEDIDO, incidente=inc, motivo='A verificação não foi concluída.')
+
+
+def sincronizar_pendentes():
+    from .models import TERMINAIS
+    for o in Objetivo.objects.filter(situacao=SO.TAREFA, tarefa__situacao__in=TERMINAIS).select_related('tarefa')[:20]:
+        sincronizar_tarefa(o.tarefa)
 
 
 def encerrar_por_incidente(incidente_id: int, motivo: str) -> int:

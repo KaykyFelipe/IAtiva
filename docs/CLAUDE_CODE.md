@@ -11,7 +11,7 @@ rodando, de Node como serviço, de cookies de navegador ou de API não oficial.
 ## Conectar pela interface (M12/M33/M34)
 
 1. Entre no IAtiva com um usuário ativo com função **TI**. Superusuário sem essa função não basta.
-2. Na lateral, abra **Conectar Claude** (rota `/configuracoes/claude/`).
+2. Na lateral, abra **Conexões de IA** (rota `/configuracoes/claude/`).
 3. Escolha o cartão **Agente de atendimento** ou **Agente de manutenção**, clique em **Conectar Claude** e aguarde o link oficial.
 4. Use **Abrir login do Claude**, entre na sua própria conta e copie o código
    exibido pelo Claude.

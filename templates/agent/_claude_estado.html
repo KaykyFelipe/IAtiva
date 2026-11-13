@@ -1,38 +1,22 @@
-<div id="claude-estado-{{ c.perfil }}"{% if c.estado.fase == "iniciando" or c.estado.fase == "confirmando" %} hx-get="{% url 'claude-estado' c.estado.id %}?perfil={{ c.perfil }}" hx-trigger="every 2s" hx-target="this" hx-swap="outerHTML"{% endif %}>
-  {% if c.erro %}<p class="erro" role="alert">{{ c.erro }}</p>{% endif %}
-  {% if c.estado.mensagem %}<p role="status">{{ c.estado.mensagem }}</p>{% endif %}
-  {% if not c.estado and not c.claude_ativo %}<p class="aviso">Nenhuma conta Claude conectada neste agente.</p>{% endif %}
-  {% if c.claude_ativo %}
-    {% if c.estado.fase == "conectado" %}<p class="estado estado-pronta">Conectado · login verificado</p>
-    {% else %}<p class="estado estado-pronta">Conexão salva</p><p class="sutil">Use “Verificar conexão” para conferir se o login continua válido.</p>{% endif %}
+<div id="claude-estado-{{ c.perfil }}" class="ia-connection"{% if c.estado.fase == "iniciando" or c.estado.fase == "confirmando" %} hx-get="{% url 'claude-estado' c.estado.id %}?perfil={{ c.perfil }}" hx-trigger="every 2s" hx-target="this" hx-swap="outerHTML"{% endif %}>
+  <div class="ia-connection-status"><span class="ia-status{% if c.claude_ativo %} ia-status-connected{% endif %}">{% if c.claude_ativo %}{% if c.estado.fase == 'conectado' %}Conectado · login verificado{% else %}Conexão salva{% endif %}{% else %}Não conectada{% endif %}</span>{% if c.claude_ativo and c.provedor_atual == 'claude' %}<span class="ia-in-use">Em uso neste agente</span>{% endif %}</div>
+  {% if c.erro %}<p class="ia-feedback ia-feedback-error" role="alert">{{ c.erro }}</p>{% endif %}
+  {% if c.estado.mensagem %}<p class="ia-feedback" role="status">{{ c.estado.mensagem }}</p>{% endif %}
+  {% if not c.estado and not c.claude_ativo %}<p class="ia-help">Nenhuma conta Claude conectada neste agente.</p>{% endif %}
+  {% if c.estado.fase == 'aguardando' %}
+    <div class="ia-login"><p><strong>Conclua o login na página oficial</strong></p><a class="ia-login-link" href="{{ c.estado.url }}" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer">Abrir login do Claude ↗</a>
+    <form method="post" action="{% url 'claude-conta' %}#agente-{{ c.perfil }}" autocomplete="off">{% csrf_token %}<input type="hidden" name="acao" value="concluir"><input type="hidden" name="perfil" value="{{ c.perfil }}"><input type="hidden" name="fluxo" value="{{ c.estado.id }}">
+      <label for="codigo-claude-{{ c.perfil }}">Cole o código exibido pelo Claude</label><input id="codigo-claude-{{ c.perfil }}" name="codigo" type="password" required maxlength="1024" autocomplete="off" spellcheck="false" placeholder="Código de autorização"><p class="ia-help">O código é usado uma vez e não é salvo pelo IAtiva.</p><button type="submit">Concluir conexão</button>
+    </form></div>
   {% endif %}
-
-  {% if c.estado.fase == "aguardando" %}
-    <p><strong>1. Entre na sua conta na página oficial</strong></p>
-    <a href="{{ c.estado.url }}" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer">Abrir login do Claude ↗</a>
-    <form method="post" action="{% url 'claude-conta' %}" autocomplete="off">
-      {% csrf_token %}
-      <input type="hidden" name="acao" value="concluir">
-      <input type="hidden" name="perfil" value="{{ c.perfil }}">
-      <input type="hidden" name="fluxo" value="{{ c.estado.id }}">
-      <label for="codigo-claude-{{ c.perfil }}">2. Cole o código que o Claude mostrar</label>
-      <input id="codigo-claude-{{ c.perfil }}" name="codigo" type="password" required maxlength="1024" autocomplete="off" spellcheck="false" placeholder="Cole o código completo">
-      <p class="sutil">O código é entregue uma única vez ao Claude Code e não é salvo pelo IAtiva.</p>
-      <button type="submit">Concluir</button>
-    </form>
-  {% endif %}
-
   {% if c.estado.aguardando %}
-    <form method="post" action="{% url 'claude-conta' %}">
-      {% csrf_token %}<input type="hidden" name="acao" value="cancelar"><input type="hidden" name="perfil" value="{{ c.perfil }}"><input type="hidden" name="fluxo" value="{{ c.estado.id }}">
-      <button type="submit" class="secundario">Cancelar conexão</button>
-    </form>
+    <form method="post" action="{% url 'claude-conta' %}#agente-{{ c.perfil }}">{% csrf_token %}<input type="hidden" name="acao" value="cancelar"><input type="hidden" name="perfil" value="{{ c.perfil }}"><input type="hidden" name="fluxo" value="{{ c.estado.id }}"><button type="submit" class="ia-text-button">Cancelar conexão</button></form>
   {% else %}
-    <form method="post" action="{% url 'claude-conta' %}">
-      {% csrf_token %}<input type="hidden" name="perfil" value="{{ c.perfil }}">
-      {% if not c.claude_ativo %}<button name="acao" value="conectar" type="submit">Conectar Claude</button>{% endif %}
-      <button name="acao" value="verificar" type="submit" class="secundario">Verificar conexão</button>
-      {% if c.claude_ativo or c.estado.fase == "conectado" %}<button name="acao" value="desconectar" type="submit" class="secundario">Desconectar</button>{% endif %}
-    </form>
+    <div class="ia-primary-actions">
+    {% if not c.claude_ativo %}<form method="post" action="{% url 'claude-conta' %}#agente-{{ c.perfil }}">{% csrf_token %}<input type="hidden" name="perfil" value="{{ c.perfil }}"><button name="acao" value="conectar" type="submit">Conectar Claude</button></form>
+    {% elif c.provedor_atual != 'claude' or not c.provedor_definido %}<form method="post" action="{% url 'chatgpt-conta' %}#agente-{{ c.perfil }}">{% csrf_token %}<input type="hidden" name="perfil" value="{{ c.perfil }}"><input type="hidden" name="provedor" value="claude"><button name="acao" value="usar" type="submit">Usar Claude neste agente</button></form>{% endif %}
+    </div>
+    <details class="ia-manage"><summary>Gerenciar conexão</summary><form method="post" action="{% url 'claude-conta' %}#agente-{{ c.perfil }}" class="ia-secondary-actions">{% csrf_token %}<input type="hidden" name="perfil" value="{{ c.perfil }}"><button name="acao" value="verificar" type="submit" class="secundario">Verificar conexão</button>{% if c.claude_ativo %}<button name="acao" value="desconectar" type="submit" class="ia-text-button ia-disconnect">Desconectar</button>{% endif %}</form></details>
   {% endif %}
 </div>
+{% if atualizar_resumo %}{% include "agent/_ia_resumo.html" %}{% endif %}

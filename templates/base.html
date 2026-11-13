@@ -7,9 +7,10 @@
   <meta name="htmx-config" content='{"historyEnabled":false,"historyCacheSize":0,"refreshOnHistoryMiss":true,"includeIndicatorStyles":false,"allowEval":false,"allowScriptTags":false,"selfRequestsOnly":true,"attributesToSettle":["class","width","height"]}'>
   <title>{% block title %}IAtiva{% endblock %}</title>
   <link rel="stylesheet" href="{% static 'css/app.css' %}">
+  {% block extra_head %}{% endblock %}
   <script src="{% static 'vendor/htmx-2.0.4.min.js' %}" defer></script>
 </head>
-<body>
+<body class="{% block body_class %}{% endblock %}">
   <header class="topo">
     <span class="marca"><img src="{% static 'img/logo-ativa.png' %}" alt="Ativa Locação" width="55" height="40"> IAtiva</span>
     <span class="ambiente">ambiente local · somente leitura</span>

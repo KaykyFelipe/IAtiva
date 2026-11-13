@@ -1,54 +1,60 @@
 {% extends "base.html" %}
-{% block title %}Conexões IA · IAtiva{% endblock %}
+{% load static %}
+{% block title %}Conexões de IA · IAtiva{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{% static 'css/conexoes.css' %}">{% endblock %}
+{% block body_class %}conexoes-page{% endblock %}
 {% block content %}
-<p><a href="{% url 'chat:index' %}">← Voltar ao chat</a></p>
-{% for c in cartoes %}
-<section class="cartao">
-  <h1>{{ c.titulo }}</h1>
-  <p><strong>Provedor em uso: {% if c.provedor_atual == "chatgpt" %}ChatGPT{% elif c.provedor_atual == "claude" %}Claude{% else %}padrão do servidor{% endif %}</strong></p>
-  <h2>Conta Claude</h2>
-  <p>{{ c.descricao }} Conecte a assinatura pelo login oficial do Claude; cada agente tem a sua própria conexão.</p>
-  {% if c.perfil == "manutencao" %}<p class="sutil">Esta conexão é compartilhada pelo sistema e gerenciada pela TI. O modelo escolhido aqui é independente do atendimento.</p>{% endif %}
-  {% include "agent/_claude_estado.html" %}
-  {% if c.claude_ativo and c.provedor_atual != "claude" %}
-    <form method="post" action="{% url 'chatgpt-conta' %}">{% csrf_token %}<input type="hidden" name="perfil" value="{{ c.perfil }}"><input type="hidden" name="provedor" value="claude"><button name="acao" value="usar">Usar Claude neste agente</button></form>
-  {% endif %}
-  <hr>
-  <h2>Modelo e esforço</h2>
-  <form method="post" action="{% url 'claude-conta' %}" class="preferencias-claude">
-    {% csrf_token %}<input type="hidden" name="acao" value="preferencias"><input type="hidden" name="perfil" value="{{ c.perfil }}">
-    <label for="claude-modelo-{{ c.perfil }}">Modelo</label>
-    <select id="claude-modelo-{{ c.perfil }}" name="modelo">{% for v, r in modelos %}<option value="{{ v }}"{% if v == c.modelo_atual %} selected{% endif %}>{{ r }}</option>{% endfor %}</select>
-    <label for="claude-esforco-{{ c.perfil }}">Esforço de raciocínio</label>
-    <select id="claude-esforco-{{ c.perfil }}" name="esforco">{% for v, r in esforcos %}<option value="{{ v }}"{% if v == c.esforco_atual %} selected{% endif %}>{{ r }}</option>{% endfor %}</select>
-    <p class="sutil">Mais esforço pensa mais antes de responder: fica mais lento e gasta mais do limite da assinatura.</p>
-    <button type="submit">Salvar</button>
-  </form>
-  {% if c.perfil == "atendimento" %}
-    <hr>
-    <p class="sutil">Seu histórico continua no IAtiva. Resultados do banco não são enviados ao Claude.</p>
-    <p class="sutil">O envio de perguntas pelo chat também depende da liberação de privacidade configurada no IAtiva.</p>
-  {% else %}
-    <hr>
-    <p class="sutil">Conectar ou trocar o modelo não ativa correções nem publicação automática. A ativação do executor é feita separadamente no servidor. Ele recebe apenas diagnósticos técnicos, sem dados do ERP.</p>
-  {% endif %}
-  <p class="sutil">A assinatura tem limites. Confira na sua conta Claude se o uso extra pago está desativado.</p>
-  <hr>
-  <h2>Conta ChatGPT</h2>
-  <p>Conecte pelo Codex oficial, usando o código na página da OpenAI. Conta e modelo são separados do outro agente e da Claude.</p>
-  {% include "agent/_chatgpt_estado.html" with g=c.chatgpt perfil=c.perfil %}
-  <h3>Modelo e esforço do ChatGPT</h3>
-  <form method="post" action="{% url 'chatgpt-conta' %}">
-    {% csrf_token %}<input type="hidden" name="perfil" value="{{ c.perfil }}"><input type="hidden" name="acao" value="preferencias">
-    <label for="chatgpt-modelo-{{ c.perfil }}">Modelo</label>
-    <select id="chatgpt-modelo-{{ c.perfil }}" name="modelo"><option value="">Padrão da conta/CLI</option>{% for m in c.chatgpt.modelos %}<option value="{{ m.id }}"{% if m.id == c.chatgpt.preferencias.modelo %} selected{% endif %}>{{ m.nome }}</option>{% endfor %}</select>
-    <label for="chatgpt-esforco-{{ c.perfil }}">Esforço</label>
-    <select id="chatgpt-esforco-{{ c.perfil }}" name="esforco"><option value="">Padrão do modelo</option>{% for e in c.chatgpt.esforcos %}<option value="{{ e }}"{% if e == c.chatgpt.preferencias.esforco %} selected{% endif %}>{{ e }}</option>{% endfor %}</select>
-    <p class="sutil">O catálogo vem da conta conectada. O esforço escolhido precisa ser compatível com o modelo.</p>
-    <button type="submit">Salvar ChatGPT</button>
-  </form>
-  <form method="post" action="{% url 'chatgpt-conta' %}">{% csrf_token %}<input type="hidden" name="perfil" value="{{ c.perfil }}"><button name="acao" value="modelos" type="submit" class="secundario">Atualizar modelos ChatGPT</button></form>
-  <p class="sutil">O acesso depende do plano e das permissões da conta. Sem chave de API ou troca automática para outro provedor. Conectar não habilita publicação da manutenção.</p>
-</section>
-{% endfor %}
+<div class="ia-page">
+  <a class="ia-back" href="{% url 'chat:index' %}"><span aria-hidden="true">←</span> Voltar ao chat</a>
+  <header class="ia-page-heading">
+    <div><h1>Conexões de IA</h1><p>Escolha quem responde no chat e quem cuida da manutenção.</p></div>
+    <span class="ia-page-note">Contas e modelos independentes</span>
+  </header>
+  {% for c in cartoes %}
+    <section class="ia-agent" id="agente-{{ c.perfil }}" aria-labelledby="titulo-{{ c.perfil }}">
+      <header class="ia-agent-heading">
+        <div class="ia-agent-identity">
+          <span class="ia-agent-symbol" aria-hidden="true">{% if c.perfil == 'atendimento' %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M20 11.5a7.5 7.5 0 0 1-7.5 7.5H5l-3 3v-10A7.5 7.5 0 0 1 9.5 4h3A7.5 7.5 0 0 1 20 11.5Z"/><path d="M7 10h8m-8 4h5"/></svg>{% else %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="m14 6 4 4m-9 7-3 3-3-3 9-9a6 6 0 0 1 7-7l-4 4 4 4 4-4a6 6 0 0 1-7 7Z"/></svg>{% endif %}</span>
+          <div><h2 id="titulo-{{ c.perfil }}">{{ c.titulo }}</h2><p>{% if c.perfil == 'atendimento' %}Responde às suas consultas e investiga os pedidos no chat.{% else %}Investiga e corrige falhas técnicas do sistema.{% endif %}</p></div>
+        </div>
+        {% include "agent/_ia_resumo.html" %}
+      </header>
+      <div class="ia-providers">
+        <section class="ia-provider" aria-labelledby="claude-titulo-{{ c.perfil }}">
+          <header class="ia-provider-heading"><span class="ia-provider-mark" aria-hidden="true">C</span><div><h3 id="claude-titulo-{{ c.perfil }}">Claude</h3><p>Conta Anthropic</p></div></header>
+          {% include "agent/_claude_estado.html" %}
+          <details class="ia-models"{% if c.claude_ativo and c.provedor_atual == 'claude' or c.estado.fase == 'preferencias' %} open{% endif %}>
+            <summary><span>Modelo e raciocínio</span><span class="ia-model-current">{{ c.modelo_atual|capfirst }}</span></summary>
+            <form method="post" action="{% url 'claude-conta' %}#agente-{{ c.perfil }}" class="ia-model-form">
+              {% csrf_token %}<input type="hidden" name="acao" value="preferencias"><input type="hidden" name="perfil" value="{{ c.perfil }}">
+              <div class="ia-fields"><div><label for="claude-modelo-{{ c.perfil }}">Modelo</label><select id="claude-modelo-{{ c.perfil }}" name="modelo">{% for v, r in modelos %}<option value="{{ v }}"{% if v == c.modelo_atual %} selected{% endif %}>{{ r }}</option>{% endfor %}</select></div>
+              <div><label for="claude-esforco-{{ c.perfil }}">Esforço de raciocínio</label><select id="claude-esforco-{{ c.perfil }}" name="esforco">{% for v, r in esforcos %}<option value="{{ v }}"{% if v == c.esforco_atual %} selected{% endif %}>{{ r }}</option>{% endfor %}</select></div></div>
+              <p class="ia-help">Mais esforço pode aumentar o tempo de resposta e o uso da assinatura.</p>
+              <button type="submit" class="secundario">Salvar modelo Claude</button>
+            </form>
+          </details>
+        </section>
+        <section class="ia-provider" aria-labelledby="chatgpt-titulo-{{ c.perfil }}">
+          <header class="ia-provider-heading"><span class="ia-provider-mark ia-provider-mark-openai" aria-hidden="true">G</span><div><h3 id="chatgpt-titulo-{{ c.perfil }}">ChatGPT</h3><p>Conta OpenAI, com acesso pelo Codex</p></div></header>
+          {% include "agent/_chatgpt_estado.html" with g=c.chatgpt perfil=c.perfil %}
+          <details class="ia-models"{% if c.chatgpt.ativo and c.provedor_atual == 'chatgpt' %} open{% endif %}>
+            <summary><span>Modelo e raciocínio</span><span class="ia-model-current">{{ c.chatgpt.preferencias.modelo|default:'Padrão da conta' }}</span></summary>
+            <form method="post" action="{% url 'chatgpt-conta' %}#agente-{{ c.perfil }}" class="ia-model-form">
+              {% csrf_token %}<input type="hidden" name="perfil" value="{{ c.perfil }}"><input type="hidden" name="acao" value="preferencias">
+              <div class="ia-fields"><div><label for="chatgpt-modelo-{{ c.perfil }}">Modelo</label><select id="chatgpt-modelo-{{ c.perfil }}" name="modelo"><option value="">Padrão da conta/CLI</option>{% for m in c.chatgpt.modelos %}<option value="{{ m.id }}"{% if m.id == c.chatgpt.preferencias.modelo %} selected{% endif %}>{{ m.nome }}</option>{% endfor %}</select></div>
+              <div><label for="chatgpt-esforco-{{ c.perfil }}">Esforço de raciocínio</label><select id="chatgpt-esforco-{{ c.perfil }}" name="esforco"><option value="">Padrão do modelo</option>{% for e, nome in c.chatgpt.esforcos_opcoes %}<option value="{{ e }}"{% if e == c.chatgpt.preferencias.esforco %} selected{% endif %}>{{ nome }}</option>{% endfor %}</select></div></div>
+              <p class="ia-help">Os modelos disponíveis vêm da conta conectada. Escolha um esforço compatível com o modelo.</p>
+              <button type="submit" class="secundario">Salvar modelo ChatGPT</button>
+            </form>
+            <form method="post" action="{% url 'chatgpt-conta' %}#agente-{{ c.perfil }}" class="ia-catalog-form">{% csrf_token %}<input type="hidden" name="perfil" value="{{ c.perfil }}"><button name="acao" value="modelos" type="submit" class="ia-text-button">Atualizar modelos ChatGPT</button></form>
+          </details>
+        </section>
+      </div>
+      <footer class="ia-agent-foot"><span>{% if c.perfil == 'atendimento' %}Conexão da sua conta{% else %}Conexão compartilhada, gerenciada pela TI{% endif %}</span><p>{% if c.perfil == 'atendimento' %}Trocar de IA mantém seu histórico no IAtiva.{% else %}Trocar de IA não altera a ativação da manutenção automática.{% endif %}</p></footer>
+    </section>
+  {% endfor %}
+  <aside class="ia-footer-note"><p><strong>Uma IA em uso por agente.</strong> Conecte a conta e escolha “Usar neste agente”. Trocar não desconecta a outra conta.</p>
+    <details><summary>Privacidade e limites das contas</summary><p>Resultados do ERP não são enviados aos modelos. A manutenção recebe apenas diagnósticos técnicos. O uso depende da liberação de privacidade, do plano e dos limites de cada conta. Confira se o uso extra pago está desativado na sua conta Claude.</p></details>
+  </aside>
+</div>
 {% endblock %}

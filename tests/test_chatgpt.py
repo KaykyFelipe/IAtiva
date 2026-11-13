@@ -172,7 +172,7 @@ def test_fluxo_nao_pode_ser_lido_por_outra_sessao(admin, fake, django_user_model
 def test_ui_duas_opcoes_e_permissoes(admin, fake, client, usuario):
     client.force_login(admin)
     html = client.get(reverse('claude-conta')).content.decode()
-    assert html.count('Conta ChatGPT') == 2 and 'Agente de manutenção' in html
+    assert html.count('>ChatGPT</h3>') == 2 and 'Agente de manutenção' in html
     assert 'Conectar ChatGPT' in html and 'Padrão da conta/CLI' in html
     r = client.post(reverse('chatgpt-conta'), {'acao':'preferencias', 'perfil':'../etc'})
     assert r.status_code == 400
@@ -262,3 +262,35 @@ def test_rpc_nega_pedidos_de_ferramentas():
     s.enviar = enviados.append
     assert s._receber(1) == {}
     assert enviados[0]['error']['code'] == -32601
+
+def test_selecao_claude_mostra_confirmacao_no_provedor_correto(admin,fake,client,monkeypatch):
+    cl._marcar(cl.config_usuario(admin,'atendimento'),True)
+    monkeypatch.setattr(cl,'provedor_login',lambda *a:object())
+    monkeypatch.setattr(cl,'conectado',lambda *a:True)
+    client.force_login(admin)
+    r=client.post(reverse('chatgpt-conta'),{'acao':'usar','perfil':'atendimento','provedor':'claude'})
+    c=r.context['cartoes'][0]
+    assert c['provedor_atual']=='claude' and c['provedor_definido']
+    assert 'Claude está em uso' in c['estado']['mensagem']
+    assert not c['chatgpt']['estado']
+    assert conexoes.preferido(admin,'manutencao')==''
+
+
+def test_polling_atualiza_resumo_apenas_do_agente_escolhido(admin,fake,client):
+    client.force_login(admin)
+    r=client.post(reverse('chatgpt-conta'),{'acao':'conectar','perfil':'manutencao'})
+    estado=r.context['cartoes'][1]['chatgpt']['estado']
+    esperar(lambda:fake.instancias and fake.instancias[-1].root.name=='manutencao')
+    r=client.get(reverse('chatgpt-estado',args=[estado['id']]),{'perfil':'manutencao'})
+    html=r.content.decode()
+    assert 'id="ia-resumo-manutencao"' in html and 'hx-swap-oob="outerHTML"' in html
+    assert 'id="ia-resumo-atendimento"' not in html
+
+
+def test_tela_separa_agentes_e_nao_faz_chamadas_ao_abrir(admin,fake,client):
+    client.force_login(admin)
+    r=client.get(reverse('claude-conta'));html=r.content.decode()
+    assert 'id="agente-atendimento"' in html and 'id="agente-manutencao"' in html
+    assert html.count('class="ia-provider"')==4
+    assert 'css/conexoes.css' in html and not fake.instancias
+    assert 'Salvar modelo Claude' in html and 'Salvar modelo ChatGPT' in html

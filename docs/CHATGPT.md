@@ -6,7 +6,7 @@ endpoints privados do ChatGPT nem chave de API. A CLI é instalada na imagem com
 
 ## Conectar e escolher
 
-1. Com função TI, abra **Conectar Claude / ChatGPT**. A rota antiga de Conectar Claude continua válida.
+1. Com função TI, abra **Conexões de IA**. A rota antiga de Conectar Claude continua válida.
 2. No agente desejado (atendimento ou manutenção), encontre **Conta ChatGPT** e clique em **Conectar ChatGPT**.
 3. Abra o link oficial `https://auth.openai.com/codex/device` e digite o código mostrado na tela
    **na página da OpenAI**, não no chat. Complete o login na sua conta. A confirmação é automática.

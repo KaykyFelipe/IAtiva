@@ -5,6 +5,7 @@ aditivas que o código antigo tolera:
 - CreateModel, AddIndex;
 - AddField com null=True ou com valor padrão no próprio banco (db_default);
 - RunPython só se a migração declarar `IATIVA_COMPATIVEL = True` (ex.: inserir um parâmetro novo).
+- SeparateDatabaseAndState apenas quando não há operações de banco.
 Qualquer outra coisa (remover, renomear ou alterar campo/tabela, SQL bruto, campo obrigatório sem
 padrão no banco) bloqueia a publicação automática; ela pode ser feita à mão, em janela combinada.
 
@@ -23,6 +24,8 @@ ADITIVAS = (migrations.CreateModel, migrations.AddIndex)
 def avaliar_operacao(migracao, op) -> str:
     """Motivo da incompatibilidade, ou vazio se a operação é aditiva e segura."""
     if isinstance(op, ADITIVAS):
+        return ""
+    if isinstance(op, migrations.SeparateDatabaseAndState) and not op.database_operations:
         return ""
     if isinstance(op, migrations.AddField):
         f = op.field

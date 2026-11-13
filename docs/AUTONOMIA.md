@@ -10,12 +10,14 @@ sem ver dados do ERP; quem executa, mede e decide se terminou é o backend.
 | | O que é | Exemplos |
 |---|---|---|
 | **Exigência** | o que o pedido precisa entregar para estar cumprido | resposta, consulta, cálculo, verificação, investigação, histórico |
-| **Evidência** | o que a ação executada de fato entregou | consulta executada, cálculo no banco, tarefa de verificação criada, diagnóstico completo, histórico levantado |
+| **Evidência** | o que a ação executada de fato entregou | consulta executada, cálculo no banco, verificação concluída com cobertura, diagnóstico completo, histórico levantado |
 
 A exigência vem, nesta ordem: de um detector do backend (o mínimo garantido), do campo `entrega`
 que o modelo declara na decisão, ou da ação escolhida. O pedido só encerra quando a evidência cobre
 a exigência (`iativa/agent/objetivos.py`, `SATISFAZ`). Consulta que deu certo é evidência de
-"consulta": não encerra verificação nem investigação.
+"consulta": não encerra verificação nem investigação. O escopo “todas as filiais” não é um pedido
+para investigar vínculos de pessoas. Uma tarefa agendada fica em `aguardando_tarefa`, vinculada ao
+objetivo, até que o worker comprove a cobertura. Cancelamento/falha não contam como entrega.
 
 ## O ciclo (`_ciclo_agente`)
 
@@ -41,11 +43,15 @@ a exigência (`iativa/agent/objetivos.py`, `SATISFAZ`). Consulta que deu certo �
 | Falta de permissão | impedimento real; nada é contornado nem encaminhado |
 
 O worker não responde fora de ordem: se a pessoa já mandou outra mensagem, o pedido antigo é
-marcado como superado. O resultado obtido pelo worker não é gravado: a mensagem aponta o
+marcado como superado. Essa condição é reconferida antes das ações e antes de publicar a resposta;
+uma tarefa criada nesse intervalo é cancelada. A concessão é conferida para evitar gravação por
+uma execução antiga. O orçamento é consumido na reivindicação, mesmo se o worker falhar antes da
+primeira decisão. O resultado obtido pelo worker não é gravado: a mensagem aponta o
 "Executar de novo".
 
 ## Encaminhamento à manutenção
 
+- Erros técnicos em uma etapa do diagnóstico são vinculados ao objetivo; após publicação, ele pode ser retomado. Limitação de fonte ou regra de negócio continua sendo impedimento, sem inventar critérios.
 - O incidente leva só códigos: exigência, causa, trilha `ação:situação:evidência` e, se houver, o
   alias da tabela. Nunca o texto do pedido, nomes ou resultados.
 - Categoria "capacidade ausente" com trilha é **elegível à triagem** (antes era só registrada).
@@ -80,7 +86,7 @@ usuário, como sempre.
 
 ## Como validar
 
-- Comportamento (decisões roteirizadas, dados sintéticos): `tests/test_objetivos.py`.
+- Comportamento e regressões (decisões roteirizadas, dados sintéticos): `tests/test_objetivos.py` e `tests/test_regressoes_autonomia.py`.
 - Ponta a ponta real, isolado, no servidor: `scripts/testar_autonomia.sh` (projeto `iativa-teste`,
   porta 18000, "GitHub" local, defeito injetado só na cópia). A IA é trocada por roteiros fixos:
   prova o encanamento inteiro, não a qualidade das decisões do modelo real.

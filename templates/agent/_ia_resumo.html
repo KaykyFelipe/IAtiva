@@ -1,0 +1,4 @@
+<div id="ia-resumo-{{ c.perfil }}" class="ia-agent-current"{% if atualizar_resumo %} hx-swap-oob="outerHTML"{% endif %}>
+  <span class="ia-help">IA em uso</span>
+  <strong>{% if c.provedor_atual == 'claude' %}Claude{% elif c.provedor_atual == 'chatgpt' %}ChatGPT{% else %}Padrão do servidor{% endif %}</strong>
+</div>

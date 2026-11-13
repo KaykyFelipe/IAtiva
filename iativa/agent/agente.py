@@ -234,7 +234,8 @@ def conversar(user, c, texto: str, provedor=None, mensagem_usuario_id=None, inte
     # e as consultas usam no máximo o tempo que resta (M24).
     cfg = _ciclo()
     t_norm = _norm(texto)
-    pede_cobertura = bool(COBERTURA_RE.search(t_norm) or (VERIFICAR_RE.search(t_norm) and REFERENCIA_RE.search(t_norm)))
+    from .objetivos import _verificar_pessoas
+    pede_cobertura = _verificar_pessoas(t_norm)
     cobertura = base_lista if (lista is not None and pede_cobertura) else None
     with prazo.definir(float(cfg["tempo_s"])):
         return _ciclo_agente(user, c, texto, provedor, interrompido, entrada, objetivos, codigos_par, defs, atual,
@@ -272,10 +273,12 @@ def _ciclo_agente(user, c, texto, provedor, interrompido, entrada, objetivos, co
             causa = "prazo"
             break
         except FalhaModelo as exc:
-            if saida is not None or prazo.esgotado() or ac.trilha:
+            if saida is not None or prazo.esgotado() or ac.trilha or ac.registro is not None:
+                if not ac.trilha:
+                    ac.anotar('continuacao', 'modelo_falhou')
                 causa = "prazo" if prazo.esgotado() else "modelo_falhou"
                 break  # a correção não veio (ou o tempo acabou): decide abaixo se continua depois
-            registrar("modelo_falhou", "agente", usuario=user, estado_novo=provedor.nome, resultado="erro")
+            registrar("modelo_falhou", "agente", usuario=user, estado_novo=provedor.nome.replace('-', '_'), resultado="erro")
             if provedor.nome in ("claude-code", "chatgpt"):
                 return Saida(str(exc), ficha={"tipo": "falha_modelo"})
             if exc.temporaria:
@@ -345,13 +348,28 @@ def _ciclo_agente(user, c, texto, provedor, interrompido, entrada, objetivos, co
                 saida.ficha = {**saida.ficha, 'tipo': 'diagnostico', 'investigacao_completa': False}
             ev = coord.evidencia(d, saida)
             ac.anotar(d.acao, "ok" if ev else "incompleta", ev)
+            if not ev and getattr(saida.resultado, 'incidentes', ()):
+                from iativa.manutencao.models import Incidente
+                from iativa.manutencao.incidentes import elegivel
+                inc = next((i for i in Incidente.objects.filter(pk__in=saida.resultado.incidentes)
+                            if elegivel(i)), None)
+                if inc is not None and mensagem_id is not None:
+                    from .models import SituacaoObjetivo as SO
+                    estado = SO.IMPEDIDO if ac.registro and ac.registro.retomado else SO.MANUTENCAO
+                    o = coord.registrar(ac, user, c, mensagem_id, estado,
+                                         'Falha técnica na investigação.', incidente=inc)
+                    saida.ficha = {**saida.ficha, 'objetivo': o.pk}
+                    saida.texto = ('A investigação encontrou uma falha técnica. O diagnóstico foi encaminhado à '
+                                   'manutenção; as etapas incompletas não foram tratadas como conclusão.'
+                                   + (' Após uma correção publicada, retomarei este pedido.' if estado == SO.MANUTENCAO else ''))
+                    return saida
             # Investigação parcial mostra o que conseguiu, marcada como incompleta (nunca como conclusão).
             return _fechar(ac, user, c, mensagem_id, saida, ev or coord.INVESTIGACAO, parcial=not ev)
         ev = coord.evidencia(d, saida)  # o que ESTA ação entregou (antes de juntar com a etapa anterior)
         if previa is not None:
             saida = _juntar(previa, saida)
         ac.anotar(d.acao, saida.observacao.situacao if saida.observacao else ("ok" if ev else "sem_resultado"), ev)
-        if ac.cumprido(ev) or ev in (coord.PERGUNTA, coord.BLOQUEIO):
+        if ac.cumprido(ev) or ev in (coord.PERGUNTA, coord.BLOQUEIO, coord.DELEGADA):
             return _fechar(ac, user, c, mensagem_id, saida, ev)
         if saida.observacao is not None and saida.observacao.recuperavel:
             observacoes.append(saida.observacao)
@@ -385,11 +403,12 @@ def _fechar(ac, user, c, mensagem_id, saida, ev, parcial=False) -> Saida:
     from . import objetivos as coord
     from .models import SituacaoObjetivo as SO
 
-    situacao = (SO.AGUARDANDO if ev == coord.PERGUNTA else SO.IMPEDIDO if (ev == coord.BLOQUEIO or parcial)
+    situacao = (SO.TAREFA if ev == coord.DELEGADA else SO.AGUARDANDO if ev == coord.PERGUNTA else SO.IMPEDIDO if (ev == coord.BLOQUEIO or parcial)
                 else SO.CUMPRIDO)
     if mensagem_id is not None and (ac.registro is not None or len(ac.trilha) > 1 or situacao != SO.CUMPRIDO):
         o = coord.registrar(ac, user, c, mensagem_id, situacao,
-                            "investigação incompleta" if parcial else ("sem permissão" if ev == coord.BLOQUEIO else ""))
+                            "investigação incompleta" if parcial else ("sem permissão" if ev == coord.BLOQUEIO else ""),
+                            tarefa_id=saida.ficha.get('tarefa') if ev == coord.DELEGADA else None)
         saida.ficha = {**saida.ficha, "objetivo": o.pk}
     return saida
 
@@ -479,17 +498,51 @@ def continuar_objetivo(o):
 
     with transaction.atomic():
         user, c = o.usuario, o.conversa
-        if coord.superado(o) or not conversas.pode_escrever(user, c):
-            Objetivo.objects.filter(pk=o.pk).update(situacao=SO.SUPERADO, execucao="", lease_ate=None)
+        token = o.execucao
+
+        def superado():
+            return coord.superado(o) or not conversas.pode_escrever(user, c)
+
+        def interrompido():
+            return superado() or not Objetivo.objects.filter(pk=o.pk, execucao=token, situacao=SO.CONTINUAR).exists()
+
+        def descartar(saida=None):
+            if saida is not None and saida.ficha.get('tipo') == 'tarefa':
+                from .tarefas import cancelar
+                cancelar(user, saida.ficha['tarefa'])
+            Objetivo.objects.filter(pk=o.pk, execucao__in=(token, '')).update(
+                situacao=SO.SUPERADO, motivo='A conversa seguiu ou o acesso mudou.', execucao='', lease_ate=None)
+
+        if interrompido():
+            if superado():
+                descartar()
             return None
-        Objetivo.objects.filter(pk=o.pk).update(continuacoes=o.continuacoes + 1)
-        o.refresh_from_db()
+        if o.continuacoes > int(coord.cfg()['continuacoes']):
+            Objetivo.objects.filter(pk=o.pk, execucao=token).update(
+                situacao=SO.IMPEDIDO, motivo='Limite de continuações atingido.', execucao='', lease_ate=None)
+            return Mensagem.objects.create(conversa=c, papel=Papel.IA,
+                texto='O pedido atingiu o limite de continuações e não foi concluído. Nenhuma nova tentativa foi iniciada.',
+                ficha={'tipo':'objetivo', 'objetivo':o.pk})
         ac = coord.Acompanhamento(o.mensagem.texto, exig=o.exigencia, origem=o.origem, registro=o)
         feito = ", ".join(o.trilha[-6:]) or "nada concluído"
         obs = [Observacao("continuacao", "continuacao",
                           f"Continuação automática do MESMO pedido (a pessoa não mandou nova mensagem). Já tentado "
                           f"(ação:situação:evidência): {feito}. {coord.FALTA.get(o.exigencia, '')}: {coord.COMO.get(o.exigencia, '')}.")]
-        saida = conversar(user, c, o.mensagem.texto, mensagem_usuario_id=o.mensagem_id, acomp=ac, observacoes=obs)
+        try:
+            saida = conversar(user, c, o.mensagem.texto, mensagem_usuario_id=o.mensagem_id, acomp=ac,
+                              observacoes=obs, interrompido=interrompido)
+        except Interrompido:
+            if superado():
+                descartar()
+            return None
+        if superado():
+            descartar(saida)
+            return None
+        # Saídas anteriores à primeira decisão também encerram a concessão de execução.
+        if o.execucao == token:
+            Objetivo.objects.filter(pk=o.pk, execucao=token).update(
+                situacao=SO.IMPEDIDO, motivo='O atendimento não conseguiu iniciar a continuação.',
+                execucao='', lease_ate=None)
         prefixo = ("Depois da correção publicada, refiz o seu pedido. " if o.retomado
                    else "Continuando o seu pedido, sem você precisar pedir de novo. ")
         texto = prefixo + saida.texto

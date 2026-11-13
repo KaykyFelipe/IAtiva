@@ -4,6 +4,15 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **plano proposto em `PLANO.md` §8, aguardando aprovação.** Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M39 — correções da autonomia e conexões de IA (2026-11-13)
+
+- Escopo “todas as filiais” não exige verificação de pessoas nem desativa a proteção contra anúncios sem execução. Contagens e consultas comuns não geram manutenção indevida.
+- O orçamento de continuação é consumido ao reivindicar o trabalho, inclusive se o processo falhar; indisponibilidade anterior à primeira ação encerra pelo coordenador. Uma execução antiga não sobrescreve a nova, e mensagem recebida durante o worker interrompe a ação/resposta antiga.
+- Falhas técnicas do diagnóstico ficam vinculadas ao objetivo e permitem retomada após publicação. Tarefa agendada deixa o objetivo aguardando o worker; conclusão exige cobertura, e cancelamentos/falhas atualizam o objetivo. Retomada reutiliza a tarefa já existente.
+- Migração 0009 adiciona vínculo opcional com a tarefa e reconcilia metadados antigos; alteração de choices é só de estado, sem DDL. A checagem de implantação aceita SeparateDatabaseAndState apenas sem operações de banco.
+- Tela **Conexões de IA** reorganizada por agente, com provedores lado a lado, indicação da IA em uso, modelos junto à conta e ações secundárias recolhíveis. Logins, contas e seleção preservados; status de autenticação atualiza só o agente correspondente. Conferência visual em desktop e celular com dados de demonstração.
+- Validação: 706 testes aprovados, 10 pulados no Windows; Django check sem problemas e nenhuma migração pendente de geração. Integração isolada em andamento. Nenhum resultado real usado em testes ou registrado na documentação. A validação isolada da manutenção usa decisões/correção roteirizadas; não comprova programação autônoma da IA real.
+
 ## Mudança M38 — autonomia geral: objetivo, evidência, continuação e manutenção (2026-11-13)
 
 - O pedido só termina com evidência do que foi pedido; consulta que deu certo não encerra verificação nem investigação. Anúncio sem execução e resposta repetida voltam ao modelo; sem progresso, o ciclo para.

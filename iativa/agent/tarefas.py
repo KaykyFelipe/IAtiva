@@ -72,6 +72,8 @@ def retomar(t: Tarefa, proposta: dict, plano: dict) -> Tarefa:
     t.refresh_from_db()
     if n != 1:
         raise ValueError("A tarefa não está mais aguardando resposta.")
+    from .objetivos import sincronizar_tarefa
+    sincronizar_tarefa(t)
     return t
 
 
@@ -84,6 +86,8 @@ def cancelar(user, tarefa_id) -> Tarefa:
     Tarefa.objects.filter(pk=t.pk, situacao=S.PENDENTE).update(
         situacao=S.CANCELADA, progresso="Cancelada antes de começar.", concluido_em=timezone.now())
     t.refresh_from_db()
+    from .objetivos import sincronizar_tarefa
+    sincronizar_tarefa(t)
     return t
 
 
@@ -191,6 +195,8 @@ def _replanejar(t, motivo: str) -> bool:
 
 def _fim(t, situacao, motivo=""):
     _salvar(t, situacao=situacao, motivo=motivo[:400], concluido_em=timezone.now(), lease_ate=None)
+    from .objetivos import sincronizar_tarefa
+    sincronizar_tarefa(t)
 
 
 def _executar_teste_espera(t: Tarefa):
@@ -407,6 +413,8 @@ def _avisar(t, duracao_ms):
 
 
 def processar_proxima() -> bool:
+    from . import objetivos
+    objetivos.sincronizar_pendentes()
     t = reivindicar()
     if t is not None:
         executar(t)

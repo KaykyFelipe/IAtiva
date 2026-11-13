@@ -128,6 +128,7 @@ class SituacaoObjetivo(models.TextChoices):
     IMPEDIDO = "impedido", "Impedimento real"
     CONTINUAR = "continuar", "Continua em segundo plano"
     MANUTENCAO = "manutencao", "Aguardando correção da manutenção"
+    TAREFA = "aguardando_tarefa", "Verificação em andamento"
     SUPERADO = "superado", "A conversa seguiu"
 
 
@@ -150,6 +151,7 @@ class Objetivo(models.Model):
     retomado = models.BooleanField(default=False)  # já voltou uma vez depois de correção publicada
     incidente = models.ForeignKey("iativa_manutencao.Incidente", on_delete=models.SET_NULL, null=True, blank=True,
                                   related_name="objetivos")
+    tarefa = models.ForeignKey(Tarefa, on_delete=models.SET_NULL, null=True, blank=True, related_name="objetivos")
     execucao = models.CharField(max_length=32, blank=True)
     lease_ate = models.DateTimeField(null=True, blank=True)
     criado_em = models.DateTimeField(auto_now_add=True)

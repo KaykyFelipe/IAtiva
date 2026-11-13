@@ -264,12 +264,12 @@ def test_superusuario_sem_funcao_ti_nao_acessa(fake, client, django_user_model):
     assert not cl.permitido(su)
     client.force_login(su)
     assert client.get(reverse("claude-conta")).status_code == 403
-    assert "Conectar Claude" not in client.get(reverse("chat:index")).content.decode()
+    assert "Conexões de IA" not in client.get(reverse("chat:index")).content.decode()
 
 
 def test_ti_ve_conectar_e_salva_modelo_e_esforco(admin, fake, client):
     client.force_login(admin)
-    assert "Conectar Claude" in client.get(reverse("chat:index")).content.decode()
+    assert "Conexões de IA" in client.get(reverse("chat:index")).content.decode()
     r = client.post(reverse("claude-conta"), {"acao": "preferencias", "modelo": "opus", "esforco": "high"})
     assert r.status_code == 200 and "salvos" in r.content.decode()
     cfg = cl.config_usuario(admin)

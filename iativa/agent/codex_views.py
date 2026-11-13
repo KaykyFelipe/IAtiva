@@ -48,11 +48,14 @@ def conta(request):
             atual = {'mensagem': 'Modelo e esforço ChatGPT salvos para este agente.'}
         elif acao == 'usar':
             conexoes.escolher(request.user, perfil, request.POST.get('provedor', ''))
-            atual = {'mensagem': 'Provedor selecionado para este agente. A outra conexão foi preservada.'}
+            nome = 'Claude' if request.POST.get('provedor') == 'claude' else 'ChatGPT'
+            atual = {'mensagem': f'{nome} está em uso neste agente. A outra conexão foi preservada.'}
         else:
             return render(request, 'agent/claude_conta.html', contexto(request, perfil, erro='Ação inválida.'), status=400)
     except FalhaModelo as exc:
         erro = str(exc)
+    if request.POST.get('acao') == 'usar' and request.POST.get('provedor') == 'claude':
+        return render(request, 'agent/claude_conta.html', claude_views._contexto(request, perfil, atual, erro))
     return render(request, 'agent/claude_conta.html', contexto(request, perfil, atual, erro))
 
 
@@ -66,7 +69,10 @@ def estado(request, fluxo_id):
         atual = codex_login.login.obter(request.user, chave_sessao(request), str(fluxo_id), perfil).estado()
         c = codex_login.cartao(request.user, perfil)
         c.update(estado=atual)
-        return render(request, 'agent/_chatgpt_estado.html', {'g': c, 'perfil': perfil})
+        cartao = claude_views._cartao(request, perfil)
+        cartao['chatgpt'] = c
+        return render(request, 'agent/_chatgpt_estado.html', {'g': c, 'c': cartao, 'perfil': perfil,
+                                                            'atualizar_resumo': True})
     except FalhaModelo as exc:
         return render(request, 'agent/_chatgpt_estado.html',
                       {'g': {'erro': str(exc)}, 'perfil': 'invalido'}, status=400)

@@ -1,24 +1,16 @@
-<div id="chatgpt-estado-{{ perfil }}"{% if g.estado.aguardando %} hx-get="{% url 'chatgpt-estado' g.estado.id %}?perfil={{ perfil }}" hx-trigger="every 2s" hx-target="this" hx-swap="outerHTML"{% endif %}>
-  {% if g.erro %}<p class="erro" role="alert">{{ g.erro }}</p>{% endif %}
-  {% if g.estado.mensagem %}<p role="status">{{ g.estado.mensagem }}</p>{% endif %}
-  {% if g.ativo %}<p class="estado estado-pronta">{% if g.estado.fase == "conectado" %}Conectado · login verificado{% else %}Conexão ChatGPT salva{% endif %}</p>{% endif %}
-  {% if g.estado.fase == "aguardando" %}
-    <p>Abra a página oficial da OpenAI e digite este código lá:</p>
-    <p><strong>{{ g.estado.codigo }}</strong></p>
-    <p><a href="{{ g.estado.url }}" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer">Entrar com ChatGPT ↗</a></p>
-    <p class="sutil">Não informe sua senha ou tokens no IAtiva. O código é temporário e não fica no histórico.</p>
-  {% endif %}
-  <form method="post" action="{% url 'chatgpt-conta' %}">
-    {% csrf_token %}<input type="hidden" name="perfil" value="{{ perfil }}">
-    {% if g.estado.aguardando %}
-      <input type="hidden" name="fluxo" value="{{ g.estado.id }}"><button type="submit" name="acao" value="cancelar">Cancelar conexão ChatGPT</button>
-    {% else %}
-      {% if not g.ativo %}<button type="submit" name="acao" value="conectar">Conectar ChatGPT</button>{% endif %}
-      <button type="submit" name="acao" value="verificar" class="secundario">Verificar ChatGPT</button>
-      {% if g.ativo %}<button type="submit" name="acao" value="desconectar" class="secundario">Desconectar ChatGPT</button>{% endif %}
-    {% endif %}
-  </form>
-  {% if g.ativo %}
-    <form method="post" action="{% url 'chatgpt-conta' %}">{% csrf_token %}<input type="hidden" name="perfil" value="{{ perfil }}"><input type="hidden" name="provedor" value="chatgpt"><button name="acao" value="usar" type="submit">Usar ChatGPT neste agente</button></form>
+<div id="chatgpt-estado-{{ perfil }}" class="ia-connection"{% if g.estado.aguardando %} hx-get="{% url 'chatgpt-estado' g.estado.id %}?perfil={{ perfil }}" hx-trigger="every 2s" hx-target="this" hx-swap="outerHTML"{% endif %}>
+  <div class="ia-connection-status"><span class="ia-status{% if g.ativo %} ia-status-connected{% endif %}">{% if g.ativo %}{% if g.estado.fase == 'conectado' %}Conectado · login verificado{% else %}Conexão ChatGPT salva{% endif %}{% else %}Não conectada{% endif %}</span>{% if g.ativo and c.provedor_atual == 'chatgpt' %}<span class="ia-in-use">Em uso neste agente</span>{% endif %}</div>
+  {% if g.erro %}<p class="ia-feedback ia-feedback-error" role="alert">{{ g.erro }}</p>{% endif %}
+  {% if g.estado.mensagem %}<p class="ia-feedback" role="status">{{ g.estado.mensagem }}</p>{% endif %}
+  {% if g.estado.fase == 'aguardando' %}<div class="ia-login"><p><strong>Digite este código na página da OpenAI</strong></p><p class="ia-device-code">{{ g.estado.codigo }}</p><a class="ia-login-link" href="{{ g.estado.url }}" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer">Entrar com ChatGPT ↗</a><p class="ia-help">O código é temporário. Informe-o somente na página oficial, sem enviar sua senha ou tokens ao IAtiva.</p></div>{% endif %}
+  {% if g.estado.aguardando %}
+    <form method="post" action="{% url 'chatgpt-conta' %}#agente-{{ perfil }}">{% csrf_token %}<input type="hidden" name="perfil" value="{{ perfil }}"><input type="hidden" name="fluxo" value="{{ g.estado.id }}"><button type="submit" name="acao" value="cancelar" class="ia-text-button">Cancelar conexão ChatGPT</button></form>
+  {% else %}
+    <div class="ia-primary-actions">
+    {% if not g.ativo %}<form method="post" action="{% url 'chatgpt-conta' %}#agente-{{ perfil }}">{% csrf_token %}<input type="hidden" name="perfil" value="{{ perfil }}"><button type="submit" name="acao" value="conectar">Conectar ChatGPT</button></form>
+    {% elif c.provedor_atual != 'chatgpt' or not c.provedor_definido %}<form method="post" action="{% url 'chatgpt-conta' %}#agente-{{ perfil }}">{% csrf_token %}<input type="hidden" name="perfil" value="{{ perfil }}"><input type="hidden" name="provedor" value="chatgpt"><button name="acao" value="usar" type="submit">Usar ChatGPT neste agente</button></form>{% endif %}
+    </div>
+    <details class="ia-manage"><summary>Gerenciar conexão</summary><form method="post" action="{% url 'chatgpt-conta' %}#agente-{{ perfil }}" class="ia-secondary-actions">{% csrf_token %}<input type="hidden" name="perfil" value="{{ perfil }}"><button type="submit" name="acao" value="verificar" class="secundario">Verificar ChatGPT</button>{% if g.ativo %}<button type="submit" name="acao" value="desconectar" class="ia-text-button ia-disconnect">Desconectar ChatGPT</button>{% endif %}</form></details>
   {% endif %}
 </div>
+{% if atualizar_resumo %}{% include "agent/_ia_resumo.html" %}{% endif %}

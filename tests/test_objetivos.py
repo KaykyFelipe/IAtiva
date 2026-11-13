@@ -230,13 +230,15 @@ def test_retoma_o_pedido_depois_da_correcao_e_confere(base, monkeypatch, capsys)
     assert tarefas.processar_proxima()
     o.refresh_from_db()
     nova = Mensagem.objects.filter(conversa=c).latest("id")
-    assert o.situacao == SO.CUMPRIDO and o.melhor_evidencia == coord.VERIFICACAO
+    assert o.situacao == SO.TAREFA and o.melhor_evidencia != coord.VERIFICACAO
     assert nova.texto.startswith("Depois da correção publicada, refiz o seu pedido.") and nova.ficha["tipo"] == "tarefa"
     assert "Continuação automática do MESMO pedido" in corrigido.entradas[0].observacoes[0]["motivo"]
     assert tarefas.processar_proxima()  # a tarefa criada pela retomada roda e conclui de verdade
     t = Tarefa.objects.get()
     t.refresh_from_db()
     assert t.situacao == "concluida" and t.cobertura["total"] == len(LISTA)
+    o.refresh_from_db()
+    assert o.situacao == SO.CUMPRIDO and o.melhor_evidencia == coord.VERIFICACAO
     assert call_command("manutencao", "retomar", inc.pk) is None and Objetivo.objects.get().situacao == SO.CUMPRIDO
 
 
@@ -278,7 +280,7 @@ def test_no_limite_de_passos_o_worker_continua_sem_nova_mensagem(base, settings,
     assert tarefas.processar_proxima()
     o.refresh_from_db()
     nova = Mensagem.objects.filter(conversa=c).latest("id")
-    assert o.situacao == SO.CUMPRIDO and o.continuacoes == 1
+    assert o.situacao == SO.TAREFA and o.continuacoes == 1
     assert nova.texto.startswith("Continuando o seu pedido") and nova.ficha["tipo"] == "tarefa"
 
 
