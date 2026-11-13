@@ -284,7 +284,8 @@ def montar_modelo(tabela: str, spec: dict, valores: dict, codigo: str) -> Plano:
         plano.premissas.append(f"Junção com {j['tabela']} pela chave do dicionário (SX9), sem duplicar linhas.")
     plano.filtros.append(Filtro(Campo(e1, filial_campo), "=", valores["filial-analise"]))
     for f in spec.get("filtros_fixos", []):
-        plano.filtros.append(Filtro(Campo(e1, f["campo"]), "=", f["valor"]))
+        # M40: o filtro pode ser de uma tabela juntada (alias da junção) e pode ser "diferente".
+        plano.filtros.append(Filtro(Campo(f.get("alias") or e1, f["campo"]), f.get("op") or "=", f["valor"]))
     campo_data = spec.get("campo_data")
     if campo_data:
         periodo = valores["periodo-analise"]
@@ -294,7 +295,7 @@ def montar_modelo(tabela: str, spec: dict, valores: dict, codigo: str) -> Plano:
         ]
         plano.premissas.append(f"Período aplicado ao campo {campo_data}.")
     for f in spec.get("filtros_fixos", []):
-        plano.premissas.append(f"Filtro fixo: {f['campo']} = {f['valor']}.")
+        plano.premissas.append(f"Filtro fixo: {f['campo']} {f.get('op') or '='} {f['valor']}.")
     for campo, op, valor, origem in valores.get(REGRAS) or []:
         if op not in ("=", "<>"):
             continue

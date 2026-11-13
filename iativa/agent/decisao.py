@@ -19,6 +19,8 @@ ACOES = (
     "historico_cargo",      # nome → matrículas → histórico de função/cargo → descrições e conclusão
     "listar_aprendizados",  # mostrar consultas aprendidas
     "remover_aprendizado",  # administrador: tirar de uso uma consulta aprendida (pede confirmação)
+    "ajustar_filtro",       # M40: a pessoa pediu para mudar os filtros fixos de uma consulta aprendida
+    "voltar_filtro",        # M40: desfazer o último ajuste de filtros (volta como era antes)
     "lembrar",              # guardar na memória do agente algo que o usuário ensinou
     "listar_memorias",      # M22: mostrar o que a memória guarda e vale para a pessoa
     "esquecer_memoria",     # M22: desativar uma nota da memória (pede confirmação)
@@ -74,6 +76,7 @@ class Decisao:
     validade: str = ""
     investigacao: dict | None = None
     entrega: str = ""  # M38: o que o pedido exige para estar cumprido (declarado pelo modelo)
+    ajuste: dict | None = None  # M40: {"filtros": [{campo, operador, valor}], "remover": [campo]}
 
 
 ENTREGAS = ("", "resposta", "consulta", "calculo", "verificacao", "investigacao", "historico")
@@ -130,6 +133,18 @@ def esquema(codigos_objetivo, codigos_parametro) -> dict:
                 "required": ["campos"],
             },
             "validade": {"type": "string", "description": "Ação lembrar: até quando vale (DD/MM/AAAA); vazio = sem prazo."},
+            "ajuste": {
+                "type": "object",
+                "description": "Só na ação ajustar_filtro (consulta em alvo): filtros fixos a incluir/trocar e campos a "
+                               "tirar. O campo pode ser da tabela da consulta ou de uma tabela ligada a ela (ex.: F4_DUPLIC "
+                               "da TES numa consulta de SD2); a junção é feita pelo dicionário.",
+                "properties": {
+                    "filtros": {"type": "array", "items": {"type": "object", "properties": {
+                        "campo": {"type": "string"}, "operador": {"type": "string", "enum": ["igual", "diferente"]},
+                        "valor": {"type": "string"}}, "required": ["campo", "operador", "valor"]}},
+                    "remover": {"type": "array", "items": {"type": "string"}},
+                },
+            },
             "consulta": {
                 "type": "object",
                 "description": "Só na ação criar_consulta: a consulta nova montada com os campos de tabelas_para_aprender.",
@@ -161,7 +176,8 @@ def validar(saida, codigos_objetivo, codigos_parametro) -> Decisao:
     if not isinstance(saida, dict):
         raise DecisaoInvalida("formato")
     extras = set(saida) - {"resposta", "acao", "objetivo", "parametros", "alvo", "nota", "confirmado", "opcoes",
-                           "alcance", "consulta", "tipo_nota", "regra", "validade", "investigacao", "entrega"}
+                           "alcance", "consulta", "tipo_nota", "regra", "validade", "investigacao", "entrega",
+                           "ajuste"}
     if extras:
         raise DecisaoInvalida("campos extras")
     acao = saida.get("acao")
@@ -209,7 +225,11 @@ def validar(saida, codigos_objetivo, codigos_parametro) -> Decisao:
     entrega = saida.get("entrega") or ""
     if entrega not in ENTREGAS:
         raise DecisaoInvalida("entrega")
+    ajuste = _ajuste(saida.get("ajuste") or None)
+    if acao == "ajustar_filtro" and not ajuste:
+        raise DecisaoInvalida("ajuste")
     return Decisao(
+        ajuste=ajuste,
         entrega=entrega,
         investigacao=investigacao,
         tipo_nota=tipo_nota, regra=regra, validade=_texto(saida.get("validade", "") or "", 10, "validade"),
@@ -224,6 +244,24 @@ def validar(saida, codigos_objetivo, codigos_parametro) -> Decisao:
         opcoes=tuple(_texto(o, 120, "opcao") for o in opcoes),
         alcance=alcance,
     )
+
+
+def _ajuste(a) -> dict | None:
+    if a is None:
+        return None
+    if not isinstance(a, dict) or set(a) - {"filtros", "remover"}:
+        raise DecisaoInvalida("ajuste")
+    filtros, remover = a.get("filtros") or [], a.get("remover") or []
+    if not isinstance(filtros, list) or not isinstance(remover, list) or len(filtros) + len(remover) > 6:
+        raise DecisaoInvalida("ajuste")
+    out = []
+    for f in filtros:
+        if not isinstance(f, dict) or f.get("operador") not in ("igual", "diferente"):
+            raise DecisaoInvalida("ajuste.filtro")
+        out.append({"campo": _texto(f.get("campo", ""), 20, "campo").upper(), "operador": f["operador"],
+                    "valor": _texto(f.get("valor", ""), 40, "valor")})
+    rem = [_texto(c, 20, "remover").upper() for c in remover]
+    return {"filtros": out, "remover": rem} if out or rem else None
 
 
 def _consulta(c) -> dict:

@@ -624,6 +624,13 @@ def _agir(user, c, d, atual, defs, texto, provedor, entrada, objetivos, administ
             return Saida("O prazo terminou antes de concluir o histórico. A busca de matrículas não foi tratada como resposta final.", ficha)
         return Saida("Consultei os vínculos, o histórico funcional e as descrições disponíveis.",
                      {**ficha, "tipo": "historico_cargo", "busca": nome}, resultado=resultado)
+    if acao in ("ajustar_filtro", "voltar_filtro"):
+        from .aprendizado import pode_ajustar
+
+        if not pode_ajustar(user):
+            return Saida("Seu usuário não pode ajustar filtros de consultas.", ficha,
+                         observacao=Observacao(acao, SEM_PERMISSAO, "ajuste não autorizado"))
+        return _ajustar_filtro(user, d, ficha)
     if acao == "remover_aprendizado" and not administrador:
         return Saida("Essa ação é só para administradores.", ficha)
     if acao in ("preparar_consulta", "investigar_divergencia"):
@@ -969,6 +976,34 @@ def _remover(user, d, ficha) -> Saida:
     cm.save(update_fields=["situacao"])
     registrar("parametro_revogado", "agente", usuario=user, entidade_id=cm.pk, estado_novo="modelo_removido")
     return Saida(f"Pronto, removi a consulta “{cm.nome}”. Ela não aparece mais para ninguém.", ficha)
+
+
+def _ajustar_filtro(user, d, ficha) -> Saida:
+    """M40: muda (ou desfaz) os filtros fixos de uma consulta aprendida a pedido da pessoa."""
+    from .aprendizado import ajustar_filtros, descrever_filtros, voltar_filtros
+
+    achados = _achar_modelo(d.alvo)
+    if not achados:
+        nomes = "; ".join(f"“{m.nome}”" for m in ConsultaModelo.objects.filter(situacao=SituacaoModelo.APROVADA))
+        return Saida("Qual consulta devo ajustar?" + (f" As que existem são: {nomes}." if nomes else ""), ficha)
+    if len(achados) > 1:
+        ficha["opcoes"] = [m.nome for m in achados[:6]]
+        return Saida("Encontrei mais de uma. Qual delas?", ficha)
+    cm = achados[0]
+    antes = descrever_filtros(cm)
+    try:
+        if d.acao == "voltar_filtro":
+            cm = voltar_filtros(user, cm)
+        else:
+            cm = ajustar_filtros(user, cm, d.ajuste["filtros"], d.ajuste["remover"])
+    except PermissaoNegada as exc:
+        return Saida(str(exc), ficha, observacao=Observacao(d.acao, SEM_PERMISSAO, "ajuste não autorizado"))
+    except (ValidationError, ValueError) as exc:
+        motivo = " ".join(getattr(exc, "messages", [str(exc)]))
+        return Saida(motivo, ficha, observacao=Observacao(d.acao, ERRO_METADADOS, motivo))
+    verbo = "Voltei os filtros" if d.acao == "voltar_filtro" else "Ajustei os filtros"
+    return Saida(f"{verbo} da consulta “{cm.nome}”. Antes: {antes}. Agora: {descrever_filtros(cm)}. "
+                 "Para desfazer, peça para voltar o filtro como era antes.", ficha)
 
 
 def _lembrar(user, d, ficha) -> Saida:

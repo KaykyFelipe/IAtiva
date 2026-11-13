@@ -382,3 +382,89 @@ def rejeitar(user, cm) -> ConsultaModelo:
     cm.save(update_fields=["situacao"])
     registrar("parametro_rejeitado", "agente", usuario=user, entidade_id=cm.pk, estado_novo="modelo_rejeitado")
     return cm
+
+
+MAX_VERSOES = 10
+
+
+def pode_ajustar(user) -> bool:
+    """Quem pode criar consultas (administrador ou aprendizado automático) pode ajustar os filtros delas."""
+    return pode_aprender(user) or pode_aprender_sozinho(user)
+OPERADORES_AJUSTE = {"igual": "=", "diferente": "<>"}
+
+
+@transaction.atomic
+def ajustar_filtros(user, cm, filtros: list[dict], remover: list[str]) -> ConsultaModelo:
+    """M40: a pessoa pediu para mudar os filtros fixos de uma consulta aprendida. Inclui/troca
+    (`filtros`: campo, operador igual|diferente, valor) e tira (`remover`) filtros; o campo pode ser de
+    uma tabela ligada pelo dicionário (junção pela chave única, sem duplicar linhas). A versão anterior
+    fica guardada para `voltar_filtros`. Só administradores; a consulta compilada é validada antes."""
+    if not pode_ajustar(user):
+        raise PermissaoNegada("Seu usuário não pode ajustar filtros de consultas.")
+    cm = ConsultaModelo.objects.select_for_update().get(pk=cm.pk)
+    por_nome = {c.nome: c for c in campos_da_tabela(user, cm.tabela, automatico=not pode_aprender(user))["campos"]}
+    spec = dict(cm.spec)
+    juncoes = [dict(j) for j in spec.get("juncoes", [])]
+    atuais = {f["campo"]: dict(f) for f in spec.get("filtros_fixos", [])}
+    for campo in remover:
+        if campo not in atuais:
+            raise ValidationError(f"A consulta não tem filtro em {campo}.")
+        atuais.pop(campo)
+    possiveis = None
+    for f in filtros:
+        campo, valor, op = f["campo"], f["valor"].strip(), OPERADORES_AJUSTE.get(f["operador"])
+        if op is None or not CAMPO_RE.match(campo) or not VALOR_FIXO_RE.match(valor):
+            raise ValidationError(f"Filtro inválido em {campo} (valor só com letras, números, espaço e hífen).")
+        if campo in por_nome:
+            if sensivel(por_nome[campo]):
+                raise PermissaoNegada("Campo indisponível para filtro.")
+            atuais[campo] = {"campo": campo, "op": op, "valor": valor}
+            continue
+        if possiveis is None:
+            possiveis = juncoes_possiveis(user, cm.tabela)
+        j = next((j for j in possiveis if any(c.nome == campo for c in j["campos"])), None)
+        if j is None:
+            raise ValidationError(f"O campo {campo} não está em {cm.tabela} nem numa tabela ligada a ela pelo dicionário.")
+        existente = next((x for x in juncoes if x["tabela"] == j["tabela"]), None)
+        if existente is None:
+            if len(juncoes) >= MAX_JUNCOES + 1:
+                raise ValidationError("A consulta já tem o máximo de tabelas ligadas.")
+            usados = {x["alias"] for x in juncoes}
+            apelido = next(f"j{n}" for n in range(1, 10) if f"j{n}" not in usados)
+            existente = {"tabela": j["tabela"], "alias": apelido, "pares": j["pares"]}
+            juncoes.append(existente)
+        atuais[campo] = {"campo": campo, "op": op, "valor": valor, "alias": existente["alias"]}
+    anteriores = list(spec.get("anteriores", []))
+    anteriores.append({"filtros_fixos": spec.get("filtros_fixos", []), "juncoes": spec.get("juncoes", [])})
+    spec.update(filtros_fixos=list(atuais.values()), juncoes=juncoes, anteriores=anteriores[-MAX_VERSOES:])
+    cm.spec = spec
+    _testar_compilacao(cm)
+    cm.save(update_fields=["spec"])
+    registrar("parametro_corrigido", "agente", usuario=user, entidade_id=cm.pk, estado_novo="filtros_ajustados")
+    return cm
+
+
+@transaction.atomic
+def voltar_filtros(user, cm) -> ConsultaModelo:
+    """M40: desfaz o último ajuste: filtros e junções voltam a ser os da versão anterior."""
+    if not pode_ajustar(user):
+        raise PermissaoNegada("Seu usuário não pode ajustar filtros de consultas.")
+    cm = ConsultaModelo.objects.select_for_update().get(pk=cm.pk)
+    spec = dict(cm.spec)
+    anteriores = list(spec.get("anteriores", []))
+    if not anteriores:
+        raise ValidationError("Essa consulta não tem ajuste de filtro para desfazer.")
+    v = anteriores.pop()
+    spec.update(filtros_fixos=v["filtros_fixos"], juncoes=v["juncoes"], anteriores=anteriores)
+    cm.spec = spec
+    _testar_compilacao(cm)
+    cm.save(update_fields=["spec"])
+    registrar("parametro_corrigido", "agente", usuario=user, entidade_id=cm.pk, estado_novo="filtros_revertidos")
+    return cm
+
+
+def descrever_filtros(cm) -> str:
+    fs = cm.spec.get("filtros_fixos", [])
+    if not fs:
+        return "sem filtros fixos"
+    return "; ".join(f"{f['campo']} {'diferente de' if f.get('op') == '<>' else '='} “{f['valor']}”" for f in fs)

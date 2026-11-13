@@ -4,6 +4,12 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **plano proposto em `PLANO.md` §8, aguardando aprovação.** Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M40 — ajustar e voltar filtro de consulta a pedido (2026-11-13)
+
+- Ações `ajustar_filtro` e `voltar_filtro`: a pessoa pede para mudar o filtro de uma consulta aprendida (inclusive campo de tabela ligada, ex.: TES) e pode voltar como era antes.
+- Regra de faturamento escolhida por Diego: itens de saída cuja TES gera duplicata.
+- Testes: 712 aprovados e 10 pulados no Windows (6 novos em `tests/test_ajuste_filtro.py`).
+
 ## Mudança M39 — correções da autonomia e conexões de IA (2026-11-13)
 
 - Escopo “todas as filiais” não exige verificação de pessoas nem desativa a proteção contra anúncios sem execução. Contagens e consultas comuns não geram manutenção indevida.

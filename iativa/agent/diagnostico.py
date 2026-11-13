@@ -245,7 +245,8 @@ def investigar(user, s, inicial, interrompido=None):
         ('Há etapas incompletas; ' if not out.completo else '') +
         'as decomposições abaixo mostram onde os valores se concentram. Soma de notas não comprova, sozinha, '
         'faturamento de vendas. Título associado e TES são hipóteses, não a definição aprovada. '
-        'Não alterei critérios para aproximar o número informado e não gravei regra nova. '
+        'Não alterei critérios por conta própria. Se um desses cenários for a regra certa, peça para ajustar o filtro '
+        'da consulta (dá para voltar como era antes). '
         'A conciliação permanece pendente enquanto não houver evidência que determine quais operações representam receita.')
     return out
 
