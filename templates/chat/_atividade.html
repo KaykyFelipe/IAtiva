@@ -3,7 +3,7 @@
 <div class="atividade-fixa" id="atividade-fixa" role="status" aria-live="polite"
      data-tarefa-ativa data-cancelar-url="{% url 'chat:tarefa_cancelar' tarefa_fixa.pk %}" data-tarefa-id="{{ tarefa_fixa.pk }}"
      hx-get="{% url 'chat:atividade' conversa.pk %}" hx-trigger="every 2s" hx-target="this" hx-swap="outerHTML">
-  <span class="giro" aria-hidden="true"></span>
+  {% include "chat/_mascote.html" with estado="checking" %}
   <span class="atividade-texto">{{ tarefa_fixa.progresso|default:tarefa_fixa.get_situacao_display }}</span>
 </div>
 {% else %}

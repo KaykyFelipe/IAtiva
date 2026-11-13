@@ -1,5 +1,6 @@
-<div class="conversa-area{% if not conversa and not aprendizado %} inicio{% endif %}" id="conversa" data-conversa-id="{{ conversa.pk|default:0 }}">
+<div class="conversa-area{% if not conversa and not aprendizado %} inicio{% endif %}" id="conversa" data-conversa-id="{{ conversa.pk|default:0 }}" data-falha="{% if mascote_falha %}1{% else %}0{% endif %}">
   <header class="cabecalho">
+    <div class="agente-capsula" aria-label="Assistente IAtiva">{% include "chat/_mascote.html" %}<div><strong>IAtiva</strong><small data-mascote-status>Pronta para ajudar</small></div></div>
     {% include "chat/_cabecalho_acoes.html" %}
     <div class="titulo-conversa">
       <h1>{% if conversa %}{{ conversa.titulo|default:"Conversa" }}{% else %}IAtiva{% endif %}</h1>

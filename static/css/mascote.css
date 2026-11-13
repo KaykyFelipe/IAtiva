@@ -1,0 +1,58 @@
+.mascote { display:inline-flex; width:40px; height:40px; flex:none; color:#1959a4; vertical-align:middle; }
+.mascote svg { width:100%; height:100%; overflow:visible; }
+.mascote-sombra { fill:#dbe6f2; }
+.mascote-personagem { transform-origin:80px 110px; animation:mascote-respirar 3.8s ease-in-out infinite; }
+.mascote-corpo { fill:currentColor; transition:x .5s,y .5s,width .5s,height .5s,rx .5s; }
+.mascote-olhos { fill:white; transform-origin:80px 79px; animation:mascote-piscar 5.7s infinite; }
+.mascote-detalhe { opacity:0; transition:opacity .35s; fill:none; stroke:#c9e1fa; stroke-width:3; stroke-linecap:round; stroke-linejoin:round; }
+.mascote-teto { fill:#fff; stroke:#a9c8e9; stroke-width:2; }
+.mascote-sorriso { fill:none; stroke:white; stroke-width:3; stroke-linecap:round; opacity:0; transition:opacity .3s; }
+.mascote-pensamento { fill:#68a0db; opacity:0; }
+.mascote[data-estado="thinking"] .mascote-pensamento { opacity:1; animation:mascote-pensar 1.3s ease-in-out infinite; }
+.mascote[data-estado="thinking"] .mascote-personagem { animation:mascote-ponderar 2.4s ease-in-out infinite; }
+.mascote[data-estado="searching"] .mascote-lupa { opacity:1; stroke:#1959a4; fill:#f4f9ff; animation:mascote-buscar 2s ease-in-out infinite; transform-origin:116px 106px; }
+.mascote[data-estado="querying"] .mascote-corpo { x:42px; y:32px; width:76px; height:104px; rx:12px; }
+.mascote[data-estado="querying"] .mascote-cabine { opacity:1; }
+.mascote[data-estado="querying"] .mascote-olhos { animation:mascote-ler 1.8s ease-in-out infinite; }
+.mascote[data-estado="organizing"] .mascote-corpo { x:14px; y:56px; width:132px; height:72px; rx:10px; }
+.mascote[data-estado="organizing"] .mascote-container { opacity:1; }
+.mascote[data-estado="calculating"] .mascote-corpo { x:45px; y:30px; width:70px; height:103px; rx:16px; }
+.mascote[data-estado="calculating"] .mascote-calculadora { opacity:1; animation:mascote-teclas 1.2s infinite; }
+.mascote[data-estado="writing"] .mascote-prancheta { opacity:1; }
+.mascote[data-estado="writing"] .mascote-corpo { x:44px; y:34px; width:72px; height:98px; rx:13px; }
+.mascote[data-estado="checking"] .mascote-capacete,.mascote[data-estado="checking"] .mascote-check { opacity:1; }
+.mascote[data-estado="done"] .mascote-corpo { x:44px; y:55px; width:72px; height:78px; rx:23px; }
+.mascote[data-estado="done"] .mascote-pia,.mascote[data-estado="done"] .mascote-sorriso { opacity:1; }
+.mascote[data-estado="done"] .mascote-personagem { animation:mascote-comemorar .7s ease-in-out 2; }
+.mascote[data-estado="attention"] { color:#a96d23; }
+.mascote[data-estado="attention"] .mascote-alerta { opacity:1; stroke:white; }
+.mascote[data-estado="paused"] .mascote-olhos { transform:scaleY(.4); animation:none; }
+.mascote[data-estado="paused"] .mascote-personagem { animation:none; }
+.agente-capsula { display:flex; align-items:center; gap:8px; padding:2px 16px 2px 7px; border:1px solid #d9e3ed; border-radius:999px; background:#fff; box-shadow:0 2px 7px #193b6010; min-width:158px; }
+.agente-capsula strong { font-size:14px; color:#244363; font-weight:650; }
+.agente-capsula .mascote { width:54px; height:54px; }
+.agente-capsula small { display:block; font-size:10px; color:#64778c; line-height:1.4; max-width:120px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.cabecalho { display:grid; grid-template-columns:1fr auto 1fr; min-height:88px; }
+.cabecalho .titulo-conversa { grid-column:1; grid-row:1; min-width:0; }
+.cabecalho .titulo-conversa h1 { max-width:230px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.cabecalho .agente-capsula { grid-column:2; grid-row:1; }
+.inicio .cabecalho .titulo-conversa { visibility:hidden; }
+.cabecalho .expandir-leitura { grid-column:3; grid-row:1; justify-self:end; }
+.cabecalho .abrir-lateral { grid-column:1; grid-row:1; justify-self:start; z-index:1; }
+.lateral-recolhida .cabecalho .titulo-conversa { padding-left:42px; }
+.assinatura-ia .mascote { width:32px; height:32px; }
+.assinatura-ia .mascote * { animation:none; }
+.tarefa-topo .mascote { width:38px; height:38px; }
+.pensando-mascote { display:flex; align-items:center; gap:10px; }
+.pensando-mascote .mascote { width:62px; height:62px; }
+.atividade-fixa .mascote { width:30px; height:30px; }
+@keyframes mascote-respirar { 50% { transform:translateY(-2px) scale(1.015,.985); } }
+@keyframes mascote-piscar { 0%,43%,47%,100% { transform:scaleY(1); } 45% { transform:scaleY(.12); } }
+@keyframes mascote-pensar { 50% { transform:translateY(-3px); opacity:.45; } }
+@keyframes mascote-ponderar { 35% { transform:rotate(-7deg); } 70% { transform:rotate(6deg); } }
+@keyframes mascote-buscar { 50% { transform:translate(-8px,3px) rotate(-12deg); } }
+@keyframes mascote-ler { 25% { transform:translateX(-4px); } 75% { transform:translateX(4px); } }
+@keyframes mascote-teclas { 50% { stroke:white; } }
+@keyframes mascote-comemorar { 50% { transform:translateY(-8px) rotate(4deg); } }
+@media(max-width:760px) { .cabecalho { padding:10px 16px; min-height:78px; } .cabecalho .titulo-conversa { display:none; } .agente-capsula { min-width:148px; } }
+@media(prefers-reduced-motion:reduce) { .mascote *, .mascote *::before { animation:none!important; transition:none!important; } }

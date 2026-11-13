@@ -4,6 +4,14 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **plano proposto em `PLANO.md` §8, aguardando aprovação.** Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M46 — mascote IAtiva no chat (2026-11-13)
+
+- Cápsula central no cabeçalho com mascote, nome e estado. Mascote também nas respostas, no pensamento durante envio e nas atividades/tarefas em segundo plano.
+- SVG próprio inspirado na prévia aprovada: corpo e olhos persistem nas transformações em toalete portátil, container e lavatório. Lupa, calculadora, prancheta e capacete/check representam busca, cálculo, escrita e conferência; inclui pensamento, respiração/piscada, conclusão, atenção e interrupção.
+- Estados seguem os textos operacionais existentes, sem simular novas etapas. Erro/formulário inválido não comemora; tarefa/objetivo pendente mantém atividade. Animações das respostas antigas ficam estáticas, e movimento reduzido desativa transições/animações.
+- Verificação em Chrome com dados sintéticos: desktop/celular sem transbordamento horizontal; estados compartilhados entre cápsula e pensamento, falha, objetivo pendente e movimento reduzido conferidos. Sem alterações nas consultas ou nos dados.
+- Validação: 794 testes aprovados e 10 pulados no Windows; Django check sem problemas e nenhuma migração nova. Chrome desktop/celular validou estados, movimento reduzido e layout. Detalhes: `docs/MASCOTE.md`.
+
 ## Mudança M45 — consultas acionáveis e cálculo até a conclusão (2026-11-13)
 
 - “E dias úteis?” recupera a pessoa, o intervalo de estágio e a filial, inclusive após uma resposta M44 que tinha mostrado só admissões. Não calcula o vínculo de outro cargo até hoje nem aceita troca de pessoa/filial sugerida pelo modelo sem pedido.

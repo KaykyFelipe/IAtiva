@@ -55,10 +55,14 @@ def _contexto(request, c=None, form=None, erro="", resultado=None, resultado_msg
     setor = setor_do_usuario(request.user)
     nome = request.user.get_full_name() or request.user.get_username()
     iniciais = "".join(p[0] for p in nome.split()[:2]).upper()
+    msgs = conversas.mensagens_com_interacao(request.user, c) if c else []
+    ultimo_tipo = msgs[-1]['m'].ficha.get('tipo') if msgs else ''
     return {
         "lateral": conversas.lateral(request.user),
         "conversa": c,
-        "mensagens": conversas.mensagens_com_interacao(request.user, c) if c else [],
+        "mensagens": msgs,
+        "mascote_falha": bool(erro or (form is not None and form.errors) or getattr(resultado, 'ok', None) is False or ultimo_tipo in (
+            'falha_modelo', 'falha_execucao', 'bloqueada', 'impedimento_dados')),
         "pode_escrever": conversas.pode_escrever(request.user, c) if c else bool(setor),
         "form": form or MessageForm(),
         "erro": erro,

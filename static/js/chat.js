@@ -266,6 +266,14 @@
     pensando.innerHTML = '<ol class="pensando-passos" data-pensando-passos></ol>' +
       '<div class="pensando-linha"><span class="pontos" aria-hidden="true"><i></i><i></i><i></i></span>' +
       '<span class="pensando-atual" data-pensando-atual>Pensando…</span></div>';
+    if (window.IAtivaMascote) {
+      const rosto = document.createElement('div'); rosto.className = 'pensando-mascote';
+      rosto.append(IAtivaMascote.criar('thinking'));
+      const linha = pensando.querySelector('.pensando-linha');
+      linha.querySelector('.pontos').remove();
+      rosto.append(linha); pensando.prepend(rosto);
+      IAtivaMascote.estado('thinking');
+    }
     lista.append(bolha, pensando);
     rolarParaFim();
     return [bolha, pensando];
@@ -297,6 +305,7 @@
         }
         while (lista.children.length > 5) lista.firstElementChild.remove();
         agora.textContent = passos[passos.length - 1] + "…";
+        if (window.IAtivaMascote) IAtivaMascote.estado(IAtivaMascote.etapa(agora.textContent));
         agora.classList.remove("trocou"); void agora.offsetWidth; agora.classList.add("trocou");
         vistos = passos.length;
         rolarParaFim();
@@ -309,10 +318,11 @@
     acompanhamento = null;
   }
 
-  function encerrar(restaurar) {
+  function encerrar(restaurar, estadoMascote = 'paused') {
     if (!atual) return;
     const { form, texto, elementos } = atual;
     atual = null;
+    if (window.IAtivaMascote) IAtivaMascote.estado(estadoMascote);
     pararAcompanhamento();
     setTimeout(atualizarBotaoTarefa, 0);
     elementos.forEach((el) => el.remove());
@@ -367,6 +377,7 @@
         if (html && cartao) { cartao.outerHTML = html; }
         barra.removeAttribute("data-tarefa-ativa");
         barra.hidden = true;
+        if (window.IAtivaMascote) IAtivaMascote.estado('paused');
         atualizarBotaoTarefa();
       })
       .catch(() => {});
@@ -413,7 +424,7 @@
   });
   ["htmx:responseError", "htmx:sendError", "htmx:timeout"].forEach((ev) =>
     document.body.addEventListener(ev, (e) => {
-      if (atual && e.detail.elt === atual.form) encerrar(true);
+      if (atual && e.detail.elt === atual.form) encerrar(true, 'attention');
     }));
   document.body.addEventListener("htmx:afterRequest", (e) => {
     // 204 = envio interrompido no servidor: a tela já foi restaurada.
@@ -472,6 +483,8 @@
         const noFim = rolagem.scrollHeight - rolagem.scrollTop - rolagem.clientHeight < 100;
         if (mensagens && novas) { mensagens.replaceWith(novas); if (window.htmx) htmx.process(novas); }
         area.querySelector("h1").textContent = doc.querySelector("h1").textContent;
+        area.dataset.falha = doc.getElementById('conversa').dataset.falha;
+        if (window.IAtivaMascote) IAtivaMascote.sincronizar();
         if (noFim) rolagem.scrollTop = rolagem.scrollHeight;
       }
       versaoRemota = lateralOcupada ? "" : dados.versao;

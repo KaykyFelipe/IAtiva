@@ -5,7 +5,7 @@
     {% if tarefa.terminal %}
       <span class="tarefa-icone {% if tarefa.situacao == 'concluida' %}ok{% else %}alerta{% endif %}" aria-hidden="true"></span>
     {% else %}
-      <span class="giro" aria-hidden="true"></span>
+      {% include "chat/_mascote.html" with estado="checking" %}
     {% endif %}
     <div class="tarefa-titulos">
       <p class="tarefa-titulo">{{ tarefa.objetivo }}</p>
