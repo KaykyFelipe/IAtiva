@@ -439,8 +439,10 @@
     atualizarBotaoTarefa();
   });
   document.body.addEventListener("htmx:afterSwap", (e) => {
-    if (e.detail && e.detail.target && e.detail.target.id === "atividade-fixa") { atualizarBotaoTarefa(); return; }
-    if (e.detail && e.detail.target && e.detail.target.classList && e.detail.target.classList.contains("tarefa-card")) return;
+    atualizarBotaoTarefa();
+    // Progresso, objetivos e conclusões atualizam apenas seus cartões. Não
+    // devem mexer na leitura nem reinicializar a sincronização da conversa.
+    if (!e.detail || !e.detail.target || e.detail.target.id !== "conversa") return;
     if (atual && !atual.form.isConnected) { atual = null; pararAcompanhamento(); }
     atualizarBotaoTarefa();
     atualizarSaudacao();
@@ -478,20 +480,29 @@
       }
       if (dados.conversa && area) {
         const doc = new DOMParser().parseFromString(dados.conversa, "text/html");
+        const recebida = doc.getElementById("conversa");
         const mensagens = area.querySelector(".mensagens"), novas = doc.querySelector(".mensagens");
         const rolagem = area.querySelector("[data-rolagem]");
         const noFim = rolagem.scrollHeight - rolagem.scrollTop - rolagem.clientHeight < 100;
-        if (mensagens && novas) { mensagens.replaceWith(novas); if (window.htmx) htmx.process(novas); }
+        const posicao = rolagem.scrollTop;
+        const mudou = !recebida.dataset.historicoVersao || recebida.dataset.historicoVersao !== area.dataset.historicoVersao;
+        if (mudou && mensagens && novas) {
+          mensagens.replaceWith(novas);
+          area.dataset.historicoVersao = recebida.dataset.historicoVersao || "";
+          if (window.htmx) htmx.process(novas);
+          rolagem.scrollTop = noFim ? rolagem.scrollHeight : posicao;
+        }
         area.querySelector("h1").textContent = doc.querySelector("h1").textContent;
         area.dataset.falha = doc.getElementById('conversa').dataset.falha;
         if (window.IAtivaMascote) IAtivaMascote.sincronizar();
-        if (noFim) rolagem.scrollTop = rolagem.scrollHeight;
       }
       versaoRemota = lateralOcupada ? "" : dados.versao;
     } catch (_) { /* indisponibilidade transitória: tentar no próximo ciclo */ }
     finally { sincronizando = false; }
   }
-  document.body.addEventListener("htmx:afterSwap", () => { versaoRemota = ""; });
+  document.body.addEventListener("htmx:afterSwap", (e) => {
+    if (e.detail && e.detail.target && e.detail.target.id === "conversa") versaoRemota = "";
+  });
   setInterval(sincronizar, 2000);
   document.addEventListener("visibilitychange", () => { if (!document.hidden) sincronizar(); });
 })();

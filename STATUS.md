@@ -4,6 +4,14 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **plano proposto em `PLANO.md` §8, aguardando aprovação.** Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M47 — leitura estável e ajustes do mascote (2026-11-13)
+
+- Atualizações de progresso, objetivos e conclusões não reinicializam a sincronização nem levam a rolagem ao final. Histórico autorizado possui versão própria, igual na página inicial e no polling; mudanças somente na lateral não remontam tabelas/cartões nem repetem o carregamento de conclusões.
+- Uma atualização real do histórico preserva a posição de leitura e o rascunho; acompanha o fim apenas quando a pessoa já estava perto dele. Novas conversas continuam aparecendo entre sessões.
+- Cabeçalho de 64px no desktop e 62px no celular, cápsula menor e sem sombra. Sombra SVG removida; capacete amarelo legível e movimentos do personagem inteiro durante conferência, busca, organização, cálculo e escrita. Movimento reduzido continua respeitado.
+- Chrome com dados sintéticos conferiu identidade da tabela no primeiro polling e na atualização da lateral, progresso sem deslocamento, mensagem remota mantendo rolagem/rascunho, tabela única e acompanhamento do fim. Desktop/celular sem transbordamento; estados e movimento reduzido verificados. Testes de integração cobrem estabilidade da versão e invalidação por acesso/mensagem.
+- Validação local: 796 testes aprovados e 10 pulados por dependências de shell no Windows. Django check sem problemas; nenhuma migração nova.
+
 ## Mudança M46 — mascote IAtiva no chat (2026-11-13)
 
 - Cápsula central no cabeçalho com mascote, nome e estado. Mascote também nas respostas, no pensamento durante envio e nas atividades/tarefas em segundo plano.

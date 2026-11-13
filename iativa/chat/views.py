@@ -57,10 +57,18 @@ def _contexto(request, c=None, form=None, erro="", resultado=None, resultado_msg
     iniciais = "".join(p[0] for p in nome.split()[:2]).upper()
     msgs = conversas.mensagens_com_interacao(request.user, c) if c else []
     ultimo_tipo = msgs[-1]['m'].ficha.get('tipo') if msgs else ''
+    # A versão representa o histórico autorizado, não o progresso dos cartões que
+    # já possuem polling próprio. Assim uma atualização da lateral não remonta tabelas.
+    historico_versao = hashlib.sha256(json.dumps([
+        {**{k: v for k, v in item.items() if k not in ('m', 'tarefa')},
+         'mensagem': [item['m'].pk, item['m'].texto, item['m'].ficha]}
+        for item in msgs
+    ], default=str, sort_keys=True).encode()).hexdigest()
     return {
         "lateral": conversas.lateral(request.user),
         "conversa": c,
         "mensagens": msgs,
+        "historico_versao": historico_versao,
         "mascote_falha": bool(erro or (form is not None and form.errors) or getattr(resultado, 'ok', None) is False or ultimo_tipo in (
             'falha_modelo', 'falha_execucao', 'bloqueada', 'impedimento_dados')),
         "pode_escrever": conversas.pode_escrever(request.user, c) if c else bool(setor),
@@ -137,7 +145,7 @@ def sincronizar(request):
     # Inclui as políticas/restrições para invalidar a apresentação quando o acesso muda.
     from iativa.accounts.authz import politicas_vigentes
     from iativa.metadata.models import RestricaoMetadado
-    versao = hashlib.sha256(json.dumps([registros, list(politicas_vigentes(request.user).values()),
+    versao = hashlib.sha256(json.dumps([registros, list(politicas_vigentes(request.user).order_by('pk').values()),
         list(RestricaoMetadado.objects.order_by("id", "setores_permitidos__pk").values(
             "id", "tabela", "campo", "ativo", "setores_permitidos__pk")), cid],
         default=str, sort_keys=True).encode()).hexdigest()

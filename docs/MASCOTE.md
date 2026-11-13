@@ -25,3 +25,9 @@ impede conclusão visual prematura. Falhas de envio e validação ficam como ate
 Respostas antigas têm avatar estático para evitar centenas de animações simultâneas.
 `prefers-reduced-motion` desativa animações e transições mantendo o desenho e o texto de estado.
 O template clonável não tem IDs internos, scripts inline nem conteúdo de usuário interpolado.
+
+M47 compactou o cabeçalho (64px desktop, 62px celular), retirou as sombras do SVG e
+da cápsula e destacou o capacete em amarelo para não desaparecer no fundo claro.
+Busca, conferência, cálculo, escrita e organização movem o personagem inteiro.
+A sincronização compara a versão do histórico autorizado antes de remontar mensagens;
+polling de cartões não reposiciona a leitura nem reinicia o histórico.

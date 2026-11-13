@@ -98,6 +98,35 @@ def test_sync_nao_mostra_conversa_alheia(funcional, novo_usuario):
     assert 'BRUNO' not in cliente.get(reverse('chat:sincronizar')).content.decode()
 
 
+def test_versao_historico_estavel_entre_pagina_sync_e_mudanca_so_na_lateral(funcional):
+    import re
+    cliente = Client()
+    cliente.force_login(funcional['u'])
+    c = conversas.nova_individual(funcional['u'])
+    _historico(funcional, c)
+    def versao(html):
+        return re.search(r'data-historico-versao="([a-f0-9]+)"', html)[1]
+    inicial = versao(cliente.get(reverse('chat:conversa', args=[c.pk])).content.decode())
+    sync = lambda: cliente.get(reverse('chat:sincronizar'), {'conversa': c.pk}).json()['conversa']
+    assert versao(sync()) == inicial
+    conversas.nova_individual(funcional['u'])
+    assert versao(sync()) == inicial
+    AccessPolicy.objects.filter(user=funcional['u']).update(pode_consultar=False)
+    sem_acesso = sync()
+    assert versao(sem_acesso) != inicial and 'Estagiário' not in sem_acesso
+
+
+def test_versao_historico_muda_com_nova_mensagem(client, funcional):
+    import re
+    c = conversas.nova_individual(funcional['u'])
+    client.force_login(funcional['u'])
+    url = reverse('chat:conversa', args=[c.pk])
+    antes = re.search(r'data-historico-versao="(.*?)"', client.get(url).content.decode())[1]
+    Mensagem.objects.create(conversa=c, papel='ia', texto='Atualização sintética.')
+    depois = re.search(r'data-historico-versao="(.*?)"', client.get(url).content.decode())[1]
+    assert antes != depois
+
+
 def test_layout_duravel_e_independente_da_sessao(base):
     a, b = Client(), Client()
     for cli in (a, b):
