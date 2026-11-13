@@ -382,6 +382,11 @@ def executar_solicitacao(user, s: RequestContext) -> Resultado:
                          "O resultado tem registros repetidos e não foi validado. Os critérios precisam ser revistos.",
                          ERRO_METADADOS)
 
+    mesclou = False
+    if todas and len(filiais) > 1 and plano.agrupar and linhas:
+        linhas, mesclou = _mesclar_filiais(plano, comp, linhas)
+        if mesclou:
+            origem = [None] * len(linhas)
     tipos = list(comp.tipos)
     formatadas = [[_fmt(v, t) for v, t in zip(l, tipos)] for l in linhas]
     totais = acumulador.totais() if (acumulador is not None and totais_ok) else None
@@ -401,7 +406,11 @@ def executar_solicitacao(user, s: RequestContext) -> Resultado:
         colunas = list(comp.rotulos) + ["Dias de atraso (maior)"]
     else:
         colunas = list(comp.rotulos)
-    if todas:
+    if todas and mesclou:
+        plano.premissas = [p for p in plano.premissas if "filial" not in p.lower()] + [
+            "Filiais: " + ", ".join(rotulo(f) for f in filiais) + ".",
+            "Grupos iguais somados entre as filiais" + (f"; ranking geral dos {plano.top} maiores." if plano.top else ".")]
+    elif todas:
         colunas, tipos = ["Filial"] + colunas, ["texto"] + tipos
         formatadas = [[rotulo(o)] + linha for o, linha in zip(origem, formatadas)]
         plano.premissas = [p for p in plano.premissas if "filial" not in p.lower()] + [
@@ -409,12 +418,66 @@ def executar_solicitacao(user, s: RequestContext) -> Resultado:
 
     mensagem = _resposta_final(s.objetivo, plano, len(linhas), truncado, totais, total, subtotal,
                                bool(valores.get(AGREGACAO)), len(filiais))
+    destaque = _destaque(plano, comp, colunas, formatadas, linhas, tipos)
+    if destaque:
+        mensagem = destaque + " " + mensagem
     situacao = VAZIO if not linhas else (PARCIAL if truncado else SUCESSO)
     res = _encerrar(user, s, E.CONCLUIDA, inicio, len(linhas), mensagem, situacao)
     res.ok, res.colunas, res.tipos, res.linhas = True, colunas, tipos, formatadas
     res.premissas, res.truncado, res.total, res.total_valor = plano.premissas, truncado, total, total_valor
     res.totais, res.subtotal = totais, subtotal
     return res
+
+
+def _mesclar_filiais(plano, comp, linhas):
+    """M40: "todas as filiais" roda uma consulta por filial. Agrupado por algo que não é a filial (cliente,
+    produto...), o mesmo grupo aparece em várias filiais: soma SUM/COUNT entre elas e aplica o top N geral.
+    MIN/MAX/AVG não se somam: nesses casos mantém uma linha por filial."""
+    aggs = [c.agregacao for c in plano.colunas]
+    if (len(aggs) != len(comp.rotulos) or not any(aggs) or all(aggs)
+            or any(a not in ("SUM", "COUNT") for a in aggs if a)):
+        return linhas, False
+    grupos = {}
+    for linha in linhas:
+        chave = tuple(str(v).strip() if not a else None for v, a in zip(linha, aggs))
+        atual = grupos.get(chave)
+        if atual is None:
+            grupos[chave] = list(linha)
+            continue
+        for i, a in enumerate(aggs):
+            if a and linha[i] is not None:
+                atual[i] = (_dec(atual[i]) if atual[i] is not None else Decimal(0)) + _dec(linha[i])
+    novas = list(grupos.values())
+    ordem = plano.ordenar[0] if plano.ordenar else None
+    i = (comp.rotulos.index(ordem[0]) if ordem and ordem[0] in comp.rotulos
+         else next(k for k, a in enumerate(aggs) if a))
+    if aggs[i]:
+        novas.sort(key=lambda l: _dec(l[i]) if l[i] is not None else Decimal(0), reverse=ordem[1] if ordem else True)
+    if plano.top:
+        novas = novas[:plano.top]
+    return novas, True
+
+
+def _destaque(plano, comp, colunas, formatadas, linhas, tipos) -> str:
+    """M40: cálculo agrupado com 2+ grupos: diz qual grupo ficou no topo (e no fim), em vez de só a tabela."""
+    if not plano.agrupar or len(linhas) < 2:
+        return ""
+    aggs = [c.agregacao for c in plano.colunas]
+    if len(aggs) != len(comp.rotulos) or not any(aggs):
+        return ""
+    i = next(k for k, a in enumerate(aggs) if a)
+    desloc = len(colunas) - len(comp.rotulos)  # coluna "Filial" na frente
+    pares = [(_dec(l[i]), f) for l, f in zip(linhas, formatadas) if l[i] is not None]
+    if len(pares) < 2:
+        return ""
+    def nome(f):
+        partes = [f[k] for k in range(len(f)) if k < desloc or not aggs[k - desloc]]
+        return " · ".join(str(p) for p in partes if str(p).strip()) or "?"
+    maior = max(pares, key=lambda p: p[0])
+    menor = min(pares, key=lambda p: p[0])
+    rot = comp.rotulos[i]
+    return (f"Maior {rot}: {nome(maior[1])} ({maior[1][i + desloc]}). "
+            f"Menor: {nome(menor[1])} ({menor[1][i + desloc]}).")
 
 
 def _numero_br(v) -> str:
