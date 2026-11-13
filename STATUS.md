@@ -11,7 +11,7 @@
 - Falhas técnicas do diagnóstico ficam vinculadas ao objetivo e permitem retomada após publicação. Tarefa agendada deixa o objetivo aguardando o worker; conclusão exige cobertura, e cancelamentos/falhas atualizam o objetivo. Retomada reutiliza a tarefa já existente.
 - Migração 0009 adiciona vínculo opcional com a tarefa e reconcilia metadados antigos; alteração de choices é só de estado, sem DDL. A checagem de implantação aceita SeparateDatabaseAndState apenas sem operações de banco.
 - Tela **Conexões de IA** reorganizada por agente, com provedores lado a lado, indicação da IA em uso, modelos junto à conta e ações secundárias recolhíveis. Logins, contas e seleção preservados; status de autenticação atualiza só o agente correspondente. Conferência visual em desktop e celular com dados de demonstração.
-- Validação: 706 testes aprovados, 10 pulados no Windows; Django check sem problemas e nenhuma migração pendente de geração. Integração isolada em andamento. Nenhum resultado real usado em testes ou registrado na documentação. A validação isolada da manutenção usa decisões/correção roteirizadas; não comprova programação autônoma da IA real.
+- Validação: 706 testes aprovados, 10 pulados no Windows; Django check sem problemas e nenhuma migração pendente de geração. Integração isolada concluída sem falhas: 13 verificações, incluindo publicação, troca azul/verde, retomada única e conclusão da tarefa sem nova mensagem. Nenhum resultado real usado em testes ou registrado na documentação. A validação isolada da manutenção usa decisões/correção roteirizadas; não comprova programação autônoma da IA real.
 
 ## Mudança M38 — autonomia geral: objetivo, evidência, continuação e manutenção (2026-11-13)
 
