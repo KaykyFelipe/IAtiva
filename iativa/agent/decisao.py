@@ -17,6 +17,7 @@ ACOES = (
     "criar_consulta",       # M18: montar a consulta nova a partir de "tabelas_para_aprender"
     "investigar_lista",     # M25: verificar TODOS os integrantes da lista anterior (tarefa em segundo plano)
     "historico_cargo",      # nome → matrículas → histórico de função/cargo → descrições e conclusão
+    "calcular_resultado",   # M45: cálculo determinístico sobre dados autorizados já consultados
     "listar_aprendizados",  # mostrar consultas aprendidas
     "remover_aprendizado",  # administrador: tirar de uso uma consulta aprendida (pede confirmação)
     "ajustar_filtro",       # M40: a pessoa pediu para mudar os filtros fixos de uma consulta aprendida
@@ -57,6 +58,7 @@ class EntradaAgente:
     observacoes: list[dict] = field(default_factory=list)
     # M25: a lista que a pessoa está vendo (só metadados: consulta, tabela e campos do dicionário).
     lista_anterior: dict | None = None
+    resultado_anterior: dict | None = None  # esquema/metadados, nunca linhas
 
 
 @dataclass(frozen=True)
@@ -77,6 +79,7 @@ class Decisao:
     investigacao: dict | None = None
     entrega: str = ""  # M38: o que o pedido exige para estar cumprido (declarado pelo modelo)
     ajuste: dict | None = None  # M40: {"filtros": [{campo, operador, valor}], "remover": [campo]}
+    calculo: dict | None = None
 
 
 ENTREGAS = ("", "resposta", "consulta", "calculo", "verificacao", "investigacao", "historico")
@@ -87,6 +90,11 @@ def esquema(codigos_objetivo, codigos_parametro) -> dict:
         "type": "object",
         "properties": {
             "resposta": {"type": "string", "description": "Texto ao usuário, em português, tom de conversa."},
+            "calculo": {"type": "object", "description": "Ação calcular_resultado: usa o resultado autorizado anterior. "
+                "Para estágio, deixe campos vazios: os intervalos são resolvidos pelo backend.", "properties": {
+                "operacao": {"type": "string", "enum": ['dias_uteis', 'dias_corridos', 'meses', 'soma', 'media', 'diferenca', 'percentual']},
+                "mensagem": {"type": "integer", "minimum": 0, "description": "Id de resultado_anterior.mensagem; 0 = último."},
+                "campo": {"type": "string"}, "campo_final": {"type": "string"}}, "required": ["operacao"]},
             "acao": {"type": "string", "enum": list(ACOES)},
             "objetivo": {"type": "string", "enum": [""] + list(codigos_objetivo)},
             "parametros": {
@@ -186,7 +194,7 @@ def validar(saida, codigos_objetivo, codigos_parametro) -> Decisao:
         raise DecisaoInvalida("formato")
     extras = set(saida) - {"resposta", "acao", "objetivo", "parametros", "alvo", "nota", "confirmado", "opcoes",
                            "alcance", "consulta", "tipo_nota", "regra", "validade", "investigacao", "entrega",
-                           "ajuste"}
+                           "ajuste", "calculo"}
     if extras:
         raise DecisaoInvalida("campos extras")
     acao = saida.get("acao")
@@ -237,7 +245,23 @@ def validar(saida, codigos_objetivo, codigos_parametro) -> Decisao:
     ajuste = _ajuste(saida.get("ajuste") or None)
     if acao == "ajustar_filtro" and not (ajuste and (ajuste["filtros"] or ajuste["remover"])):
         raise DecisaoInvalida("ajuste")
+    calculo = saida.get('calculo') or None
+    if calculo is not None:
+        from .calculos import OPERACOES
+        if not isinstance(calculo, dict) or set(calculo) - {'operacao', 'mensagem', 'campo', 'campo_final'}:
+            raise DecisaoInvalida('calculo')
+        mid = calculo.get('mensagem', 0)
+        if mid is None:
+            mid = 0  # campos opcionais vêm como null no schema estrito do ChatGPT
+        if calculo.get('operacao') not in OPERACOES or type(mid) is not int or not 0 <= mid < 2**63:
+            raise DecisaoInvalida('calculo')
+        calculo = {'operacao': calculo['operacao'], 'mensagem': mid,
+                   'campo': _texto('' if calculo.get('campo') is None else calculo['campo'], 120, 'campo'),
+                   'campo_final': _texto('' if calculo.get('campo_final') is None else calculo['campo_final'], 120, 'campo_final')}
+    if acao == 'calcular_resultado' and calculo is None:
+        raise DecisaoInvalida('calculo')
     return Decisao(
+        calculo=calculo,
         ajuste=ajuste,
         entrega=entrega,
         investigacao=investigacao,

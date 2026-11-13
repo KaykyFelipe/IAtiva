@@ -15,6 +15,7 @@ from django.utils import timezone
 from iativa.accounts.authz import Permissao, PermissaoNegada, filiais_autorizadas, setores_autorizados, tem_permissao
 from iativa.accounts.models import Department
 from iativa.audit.servicos import registrar
+from iativa.chat.estados import TransicaoInvalida
 from iativa.metadata.catalogo import abrir_catalogo
 from iativa.metadata.descoberta import _Visibilidade
 from iativa.query.compilador import compilar
@@ -44,16 +45,50 @@ def pede_tempo_estagio(texto):
     return bool(re.search(r'estagi', t) and re.search(r'tempo|quanto|durac|meses|anos|dias|ficou|permane', t))
 
 
+def pede_dias_uteis(texto):
+    return bool(re.search(r'\bdias?\s+uteis\b|\bdias?\s+util\b', norm(texto)))
+
+
+def contexto_estagio(user, conversa, texto):
+    """Continuações curtas herdam só a última consulta, sem atravessar mudança de assunto."""
+    if pede_tempo_estagio(texto):
+        return True
+    if not re.search(r'dias?\s+(?:uteis|util|corridos?)|\b(?:meses|semanas)\b', norm(texto)):
+        return False
+    anterior = conversa.mensagens.filter(papel='ia').order_by('-id').first()
+    if anterior is None:
+        return False
+    if anterior.ficha.get('tempo_estagio') or (anterior.resultado or {}).get('periodos'):
+        return True
+    base = anterior.ficha.get('tipo') == 'historico_cargo'
+    if anterior.solicitacao_id and anterior.solicitacao.usuario_id == user.pk:
+        base = base or (anterior.solicitacao.objetivo in OBJETIVOS and
+                        'SRA' in OBJETIVOS[anterior.solicitacao.objetivo].tabelas)
+    if base:
+        for pergunta in conversa.mensagens.filter(papel='usuario', id__lt=anterior.pk).order_by('-id')[:8]:
+            if pede_tempo_estagio(pergunta.texto):
+                return True
+            if not re.fullmatch(r'(?:e\s+)?(?:em\s+)?dias?\s+(?:uteis|util|corridos?)\??', norm(pergunta.texto).strip()):
+                break
+    return False
+
+
 def nome_contexto(user, conversa, texto, decisao):
     # O nome vem do pedido/critério do usuário, nunca de linhas devolvidas pelo ERP.
     alvo = (decisao.alvo or '').strip()
     busca = next((v for k, v in decisao.parametros if k == 'texto-busca'), '')
+    if contexto_estagio(user, conversa, texto) and not pede_tempo_estagio(texto):
+        if busca and norm(busca) not in norm(texto):
+            busca = ''  # Continuação curta não troca a pessoa por um parâmetro inventado pelo modelo.
+        if alvo and norm(alvo) not in norm(texto):
+            alvo = ''
     if busca:
         return busca.strip()
     if pede_tempo_estagio(texto):
         m = re.search(r'est[aá]gi\w*.*?\b(?:do|da|de)\s+(?:(?:funcion[aá]rio|colaborador|usu[aá]rio)\s+)?(.+)', texto, re.I)
         if m and norm(m.group(1).strip(' .?!')) not in ('ele', 'ela', 'estagio'):
-            return m.group(1).strip(' .?!')
+            return re.split(r'\s+(?:desde|a partir de|em todas as filiais|nas filiais|na filial|nos [uú]ltimos|no per[ií]odo)\b',
+                            m.group(1), maxsplit=1, flags=re.I)[0].strip(' .?!')
     m = re.search(r'(?:(?:hist[oó]rico|qual|quais).*?(?:cargo|fun[cç][aã]o|fun[cç][oõ]es).*?)\s+(?:do|da|de)\s+(.+)', texto, re.I)
     if m:
         return re.split(r'\s+(?:desde|a partir de|em todas as filiais|nas filiais|na filial|nos [uú]ltimos|no per[ií]odo)\b',
@@ -70,7 +105,7 @@ def nome_contexto(user, conversa, texto, decisao):
                     nome = _valores(user, msg.solicitacao).get('texto-busca')
                     if nome:
                         return nome
-            except (KeyError, ValidationError):
+            except (KeyError, ValidationError, TransicaoInvalida):
                 continue
     return ''
 
@@ -155,7 +190,7 @@ class Leitura:
         return [dict(zip(campos, (str(v or '').strip() for v in linha))) for linha in linhas]
 
 
-def consultar(user, conversa, nome, periodo=None, interrompido=None, filial=None, tempo_estagio=False):
+def consultar(user, conversa, nome, periodo=None, interrompido=None, filial=None, tempo_estagio=False, dias_uteis=False):
     if len(nome.strip()) < 3 or not padrao_busca(nome):
         raise ValidationError('Informe o nome do funcionário para consultar o histórico de cargos e funções.')
     if isinstance(periodo, str) and periodo:
@@ -267,12 +302,16 @@ def consultar(user, conversa, nome, periodo=None, interrompido=None, filial=None
                      'Registros da SR7 podem incluir alterações salariais sem troca de função. Não se presume promoção ou efetivação.',
                      'Os cadastros mostram a função atual/última de cada vínculo; sua admissão não é a data comprovada da mudança.',
                      f'Consultado em {timezone.localtime():%d/%m/%Y %H:%M}.', *sorted(set(avisos))]
+        periodos = []
         if tempo_estagio:
-            resumo = _resumir_estagio(cadastros, historicos, hoje) + ' ' + resumo
+            resumo = _resumir_estagio(cadastros, historicos, hoje, periodos, dias_uteis) + ' ' + resumo
+            if dias_uteis:
+                premissas.append('Dias úteis: segunda a sexta, sem descontar feriados; início incluído e fim excluído.')
         registrar('consulta_executada', 'agente', usuario=user, setor=setor, estado_novo='historico_funcional',
                   resultado='ok', linhas=len(eventos))
         return Resultado(True, resumo, colunas=['Filial', 'Matrícula', 'Data', 'Função', 'Cargo', 'Origem / interpretação'],
-                         tipos=['texto'] * 6, linhas=[e[2] for e in eventos], premissas=premissas,
+                         tipos=['texto'] * 6, linhas=[e[2] for e in eventos], premissas=premissas, periodos=periodos,
+                         medida_calculada=('dias_uteis' if dias_uteis else 'duracao_estagio') if periodos else '',
                          escopo={"setor": setor.pk, "filiais": sorted(leitor.filiais),
                                  "campos": {a: sorted(cs) for a, cs in leitor.campos.items()}})
 
@@ -291,7 +330,7 @@ def _duracao(inicio, fim):
     return ' e '.join(partes) + f" ({(fim - inicio).days} dias corridos)"
 
 
-def _resumir_estagio(cadastros, historicos, hoje):
+def _resumir_estagio(cadastros, historicos, hoje, periodos=None, uteis=False):
     frases = []
     for filial, r, func, cargo in cadastros:
         inicio, demissao = _data(r['RA_ADMISSA']), _data(r['RA_DEMISSA'])
@@ -302,18 +341,27 @@ def _resumir_estagio(cadastros, historicos, hoje):
         intervalos = []
         for i, h in enumerate(hs):
             a, b = max(inicio, h[0]), min(fim, hs[i + 1][0]) if i + 1 < len(hs) else fim
-            if i + 1 == len(hs) and 'estagi' not in norm(func + ' ' + cargo):
+            if i + 1 == len(hs) and not _e_estagio(func, cargo):
                 continue  # O cadastro mudou sem evento de saída do estágio: não inventar sua data.
-            if 'estagi' in norm(h[2] + ' ' + h[3]) and a < b:
+            if _e_estagio(h[2], h[3]) and a < b:
                 if intervalos and intervalos[-1][1] == a:
                     intervalos[-1] = (intervalos[-1][0], b)
                 else:
                     intervalos.append((a, b))
         estimado = False
-        if not hs and 'estagi' in norm(func + ' ' + cargo):
+        if not hs and _e_estagio(func, cargo):
             intervalos, estimado = [(inicio, fim)], True
         for a, b in intervalos:
+            if periodos is not None:
+                periodos.append({'rotulo': f"{r['RA_NOME']} — matrícula {r['RA_MAT']}, filial {filial}",
+                                 'inicio': a.isoformat(), 'fim': b.isoformat(), 'estimativa': estimado})
             base = 'Duração do vínculo cadastrado como estágio (estimativa, sem histórico que comprove toda a permanência)' if estimado else 'Tempo de estágio registrado no histórico'
-            frases.append(f"{r['RA_NOME']} — {base}: {_duracao(a, b)}, de {a:%d/%m/%Y} a {b:%d/%m/%Y}, "
+            from .calculos import dias_uteis
+            duracao = f'{dias_uteis(a, b)} dias úteis (segunda a sexta, sem descontar feriados; início incluído e fim excluído)' if uteis else _duracao(a, b)
+            frases.append(f"{r['RA_NOME']} — {base}: {duracao}, de {a:%d/%m/%Y} a {b:%d/%m/%Y}, "
                           f"matrícula {r['RA_MAT']}, filial {filial}.")
     return ' '.join(frases) or 'Não há um intervalo de estágio comprovável nas funções/descrições disponíveis; as matrículas e mudanças encontradas estão na tabela.'
+
+
+def _e_estagio(funcao, cargo):
+    return any(re.match(r'^estagi(?:ari[oa]|o)\b', norm(t).strip()) for t in (funcao, cargo))

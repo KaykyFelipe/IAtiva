@@ -93,6 +93,8 @@ class Resultado:
     solicitacao: RequestContext | None = None
     duracao_ms: int = 0
     escopo: dict = field(default_factory=dict)
+    periodos: list = field(default_factory=list)  # intervalos derivados, só no backend/snapshot autorizado
+    medida_calculada: str = ''
 
     @property
     def cabecalho(self):

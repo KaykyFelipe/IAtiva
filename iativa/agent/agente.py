@@ -95,7 +95,7 @@ def _ciclo() -> dict:
 
 def _assinatura(d) -> str:
     return json.dumps([d.acao, d.objetivo, sorted(d.parametros), d.alvo, d.nota, d.consulta, d.regra, d.investigacao,
-                       d.ajuste],
+                       d.ajuste, d.calculo],
                       sort_keys=True, ensure_ascii=False, default=str)
 
 
@@ -218,7 +218,9 @@ def conversar(user, c, texto: str, provedor=None, mensagem_usuario_id=None, inte
         lista = {**lista, "pergunta_pendente": aguardando.motivo,
                  "instrucao": "A mensagem responde à pergunta pendente da verificação: use investigar_lista com o que "
                               "ela disse para retomar a mesma verificação."}
+    from . import calculos
     entrada = EntradaAgente(
+        resultado_anterior=calculos.contexto(user, c),
         lista_anterior=lista,
         mensagem=texto, hoje=timezone.localdate().isoformat(), historico=_historico(c, mensagem_usuario_id),
         objetivos=_catalogo(user, objetivos, defs), solicitacao_atual=_estado(user, atual, defs),
@@ -283,6 +285,7 @@ def _ciclo_agente(user, c, texto, provedor, interrompido, entrada, objetivos, co
     feitas, observacoes, saida = set(), list(observacoes or []), None
     previa = None  # etapa intermediária concluída (ex.: a lista) que a próxima etapa completa
     previa_parte = None  # M41: resposta já conferida da 1ª pergunta de uma mensagem com várias
+    resultado_base = None  # M45: última consulta desta mensagem; só em memória, autorizada pelo backend
     causa = "passos"
     for _ in range(max(1, int(cfg["passos"]))):
         if prazo.esgotado():
@@ -323,7 +326,7 @@ def _ciclo_agente(user, c, texto, provedor, interrompido, entrada, objetivos, co
                 from iativa.query.servico import repetir
                 atual = repetir(user, anterior, conversa=c)
                 d = replace(d, acao='executar_consulta', objetivo=atual.objetivo, resposta='')
-        if historico_funcional.solicitado(texto) and d.acao in (
+        if (historico_funcional.solicitado(texto) or historico_funcional.contexto_estagio(user, c, texto)) and d.acao in (
                 "conversar", "preparar_consulta", "executar_consulta", "aprender_tabela", "criar_consulta", "historico_cargo"):
             # Histórico funcional exige encadear fontes: listar matrículas não conclui esse pedido.
             nome = historico_funcional.nome_contexto(user, c, texto, d)
@@ -358,7 +361,11 @@ def _ciclo_agente(user, c, texto, provedor, interrompido, entrada, objetivos, co
                   linhas=len(d.parametros))
         reduz = _reduz_escopo(d, cobertura)
         saida = reduz or _agir(user, c, d, atual, defs, texto, provedor, entrada_passo, objetivos, administrador,
-                               interrompido=interrompido)
+                               interrompido=interrompido, resultado_base=resultado_base)
+        if saida.resultado is not None and getattr(saida.resultado, 'ok', False):
+            from . import calculos
+            resultado_base = saida.resultado
+            entrada = replace(entrada, resultado_anterior=calculos.metadados(resultado_base))
         if ((d.acao == 'investigar_divergencia' or diagnostico.solicitado(texto)) and saida.solicitacao is not None
                 and (getattr(saida.resultado, 'ok', False) or getattr(saida.resultado, 'consolidado', False))):
             andamento.avisar('A soma inicial não conclui o pedido; investigando as causas da divergência')
@@ -377,7 +384,7 @@ def _ciclo_agente(user, c, texto, provedor, interrompido, entrada, objetivos, co
                     'A consulta inicial não comprova a causa da divergência.', completo=False)
                 saida.texto = 'A investigação ficou incompleta; não apresentei a soma inicial como conclusão.'
                 saida.ficha = {**saida.ficha, 'tipo': 'diagnostico', 'investigacao_completa': False}
-            ev = coord.evidencia(d, saida)
+            ev = coord.evidencia(d, saida, texto)
             ac.anotar(d.acao, "ok" if ev else "incompleta", ev)
             if not ev and getattr(saida.resultado, 'incidentes', ()):
                 from iativa.manutencao.models import Incidente
@@ -396,7 +403,7 @@ def _ciclo_agente(user, c, texto, provedor, interrompido, entrada, objetivos, co
                     return saida
             # Investigação parcial mostra o que conseguiu, marcada como incompleta (nunca como conclusão).
             return _fechar(ac, user, c, mensagem_id, saida, ev or coord.INVESTIGACAO, parcial=not ev)
-        ev = coord.evidencia(d, saida)  # o que ESTA ação entregou (antes de juntar com a etapa anterior)
+        ev = coord.evidencia(d, saida, texto)  # o que ESTA ação entregou (antes de juntar com a etapa anterior)
         if previa is not None:
             saida = _juntar(previa, saida)
         ac.anotar(d.acao, saida.observacao.situacao if saida.observacao else ("ok" if ev else "sem_resultado"), ev)
@@ -490,7 +497,9 @@ def _fechar(ac, user, c, mensagem_id, saida, ev, parcial=False) -> Saida:
                 else SO.CUMPRIDO)
     if mensagem_id is not None and (ac.registro is not None or len(ac.trilha) > 1 or situacao != SO.CUMPRIDO):
         o = coord.registrar(ac, user, c, mensagem_id, situacao,
-                            "investigação incompleta" if parcial else ("sem permissão" if ev == coord.BLOQUEIO else ""),
+                            "investigação incompleta" if parcial else (
+                                "fontes sem intervalo comprovável" if saida.ficha.get('tipo') == 'impedimento_dados'
+                                else "sem permissão" if ev == coord.BLOQUEIO else ""),
                             tarefa_id=saida.ficha.get('tarefa') if ev == coord.DELEGADA else None)
         saida.ficha = {**saida.ficha, "objetivo": o.pk}
     return saida
@@ -692,11 +701,25 @@ ROTULO_ACAO = {"investigar_lista": "verificar a lista inteira", "preparar_consul
                "lembrar": "guardar na memória"}
 
 
-def _agir(user, c, d, atual, defs, texto, provedor, entrada, objetivos, administrador, interrompido=None) -> Saida:
+def _agir(user, c, d, atual, defs, texto, provedor, entrada, objetivos, administrador, interrompido=None,
+          resultado_base=None) -> Saida:
     """Executa UMA ação já autorizada e devolve a saída com a observação do que aconteceu."""
     ficha = {"provedor": provedor.nome, "opcoes": list(d.opcoes)}
 
     acao = d.acao
+    if acao == 'calcular_resultado':
+        from . import calculos
+        try:
+            plano = d.calculo
+            if resultado_base is None and not plano.get('mensagem') and entrada.resultado_anterior:
+                plano = {**plano, 'mensagem': entrada.resultado_anterior['mensagem']}
+            resultado = calculos.executar(user, c, plano, resultado_base)
+        except PermissaoNegada as exc:
+            return Saida(str(exc), ficha, observacao=Observacao(acao, SEM_PERMISSAO, 'cálculo não autorizado'))
+        except ValidationError as exc:
+            return Saida(' '.join(exc.messages), ficha, observacao=Observacao(acao, ERRO_PARAMETROS, ' '.join(exc.messages)))
+        return Saida('Calculei sobre o resultado autorizado da consulta anterior.',
+                     {**ficha, 'tipo': 'calculo_resultado', 'tempo_estagio': bool(resultado.periodos)}, resultado=resultado)
     if acao == "historico_cargo":
         from . import historico_funcional
         from .periodo import periodo_da_mensagem
@@ -704,18 +727,35 @@ def _agir(user, c, d, atual, defs, texto, provedor, entrada, objetivos, administ
         nome = d.alvo or historico_funcional.nome_contexto(user, c, texto, d)
         if not nome:
             return Saida("De qual funcionário você quer o histórico de cargos e funções? Informe o nome.", ficha)
+        tempo = historico_funcional.contexto_estagio(user, c, texto)
+        anterior = c.mensagens.filter(papel='ia').order_by('-id').first() if tempo else None
+        periodo = periodo_da_mensagem(texto, timezone.localdate())
+        filial = next((v for k, v in d.parametros if k == 'filial-analise'), None)
+        if anterior and not historico_funcional.pede_tempo_estagio(texto):
+            periodo = periodo or anterior.ficha.get('periodo')
+            filiais = (anterior.resultado or {}).get('escopo', {}).get('filiais', [])
+            preservada = anterior.ficha.get('filial') or (filiais[0] if len(filiais) == 1 else None)
+            filial = (filial or preservada) if re.search(r'filia|matriz|todas', texto, re.I) else preservada
         try:
-            resultado = historico_funcional.consultar(user, c, nome, periodo_da_mensagem(texto, timezone.localdate()),
-                interrompido=interrompido, filial=next((v for k, v in d.parametros if k == 'filial-analise'), None),
-                tempo_estagio=historico_funcional.pede_tempo_estagio(texto))
+            resultado = historico_funcional.consultar(user, c, nome, periodo,
+                interrompido=interrompido, filial=filial, tempo_estagio=tempo,
+                dias_uteis=historico_funcional.pede_dias_uteis(texto))
         except PermissaoNegada as exc:
             return Saida(str(exc), ficha, observacao=Observacao(acao, SEM_PERMISSAO, "histórico não autorizado"))
         except ValidationError as exc:
             return Saida(" ".join(exc.messages), ficha)
         except prazo.PrazoEsgotado:
             return Saida("O prazo terminou antes de concluir o histórico. A busca de matrículas não foi tratada como resposta final.", ficha)
+        if tempo and not resultado.periodos:
+            return Saida('Consultei as fontes autorizadas, mas elas não comprovam um intervalo de estágio para calcular. '
+                         'A tabela mostra o histórico disponível; falta uma data ou classificação comprovada do estágio.',
+                         {**ficha, 'tipo': 'impedimento_dados', 'busca': nome}, resultado=resultado)
+        if tempo and resultado.periodos and not historico_funcional.pede_dias_uteis(texto):
+            from .objetivos import metrica_exigida
+            resultado.medida_calculada = metrica_exigida(texto) or resultado.medida_calculada
         return Saida("Consultei os vínculos, o histórico funcional e as descrições disponíveis.",
-                     {**ficha, "tipo": "historico_cargo", "busca": nome}, resultado=resultado)
+                     {**ficha, "tipo": "historico_cargo", "busca": nome, 'tempo_estagio': tempo,
+                      'periodo': periodo, 'filial': filial}, resultado=resultado)
     if acao in ("ajustar_filtro", "voltar_filtro"):
         from .aprendizado import TODOS, alcance_padrao
 

@@ -55,7 +55,7 @@ FALTA = {
 }
 COMO = {
     CONSULTA: "use preparar_consulta (ou aprender_tabela, se nenhuma consulta atende)",
-    CALCULO: "use preparar_consulta com o parâmetro agregacao",
+    CALCULO: "use preparar_consulta com agregacao ou calcular_resultado sobre colunas/intervalos autorizados",
     VERIFICACAO: "use investigar_lista com os campos de lista_anterior",
     INVESTIGACAO: "use investigar_divergencia",
     HISTORICO: "use historico_cargo",
@@ -134,6 +134,8 @@ def _detectores():
 
     return (
         (INVESTIGACAO, lambda bruto, t: diagnostico.solicitado(bruto)),
+        (CALCULO, lambda bruto, t: historico_funcional.pede_tempo_estagio(bruto) or
+         (bool(re.search(r'\bdias?\s+(?:uteis|util|corridos?)\b', t)) and not re.search(r'^o que|^explique|^defina', t))),
         (HISTORICO, lambda bruto, t: historico_funcional.solicitado(bruto)),
         (VERIFICACAO, lambda bruto, t: _verificar_pessoas(t)),
     )
@@ -174,7 +176,7 @@ def exigencia(texto: str, decisao=None) -> tuple[str, str]:
 
 # --- o que a ação entregou ----------------------------------------------------------------------
 
-def evidencia(decisao, saida) -> str:
+def evidencia(decisao, saida, texto='') -> str:
     """Tipo de evidência que a saída comprova. Vazio = nada entregue (falha ou etapa sem resultado)."""
     ficha = saida.ficha or {}
     tipo = ficha.get("tipo", "")
@@ -183,14 +185,21 @@ def evidencia(decisao, saida) -> str:
         return BLOQUEIO
     if tipo == "tarefa":
         return DELEGADA
+    if tipo == 'impedimento_dados':
+        return BLOQUEIO
+    unidade = metrica_exigida(texto)
+    if unidade and getattr(saida.resultado, 'ok', False) and getattr(saida.resultado, 'medida_calculada', '') != unidade:
+        return CONSULTA  # contagem de registros não comprova dias úteis/corridos
     if tipo == "diagnostico":
         return INVESTIGACAO if ficha.get("investigacao_completa") else ""
     if tipo == "historico_cargo" and saida.resultado is not None:
-        return HISTORICO
+        return CALCULO if getattr(saida.resultado, 'medida_calculada', '') else HISTORICO
     if tipo == "bloqueada":
         return BLOQUEIO
     res = saida.resultado
     if res is not None and (getattr(res, "ok", False) or getattr(res, "consolidado", False)):
+        if getattr(res, 'medida_calculada', ''):
+            return CALCULO
         calculo = any(k == "agregacao" for k, _ in getattr(decisao, "parametros", ())) or bool(
             getattr(getattr(res, "totais", None), "medidas", None) and len(getattr(res, "linhas", [])) <= 1
             and any("Soma" in c or "Média" in c or "Quantidade" in c for c in getattr(res, "colunas", [])))
@@ -213,6 +222,13 @@ def evidencia(decisao, saida) -> str:
                 "ajustar_filtro", "voltar_filtro"):
         return ACAO
     return ""
+
+
+def metrica_exigida(texto):
+    t = _norm(texto)
+    if re.search(r'\bdias?\s+(?:uteis|util)\b', t):
+        return 'dias_uteis'
+    return 'dias_corridos' if re.search(r'\bdias?\s+corridos?\b', t) else ''
 
 
 def cumpre(exig: str, ev: str) -> bool:
@@ -316,6 +332,11 @@ class Acompanhamento:
     def falta_obs(self, consulta=None) -> str:
         txt = (f"{FALTA[self.exig]}. A etapa anterior deu certo, mas é só parte do pedido: {COMO[self.exig]}. Só pare "
                "para perguntar à pessoa (conversar terminando em pergunta) se faltar uma decisão que só ela pode dar.")
+        metrica = metrica_exigida(self.texto)
+        if metrica:
+            return txt + (f' A unidade pedida é {metrica}: listar datas ou contar registros não basta. '
+                          'Use calcular_resultado com essa operação e as colunas inicial/final, ou historico_cargo '
+                          'para resolver os intervalos de estágio. Preserve pessoa, período e filiais do pedido.')
         if consulta:
             txt += (f" Consulta usada na etapa anterior: {consulta['codigo']}"
                     + (f" (filtros atuais: {consulta['filtros']})" if consulta.get("filtros") else "") + ". "

@@ -4,6 +4,15 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **plano proposto em `PLANO.md` §8, aguardando aprovação.** Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M45 — consultas acionáveis e cálculo até a conclusão (2026-11-13)
+
+- “E dias úteis?” recupera a pessoa, o intervalo de estágio e a filial, inclusive após uma resposta M44 que tinha mostrado só admissões. Não calcula o vínculo de outro cargo até hoje nem aceita troca de pessoa/filial sugerida pelo modelo sem pedido.
+- Nova ferramenta `calcular_resultado`: dias úteis/corridos, meses de calendário, soma, média, diferença e percentual sobre resultado autorizado salvo ou recém-consultado no mesmo ciclo. Modelo recebe esquema, tipos, operações e indicador de intervalos; linhas/datas derivadas ficam no backend. As consultas e a descoberta de tabelas existentes continuam disponíveis.
+- Pedido de dias úteis/corridos exige a medida correspondente, não uma tabela ou contagem de registros. Observações dizem qual cálculo falta; fontes insuficientes ficam explícitas, sem inventar datas. Regras de acesso a conversa, setor, filial e campos são reconferidas.
+- Snapshots incluem intervalos derivados, cobertura e moedas. Soma de recorte truncado/moedas distintas é recusada; data final ausente não vira hoje automaticamente; percentual com base zero é indefinido. Compatível com campos opcionais nulos do schema estrito ChatGPT.
+- Contagem de segunda a sexta, início incluído e fim excluído, consistente com a diferença de datas. Sem desconto de feriados enquanto não houver calendário definido; essa premissa aparece na resposta. Cadastro sem histórico suficiente continua identificado como estimativa.
+- Validação: 790 testes aprovados e 10 pulados no Windows, incluindo 31 regressões novas; Django check sem problemas e nenhuma migração pendente de geração. Nenhum resultado real registrado nesta documentação.
+
 ## Mudança M44 — sincronização, tabelas permanentes, layout e tempo de estágio (2026-11-13)
 
 - Chats e mensagens autorizados sincronizados entre sessões por polling de 2 segundos; sem executar consultas ao ERP para atualizar a tela. Preserva compositor, busca, grupos e posição de leitura; resposta de navegação antiga é descartada.

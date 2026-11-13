@@ -93,6 +93,11 @@ usuário, como sempre.
 
 ## Limitações
 
+M45 adiciona `calcular_resultado` para operar sobre consultas recém-executadas ou snapshots
+autorizados. O modelo recebe o esquema e escolhe a operação; o backend lê e calcula, sem enviar
+linhas ao provedor. O ciclo confere a unidade pedida (dias úteis/corridos): listar datas não é
+evidência suficiente. Datas sem fonte e calendários de feriados não definidos não são inventados.
+
 - A exigência depende do detector ou do que o modelo declara em `entrega`; se os dois errarem para
   menos, o pedido pode encerrar cedo.
 - Desde a M44, resultados do worker são gravados com a mensagem e aparecem pela sincronização automática da conversa, respeitando as permissões atuais.

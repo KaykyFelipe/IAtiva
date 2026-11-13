@@ -19,6 +19,12 @@ automática, respeitando as permissões atuais ao reabrir.
 
 ## Tempo de estágio (M44)
 
+M45: continuação curta “e dias úteis?” preserva o contexto e calcula o intervalo do estágio,
+sem substituir o fim do vínculo antigo pela data atual nem contar o cargo novo. Também recupera
+conversas antigas que tinham perdido o contexto em uma busca de admissões. Dias úteis são
+segunda a sexta, início incluído e fim excluído, sem descontar feriados não definidos. As datas
+e a condição de estimativa ficam no backend e no snapshot, não no contexto do modelo.
+
 Pedido de duração de estágio usa a mesma ferramenta, mesmo que o modelo proponha apenas buscar
 matrículas. Classifica pelas descrições de função/cargo; não presume o significado de códigos
 de categoria. Calcula intervalos registrados entre eventos, encerramento do vínculo e data atual,
