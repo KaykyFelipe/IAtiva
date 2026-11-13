@@ -467,14 +467,14 @@ def objetivo_pendente(user, c):
 
 @require_GET
 def objetivo(request, objetivo_id):
-    """Situação do pedido em continuação. Quando termina, manda o navegador recarregar a conversa."""
+    """Situação do pedido; ao terminar, remove a barra sem recarregar a página."""
     from iativa.agent.models import Objetivo, SituacaoObjetivo
 
     o = Objetivo.objects.select_related("conversa").filter(pk=objetivo_id, usuario=request.user).first()
     if o is None or not conversas.pode_ver(request.user, o.conversa):
         raise Http404
     if o.situacao != SituacaoObjetivo.CONTINUAR:
-        resposta = HttpResponse(status=200)
-        resposta["HX-Refresh"] = "true"
-        return resposta
+        # A sincronização já observa mensagens novas entre sessões. Recarregar
+        # aqui perderia rascunho/rolagem e remontaria as tabelas do histórico.
+        return HttpResponse(status=200)
     return render(request, "chat/_objetivo.html", {"objetivo": o})

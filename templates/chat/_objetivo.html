@@ -1,4 +1,4 @@
-{# Pedido que continua em segundo plano (M38): só situação, sem dados. Recarrega a conversa quando termina. #}
+{# Pedido em segundo plano: a barra desaparece ao terminar; a sincronização traz a resposta sem recarregar. #}
 <div class="atividade-fixa" id="objetivo-{{ objetivo.pk }}" data-objetivo-pendente role="status" aria-live="polite"
      hx-get="{% url 'chat:objetivo' objetivo.pk %}" hx-trigger="every 3s" hx-target="this" hx-swap="outerHTML">
   {% include "chat/_mascote.html" with estado="thinking" %}

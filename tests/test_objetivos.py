@@ -332,7 +332,7 @@ def test_cancelar_a_tarefa_continua_valendo(base, monkeypatch):
     assert not tarefas.processar_proxima() and Tarefa.objects.get().situacao == "cancelada"
 
 
-def test_tela_avisa_a_continuacao_e_recarrega_quando_termina(base, settings, monkeypatch, client):
+def test_tela_avisa_a_continuacao_e_termina_sem_recarregar(base, settings, monkeypatch, client):
     from django.urls import reverse
 
     settings.IATIVA_AGENTE_CICLO = {"passos": 1, "retentativas": 0, "tempo_s": 60, "espera_s": 0}
@@ -345,4 +345,8 @@ def test_tela_avisa_a_continuacao_e_recarrega_quando_termina(base, settings, mon
     settings.IATIVA_AGENTE_CICLO = {"passos": 3, "retentativas": 0, "tempo_s": 60, "espera_s": 0}
     monkeypatch.setattr(agente, "obter_provedor", lambda usuario=None: Espiao([_investigar()]))
     tarefas.processar_proxima()
-    assert client.get(reverse("chat:objetivo", args=[o.pk]))["HX-Refresh"] == "true"
+    resposta = client.get(reverse("chat:objetivo", args=[o.pk]))
+    assert resposta.status_code == 200 and resposta.content == b''
+    assert "HX-Refresh" not in resposta
+    sync = client.get(reverse("chat:sincronizar"), {'conversa': c.pk}).json()
+    assert 'data-objetivo-pendente' not in sync['conversa']
