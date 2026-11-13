@@ -221,7 +221,8 @@ def investigar(user, s, inicial, interrompido=None):
             if nome in cs:
                 etapa('Decomposição por ' + nome,
                       lambda f, n=nome: _agregado(original(f), nums, cs, [Campo('e1', n)]))
-        chave_dup = [n for n in (prefixo + 'FORNECE', prefixo + 'CLIENTE', prefixo + 'NUM', prefixo + 'VALOR') if n in cs]
+        chave_dup = [n for n in (prefixo + 'FORNECE', prefixo + 'CLIENTE', prefixo + 'NUM', prefixo + 'PARCELA',
+                                          prefixo + 'VALOR') if n in cs]
         if len(chave_dup) >= 3:
             # M40: o mesmo título lançado mais de uma vez (outro prefixo/parcela) infla a soma.
             def duplicados(f):
@@ -328,7 +329,7 @@ def _itens(a, out, etapa, base):
     etapa('Itens por geração de duplicata na TES atual — configuração histórica não comprovada', financeira)
 
 
-DUPLICIDADE = 'Possíveis duplicidades (mesmo fornecedor/cliente, número e valor)'
+DUPLICIDADE = 'Possíveis duplicidades (mesmo fornecedor/cliente, número, parcela e valor)'
 
 
 def _duplicidades(evidencias) -> str:
@@ -336,11 +337,11 @@ def _duplicidades(evidencias) -> str:
     if DUPLICIDADE not in evidencias:
         return ''
     if not rep:
-        return 'Não encontrei título repetido (mesmo fornecedor/cliente, número e valor) no recorte.'
+        return 'Não encontrei título repetido (mesmo fornecedor/cliente, número, parcela e valor) no recorte.'
     extra = sum(int(r['Quantidade']) - 1 for r in rep)
-    return (f'Encontrei {len(rep)} título(s) com o mesmo fornecedor/cliente, número e valor lançados mais de uma vez '
-            f'({extra} lançamento(s) a mais, entre os 10 grupos mais repetidos de cada filial); confira se são '
-            'parcelas ou duplicidade.')
+    return (f'Encontrei {len(rep)} título(s) com o mesmo fornecedor/cliente, número, parcela e valor lançados mais '
+            f'de uma vez ({extra} lançamento(s) a mais, entre os 10 grupos mais repetidos de cada filial); a diferença '
+            'entre eles é só prefixo ou tipo: confira se é duplicidade.')
 
 
 def _achados(evidencias):
