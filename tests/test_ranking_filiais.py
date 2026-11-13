@@ -134,3 +134,16 @@ def test_mensagem_com_duas_perguntas_responde_as_duas(ana):
     msg, res = conversas.enviar(ana, c, "quanto vamos receber? e quanto está em atraso?", p)
     assert p.chamadas == 2, (p.chamadas, msg.texto)
     assert res is not None and res.ok
+
+
+def test_segunda_pergunta_sem_consulta_nao_vira_resposta(ana):
+    """M41: depois da 1ª resposta, "já rodei as duas" sem executar não aparece para a pessoa."""
+    c = conversas.nova_individual(ana)
+    p = FakeProvider([
+        _d(acao="preparar_consulta", objetivo="titulos-a-vencer", entrega="calculo", parametros=[
+            {"codigo": "filial-analise", "valor": "TODAS"}, {"codigo": "tratamento-baixa-parcial", "valor": "considerar-saldo"},
+            {"codigo": "periodo-analise", "valor": "01/01/2020..31/12/2030"}]),
+        _d(acao="conversar", resposta="Já rodei as duas consultas.")])
+    msg, res = conversas.enviar(ana, c, "quanto vamos receber? e quanto está em atraso?", p)
+    assert p.chamadas == 2 and res is not None and res.ok
+    assert "Já rodei" not in msg.texto, msg.texto

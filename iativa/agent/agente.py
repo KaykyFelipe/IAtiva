@@ -281,6 +281,7 @@ def _ciclo_agente(user, c, texto, provedor, interrompido, entrada, objetivos, co
     ac = acomp or coord.Acompanhamento(texto)
     feitas, observacoes, saida = set(), list(observacoes or []), None
     previa = None  # etapa intermediária concluída (ex.: a lista) que a próxima etapa completa
+    previa_parte = None  # M41: resposta já conferida da 1ª pergunta de uma mensagem com várias
     causa = "passos"
     for _ in range(max(1, int(cfg["passos"]))):
         if prazo.esgotado():
@@ -410,16 +411,22 @@ def _ciclo_agente(user, c, texto, provedor, interrompido, entrada, objetivos, co
             observacoes.append(Observacao(d.acao, coord.ETAPA, coord.FALTA_MEMORIA))
             andamento.avisar("Resposta pronta; agora guardando o que você ensinou")
             continue
-        if ac.partes_faltam > 0 and ac.entregue and ev and ev not in (coord.PERGUNTA, coord.BLOQUEIO, coord.DELEGADA,
-                                                                       coord.ACAO):
+        if ac.partes_faltam > 0 and ac.entregue and ev not in ("", coord.PERGUNTA, coord.BLOQUEIO, coord.DELEGADA,
+                                                               coord.ACAO, coord.RESPOSTA):
             ac.partes_faltam -= 1  # M41: mais uma das perguntas da mensagem respondida
         elif ac.cumprido(ev) and ac.partes_faltam < 0 and d.acao != "lembrar":
             ac.partes_faltam = coord.partes(texto) - 1
+        if ac.entregue and ev == coord.RESPOSTA and previa_parte is not None:
+            # M41: depois da 1ª resposta, texto sem consulta não comprova a outra pergunta ("já rodei as duas"):
+            # ficam só as respostas já conferidas, sem a afirmação do modelo.
+            return _fechar(ac, user, c, mensagem_id, previa, ac.entregue)
         if (ac.partes_faltam > 0 and (ac.cumprido(ev) or ac.entregue) and ac.pode_cutucar()
                 and ev not in (coord.PERGUNTA, coord.BLOQUEIO, coord.DELEGADA)):
             # M41: "quantos entraram? e quantos saíram?": a primeira resposta saiu; falta a outra pergunta.
             ac.cutucadas += 1
             ac.entregue = ac.entregue or ev
+            if previa_parte is None:
+                previa_parte = saida
             previa = saida
             feita = (f"“{OBJETIVOS[d.objetivo].nome}” com " + ", ".join(f"{k}={v}" for k, v in d.parametros)
                      if d.objetivo in OBJETIVOS else d.acao)
@@ -701,7 +708,7 @@ def _agir(user, c, d, atual, defs, texto, provedor, entrada, objetivos, administ
             msg = ("Ajustar ou voltar filtro só quando a pessoa pede. Ela não pediu: não mude a consulta "
                    "compartilhada. Use outra consulta que já responda (veja os objetivos) ou crie uma nova "
                    "(aprender_tabela / criar_consulta) com os filtros que esta pergunta precisa.")
-            return Saida(msg, ficha, observacao=Observacao(acao, ERRO_PARAMETROS, msg))
+            return Saida("", ficha, observacao=Observacao(acao, ERRO_PARAMETROS, msg))  # aviso só para o modelo
         return _ajustar_filtro(user, d, ficha)
     if acao == "remover_aprendizado" and not administrador:
         return Saida("Essa ação é só para administradores.", ficha)

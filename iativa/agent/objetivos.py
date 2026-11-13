@@ -78,7 +78,7 @@ _MEMORIA_RE = re.compile(r"\b(guard[ae]|lembr[ae]|memoriz|anot[ae]|grav[ae]|daqu
 
 FALTA_PARTE = ("A mensagem tem mais de uma pergunta e a resposta acima cobriu só parte dela. Responda agora a "
                "próxima pergunta ainda não respondida (execute a consulta dela; não refaça a anterior). "
-               "Se a resposta acima já cobre tudo, use conversar e diga isso em uma frase.")
+               "Não diga que já respondeu sem executar a consulta.")
 _PERGUNTA_RE = re.compile(r"(?:^|[?;,.]|\be\b)\s*(?:e\s+)?(?:quant[oa]s?|qua(?:l|is)|quem|onde|quando)\b", re.I)
 
 
