@@ -51,6 +51,9 @@ class Interrompido(Exception):
 
 HISTORICO = 12
 TENTATIVAS = 2
+# M41: pedido explícito de mudar o critério de uma consulta ("ajuste o filtro", "tire os cancelados", "volte como era").
+PEDE_AJUSTE_RE = re.compile(r"filtr|ajust|crit[eé]rio|regra|consider|inclu|exclu|\btir[ae]|remov|\bvolt|\bmud|\btroc|desfa",
+                            re.I)
 PARAMETROS_APRENDIDOS = ("filial-analise", "periodo-analise", "texto-busca", "filtro-campo", "agregacao")
 
 
@@ -407,7 +410,8 @@ def _ciclo_agente(user, c, texto, provedor, interrompido, entrada, objetivos, co
             observacoes.append(Observacao(d.acao, coord.ETAPA, coord.FALTA_MEMORIA))
             andamento.avisar("Resposta pronta; agora guardando o que você ensinou")
             continue
-        if ac.partes_faltam > 0 and ev and ev not in (coord.PERGUNTA, coord.BLOQUEIO, coord.DELEGADA):
+        if ac.partes_faltam > 0 and ac.entregue and ev and ev not in (coord.PERGUNTA, coord.BLOQUEIO, coord.DELEGADA,
+                                                                       coord.ACAO):
             ac.partes_faltam -= 1  # M41: mais uma das perguntas da mensagem respondida
         elif ac.cumprido(ev) and ac.partes_faltam < 0 and d.acao != "lembrar":
             ac.partes_faltam = coord.partes(texto) - 1
@@ -417,10 +421,11 @@ def _ciclo_agente(user, c, texto, provedor, interrompido, entrada, objetivos, co
             ac.cutucadas += 1
             ac.entregue = ac.entregue or ev
             previa = saida
-            observacoes.append(Observacao(d.acao, coord.ETAPA, coord.FALTA_PARTE))
+            observacoes.append(Observacao(d.acao, coord.ETAPA, coord.falta_parte(
+                texto, coord.partes(texto) - ac.partes_faltam)))
             andamento.avisar("Uma pergunta respondida; agora a próxima")
             continue
-        if ac.entregue and ev and ev not in (coord.PERGUNTA, coord.BLOQUEIO, coord.DELEGADA):
+        if ac.entregue and ev and ev not in (coord.PERGUNTA, coord.BLOQUEIO, coord.DELEGADA, coord.ACAO):
             return _fechar(ac, user, c, mensagem_id, saida, ac.entregue)
         if ac.cumprido(ev) or ev in (coord.PERGUNTA, coord.BLOQUEIO, coord.DELEGADA):
             return _fechar(ac, user, c, mensagem_id, saida, ev)
@@ -690,6 +695,12 @@ def _agir(user, c, d, atual, defs, texto, provedor, entrada, objetivos, administ
         if not pode_ajustar(user):
             return Saida("Seu usuário não pode ajustar filtros de consultas.", ficha,
                          observacao=Observacao(acao, SEM_PERMISSAO, "ajuste não autorizado"))
+        if not PEDE_AJUSTE_RE.search(texto or ""):
+            # M41: a consulta é compartilhada; mudar o filtro sem a pessoa pedir altera a resposta de todos.
+            msg = ("Ajustar ou voltar filtro só quando a pessoa pede. Ela não pediu: não mude a consulta "
+                   "compartilhada. Use outra consulta que já responda (veja os objetivos) ou crie uma nova "
+                   "(aprender_tabela / criar_consulta) com os filtros que esta pergunta precisa.")
+            return Saida(msg, ficha, observacao=Observacao(acao, ERRO_PARAMETROS, msg))
         return _ajustar_filtro(user, d, ficha)
     if acao == "remover_aprendizado" and not administrador:
         return Saida("Essa ação é só para administradores.", ficha)

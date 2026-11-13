@@ -87,6 +87,16 @@ def partes(texto: str) -> int:
     return max(1, len(_PERGUNTA_RE.findall(texto or "")))
 
 
+def falta_parte(texto: str, respondidas: int) -> str:
+    """Dica com as perguntas da mensagem, para o modelo atacar a próxima em vez de repetir a anterior."""
+    texto = texto or ""
+    inicios = [m.start() for m in _PERGUNTA_RE.finditer(texto)] or [0]
+    pedacos = [texto[a:b].strip(" ?;,.") for a, b in zip(inicios, inicios[1:] + [len(texto)])]
+    pedacos = [p for p in pedacos if p]
+    lista = " ".join(f"{i}) {p}{' [já respondida]' if i <= respondidas else ''}" for i, p in enumerate(pedacos, 1))
+    return f"{FALTA_PARTE} Perguntas: {lista}. A próxima pede outra consulta ou outros critérios que a anterior."
+
+
 def pede_memoria(texto: str) -> bool:
     """A mensagem pede para guardar um ensinamento (além de, talvez, responder)."""
     return bool(_MEMORIA_RE.search(texto or ""))

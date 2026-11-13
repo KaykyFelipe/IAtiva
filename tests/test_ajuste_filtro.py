@@ -218,3 +218,15 @@ def test_consulta_nova_nasce_com_filtro_de_tabela_ligada(ana):
     cm = ConsultaModelo.objects.get(nome="Titulos comercio nascido")
     assert [f["campo"] for f in cm.spec["filtros_fixos"]] == ["A1_XSEGMEN"], msg.texto
     assert res is not None and res.ok
+
+
+def test_ajuste_sem_a_pessoa_pedir_e_recusado(ana):
+    """M41: a IA não muda sozinha o filtro de uma consulta compartilhada para responder outra pergunta."""
+    c = conversas.nova_individual(ana)
+    cm, _ = _consulta(ana, c)
+    msg, _ = conversas.enviar(ana, c, "quantos títulos o cliente 7 tem?", FakeProvider([
+        _d(acao="ajustar_filtro", alvo=cm.nome,
+           ajuste={"filtros": [{"campo": "A1_XSEGMEN", "operador": "igual", "valor": "COM"}]}),
+        _d(acao="conversar", resposta="Não vou mudar a consulta.")]))
+    cm.refresh_from_db()
+    assert cm.spec.get("filtros_fixos") in (None, []) and not cm.spec.get("anteriores"), cm.spec
