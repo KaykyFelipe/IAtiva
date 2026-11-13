@@ -1062,9 +1062,18 @@ def _lembrar(user, d, ficha) -> Saida:
             validade = datetime.strptime(d.validade, "%d/%m/%Y").date()
         except ValueError:
             validade = None
+    aviso = ""
     try:
-        n = memoria.lembrar(user, nota, d.alcance, tipo=d.tipo_nota, regra=d.regra, confirmado=d.confirmado,
-                            valido_ate=validade)
+        try:
+            n = memoria.lembrar(user, nota, d.alcance, tipo=d.tipo_nota, regra=d.regra, confirmado=d.confirmado,
+                                valido_ate=validade)
+        except ValidationError as exc:
+            if not d.regra or "CPF" in exc.messages[0]:
+                raise
+            # M40: o mapeamento campo/valor não serve como filtro automático (ex.: campo de outra tabela),
+            # mas o ensinamento vale: guarda como definição do termo em vez de perder o pedido.
+            n = memoria.lembrar(user, nota, d.alcance, tipo="termo", valido_ate=validade)
+            aviso = f" {exc.messages[0]} Por isso guardei como definição, sem virar filtro automático."
     except ValidationError as exc:
         texto = exc.messages[0]
         if "CPF" in texto:
@@ -1089,8 +1098,8 @@ def _lembrar(user, d, ficha) -> Saida:
     if n.situacao == "aprovada":
         alcance = {"usuario": "para você", "setor": f"para o setor {n.setor.nome if n.setor else ''}".strip(),
                    "empresa": "para todos"}[n.escopo]
-        return Saida(d.resposta if d.resposta and "aprova" not in d.resposta.lower() else f"Anotado {alcance}: {nota}",
-                     ficha)
+        texto = d.resposta if d.resposta and "aprova" not in d.resposta.lower() else f"Anotado {alcance}: {nota}"
+        return Saida(texto + aviso, ficha)
     extra = " Ela substitui a definição atual do mesmo termo depois de aprovada." if n.substitui_id else ""
     nivel = f"do setor {n.setor.nome}" if n.setor else "da empresa"
     return Saida(f"Registrei como proposta para a memória {nivel}: “{nota}”. Ela só vale depois de aprovada por "

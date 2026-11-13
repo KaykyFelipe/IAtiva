@@ -179,3 +179,15 @@ def test_superusuario_tem_permissao_geral(ana):
     ana.is_superuser = True
     ana.save(update_fields=["is_superuser"])
     assert permissao_geral(ana)
+
+
+def test_regra_com_campo_de_outra_tabela_vira_definicao(ana):
+    """O modelo mapeou a regra para um campo que não está na tabela: guarda como termo em vez de falhar."""
+    from iativa.agent.models import NotaAgente
+
+    c = conversas.nova_individual(ana)
+    msg, _ = conversas.enviar(ana, c, "guarde: total de títulos é só do comércio", FakeProvider([
+        _d(acao="lembrar", nota="Total de títulos = só clientes do comércio", tipo_nota="regra", alcance="usuario",
+           regra={"tabela": "SE1", "campo": "A1_XSEGMEN", "operador": "igual", "valor": "COM"}, confirmado=True)]))
+    n = NotaAgente.objects.get(texto__icontains="comércio")
+    assert n.tipo == "termo" and not n.criterios, msg.texto

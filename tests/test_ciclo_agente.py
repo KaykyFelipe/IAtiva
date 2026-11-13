@@ -251,9 +251,11 @@ def test_regra_sem_mapeamento_fica_como_hipotese_e_pede_esclarecimento(base):
     assert any("NÃO confirmada" in t for t in agente._notas(ana, "qual o faturamento?"))
 
 
-def test_regra_com_campo_inexistente_e_recusada(base):
+def test_regra_com_campo_inexistente_nao_vira_filtro(base):
+    """M40: campo inválido não vira filtro automático, mas o ensinamento é guardado como definição."""
     msg = _ensinar(base["ana"], confirmado=True, regra={**REGRA, "campo": "E1_INVENTADO"})
-    assert "não existe" in msg.texto and not NotaAgente.objects.exists()
+    assert "não existe" in msg.texto and "definição" in msg.texto
+    assert not NotaAgente.objects.exclude(criterios={}).exclude(criterios=None).exists()
 
 
 def test_correcao_pontual_nao_vira_memoria(base):
