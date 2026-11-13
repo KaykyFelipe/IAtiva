@@ -190,6 +190,9 @@ def test_diagnostico_generico_nao_depende_de_sf2(base):
     m,r=conversas.enviar(base['ana'],c,'Explique o resultado',Espiao([decisao]))
     assert m.ficha['tipo']=='diagnostico'
     assert any('E1_TIPO' in b.titulo for b in r.blocos)
+    assert any(b.titulo == diagnostico.DUPLICIDADE for b in r.blocos)  # M40: duplicidade conferida
+    assert 'faturamento' not in r.resumo.lower() and 'TES' not in r.resumo  # resumo fala do assunto certo
+    assert 'título repetido' in r.resumo or 'lançados mais de uma vez' in r.resumo
 
 def test_apresentacao_tem_evidencias_e_nao_promessa(faturamento):
     from django.template.loader import render_to_string

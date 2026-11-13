@@ -217,10 +217,18 @@ def investigar(user, s, inicial, interrompido=None):
         etapa('Conferência por filial e moeda, sem ranking',
               lambda f: _agregado(original(f), nums, cs))
         prefixo = base.base[1:] + '_'
-        for nome in (prefixo + 'TIPO', prefixo + 'SERIE', prefixo + 'STATUS'):
+        for nome in (prefixo + 'TIPO', prefixo + 'NATUREZ', prefixo + 'SERIE', prefixo + 'STATUS'):
             if nome in cs:
                 etapa('Decomposição por ' + nome,
                       lambda f, n=nome: _agregado(original(f), nums, cs, [Campo('e1', n)]))
+        chave_dup = [n for n in (prefixo + 'FORNECE', prefixo + 'CLIENTE', prefixo + 'NUM', prefixo + 'VALOR') if n in cs]
+        if len(chave_dup) >= 3:
+            # M40: o mesmo título lançado mais de uma vez (outro prefixo/parcela) infla a soma.
+            def duplicados(f):
+                p = _agregado(original(f), nums, cs, [Campo('e1', n) for n in chave_dup])
+                p.ordenar, p.top = [('Quantidade', True)], 10
+                return p
+            etapa(DUPLICIDADE, duplicados)
         datas = [c.campo.nome for c in base.colunas if c.campo.nome in cs and cs[c.campo.nome].tipo == 'D']
         if not datas:
             datas = [f.campo.nome for f in base.filtros if f.campo.nome in cs and cs[f.campo.nome].tipo == 'D']
@@ -240,14 +248,17 @@ def investigar(user, s, inicial, interrompido=None):
                 etapa('Comparação com valor faturado F2_VALFAT — base de cálculo distinta',
                       lambda f: _agregado(original(f), ['F2_VALFAT'], cs))
             _itens(a, out, etapa, base)
-    achados = _achados(evidencias)
-    out.resumo = (achados + ' Investigação executada com critérios independentes do valor esperado. ' +
+    achados = (_duplicidades(evidencias) + ' ' + _achados(evidencias)).strip()
+    faturamento = base.base in ('SF2', 'SD2')
+    out.resumo = ((achados + ' ' if achados else '') + 'Investigação executada com critérios independentes do valor esperado. ' +
         ('Há etapas incompletas; ' if not out.completo else '') +
-        'as decomposições abaixo mostram onde os valores se concentram. Soma de notas não comprova, sozinha, '
-        'faturamento de vendas. Título associado e TES são hipóteses, não a definição aprovada. '
+        'as decomposições abaixo mostram onde os valores se concentram. ' +
+        ('Soma de notas não comprova, sozinha, faturamento de vendas. Título associado e TES são hipóteses, não a '
+         'definição aprovada. ' if faturamento else '') +
         'Não alterei critérios por conta própria. Se um desses cenários for a regra certa, peça para ajustar o filtro '
-        'da consulta (dá para voltar como era antes). '
-        'A conciliação permanece pendente enquanto não houver evidência que determine quais operações representam receita.')
+        'da consulta (dá para voltar como era antes).' +
+        (' A conciliação permanece pendente enquanto não houver evidência que determine quais operações representam '
+         'receita.' if faturamento else ''))
     return out
 
 
@@ -315,6 +326,21 @@ def _itens(a, out, etapa, base):
         p.juncoes += [Juncao('j2', 'SF4', (('F4_CODIGO', 'D2_TES'),))]
         return agrupar(p, [Campo('j2', 'F4_DUPLIC')])
     etapa('Itens por geração de duplicata na TES atual — configuração histórica não comprovada', financeira)
+
+
+DUPLICIDADE = 'Possíveis duplicidades (mesmo fornecedor/cliente, número e valor)'
+
+
+def _duplicidades(evidencias) -> str:
+    rep = [r for r in evidencias.get(DUPLICIDADE, []) if int(r.get('Quantidade') or 0) > 1]
+    if DUPLICIDADE not in evidencias:
+        return ''
+    if not rep:
+        return 'Não encontrei título repetido (mesmo fornecedor/cliente, número e valor) no recorte.'
+    extra = sum(int(r['Quantidade']) - 1 for r in rep)
+    return (f'Encontrei {len(rep)} título(s) com o mesmo fornecedor/cliente, número e valor lançados mais de uma vez '
+            f'({extra} lançamento(s) a mais, entre os 10 grupos mais repetidos de cada filial); confira se são '
+            'parcelas ou duplicidade.')
 
 
 def _achados(evidencias):
