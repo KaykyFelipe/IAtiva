@@ -26,6 +26,7 @@ from django.conf import settings
 from django.db.models import Q, F
 from django.utils import timezone
 
+from .contratos import FIXOS
 from .models import Objetivo, SituacaoObjetivo as SO
 
 # Exigências, da mais fraca para as específicas.
@@ -170,6 +171,11 @@ def evidencia(decisao, saida) -> str:
         calculo = any(k == "agregacao" for k, _ in getattr(decisao, "parametros", ())) or bool(
             getattr(getattr(res, "totais", None), "medidas", None) and len(getattr(res, "linhas", [])) <= 1
             and any("Soma" in c or "Média" in c or "Quantidade" in c for c in getattr(res, "colunas", [])))
+        if not calculo and getattr(decisao, "objetivo", "") in FIXOS and getattr(
+                getattr(res, "totais", None), "medidas", None):
+            # M41: consulta fixa (títulos a vencer, em atraso) já traz o total geral calculado no banco:
+            # "quanto vamos receber?" está respondido, sem criar consulta nova para somar de novo.
+            calculo = True
         return CALCULO if calculo else CONSULTA
     if obs is not None and obs.situacao not in ("sucesso", "vazio", "parcial", ETAPA):
         return ""

@@ -101,3 +101,15 @@ def test_inadimplencia_top_n_geral_pelo_valor(ana):
 def test_inadimplencia_recusa_calculo_que_nao_e_top(ana):
     msg, res = _atraso(ana, [{"codigo": "agregacao", "valor": "soma:E1_VALOR"}])
     assert res is None and "top N" in msg.texto, msg.texto
+
+
+def test_total_da_consulta_fixa_responde_quanto(ana):
+    """M41: "quanto vamos receber até o fim do mês?" — a lista fixa já traz o total do banco; não cria consulta nova."""
+    c = conversas.nova_individual(ana)
+    p = FakeProvider([_d(acao="preparar_consulta", objetivo="titulos-a-vencer", entrega="calculo", parametros=[
+        {"codigo": "filial-analise", "valor": "TODAS"}, {"codigo": "periodo-analise", "valor": "01/01/2020..31/12/2030"},
+        {"codigo": "tratamento-baixa-parcial", "valor": "considerar-saldo"}])] * 3)
+    msg, res = conversas.enviar(ana, c, "quanto vamos receber até o fim do mês?", p)
+    assert res is not None and res.ok, msg.texto
+    assert p.chamadas == 1, p.chamadas
+    assert not ConsultaModelo.objects.exists()
