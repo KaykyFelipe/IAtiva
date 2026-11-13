@@ -62,3 +62,15 @@ def test_agrupado_sem_top_tambem_soma_entre_filiais(ana):
     total = sum(_num(l[-1]) for l in res.linhas)
     assert "Maior" in res.mensagem and total > 0
     assert len(res.linhas) >= len(por_filial.linhas)
+
+
+def test_total_por_filial_diz_a_maior(ana):
+    msg, res = _rodar(ana, "soma:E1_VALOR")
+    assert res.colunas[0] == "Filial" and len(res.linhas) == 3
+    assert res.mensagem.startswith("Maior "), res.mensagem
+
+
+def test_top_1_responde_direto(ana):
+    msg, res = _rodar(ana, "soma:E1_VALOR por E1_CLIENTE top 1")
+    assert len(res.linhas) == 1 and res.mensagem.startswith("O maior é "), res.mensagem
+    assert "Ranking com os 1" not in res.mensagem

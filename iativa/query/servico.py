@@ -460,19 +460,21 @@ def _mesclar_filiais(plano, comp, linhas):
 
 def _destaque(plano, comp, colunas, formatadas, linhas, tipos) -> str:
     """M40: cálculo agrupado com 2+ grupos: diz qual grupo ficou no topo (e no fim), em vez de só a tabela."""
-    if not plano.agrupar or len(linhas) < 2:
+    desloc = len(colunas) - len(comp.rotulos)  # coluna "Filial" na frente
+    if not (plano.agrupar or desloc) or not linhas:
         return ""
     aggs = [c.agregacao for c in plano.colunas]
     if len(aggs) != len(comp.rotulos) or not any(aggs):
         return ""
     i = next(k for k, a in enumerate(aggs) if a)
-    desloc = len(colunas) - len(comp.rotulos)  # coluna "Filial" na frente
     pares = [(_dec(l[i]), f) for l, f in zip(linhas, formatadas) if l[i] is not None]
-    if len(pares) < 2:
-        return ""
     def nome(f):
         partes = [f[k] for k in range(len(f)) if k < desloc or not aggs[k - desloc]]
         return " · ".join(str(p) for p in partes if str(p).strip()) or "?"
+    if len(pares) == 1 and plano.top == 1:
+        return f"O maior é {nome(pares[0][1])} ({pares[0][1][i + desloc]})."
+    if len(pares) < 2:
+        return ""
     maior = max(pares, key=lambda p: p[0])
     menor = min(pares, key=lambda p: p[0])
     rot = comp.rotulos[i]
@@ -510,7 +512,7 @@ def _resposta_final(objetivo, plano, n, truncado, totais, total, subtotal, pediu
             return f"{_medidas_texto(totais)}. Calculado no banco sobre {totais.registros} registro(s){filiais}.{nota}{aviso_moeda}"
         geral = f"Total geral ({totais.registros} registro(s){filiais}, calculado no banco): {_medidas_texto(totais)}."
         if plano.top:
-            return (f"Ranking com os {n} primeiros. {geral} O total geral considera todos os registros, não só os "
+            return (f"{'Ranking com os ' + str(n) + ' primeiros. ' if n > 1 else ''}{geral} O total geral considera todos os registros, não só os "
                     f"do ranking.{nota}{aviso_moeda}")
         corte = f" Mostrando só os primeiros {n} grupos." if truncado else ""
         return f"{n} grupo(s).{corte} {geral}{nota}{aviso_moeda}"
