@@ -191,3 +191,16 @@ def test_regra_com_campo_de_outra_tabela_vira_definicao(ana):
            regra={"tabela": "SE1", "campo": "A1_XSEGMEN", "operador": "igual", "valor": "COM"}, confirmado=True)]))
     n = NotaAgente.objects.get(texto__icontains="comércio")
     assert n.tipo == "termo" and not n.criterios, msg.texto
+
+
+def test_permissao_geral_regra_sem_campo_vira_definicao_da_empresa(ana):
+    from iativa.agent.models import NotaAgente
+
+    ana.is_superuser = True
+    ana.save(update_fields=["is_superuser"])
+    c = conversas.nova_individual(ana)
+    conversas.enviar(ana, c, "guarde para a empresa: faturamento é a consulta de itens", FakeProvider([
+        _d(acao="lembrar", nota="Faturamento = consulta de itens com TES que gera duplicata", tipo_nota="regra",
+           alcance="empresa")]))
+    n = NotaAgente.objects.get(texto__icontains="TES")
+    assert (n.tipo, n.escopo, n.situacao) == ("termo", "empresa", "aprovada")

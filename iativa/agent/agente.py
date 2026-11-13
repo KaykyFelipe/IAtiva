@@ -1063,6 +1063,14 @@ def _lembrar(user, d, ficha) -> Saida:
         except ValueError:
             validade = None
     aviso = ""
+    tipo = d.tipo_nota
+    if tipo == "regra" and not d.regra:
+        from iativa.accounts.authz import permissao_geral
+
+        if permissao_geral(user):
+            # M40: TI ensinando sem campo/valor: é uma definição (vai ao modelo), não filtro automático.
+            tipo = "termo"
+    d = replace(d, tipo_nota=tipo)
     try:
         try:
             n = memoria.lembrar(user, nota, d.alcance, tipo=d.tipo_nota, regra=d.regra, confirmado=d.confirmado,
