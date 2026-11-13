@@ -94,6 +94,7 @@ def test_inadimplencia_top_n_geral_pelo_valor(ana):
     valores = [_num(str(l[i]).replace("R$", "").strip()) for l in res.linhas]
     assert valores == sorted(valores, reverse=True)
     assert res.mensagem.startswith("Maior Valor em atraso"), res.mensagem
+    assert f"({res.linhas[0][i]})" in res.mensagem.split(". Menor")[0], res.mensagem
     assert len(todos.linhas) > 2
 
 

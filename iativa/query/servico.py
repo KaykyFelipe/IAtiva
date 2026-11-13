@@ -466,7 +466,8 @@ def _mesclar_filiais(plano, comp, linhas):
 
 def _destaque(plano, comp, colunas, formatadas, linhas, tipos) -> str:
     """M40: cálculo agrupado com 2+ grupos: diz qual grupo ficou no topo (e no fim), em vez de só a tabela."""
-    desloc = len(colunas) - len(comp.rotulos)  # coluna "Filial" na frente
+    # Coluna "Filial" na frente (uma linha por filial); colunas extras no fim (ex.: dias de atraso) não deslocam.
+    desloc = 1 if colunas and colunas[0] == "Filial" and comp.rotulos[:1] != ["Filial"] else 0
     if not (plano.agrupar or desloc) or not linhas:
         return ""
     aggs = [c.agregacao for c in plano.colunas]
@@ -478,7 +479,7 @@ def _destaque(plano, comp, colunas, formatadas, linhas, tipos) -> str:
          else next(k for k, a in enumerate(aggs) if a))
     pares = [(_dec(l[i]), f) for l, f in zip(linhas, formatadas) if l[i] is not None]
     def nome(f):
-        partes = [f[k] for k in range(len(f)) if k < desloc or not aggs[k - desloc]]
+        partes = [f[k] for k in range(desloc + len(aggs)) if k < desloc or not aggs[k - desloc]]
         return " · ".join(str(p) for p in partes if str(p).strip()) or "?"
     if len(pares) == 1 and plano.top == 1:
         return f"O maior é {nome(pares[0][1])} ({pares[0][1][i + desloc]})."
