@@ -621,6 +621,10 @@ def _encerrar_sem_cumprir(ac, user, c, mensagem_id, saida, previa, causa, observ
         if situacao == SO.MANUTENCAO:
             # M48: fala como uma IA de verdade: avisa que está corrigindo e volta com a resposta sozinha.
             ficha["corrigindo"] = True
+            # M49: sem resultado conferido, o texto do modelo não aparece (pode trazer um número não calculado).
+            if saida is None or (saida.resultado is None and (saida.observacao is None
+                                                               or saida.observacao.acao == "conversar")):
+                texto = ""
             parte = f"{falta}. " if texto else ""  # entregou só uma parte: diz qual falta
             final = Saida(f"{texto}\n\n{parte}Não tenho isso ainda, corrigindo… A manutenção vai ajustar o sistema "
                           f"(registro nº {inc.pk}) e, assim que a correção entrar no ar, refaço o pedido e "

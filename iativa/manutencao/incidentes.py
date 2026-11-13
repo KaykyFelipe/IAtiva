@@ -81,7 +81,29 @@ def classificar(exc=None, situacao: str = "") -> str:
     return Categoria.ERRO_TECNICO
 
 
+def acordar_manutencao() -> None:
+    """M50: avisa o executor do host na hora (arquivo no volume vigiado por iativa-manutencao.path), em vez
+    de esperar o agendamento. Só um carimbo de hora: nenhum dado do incidente sai da aplicação."""
+    from pathlib import Path
+
+    from django.conf import settings
+
+    try:
+        arq = Path(settings.BASE_DIR) / "var" / "manutencao-acordar"
+        arq.parent.mkdir(parents=True, exist_ok=True)
+        arq.write_text(timezone.now().isoformat())
+    except Exception as erro:
+        logger.warning("manutenção não acordada: %s", type(erro).__name__)
+
+
 def registrar(componente: str, operacao: str, exc=None, categoria: str = "", condicoes: dict | None = None):
+    inc = _registrar(componente, operacao, exc, categoria, condicoes)
+    if inc is not None and elegivel(inc):
+        acordar_manutencao()
+    return inc
+
+
+def _registrar(componente: str, operacao: str, exc=None, categoria: str = "", condicoes: dict | None = None):
     """Agrupa pela causa (categoria, componente, operação, tipo da exceção, onde ocorreu). Nunca levanta."""
     try:
         categoria = categoria or classificar(exc)

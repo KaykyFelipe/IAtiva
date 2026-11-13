@@ -22,7 +22,7 @@ from iativa.memory.models import ParameterDefinition, TipoValor
 from . import conversas
 from .estados import TransicaoInvalida
 from .forms import MessageForm
-from .models import ConversationContext, TipoConversa, PreferenciaChat
+from .models import ConversationContext, Mensagem, Papel, TipoConversa, PreferenciaChat
 
 FRASES_INICIO = (
     "O que vamos descobrir hoje?", "Como posso ajudar você hoje?",
@@ -462,7 +462,27 @@ def objetivo_pendente(user, c):
 
     if c is None:
         return None
-    return Objetivo.objects.filter(usuario=user, conversa=c, situacao=SituacaoObjetivo.CONTINUAR).order_by("-id").first()
+    # M50: em manutenção também: o chat mostra que está corrigindo e fica ocupado até a resposta.
+    return Objetivo.objects.filter(usuario=user, conversa=c, situacao__in=(
+        SituacaoObjetivo.CONTINUAR, SituacaoObjetivo.MANUTENCAO)).order_by("-id").first()
+
+
+@require_POST
+def parar_objetivo(request, objetivo_id):
+    """M50: botão parar do chat ocupado: encerra o pedido em segundo plano (a correção, se houver, segue
+    na manutenção, mas este pedido não é refeito)."""
+    from iativa.agent.models import Objetivo, SituacaoObjetivo
+
+    o = Objetivo.objects.select_related("conversa").filter(pk=objetivo_id, usuario=request.user).first()
+    if o is None or not conversas.pode_ver(request.user, o.conversa):
+        raise Http404
+    alterou = Objetivo.objects.filter(pk=o.pk, situacao__in=(SituacaoObjetivo.CONTINUAR, SituacaoObjetivo.MANUTENCAO)
+                                      ).update(situacao=SituacaoObjetivo.IMPEDIDO, motivo="Interrompido pela pessoa.",
+                                               execucao="", lease_ate=None)
+    if alterou:
+        Mensagem.objects.create(conversa=o.conversa, papel=Papel.IA, texto="Parei este pedido, como você pediu.",
+                                ficha={"tipo": "objetivo", "objetivo": o.pk})
+    return _render(request, o.conversa)
 
 
 @require_GET
@@ -473,7 +493,7 @@ def objetivo(request, objetivo_id):
     o = Objetivo.objects.select_related("conversa").filter(pk=objetivo_id, usuario=request.user).first()
     if o is None or not conversas.pode_ver(request.user, o.conversa):
         raise Http404
-    if o.situacao != SituacaoObjetivo.CONTINUAR:
+    if o.situacao not in (SituacaoObjetivo.CONTINUAR, SituacaoObjetivo.MANUTENCAO):
         # A sincronização já observa mensagens novas entre sessões. Recarregar
         # aqui perderia rascunho/rolagem e remontaria as tabelas do histórico.
         return HttpResponse(status=200)

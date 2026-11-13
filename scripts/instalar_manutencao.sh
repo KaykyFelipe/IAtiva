@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Instala o agendamento do executor de manutenção (M32): systemd timer a cada 15 min, com prioridade
+# Instala o agendamento do executor de manutenção (M32): disparo imediato por incidente (.path) e varredura de hora em hora, com prioridade
 # baixa e CPU/memória limitadas (não disputa com as consultas). Cria /etc/iativa/manutencao.env
 # DESLIGADO se ainda não existir; quem liga é o administrador, editando esse arquivo.
 #
@@ -9,8 +9,8 @@ set -Eeuo pipefail
 [[ "$(id -u)" == 0 ]] || { echo "Execute com sudo." >&2; exit 1; }
 UNIT=iativa-manutencao
 if [[ "${1:-}" == "--remover" ]]; then
-    systemctl disable --now "$UNIT.timer" 2> /dev/null || true
-    rm -f "/etc/systemd/system/$UNIT.service" "/etc/systemd/system/$UNIT.timer"
+    systemctl disable --now "$UNIT.timer" "$UNIT.path" 2> /dev/null || true
+    rm -f "/etc/systemd/system/$UNIT.service" "/etc/systemd/system/$UNIT.timer" "/etc/systemd/system/$UNIT.path"
     systemctl daemon-reload
     echo "Agendamento da manutenção removido."
     exit 0
@@ -47,16 +47,33 @@ TimeoutStartSec=2h
 EOF
 cat > "/etc/systemd/system/$UNIT.timer" <<EOF
 [Unit]
-Description=IAtiva - manutenção a cada 15 minutos
+Description=IAtiva - manutenção: varredura de segurança a cada hora (o disparo normal é imediato)
 
 [Timer]
 OnBootSec=10min
-OnUnitActiveSec=15min
+OnUnitActiveSec=1h
 Persistent=true
 
 [Install]
 WantedBy=timers.target
 EOF
+# M50: disparo imediato. A aplicação grava var/manutencao-acordar (volume iativa_var) ao registrar um
+# incidente elegível; o systemd inicia o executor na hora.
+VAR_DIR="$(docker volume inspect -f '{{.Mountpoint}}' iativa_iativa_var 2> /dev/null || true)"
+if [[ -n "$VAR_DIR" ]]; then
+    cat > "/etc/systemd/system/$UNIT.path" <<EOF
+[Unit]
+Description=IAtiva - manutenção disparada na hora por um incidente novo
+
+[Path]
+PathModified=$VAR_DIR/manutencao-acordar
+Unit=$UNIT.service
+
+[Install]
+WantedBy=paths.target
+EOF
+fi
 systemctl daemon-reload
 systemctl enable --now "$UNIT.timer"
+[[ -f "/etc/systemd/system/$UNIT.path" ]] && systemctl enable --now "$UNIT.path"
 echo "Agendamento instalado. Ligue em /etc/iativa/manutencao.env (MANUTENCAO_ATIVA=1)."

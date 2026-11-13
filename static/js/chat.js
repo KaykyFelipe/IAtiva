@@ -356,16 +356,37 @@
   }
 
   // M26: com uma verificação em segundo plano rodando, o botão de enviar vira "parar" e cancela a tarefa.
-  function tarefaAtiva() { return document.querySelector("#atividade-fixa[data-tarefa-ativa]"); }
+  // M50: um pedido em segundo plano (continuação ou correção pela manutenção) ocupa o chat, como uma
+  // tarefa: o botão vira "parar" e outra pergunta vai para um chat novo.
+  function tarefaAtiva() { return document.querySelector("#atividade-fixa[data-tarefa-ativa], [data-objetivo-pendente]"); }
   function atualizarBotaoTarefa() {
     const form = document.querySelector("[data-compositor]");
     if (!form || atual) return;
     const ativa = tarefaAtiva();
     botao(form, Boolean(ativa));
     const b = form.querySelector("[data-botao-enviar]");
-    if (b && ativa) { b.setAttribute("aria-label", "Parar a verificação"); b.title = "Parar a verificação"; }
+    const objetivo = ativa && ativa.hasAttribute("data-objetivo-pendente");
+    if (b && ativa) {
+      const rotulo = objetivo ? "Parar este pedido" : "Parar a verificação";
+      b.setAttribute("aria-label", rotulo); b.title = rotulo;
+    }
+    const campo = form.querySelector("[data-campo]");
+    if (campo) {
+      if (!campo.dataset.placeholderOriginal) campo.dataset.placeholderOriginal = campo.placeholder;
+      campo.disabled = Boolean(objetivo);
+      campo.placeholder = objetivo ? "Estou trabalhando neste pedido. Para perguntar outra coisa, abra um novo chat."
+        : campo.dataset.placeholderOriginal;
+    }
   }
   function cancelarTarefa(form, barra) {
+    if (barra.hasAttribute("data-objetivo-pendente")) {
+      const texto = barra.querySelector(".atividade-texto");
+      if (texto) texto.textContent = "Parando o pedido…";
+      htmx.ajax("POST", barra.dataset.cancelarUrl, { target: "#conversa", swap: "outerHTML",
+        values: { csrfmiddlewaretoken: form.querySelector("[name=csrfmiddlewaretoken]").value } });
+      if (window.IAtivaMascote) IAtivaMascote.estado('paused');
+      return;
+    }
     const dados = new FormData();
     dados.append("csrfmiddlewaretoken", form.querySelector("[name=csrfmiddlewaretoken]").value);
     const texto = barra.querySelector(".atividade-texto");
@@ -398,6 +419,11 @@
   // Captura: roda antes do htmx ler o formulário.
   document.addEventListener("submit", (e) => {
     const form = e.target;
+    const ocupado = tarefaAtiva();
+    if (!atual && ocupado && ocupado.hasAttribute("data-objetivo-pendente") && form.matches("[data-compositor]")) {
+      e.preventDefault(); e.stopImmediatePropagation();  // M50: chat ocupado; o campo está travado
+      return;
+    }
     if (!form.matches("[data-compositor]")) return;
     if (atual) {
       e.preventDefault();

@@ -4,6 +4,12 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **plano proposto em `PLANO.md` §8, aguardando aprovação.** Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M50 — correção na hora com chat ocupado (2026-11-13)
+
+- Incidente elegível grava `var/manutencao-acordar` no volume; a unidade `iativa-manutencao.path` inicia o executor na hora. O timer passou de 15 min para varredura de hora em hora.
+- Pedido em correção (situação manutenção) ocupa o chat: barra "Corrigindo…" com o mascote, campo travado com aviso para abrir um novo chat, botão enviar vira parar (encerra o pedido sem refazê-lo). A resposta chega no mesmo chat quando a correção entra no ar.
+- O aviso de correção não mostra mais texto do modelo sem resultado conferido (antes vazou um número não calculado).
+
 ## Mudança M49 — hora do servidor para a IA (2026-11-13)
 
 - O contexto do modelo traz "agora" (data, hora, dia da semana e fuso do servidor, lido a cada chamada). "Que horas são?" é respondido direto. Sem acesso de shell/Docker ao modelo: só o relógio é exposto.
