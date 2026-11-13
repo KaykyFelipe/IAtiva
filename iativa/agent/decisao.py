@@ -143,6 +143,9 @@ def esquema(codigos_objetivo, codigos_parametro) -> dict:
                         "campo": {"type": "string"}, "operador": {"type": "string", "enum": ["igual", "diferente"]},
                         "valor": {"type": "string"}}, "required": ["campo", "operador", "valor"]}},
                     "remover": {"type": "array", "items": {"type": "string"}},
+                    "alcance": {"type": "string", "enum": ["", "usuario", "todos"],
+                                "description": "M42: \"usuario\" = filtro só para quem pediu; \"todos\" = filtro fixo "
+                                               "da consulta (só T.I). Vazio = padrão pela permissão da pessoa."},
                 },
             },
             "consulta": {
@@ -232,7 +235,7 @@ def validar(saida, codigos_objetivo, codigos_parametro) -> Decisao:
     if entrega not in ENTREGAS:
         raise DecisaoInvalida("entrega")
     ajuste = _ajuste(saida.get("ajuste") or None)
-    if acao == "ajustar_filtro" and not ajuste:
+    if acao == "ajustar_filtro" and not (ajuste and (ajuste["filtros"] or ajuste["remover"])):
         raise DecisaoInvalida("ajuste")
     return Decisao(
         ajuste=ajuste,
@@ -255,8 +258,11 @@ def validar(saida, codigos_objetivo, codigos_parametro) -> Decisao:
 def _ajuste(a) -> dict | None:
     if a is None:
         return None
-    if not isinstance(a, dict) or set(a) - {"filtros", "remover"}:
+    if not isinstance(a, dict) or set(a) - {"filtros", "remover", "alcance"}:
         raise DecisaoInvalida("ajuste")
+    alcance = a.get("alcance") or ""
+    if alcance not in ("", "usuario", "todos"):
+        raise DecisaoInvalida("ajuste.alcance")
     filtros, remover = a.get("filtros") or [], a.get("remover") or []
     if not isinstance(filtros, list) or not isinstance(remover, list) or len(filtros) + len(remover) > 6:
         raise DecisaoInvalida("ajuste")
@@ -267,7 +273,7 @@ def _ajuste(a) -> dict | None:
         out.append({"campo": _texto(f.get("campo", ""), 20, "campo").upper(), "operador": f["operador"],
                     "valor": _texto(f.get("valor", ""), 40, "valor")})
     rem = [_texto(c, 20, "remover").upper() for c in remover]
-    return {"filtros": out, "remover": rem} if out or rem else None
+    return {"filtros": out, "remover": rem, "alcance": alcance} if out or rem or alcance else None
 
 
 def _consulta(c) -> dict:

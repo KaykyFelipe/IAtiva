@@ -214,3 +214,19 @@ class NotaAgente(models.Model):
 
     def __str__(self):
         return self.texto[:60]
+
+
+class FiltroUsuario(models.Model):
+    """M42: filtros que uma pessoa criou para si numa consulta aprendida (camada do usuário).
+    Os filtros fixos da consulta são a camada do T.I e valem para todos; estes valem só para quem pediu.
+    camada = {"filtros": [{campo, op, valor, alias?}], "juncoes": [{tabela, alias, pares}],
+              "desligados": [campo do T.I que não vale para esta pessoa], "anteriores": [versões]}"""
+    usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="+")
+    consulta = models.ForeignKey(ConsultaModelo, on_delete=models.CASCADE, related_name="filtros_usuario")
+    camada = models.JSONField(default=dict)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = [("usuario", "consulta")]
+        verbose_name = "filtro do usuário"
+        verbose_name_plural = "filtros do usuário"

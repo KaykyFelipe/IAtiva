@@ -263,7 +263,7 @@ def _consulta_recente(user, c):
         return {"codigo": s.objetivo}
     from .aprendizado import descrever_filtros
 
-    return {"codigo": cm.codigo, "tabela": cm.tabela, "filtros": descrever_filtros(cm)}
+    return {"codigo": cm.codigo, "tabela": cm.tabela, "filtros": descrever_filtros(cm, user)}
 
 
 SEM_TEMPO = "O tempo total para responder esta mensagem acabou antes de eu concluir."
@@ -703,18 +703,17 @@ def _agir(user, c, d, atual, defs, texto, provedor, entrada, objetivos, administ
         return Saida("Consultei os vínculos, o histórico funcional e as descrições disponíveis.",
                      {**ficha, "tipo": "historico_cargo", "busca": nome}, resultado=resultado)
     if acao in ("ajustar_filtro", "voltar_filtro"):
-        from .aprendizado import pode_ajustar
+        from .aprendizado import TODOS, alcance_padrao
 
-        if not pode_ajustar(user):
-            return Saida("Seu usuário não pode ajustar filtros de consultas.", ficha,
-                         observacao=Observacao(acao, SEM_PERMISSAO, "ajuste não autorizado"))
-        if not PEDE_AJUSTE_RE.search(texto or ""):
-            # M41: a consulta é compartilhada; mudar o filtro sem a pessoa pedir altera a resposta de todos.
+        alcance = (d.ajuste or {}).get("alcance") or alcance_padrao(user)
+        if alcance == TODOS and not PEDE_AJUSTE_RE.search(texto or ""):
+            # M41: o filtro fixo é de todos; mudar sem a pessoa pedir altera a resposta de todos.
+            # M42: o filtro só da pessoa não passa por esta trava (ela pede do jeito que quiser).
             msg = ("Ajustar ou voltar filtro só quando a pessoa pede. Ela não pediu: não mude a consulta "
                    "compartilhada. Use outra consulta que já responda (veja os objetivos) ou crie uma nova "
                    "(aprender_tabela / criar_consulta) com os filtros que esta pergunta precisa.")
             return Saida("", ficha, observacao=Observacao(acao, ERRO_PARAMETROS, msg))  # aviso só para o modelo
-        return _ajustar_filtro(user, d, ficha)
+        return _ajustar_filtro(user, d, ficha, alcance, objetivos)
     if acao == "remover_aprendizado" and not administrador:
         return Saida("Essa ação é só para administradores.", ficha)
     if acao in ("preparar_consulta", "investigar_divergencia"):
@@ -1014,7 +1013,7 @@ def _aprender_sozinho(user, c, d, texto, ficha, provedor, entrada, atual, motivo
     if consulta.get("filtros") and not cm.spec.get("filtros_fixos"):
         # M40: a consulta nasce com os filtros da definição (ex.: faturamento só com TES que gera duplicata).
         try:
-            cm = aprendizado.ajustar_filtros(user, cm, consulta["filtros"], [])
+            cm = aprendizado.ajustar_filtros(user, cm, consulta["filtros"], [], criacao=True)
         except (ValidationError, PermissaoNegada) as exc:
             detalhe = "; ".join(getattr(exc, "messages", None) or [str(exc)])
             motivo.append(f"filtro da consulta nova recusado: {detalhe}"[:300])
@@ -1069,9 +1068,10 @@ def _remover(user, d, ficha) -> Saida:
     return Saida(f"Pronto, removi a consulta “{cm.nome}”. Ela não aparece mais para ninguém.", ficha)
 
 
-def _ajustar_filtro(user, d, ficha) -> Saida:
-    """M40: muda (ou desfaz) os filtros fixos de uma consulta aprendida a pedido da pessoa."""
-    from .aprendizado import ajustar_filtros, descrever_filtros, voltar_filtros
+def _ajustar_filtro(user, d, ficha, alcance="", objetivos=()) -> Saida:
+    """M40/M42: muda (ou desfaz) os filtros de uma consulta aprendida a pedido da pessoa: os fixos (T.I,
+    valem para todos) ou os só dela."""
+    from .aprendizado import USUARIO, ajustar_filtros, descrever_filtros, voltar_filtros
 
     achados = _achar_modelo(d.alvo)
     if not achados:
@@ -1081,19 +1081,29 @@ def _ajustar_filtro(user, d, ficha) -> Saida:
         ficha["opcoes"] = [m.nome for m in achados[:6]]
         return Saida("Encontrei mais de uma. Qual delas?", ficha)
     cm = achados[0]
-    antes = descrever_filtros(cm)
+    so_seu = alcance == USUARIO
+    if so_seu and cm.codigo not in {o.codigo for o in objetivos}:
+        return Saida("Você não tem acesso a essa consulta.", ficha,
+                     observacao=Observacao(d.acao, SEM_PERMISSAO, "consulta fora do acesso"))
+    quem = user if so_seu else None
+    antes = descrever_filtros(cm, quem)
     try:
         if d.acao == "voltar_filtro":
-            cm = voltar_filtros(user, cm)
+            cm = voltar_filtros(user, cm, alcance)
         else:
-            cm = ajustar_filtros(user, cm, d.ajuste["filtros"], d.ajuste["remover"])
+            cm = ajustar_filtros(user, cm, d.ajuste["filtros"], d.ajuste["remover"], alcance)
     except PermissaoNegada as exc:
         return Saida(str(exc), ficha, observacao=Observacao(d.acao, SEM_PERMISSAO, "ajuste não autorizado"))
     except (ValidationError, ValueError) as exc:
         motivo = " ".join(getattr(exc, "messages", [str(exc)]))
         return Saida(motivo, ficha, observacao=Observacao(d.acao, ERRO_METADADOS, motivo))
+    if so_seu:
+        verbo = "Voltei os seus filtros" if d.acao == "voltar_filtro" else "Criei o filtro só para você"
+        return Saida(f"{verbo} na consulta “{cm.nome}”. Antes: {antes}. Agora: {descrever_filtros(cm, user)}. "
+                     "Os outros usuários continuam com os filtros fixos. Para desfazer, peça para voltar o filtro.",
+                     ficha)
     verbo = "Voltei os filtros" if d.acao == "voltar_filtro" else "Ajustei os filtros"
-    return Saida(f"{verbo} da consulta “{cm.nome}”. Antes: {antes}. Agora: {descrever_filtros(cm)}. "
+    return Saida(f"{verbo} da consulta “{cm.nome}” (valem para todos). Antes: {antes}. Agora: {descrever_filtros(cm)}. "
                  "Para desfazer, peça para voltar o filtro como era antes.", ficha)
 
 

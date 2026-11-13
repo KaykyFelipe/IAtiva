@@ -51,7 +51,13 @@ def _rodar(ana, c, cm):
     return len(res.linhas)
 
 
+def _ti(u):
+    u.is_superuser = True  # M42: permissão geral (T.I) mexe nos filtros fixos, que valem para todos
+    u.save(update_fields=["is_superuser"])
+
+
 def test_ajusta_filtro_de_tabela_ligada_e_volta_como_era(ana):
+    _ti(ana)
     c = conversas.nova_individual(ana)
     cm, total = _consulta(ana, c)
 
@@ -74,6 +80,7 @@ def test_ajusta_filtro_de_tabela_ligada_e_volta_como_era(ana):
 
 
 def test_filtro_diferente_e_remover(ana):
+    _ti(ana)
     c = conversas.nova_individual(ana)
     cm, total = _consulta(ana, c)
     cm = aprendizado.ajustar_filtros(ana, cm, [{"campo": "A1_XSEGMEN", "operador": "diferente", "valor": "COM"}], [])
@@ -103,14 +110,14 @@ def test_voltar_sem_ajuste_explica(ana):
     assert "desfazer" in msg.texto
 
 
-def test_sem_permissao_nao_ajusta(ana, monkeypatch):
+def test_sem_permissao_geral_nao_muda_filtro_de_todos(ana):
     c = conversas.nova_individual(ana)
     cm, _ = _consulta(ana, c)
-    monkeypatch.setattr(aprendizado, "pode_ajustar", lambda u: False)
-    msg, _ = conversas.enviar(ana, c, "filtre por tipo", FakeProvider([
-        _d(acao="ajustar_filtro", alvo=cm.nome, ajuste={"filtros": [{"campo": "E1_TIPO", "operador": "igual", "valor": "NF"}]})]))
+    msg, _ = conversas.enviar(ana, c, "filtre por tipo para todos", FakeProvider([
+        _d(acao="ajustar_filtro", alvo=cm.nome, ajuste={"filtros": [{"campo": "E1_TIPO", "operador": "igual", "valor": "NF"}],
+                                                        "alcance": "todos"})]))
     cm.refresh_from_db()
-    assert "não pode ajustar" in msg.texto and cm.spec["filtros_fixos"] == []
+    assert "Só o T.I" in msg.texto and cm.spec["filtros_fixos"] == []
     assert "manutenção" not in msg.texto  # falta de permissão é impedimento, não defeito
 
 
@@ -121,7 +128,7 @@ def test_decisao_valida_ajuste():
     with pytest.raises(DecisaoInvalida):
         validar({**base, "ajuste": {"filtros": [{"campo": "X", "operador": "maior", "valor": "1"}]}}, [], [])
     d = validar({**base, "ajuste": {"filtros": [{"campo": "f4_duplic", "operador": "igual", "valor": "S"}]}}, [], [])
-    assert d.ajuste == {"filtros": [{"campo": "F4_DUPLIC", "operador": "igual", "valor": "S"}], "remover": []}
+    assert d.ajuste == {"filtros": [{"campo": "F4_DUPLIC", "operador": "igual", "valor": "S"}], "remover": [], "alcance": ""}
 
 
 def test_mesma_mensagem_cria_ajusta_e_soma(ana):
@@ -230,3 +237,43 @@ def test_ajuste_sem_a_pessoa_pedir_e_recusado(ana):
         _d(acao="conversar", resposta="Não vou mudar a consulta.")]))
     cm.refresh_from_db()
     assert cm.spec.get("filtros_fixos") in (None, []) and not cm.spec.get("anteriores"), cm.spec
+
+
+def test_filtro_do_usuario_vale_so_para_ele(ana, novo_usuario, politica):
+    """M42: quem não é do T.I cria filtro só para si; os outros continuam com os filtros fixos; dá para voltar."""
+    from iativa.agent.models import FiltroUsuario
+
+    cob = Department.objects.get(codigo="financeiro-cobranca")
+    bia = novo_usuario("bia", cob)
+    politica(bia, cob, consultar=True, filiais=["01"])
+    c = conversas.nova_individual(ana)
+    cm, total = _consulta(ana, c)
+    msg, _ = conversas.enviar(ana, c, "pra mim, só clientes do comércio", FakeProvider([
+        _d(acao="ajustar_filtro", alvo=cm.nome,
+           ajuste={"filtros": [{"campo": "A1_XSEGMEN", "operador": "igual", "valor": "COM"}]})]))
+    assert "só para você" in msg.texto, msg.texto
+    cm.refresh_from_db()
+    assert cm.spec.get("filtros_fixos") in (None, [])  # camada do T.I intacta
+    assert FiltroUsuario.objects.filter(usuario=ana, consulta=cm).exists()
+    filtrado = _rodar(ana, c, cm)
+    assert 0 < filtrado < total
+    cb = conversas.nova_individual(bia)
+    assert _rodar(bia, cb, cm) == total  # a outra pessoa não é afetada
+    msg, _ = conversas.enviar(ana, c, "volte meu filtro", FakeProvider([_d(acao="voltar_filtro", alvo=cm.nome)]))
+    assert "Voltei os seus filtros" in msg.texto, msg.texto
+    assert _rodar(ana, c, cm) == total
+
+
+def test_usuario_desliga_filtro_fixo_so_para_si(ana, novo_usuario, politica):
+    """M42: "pra mim, conte também os bloqueados": o filtro fixo do T.I deixa de valer só para quem pediu."""
+    _ti(ana)
+    c = conversas.nova_individual(ana)
+    cm, total = _consulta(ana, c)
+    cm = aprendizado.ajustar_filtros(ana, cm, [{"campo": "A1_XSEGMEN", "operador": "igual", "valor": "COM"}], [])
+    filtrado = _rodar(ana, c, cm)
+    aprendizado.ajustar_filtros(ana, cm, [], ["A1_XSEGMEN"], alcance="usuario")
+    assert _rodar(ana, c, cm) == total
+    cm.refresh_from_db()
+    assert [f["campo"] for f in cm.spec["filtros_fixos"]] == ["A1_XSEGMEN"]
+    assert "não valem para você" in aprendizado.descrever_filtros(cm, ana)
+    assert 0 < filtrado < total

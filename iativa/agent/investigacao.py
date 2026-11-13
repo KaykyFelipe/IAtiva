@@ -335,7 +335,12 @@ def reconstruir_lista(user, base, plano_inv, ctx: Contexto, ctl: Controle):
     if not filiais or any(f not in autorizadas for f in filiais):
         raise SemPermissao("A filial da lista original não está mais entre as suas filiais autorizadas.")
     valores[REGRAS] = memoria.regras_aplicaveis(user, base.setor, plano_inv["tabela"])
-    limite = int(ctl.limites.get("registros", 2000))
+    from iativa.query.plano import FILTROS_USUARIO
+
+    from .aprendizado import camada_por_codigo
+
+    valores[FILTROS_USUARIO] = camada_por_codigo(user, base.objetivo)  # M42: mesma lista que a pessoa viu
+    limite =int(ctl.limites.get("registros", 2000))
     ctx.itens, ctx.lista_truncada = [], False
     vistos = set()
     with _Sessao() as ses:

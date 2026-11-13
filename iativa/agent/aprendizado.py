@@ -329,17 +329,18 @@ def salvar_proposta(user, alias: str, dados, automatico: bool = False) -> Consul
     return cm
 
 
-def _testar_compilacao(cm):
-    """Compila e valida com valores de exemplo, sem executar nada."""
+def _testar_compilacao(cm, camada=None):
+    """Compila e valida com valores de exemplo, sem executar nada (com a camada da pessoa, se houver)."""
     from iativa.query.compilador import compilar
-    from iativa.query.plano import montar_modelo
+    from iativa.query.plano import FILTROS_USUARIO, montar_modelo
     from iativa.query.validador import validar
 
-    valores = {"filial-analise": "01", "periodo-analise": {"inicio": "2026-01-01", "fim": "2026-01-31"}}
+    valores = {"filial-analise": "01", "periodo-analise": {"inicio": "2026-01-01", "fim": "2026-01-31"},
+               FILTROS_USUARIO: camada or {}}
     plano = montar_modelo(cm.tabela, cm.spec, valores, cm.codigo)
     with abrir_catalogo() as cat:
         comp = compilar(plano, cat, 10)
-        aliases = [cm.tabela] + [j["tabela"] for j in cm.spec.get("juncoes", [])]
+        aliases = [cm.tabela] + [j["tabela"] for j in cm.spec.get("juncoes", []) + (camada or {}).get("juncoes", [])]
         fisicas = {t.fisica for t in cat.tabelas(aliases).values()}
     validar(comp.sql, fisicas, 11)
 
@@ -397,16 +398,48 @@ def pode_ajustar(user) -> bool:
 OPERADORES_AJUSTE = {"igual": "=", "diferente": "<>"}
 
 
+TODOS, USUARIO = "todos", "usuario"  # M42: camada do T.I (filtros fixos) e camada da pessoa
+
+
+def alcance_padrao(user) -> str:
+    """Quem tem permissão geral (T.I) mexe nos filtros fixos, que valem para todos; os demais criam
+    filtros só para si."""
+    from iativa.accounts.authz import permissao_geral
+
+    return TODOS if permissao_geral(user) else USUARIO
+
+
+def camada_por_codigo(user, codigo: str) -> dict:
+    """Camada da pessoa para executar a consulta aprendida `codigo` (vazia se não houver)."""
+    from .models import FiltroUsuario
+
+    fu = FiltroUsuario.objects.filter(usuario=user, consulta__codigo=codigo).first() if user is not None else None
+    return {k: v for k, v in fu.camada.items() if k != "anteriores"} if fu is not None else {}
+
+
+def camada_usuario(user, cm) -> dict:
+    from .models import FiltroUsuario
+
+    fu = FiltroUsuario.objects.filter(usuario=user, consulta=cm).first() if user is not None else None
+    return dict(fu.camada) if fu is not None else {}
+
+
 @transaction.atomic
-def ajustar_filtros(user, cm, filtros: list[dict], remover: list[str]) -> ConsultaModelo:
-    """M40: a pessoa pediu para mudar os filtros fixos de uma consulta aprendida. Inclui/troca
-    (`filtros`: campo, operador igual|diferente, valor) e tira (`remover`) filtros; o campo pode ser de
-    uma tabela ligada pelo dicionário (junção pela chave única, sem duplicar linhas). A versão anterior
-    fica guardada para `voltar_filtros`. Só administradores; a consulta compilada é validada antes."""
-    if not pode_ajustar(user):
-        raise PermissaoNegada("Seu usuário não pode ajustar filtros de consultas.")
+def ajustar_filtros(user, cm, filtros: list[dict], remover: list[str], alcance: str = "",
+                    criacao: bool = False) -> ConsultaModelo:
+    """M40/M42: muda os filtros de uma consulta aprendida a pedido da pessoa. Inclui/troca (`filtros`:
+    campo, operador igual|diferente, valor) e tira (`remover`) filtros; o campo pode ser de uma tabela
+    ligada pelo dicionário (junção pela chave única, sem duplicar linhas). A versão anterior fica guardada
+    para `voltar_filtros`. Alcance "todos" (filtros fixos, só T.I) ou "usuario" (só para quem pediu; pode
+    também desligar, para si, um filtro fixo). A consulta compilada é validada antes."""
+    # criacao: a consulta que a própria pessoa acabou de criar nasce com os filtros da definição (fixos).
+    alcance = TODOS if criacao else (alcance or alcance_padrao(user))
+    if alcance == USUARIO:
+        return _ajustar_do_usuario(user, cm, filtros, remover)
+    if not pode_ajustar(user) or (alcance_padrao(user) != TODOS and not criacao):
+        raise PermissaoNegada("Só o T.I (permissão geral) muda o filtro que vale para todos. "
+                              "Posso criar esse filtro só para você.")
     cm = ConsultaModelo.objects.select_for_update().get(pk=cm.pk)
-    por_nome = {c.nome: c for c in campos_da_tabela(user, cm.tabela, automatico=not pode_aprender(user))["campos"]}
     spec = dict(cm.spec)
     juncoes = [dict(j) for j in spec.get("juncoes", [])]
     atuais = {f["campo"]: dict(f) for f in spec.get("filtros_fixos", [])}
@@ -414,6 +447,55 @@ def ajustar_filtros(user, cm, filtros: list[dict], remover: list[str]) -> Consul
         if campo not in atuais:
             raise ValidationError(f"A consulta não tem filtro em {campo}.")
         atuais.pop(campo)
+    _novos_filtros(user, cm, atuais, juncoes, filtros, "j")
+    anteriores = list(spec.get("anteriores", []))
+    anteriores.append({"filtros_fixos": spec.get("filtros_fixos", []), "juncoes": spec.get("juncoes", [])})
+    spec.update(filtros_fixos=list(atuais.values()), juncoes=juncoes, anteriores=anteriores[-MAX_VERSOES:])
+    cm.spec = spec
+    _testar_compilacao(cm)
+    cm.save(update_fields=["spec"])
+    registrar("parametro_corrigido", "agente", usuario=user, entidade_id=cm.pk, estado_novo="filtros_ajustados")
+    return cm
+
+
+def _ajustar_do_usuario(user, cm, filtros, remover) -> ConsultaModelo:
+    from .models import FiltroUsuario
+
+    fu, _ = FiltroUsuario.objects.select_for_update().get_or_create(usuario=user, consulta=cm)
+    camada = dict(fu.camada)
+    atuais = {f["campo"]: dict(f) for f in camada.get("filtros", [])}
+    juncoes = [dict(j) for j in camada.get("juncoes", [])]
+    desligados = list(camada.get("desligados", []))
+    fixos = {f["campo"] for f in cm.spec.get("filtros_fixos", [])}
+    for campo in remover:
+        if campo in atuais:
+            atuais.pop(campo)
+        elif campo in fixos and campo not in desligados:
+            desligados.append(campo)  # o filtro do T.I deixa de valer só para esta pessoa
+        else:
+            raise ValidationError(f"A consulta não tem filtro em {campo}.")
+    _novos_filtros(user, cm, atuais, juncoes, filtros, "u", cm.spec.get("juncoes", []))
+    for campo in atuais:
+        if campo in fixos and campo not in desligados:
+            desligados.append(campo)  # o critério da pessoa substitui o do T.I no mesmo campo
+    usados = {f.get("alias") for f in atuais.values()}
+    juncoes = [j for j in juncoes if j["alias"] in usados]
+    anteriores = list(camada.get("anteriores", []))
+    anteriores.append({k: camada.get(k, []) for k in ("filtros", "juncoes", "desligados")})
+    nova = {"filtros": list(atuais.values()), "juncoes": juncoes, "desligados": desligados,
+            "anteriores": anteriores[-MAX_VERSOES:]}
+    _testar_compilacao(cm, nova)
+    fu.camada = nova
+    fu.save()
+    registrar("parametro_corrigido", "agente", usuario=user, entidade_id=cm.pk, estado_novo="filtros_do_usuario")
+    return cm
+
+
+def _novos_filtros(user, cm, atuais: dict, juncoes: list, filtros: list[dict], prefixo: str,
+                   juncoes_base=()) -> None:
+    """Valida e aplica `filtros` em `atuais`/`juncoes`. Campo de tabela ligada pelo dicionário entra com a
+    junção pela chave; uma tabela já ligada em `juncoes_base` (camada do T.I) é reaproveitada."""
+    por_nome = {c.nome: c for c in campos_da_tabela(user, cm.tabela, automatico=not pode_aprender(user))["campos"]}
     possiveis = None
     for f in filtros:
         campo, valor, op = f["campo"], f["valor"].strip(), OPERADORES_AJUSTE.get(f["operador"])
@@ -429,30 +511,35 @@ def ajustar_filtros(user, cm, filtros: list[dict], remover: list[str]) -> Consul
         j = next((j for j in possiveis if any(c.nome == campo for c in j["campos"])), None)
         if j is None:
             raise ValidationError(f"O campo {campo} não está em {cm.tabela} nem numa tabela ligada a ela pelo dicionário.")
-        existente = next((x for x in juncoes if x["tabela"] == j["tabela"]), None)
+        existente = next((x for x in list(juncoes_base) + juncoes if x["tabela"] == j["tabela"]), None)
         if existente is None:
-            if len(juncoes) >= MAX_JUNCOES + 1:
+            if len(juncoes) + len(juncoes_base) >= MAX_JUNCOES + 1:
                 raise ValidationError("A consulta já tem o máximo de tabelas ligadas.")
             usados = {x["alias"] for x in juncoes}
-            apelido = next(f"j{n}" for n in range(1, 10) if f"j{n}" not in usados)
+            apelido = next(f"{prefixo}{n}" for n in range(1, 10) if f"{prefixo}{n}" not in usados)
             existente = {"tabela": j["tabela"], "alias": apelido, "pares": j["pares"]}
             juncoes.append(existente)
         atuais[campo] = {"campo": campo, "op": op, "valor": valor, "alias": existente["alias"]}
-    anteriores = list(spec.get("anteriores", []))
-    anteriores.append({"filtros_fixos": spec.get("filtros_fixos", []), "juncoes": spec.get("juncoes", [])})
-    spec.update(filtros_fixos=list(atuais.values()), juncoes=juncoes, anteriores=anteriores[-MAX_VERSOES:])
-    cm.spec = spec
-    _testar_compilacao(cm)
-    cm.save(update_fields=["spec"])
-    registrar("parametro_corrigido", "agente", usuario=user, entidade_id=cm.pk, estado_novo="filtros_ajustados")
-    return cm
 
 
 @transaction.atomic
-def voltar_filtros(user, cm) -> ConsultaModelo:
-    """M40: desfaz o último ajuste: filtros e junções voltam a ser os da versão anterior."""
-    if not pode_ajustar(user):
-        raise PermissaoNegada("Seu usuário não pode ajustar filtros de consultas.")
+def voltar_filtros(user, cm, alcance: str = "") -> ConsultaModelo:
+    """M40/M42: desfaz o último ajuste da camada (filtros fixos do T.I ou filtros da própria pessoa)."""
+    alcance = alcance or alcance_padrao(user)
+    if alcance == USUARIO:
+        from .models import FiltroUsuario
+
+        fu = FiltroUsuario.objects.select_for_update().filter(usuario=user, consulta=cm).first()
+        anteriores = list((fu.camada if fu else {}).get("anteriores", []))
+        if not anteriores:
+            raise ValidationError("Você não tem ajuste de filtro nessa consulta para desfazer.")
+        fu.camada = {**anteriores.pop(), "anteriores": anteriores}
+        fu.save()
+        registrar("parametro_corrigido", "agente", usuario=user, entidade_id=cm.pk,
+                  estado_novo="filtros_do_usuario_revertidos")
+        return cm
+    if not pode_ajustar(user) or alcance_padrao(user) != TODOS:
+        raise PermissaoNegada("Só o T.I (permissão geral) muda o filtro que vale para todos.")
     cm = ConsultaModelo.objects.select_for_update().get(pk=cm.pk)
     spec = dict(cm.spec)
     anteriores = list(spec.get("anteriores", []))
@@ -467,8 +554,20 @@ def voltar_filtros(user, cm) -> ConsultaModelo:
     return cm
 
 
-def descrever_filtros(cm) -> str:
-    fs = cm.spec.get("filtros_fixos", [])
-    if not fs:
-        return "sem filtros fixos"
+def _texto_filtros(fs) -> str:
     return "; ".join(f"{f['campo']} {'diferente de' if f.get('op') == '<>' else '='} “{f['valor']}”" for f in fs)
+
+
+def descrever_filtros(cm, user=None) -> str:
+    """Filtros fixos (T.I) e, se houver, os da pessoa."""
+    camada = camada_usuario(user, cm)
+    desligados = set(camada.get("desligados", []))
+    fixos = [f for f in cm.spec.get("filtros_fixos", []) if f["campo"] not in desligados]
+    if not camada:
+        return _texto_filtros(fixos) if fixos else "sem filtros fixos"
+    partes = [("fixos: " + _texto_filtros(fixos)) if fixos else "sem filtros fixos"]
+    if camada.get("filtros"):
+        partes.append("só seus: " + _texto_filtros(camada["filtros"]))
+    if desligados:
+        partes.append("fixos que não valem para você: " + ", ".join(sorted(desligados)))
+    return " · ".join(partes)

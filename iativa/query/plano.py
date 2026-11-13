@@ -220,6 +220,7 @@ def _aplicar_agregacao(plano, spec: dict, texto: str):
                            + (f", por {colunas[0].rotulo}" if grupo else "") + (f", top {top}" if top else "") + ".")
 
 
+FILTROS_USUARIO = "_filtros_usuario"  # M42: camada de filtros da pessoa (FiltroUsuario.camada)
 REGRAS = "_regras"  # regras da memória (M22): [(campo, operador, valor, origem)] já confirmadas
 
 
@@ -291,9 +292,19 @@ def montar_modelo(tabela: str, spec: dict, valores: dict, codigo: str) -> Plano:
         plano.juncoes.append(Juncao(j["alias"], j["tabela"], tuple((a, b) for a, b in j["pares"])))
         plano.premissas.append(f"Junção com {j['tabela']} pela chave do dicionário (SX9), sem duplicar linhas.")
     plano.filtros.append(Filtro(Campo(e1, filial_campo), "=", valores["filial-analise"]))
+    camada = valores.get(FILTROS_USUARIO) or {}  # M42: filtros que a pessoa criou só para si
+    desligados = set(camada.get("desligados", []))
     for f in spec.get("filtros_fixos", []):
+        if f["campo"] in desligados:
+            plano.premissas.append(f"Filtro fixo {f['campo']} não aplicado: você pediu outro critério para si.")
+            continue
         # M40: o filtro pode ser de uma tabela juntada (alias da junção) e pode ser "diferente".
         plano.filtros.append(Filtro(Campo(f.get("alias") or e1, f["campo"]), f.get("op") or "=", f["valor"]))
+    for j in camada.get("juncoes", []):
+        plano.juncoes.append(Juncao(j["alias"], j["tabela"], tuple((a, b) for a, b in j["pares"])))
+    for f in camada.get("filtros", []):
+        plano.filtros.append(Filtro(Campo(f.get("alias") or e1, f["campo"]), f.get("op") or "=", f["valor"]))
+        plano.premissas.append(f"Seu filtro (só para você): {f['campo']} {f.get('op') or '='} {f['valor']}.")
     campo_data = spec.get("campo_data")
     if campo_data:
         periodo = valores["periodo-analise"]
@@ -303,7 +314,8 @@ def montar_modelo(tabela: str, spec: dict, valores: dict, codigo: str) -> Plano:
         ]
         plano.premissas.append(f"Período aplicado ao campo {campo_data}.")
     for f in spec.get("filtros_fixos", []):
-        plano.premissas.append(f"Filtro fixo: {f['campo']} {f.get('op') or '='} {f['valor']}.")
+        if f["campo"] not in desligados:
+            plano.premissas.append(f"Filtro fixo: {f['campo']} {f.get('op') or '='} {f['valor']}.")
     for campo, op, valor, origem in valores.get(REGRAS) or []:
         if op not in ("=", "<>"):
             continue

@@ -165,6 +165,10 @@ def investigar(user, s, inicial, interrompido=None):
             completo=False)
     vals = _valores(user, s)
     vals[REGRAS] = memoria.regras_aplicaveis(user, s.setor, obj.tabelas[0])
+    from iativa.agent.aprendizado import camada_por_codigo
+    from iativa.query.plano import FILTROS_USUARIO
+
+    vals[FILTROS_USUARIO] = camada_por_codigo(user, s.objetivo)  # M42
     filiais = sorted(filiais_autorizadas(user, s.setor)) if vals.get('filial-analise') == 'TODAS' else [vals.get('filial-analise')]
     if not filiais:
         raise PermissaoNegada('Nenhuma filial autorizada para a investigação.')

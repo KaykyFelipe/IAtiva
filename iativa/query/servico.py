@@ -301,6 +301,11 @@ def executar_solicitacao(user, s: RequestContext) -> Resultado:
         from iativa.agent import memoria as memoria_agente
 
         valores[REGRAS] = memoria_agente.regras_aplicaveis(user, s.setor, OBJETIVOS[s.objetivo].tabelas[0])
+        from iativa.agent.aprendizado import camada_por_codigo
+
+        from .plano import FILTROS_USUARIO
+
+        valores[FILTROS_USUARIO] = camada_por_codigo(user, s.objetivo)  # M42: filtros só desta pessoa
 
     from iativa.agent import prazo
 
