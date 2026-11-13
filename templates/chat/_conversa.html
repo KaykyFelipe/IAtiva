@@ -1,4 +1,4 @@
-<div class="conversa-area{% if not conversa and not aprendizado %} inicio{% endif %}" id="conversa">
+<div class="conversa-area{% if not conversa and not aprendizado %} inicio{% endif %}" id="conversa" data-conversa-id="{{ conversa.pk|default:0 }}">
   <header class="cabecalho">
     {% include "chat/_cabecalho_acoes.html" %}
     <div class="titulo-conversa">
@@ -33,7 +33,15 @@
           {% endif %}
         {% else %}
           {% include "chat/_resposta.html" with m=m editavel=item.editavel executavel=item.executavel repetivel=item.repetivel aprendivel=item.aprendivel aprovavel=item.aprovavel ultima=item.ultima %}
-          <div class="resultado-de" data-resultado-de="{{ m.pk }}">{% if resultado and resultado_msg == m.pk %}{% if resultado.consolidado %}{% include "chat/_consolidado.html" %}{% else %}{% include "chat/_resultado.html" %}{% endif %}{% endif %}</div>
+          <div class="resultado-de" data-resultado-de="{{ m.pk }}">
+            {% if m.resultado %}
+              {% if item.resultado_salvo %}
+                {% if item.resultado_salvo.consolidado %}{% include "chat/_consolidado.html" with resultado=item.resultado_salvo %}{% else %}{% include "chat/_resultado.html" with resultado=item.resultado_salvo %}{% endif %}
+              {% else %}<p class="nota">Resultado indisponível nas suas permissões atuais.</p>{% endif %}
+            {% elif resultado and resultado_msg == m.pk %}
+              {% if resultado.consolidado %}{% include "chat/_consolidado.html" %}{% else %}{% include "chat/_resultado.html" %}{% endif %}
+            {% endif %}
+          </div>
           {% if item.tarefa %}{% include "chat/_tarefa.html" with tarefa=item.tarefa %}{% endif %}
         {% endif %}
         {% endwith %}
@@ -67,7 +75,7 @@
         <textarea id="campo-mensagem" name="mensagem" rows="1" maxlength="{{ form.fields.mensagem.max_length }}" placeholder="{% if conversa %}Continue a conversa…{% else %}Pergunte à IAtiva…{% endif %}" required data-campo></textarea>
         <div class="compositor-acoes"><span class="contexto-compositor">{% include "chat/_icone.html" with nome="cadeado" %}{% if conversa.tipo == TipoConversa.SETOR %}Conversa do setor{% elif conversa.tipo == TipoConversa.MESTRE %}Seus setores autorizados{% else %}Somente os dados que você pode consultar{% endif %}</span><button type="submit" class="enviar" aria-label="Enviar" data-botao-enviar>{% include "chat/_icone.html" with nome="enviar" %}</button></div>
       </div>
-      <div class="rodape-compositor"><span>Não envie CPF ou CNPJ. Histórico por 90 dias.</span><span class="dica-teclado"><kbd>Enter</kbd> enviar · <kbd>Shift + Enter</kbd> nova linha</span></div>
+      <div class="rodape-compositor"><span>Não envie CPF ou CNPJ. Resultados salvos no histórico.</span><span class="dica-teclado"><kbd>Enter</kbd> enviar · <kbd>Shift + Enter</kbd> nova linha</span></div>
     </form>
   {% else %}
     <p class="rodape-compositor somente-leitura">{% if erro %}{{ erro }}{% else %}Você pode ler esta conversa, mas não enviar mensagens.{% endif %}</p>

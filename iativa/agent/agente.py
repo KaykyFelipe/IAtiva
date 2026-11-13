@@ -631,10 +631,11 @@ def continuar_objetivo(o):
         prefixo = ("Depois da correção publicada, refiz o seu pedido. " if o.retomado
                    else "Continuando o seu pedido, sem você precisar pedir de novo. ")
         texto = prefixo + saida.texto
-        if saida.resultado is not None and saida.solicitacao is not None:
-            texto += "\n\nOs dados não ficam guardados fora da tela: use “Executar de novo” para vê-los."
-        return Mensagem.objects.create(conversa=c, papel=Papel.IA, texto=texto[:4000], ficha=saida.ficha,
-                                       solicitacao=saida.solicitacao)
+        msg = Mensagem.objects.create(conversa=c, papel=Papel.IA, texto=texto[:4000], ficha=saida.ficha,
+                                     solicitacao=saida.solicitacao)
+        from iativa.chat.resultados import guardar
+        guardar(msg, saida.resultado)
+        return msg
 
 
 # M25: pedidos sobre a lista inteira geram obrigação de cobertura verificada pelo backend.
@@ -705,7 +706,8 @@ def _agir(user, c, d, atual, defs, texto, provedor, entrada, objetivos, administ
             return Saida("De qual funcionário você quer o histórico de cargos e funções? Informe o nome.", ficha)
         try:
             resultado = historico_funcional.consultar(user, c, nome, periodo_da_mensagem(texto, timezone.localdate()),
-                interrompido=interrompido, filial=next((v for k, v in d.parametros if k == 'filial-analise'), None))
+                interrompido=interrompido, filial=next((v for k, v in d.parametros if k == 'filial-analise'), None),
+                tempo_estagio=historico_funcional.pede_tempo_estagio(texto))
         except PermissaoNegada as exc:
             return Saida(str(exc), ficha, observacao=Observacao(acao, SEM_PERMISSAO, "histórico não autorizado"))
         except ValidationError as exc:

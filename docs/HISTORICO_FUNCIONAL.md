@@ -14,8 +14,17 @@ O modelo escolhe `historico_cargo`, com o nome em `alvo`; o backend resolve os d
 resposta. A detecção de pedidos explícitos também impede que uma decisão de listar matrículas
 ou uma resposta "não vejo as linhas" encerre prematuramente a consulta.
 Continuações recuperam o nome fornecido pelo usuário nos critérios anteriores, sem enviar linhas
-do ERP ao modelo. Não se salva o histórico funcional nos registros de mensagens (a exceção M29
-de persistência de conclusões das tarefas não se aplica a esta consulta).
+do ERP ao modelo. Desde a M44, a tabela e a conclusão são salvas com a mensagem, sem expiração
+automática, respeitando as permissões atuais ao reabrir.
+
+## Tempo de estágio (M44)
+
+Pedido de duração de estágio usa a mesma ferramenta, mesmo que o modelo proponha apenas buscar
+matrículas. Classifica pelas descrições de função/cargo; não presume o significado de códigos
+de categoria. Calcula intervalos registrados entre eventos, encerramento do vínculo e data atual,
+por matrícula/filial. Meses são de calendário, com dias restantes e total de dias; não divide por 30.
+Cadastro de estágio sem eventos fornece duração do vínculo explicitamente como estimativa.
+Mudança atual sem data histórica de saída do estágio não permite inventar o término do intervalo.
 
 ## Limites de interpretação
 

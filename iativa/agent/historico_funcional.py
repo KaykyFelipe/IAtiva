@@ -1,10 +1,11 @@
 """Histórico funcional: nome → vínculos → histórico → descrições → conclusão.
 
-Resultados só na resposta; nunca no modelo ou no histórico persistente. Cada leitura reconfere
+Resultados nunca vão ao modelo; a camada do chat salva a apresentação autorizada na M44. Cada leitura reconfere
 setor, filial e restrições de tabela/campo e usa o compilador e validador existentes.
 """
 import re
 import unicodedata
+from calendar import monthrange
 from datetime import date, datetime
 
 from django.conf import settings
@@ -34,8 +35,13 @@ def norm(texto):
 
 def solicitado(texto):
     t = norm(texto)
-    return bool(re.search(r'carg|funcao|funcoes', t) and re.search(
+    return pede_tempo_estagio(texto) or bool(re.search(r'carg|funcao|funcoes', t) and re.search(
         r'histor|mud|anterior|recente|atual|qual|quais|linha do tempo|cargo e funcao', t))
+
+
+def pede_tempo_estagio(texto):
+    t = norm(texto)
+    return bool(re.search(r'estagi', t) and re.search(r'tempo|quanto|durac|meses|anos|dias|ficou|permane', t))
 
 
 def nome_contexto(user, conversa, texto, decisao):
@@ -44,6 +50,10 @@ def nome_contexto(user, conversa, texto, decisao):
     busca = next((v for k, v in decisao.parametros if k == 'texto-busca'), '')
     if busca:
         return busca.strip()
+    if pede_tempo_estagio(texto):
+        m = re.search(r'est[aá]gi\w*.*?\b(?:do|da|de)\s+(?:(?:funcion[aá]rio|colaborador|usu[aá]rio)\s+)?(.+)', texto, re.I)
+        if m and norm(m.group(1).strip(' .?!')) not in ('ele', 'ela', 'estagio'):
+            return m.group(1).strip(' .?!')
     m = re.search(r'(?:(?:hist[oó]rico|qual|quais).*?(?:cargo|fun[cç][aã]o|fun[cç][oõ]es).*?)\s+(?:do|da|de)\s+(.+)', texto, re.I)
     if m:
         return re.split(r'\s+(?:desde|a partir de|em todas as filiais|nas filiais|na filial|nos [uú]ltimos|no per[ií]odo)\b',
@@ -100,6 +110,8 @@ class Leitura:
         self.user, self.setor, self.cat = user, setor, cat
         self.interrompido = interrompido
         self.n = 0
+        self.campos = {}
+        self.filiais = set()
 
     def consultar(self, alias, filial, campos, filtros=(), obrigatorios=(), limite=500):
         from .agente import Interrompido
@@ -122,6 +134,8 @@ class Leitura:
         if not set(obrigatorios) <= disponiveis:
             raise ValidationError(f'Faltam campos autorizados para consultar {alias}.')
         campos = [c for c in campos if c in disponiveis]
+        self.campos.setdefault(alias, set()).update(campos + [f.campo.nome for f in filtros])
+        self.filiais.add(filial)
         if not {f.campo.nome for f in filtros} <= disponiveis:
             raise PermissaoNegada('Um campo necessário ao filtro não está autorizado.')
         plano = Plano('historico-funcional', base=alias, filial=filial,
@@ -141,7 +155,7 @@ class Leitura:
         return [dict(zip(campos, (str(v or '').strip() for v in linha))) for linha in linhas]
 
 
-def consultar(user, conversa, nome, periodo=None, interrompido=None, filial=None):
+def consultar(user, conversa, nome, periodo=None, interrompido=None, filial=None, tempo_estagio=False):
     if len(nome.strip()) < 3 or not padrao_busca(nome):
         raise ValidationError('Informe o nome do funcionário para consultar o histórico de cargos e funções.')
     if isinstance(periodo, str) and periodo:
@@ -170,12 +184,14 @@ def consultar(user, conversa, nome, periodo=None, interrompido=None, filial=None
                 ['RA_MAT', 'RA_NOME', 'RA_ADMISSA', 'RA_DEMISSA', 'RA_CODFUNC'], limite=50)
             vinculos += [(filial, r) for r in rows]
         nomes = {norm(r['RA_NOME']).strip() for _, r in vinculos}
+        escopo_inicial = {"setor": setor.pk, "filiais": sorted(leitor.filiais),
+                          "campos": {a: sorted(cs) for a, cs in leitor.campos.items()}}
         if len(nomes) > 1:
             opcoes = sorted({r['RA_NOME'] for _, r in vinculos})
             return Resultado(True, 'Encontrei nomes diferentes. Informe o nome completo de qual pessoa deseja o histórico.',
-                             colunas=['Nome encontrado'], tipos=['texto'], linhas=[[n] for n in opcoes])
+                             colunas=['Nome encontrado'], tipos=['texto'], linhas=[[n] for n in opcoes], escopo=escopo_inicial)
         if not vinculos:
-            return Resultado(True, 'Nenhum vínculo encontrado para esse nome nas filiais autorizadas.')
+            return Resultado(True, 'Nenhum vínculo encontrado para esse nome nas filiais autorizadas.', escopo=escopo_inicial)
         if len(vinculos) > 30:
             raise ValidationError('Há muitos vínculos com esse nome; informe um nome mais específico.')
         avisos, cache = [], {}
@@ -197,7 +213,7 @@ def consultar(user, conversa, nome, periodo=None, interrompido=None, filial=None
                     cache[k] = f'código {codigo} (descrição indisponível)'
             return cache[k]
 
-        eventos, cadastros = [], []
+        eventos, cadastros, historicos = [], [], {}
         hoje = timezone.localdate()
         for filial, r in vinculos:
             andamento.avisar('Consultando alterações de função/cargo das matrículas encontradas')
@@ -208,10 +224,12 @@ def consultar(user, conversa, nome, periodo=None, interrompido=None, filial=None
             hs = leitor.consultar('SR7', filial,
                 ['R7_MAT', 'R7_DATA', 'R7_SEQ', 'R7_FUNCAO', 'R7_DESCFUN', 'R7_CARGO', 'R7_DESCCAR', 'R7_CC'],
                 filtros, ['R7_MAT', 'R7_DATA'])
+            historicos[(filial, r['RA_MAT'])] = []
             for h in hs:
                 func = h.get('R7_DESCFUN') or descricao('SRJ', filial, h.get('R7_FUNCAO'), 'RJ_FUNCAO', 'RJ_DESC')
                 cargo = h.get('R7_DESCCAR') or descricao('SQ3', filial, h.get('R7_CARGO'), 'Q3_CARGO', 'Q3_DESCSUM', h.get('R7_CC', ''))
                 d = _data(h['R7_DATA'])
+                historicos[(filial, r['RA_MAT'])].append((d, h.get('R7_SEQ', ''), func, cargo))
                 if not d:
                     avisos.append('Há registros históricos com data inválida; não foram usados para ordenar alterações.')
                 eventos.append((d or date.min, h.get('R7_SEQ', ''), [filial, r['RA_MAT'], _fmt(h['R7_DATA']),
@@ -249,7 +267,53 @@ def consultar(user, conversa, nome, periodo=None, interrompido=None, filial=None
                      'Registros da SR7 podem incluir alterações salariais sem troca de função. Não se presume promoção ou efetivação.',
                      'Os cadastros mostram a função atual/última de cada vínculo; sua admissão não é a data comprovada da mudança.',
                      f'Consultado em {timezone.localtime():%d/%m/%Y %H:%M}.', *sorted(set(avisos))]
+        if tempo_estagio:
+            resumo = _resumir_estagio(cadastros, historicos, hoje) + ' ' + resumo
         registrar('consulta_executada', 'agente', usuario=user, setor=setor, estado_novo='historico_funcional',
                   resultado='ok', linhas=len(eventos))
         return Resultado(True, resumo, colunas=['Filial', 'Matrícula', 'Data', 'Função', 'Cargo', 'Origem / interpretação'],
-                         tipos=['texto'] * 6, linhas=[e[2] for e in eventos], premissas=premissas)
+                         tipos=['texto'] * 6, linhas=[e[2] for e in eventos], premissas=premissas,
+                         escopo={"setor": setor.pk, "filiais": sorted(leitor.filiais),
+                                 "campos": {a: sorted(cs) for a, cs in leitor.campos.items()}})
+
+
+def _duracao(inicio, fim):
+    meses = (fim.year - inicio.year) * 12 + fim.month - inicio.month
+    def avancar(n):
+        ano, mes = divmod(inicio.year * 12 + inicio.month - 1 + n, 12)
+        return date(ano, mes + 1, min(inicio.day, monthrange(ano, mes + 1)[1]))
+    if avancar(meses) > fim:
+        meses -= 1
+    dias = (fim - avancar(meses)).days
+    partes = ([f"{meses} {'mês' if meses == 1 else 'meses'}"] if meses else [])
+    if dias or not partes:
+        partes.append(f"{dias} {'dia' if dias == 1 else 'dias'}")
+    return ' e '.join(partes) + f" ({(fim - inicio).days} dias corridos)"
+
+
+def _resumir_estagio(cadastros, historicos, hoje):
+    frases = []
+    for filial, r, func, cargo in cadastros:
+        inicio, demissao = _data(r['RA_ADMISSA']), _data(r['RA_DEMISSA'])
+        fim = min(hoje, demissao) if demissao else hoje
+        if not inicio or inicio > fim or (r['RA_DEMISSA'] and not demissao):
+            continue
+        hs = sorted([h for h in historicos[(filial, r['RA_MAT'])] if h[0] and h[0] <= fim], key=lambda h: (h[0], h[1]))
+        intervalos = []
+        for i, h in enumerate(hs):
+            a, b = max(inicio, h[0]), min(fim, hs[i + 1][0]) if i + 1 < len(hs) else fim
+            if i + 1 == len(hs) and 'estagi' not in norm(func + ' ' + cargo):
+                continue  # O cadastro mudou sem evento de saída do estágio: não inventar sua data.
+            if 'estagi' in norm(h[2] + ' ' + h[3]) and a < b:
+                if intervalos and intervalos[-1][1] == a:
+                    intervalos[-1] = (intervalos[-1][0], b)
+                else:
+                    intervalos.append((a, b))
+        estimado = False
+        if not hs and 'estagi' in norm(func + ' ' + cargo):
+            intervalos, estimado = [(inicio, fim)], True
+        for a, b in intervalos:
+            base = 'Duração do vínculo cadastrado como estágio (estimativa, sem histórico que comprove toda a permanência)' if estimado else 'Tempo de estágio registrado no histórico'
+            frases.append(f"{r['RA_NOME']} — {base}: {_duracao(a, b)}, de {a:%d/%m/%Y} a {b:%d/%m/%Y}, "
+                          f"matrícula {r['RA_MAT']}, filial {filial}.")
+    return ' '.join(frases) or 'Não há um intervalo de estágio comprovável nas funções/descrições disponíveis; as matrículas e mudanças encontradas estão na tabela.'

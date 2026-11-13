@@ -1,7 +1,7 @@
 """Contextos de conversa e de solicitação (Etapa 2).
 
-Guardam somente dados estruturados: dono, setor, domínio, código do objetivo e estado.
-Não existe campo para o texto das mensagens, SQL ou resultados (PEDIDO_INICIAL §4 e §14).
+M8 inclui mensagens; M44 autoriza snapshots de apresentação dos resultados ligados a elas.
+SQL e credenciais nunca são persistidos.
 """
 from django.conf import settings
 from django.db import models
@@ -43,6 +43,7 @@ class ConversationContext(models.Model):
     criado_em = models.DateTimeField(auto_now_add=True)
     atualizado_em = models.DateTimeField(auto_now=True)
     encerrada_em = models.DateTimeField(null=True, blank=True)
+    preservar_historico = models.BooleanField(default=False, db_default=False)  # M44: resultados não expiram
 
     class Meta:
         verbose_name = "conversa"
@@ -66,13 +67,14 @@ class Papel(models.TextChoices):
 
 
 class Mensagem(models.Model):
-    """Histórico da conversa (M8). Guarda texto e a ficha de critérios; nunca resultados nem SQL."""
+    """Histórico: texto/ficha (M8) e snapshot autorizado da apresentação (M44), nunca SQL."""
 
     conversa = models.ForeignKey(ConversationContext, on_delete=models.CASCADE, related_name="mensagens")
     papel = models.CharField(max_length=10, choices=Papel.choices)
     autor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
     texto = models.TextField(max_length=4000)
     ficha = models.JSONField(default=dict, blank=True)
+    resultado = models.JSONField(default=dict, blank=True, null=True)  # nullable para a versão antiga durante drenagem
     solicitacao = models.ForeignKey(
         "RequestContext", on_delete=models.SET_NULL, null=True, blank=True, related_name="mensagens"
     )
@@ -124,3 +126,8 @@ class PedidoInterrompido(models.Model):
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=["pedido", "usuario"], name="pedido_interrompido_unico")]
+
+
+class PreferenciaChat(models.Model):
+    usuario = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="preferencia_chat")
+    layout = models.JSONField(default=dict)

@@ -37,16 +37,16 @@ class Command(BaseCommand):
             "valores_dado_pessoal": ParameterBinding.objects.filter(expira_em__lte=agora),
             "solicitacoes": RequestContext.objects.filter(encerrado_em__lte=limite),
             "conversas": ConversationContext.objects.annotate(n=Count("solicitacoes")).filter(
-                n=0, atualizado_em__lte=limite
-            ),
+                n=0, atualizado_em__lte=limite, preservar_historico=False
+            ).exclude(tarefas__isnull=False),
             # M8: conversas individuais/mestre paradas além do prazo (com histórico e solicitações).
             "conversas_paradas": ConversationContext.objects.exclude(tipo=TipoConversa.SETOR).filter(
-                atualizado_em__lte=limite_conversa
-            ),
+                atualizado_em__lte=limite_conversa, preservar_historico=False
+            ).exclude(tarefas__isnull=False),
             # Conversa do setor é permanente; as mensagens antigas é que expiram.
             "mensagens_setor": Mensagem.objects.filter(
-                conversa__tipo=TipoConversa.SETOR, criado_em__lte=limite_conversa
-            ),
+                conversa__tipo=TipoConversa.SETOR, criado_em__lte=limite_conversa, conversa__preservar_historico=False
+            ).exclude(conversa__tarefas__isnull=False),
         }
         if cfg.get("auditoria_dias"):
             alvos["auditoria"] = OperationAudit.objects.filter(
@@ -62,10 +62,11 @@ class Command(BaseCommand):
                 if nome == "conversas":
                     # Conta de novo após remover solicitações (conversas podem ter ficado vazias).
                     qs = ConversationContext.objects.annotate(n=Count("solicitacoes")).filter(
-                        n=0, atualizado_em__lte=limite
+                        n=0, atualizado_em__lte=limite, preservar_historico=False
                     )
                     qs = ConversationContext.objects.filter(pk__in=list(qs.values_list("pk", flat=True)))
                     qs = qs.exclude(tipo=TipoConversa.SETOR)
+                    qs = qs.exclude(tarefas__isnull=False)
                 contagens[nome] = qs.count()
                 qs.delete()
             if not simular:

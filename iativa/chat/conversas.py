@@ -4,10 +4,11 @@ Regras de acesso (todas no backend):
 - individual e mestre: só o dono; o mestre exige "consultar" em mais de um setor;
 - setor: lê quem tem "consultar" ou "ler memória" no setor; escreve quem é do setor e tem "consultar".
 
-Guarda texto e fichas de critérios. Nunca resultados de consultas nem SQL.
+Guarda texto, fichas e snapshots de apresentação autorizados na M44. Nunca SQL.
 """
 from django.core.exceptions import ValidationError
 from django.db import transaction
+from django.db.models import OuterRef, Subquery
 from django.utils import timezone
 
 from iativa.accounts.authz import Permissao, PermissaoNegada, setor_do_usuario, setores_autorizados, tem_permissao
@@ -93,7 +94,8 @@ def lateral(user) -> dict:
     hoje = timezone.localdate()
     individuais = ConversationContext.objects.filter(
         tipo=T.INDIVIDUAL, usuario=user, encerrada_em__isnull=True, mensagens__isnull=False
-    ).distinct().order_by("-atualizado_em")[:60]
+    ).annotate(estado_ativo=Subquery(RequestContext.objects.filter(conversa_id=OuterRef("pk"),
+        estado__in=list(EM_PREPARACAO)).order_by("-id").values("estado")[:1])).distinct().order_by("-atualizado_em")[:60]
     grupos: list[tuple[str, list]] = []
     for c in individuais:
         rotulo = _grupo(timezone.localdate(c.atualizado_em), hoje)
@@ -122,6 +124,8 @@ def renomear(user, conversa_id, titulo: str) -> ConversationContext:
 
 
 def _estado_lateral(c) -> str:
+    if hasattr(c, "estado_ativo"):
+        return "pronta" if c.estado_ativo == "pronta" else "pendente" if c.estado_ativo else ""
     s = c.solicitacoes.filter(estado__in=list(EM_PREPARACAO)).order_by("-id").first()
     if s is None:
         return ""
@@ -216,6 +220,8 @@ def enviar(user, c: ConversationContext, texto: str, provedor=None, pedido=None)
         andamento.avisar("Escrevendo a resposta")
     msg = Mensagem.objects.create(conversa=c, papel=Papel.IA, texto=saida.texto[:MAX_TEXTO], ficha=saida.ficha,
                                   solicitacao=saida.solicitacao)
+    from .resultados import guardar
+    guardar(msg, saida.resultado)
     _tocar(c, texto)
     return msg, saida.resultado
 
@@ -250,7 +256,7 @@ def _executar_e_registrar(user, c, s):
     if res.ok:
         # M8: o histórico guarda só que a consulta rodou e quantas linhas; nunca os dados.
         texto = (f"Consulta executada em {timezone.localtime():%d/%m/%Y às %H:%M}: {len(res.linhas)} linha(s). "
-                 "Os dados não ficam salvos; use “Executar de novo” para ver outra vez.")
+                 "Resultado salvo no histórico; use “Executar de novo” para atualizar os dados.")
     else:
         texto = res.mensagem
     ficha = {"tipo": "executada" if res.ok else "falha_execucao", "estado": res.estado,
@@ -263,6 +269,8 @@ def _executar_e_registrar(user, c, s):
         texto += f" Setores: {len(exibido.blocos)}."
     msg = Mensagem.objects.create(conversa=c, papel=Papel.IA, texto=texto[:MAX_TEXTO], ficha=ficha,
                                   solicitacao=res.solicitacao)
+    from .resultados import guardar
+    guardar(msg, exibido)
     _tocar(c, "")
     return msg, exibido
 
@@ -347,6 +355,7 @@ def mensagens_com_interacao(user, c: ConversationContext) -> list[dict]:
     """Histórico para a tela. Só a última ficha de cada solicitação em andamento do próprio
     usuário fica editável; as anteriores aparecem como registro."""
     from iativa.agent.aprendizado import pode_aprender, pode_aprovar
+    from .resultados import restaurar
     from iativa.agent.models import ConsultaModelo
 
     msgs = list(c.mensagens.select_related("autor", "solicitacao"))
@@ -371,6 +380,7 @@ def mensagens_com_interacao(user, c: ConversationContext) -> list[dict]:
         ultima_dono = bool(s and ultima_por_solicitacao.get(s.pk) == m.pk and s.usuario_id == user.pk)
         out.append({
             "m": m,
+            "resultado_salvo": restaurar(user, m.resultado),
             "proprio": m.autor_id == user.pk,
             "editavel": ultima_dono and s.estado == "aguardando_parametros",
             "executavel": ultima_dono and s.estado == "pronta",

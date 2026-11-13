@@ -1,12 +1,16 @@
 """Chat com histórico (M8): conversas individuais, do setor e mestre.
 
-O acesso é sempre conferido em `conversas.py`. O histórico guarda texto e fichas de critérios,
-nunca resultados de consultas.
+O acesso é sempre conferido em `conversas.py`. Desde M44, o histórico inclui a apresentação
+autorizada das tabelas, com acesso reconferido na camada de snapshots.
 """
 import uuid
+import hashlib
+import json
 
 from django.core.exceptions import ValidationError
-from django.http import Http404, HttpResponse
+from django.http import Http404, HttpResponse, JsonResponse
+from django.template.loader import render_to_string
+from django.db.models import Max, Q
 from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.views.decorators.http import require_GET, require_POST
@@ -18,7 +22,7 @@ from iativa.memory.models import ParameterDefinition, TipoValor
 from . import conversas
 from .estados import TransicaoInvalida
 from .forms import MessageForm
-from .models import ConversationContext, TipoConversa
+from .models import ConversationContext, TipoConversa, PreferenciaChat
 
 FRASES_INICIO = (
     "O que vamos descobrir hoje?", "Como posso ajudar você hoje?",
@@ -95,7 +99,8 @@ def conversa(request, conversa_id):
 
 
 def _layout(request):
-    l = request.session.get("layout", {})
+    pref = PreferenciaChat.objects.filter(usuario=request.user).first()
+    l = pref.layout if pref else request.session.get("layout", {})
     largura = l.get("largura", 278)
     return {"largura": largura if isinstance(largura, int) and 224 <= largura <= 430 else 278,
             "ampla": bool(l.get("ampla")), "recolhida": bool(l.get("recolhida"))}
@@ -108,9 +113,35 @@ def layout(request):
         largura = max(224, min(430, int(request.POST.get("largura", 278))))
     except ValueError:
         largura = 278
-    request.session["layout"] = {"largura": largura, "ampla": bool(request.POST.get("ampla")),
-                                 "recolhida": bool(request.POST.get("recolhida"))}
+    dados = {"largura": largura, "ampla": request.POST.get("ampla") == "1",
+             "recolhida": request.POST.get("recolhida") == "1"}
+    PreferenciaChat.objects.update_or_create(usuario=request.user, defaults={"layout": dados})
     return HttpResponse(status=204)
+
+
+@require_GET
+def sincronizar(request):
+    """Polling curto entre sessões: só metadados/HTML autorizado, sem executar consultas."""
+    cid = request.GET.get("conversa")
+    c = _obter(request, cid) if cid and cid.isdecimal() and int(cid) else None
+    visiveis = ConversationContext.objects.filter(encerrada_em__isnull=True).filter(
+        Q(usuario=request.user) | Q(tipo=TipoConversa.SETOR, setor_id__in=conversas.setores_leitura(request.user)))
+    if not conversas.pode_mestre(request.user):
+        visiveis = visiveis.exclude(tipo=TipoConversa.MESTRE)
+    registros = list(visiveis.annotate(ultima=Max("mensagens__id"))
+                     .order_by("pk").values_list("pk", "titulo", "atualizado_em", "ultima"))
+    # Inclui as políticas/restrições para invalidar a apresentação quando o acesso muda.
+    from iativa.accounts.authz import politicas_vigentes
+    from iativa.metadata.models import RestricaoMetadado
+    versao = hashlib.sha256(json.dumps([registros, list(politicas_vigentes(request.user).values()),
+        list(RestricaoMetadado.objects.order_by("id", "setores_permitidos__pk").values(
+            "id", "tabela", "campo", "ativo", "setores_permitidos__pk")), cid],
+        default=str, sort_keys=True).encode()).hexdigest()
+    if request.GET.get("versao") == versao:
+        return JsonResponse({"versao": versao})
+    ctx = _contexto(request, c)
+    return JsonResponse({"versao": versao, "lateral": render_to_string("chat/_lateral.html", ctx, request),
+                         "conversa": render_to_string("chat/_conversa.html", ctx, request) if c else ""})
 
 
 @require_POST

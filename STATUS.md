@@ -4,6 +4,15 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **plano proposto em `PLANO.md` §8, aguardando aprovação.** Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M44 — sincronização, tabelas permanentes, layout e tempo de estágio (2026-11-13)
+
+- Chats e mensagens autorizados sincronizados entre sessões por polling de 2 segundos; sem executar consultas ao ERP para atualizar a tela. Preserva compositor, busca, grupos e posição de leitura; resposta de navegação antiga é descartada.
+- Tabelas passam a ser snapshots ligados à mensagem, incluindo resultados do worker e diagnósticos/consolidados. Texto e ficha enviados ao modelo continuam sem linhas. CPF/CNPJ são omitidos dos snapshots; SQL não é serializado. Leitura reconfere políticas, filiais e restrições de campos. Conversas com resultados ou tarefas não expiram automaticamente. Resultados antigos descartados exigem reexecução única para passar a ficar salvos.
+- Layout fica na conta do usuário, separado da sessão. Largura aplicada pelo JavaScript permitido pela CSP, com gravação ao encerrar arraste/sair da página. Mantido suporte ao layout antigo da sessão.
+- Pedido de tempo de estágio usa a consulta encadeada, com tabela de cargos e duração por vínculo em meses de calendário/dias. Histórico registrado e estimativa pelo cadastro são diferenciados; homônimos, lacunas, datas inválidas/futuras e mudança sem data comprovada não viram duração inventada.
+- Migração 0005 do chat é aditiva: JSON opcional e flag com padrão no próprio banco, tolerando gravações da versão antiga durante a drenagem. Navegador real confirmou sincronização, rascunho preservado, CSP e largura após recarregar, com dados sintéticos.
+- Validação: 759 testes aprovados e 10 pulados no Windows; 16 novos casos da M44. Django check sem problemas, migrações consistentes e teste de navegador aprovado. Nenhum resultado real registrado nesta documentação.
+
 ## Revisão M43 — correções das mudanças M40–M42 (2026-11-13)
 
 - Ranking geral reúne todos os grupos de cada filial antes de aplicar top N; se o teto de leitura impedir a cobertura, o resultado não é validado como ranking geral. Limites de leitura e permissões preservados.

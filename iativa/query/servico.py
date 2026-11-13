@@ -34,7 +34,7 @@ from iativa.accounts.filiais import TODAS, rotulo
 
 from .compilador import PlanoInvalido, compilar, xfilial
 from .executor import TempoEsgotado, ValorRecusado, executar
-from .plano import REGRAS, medidas_do_plano, montar, plano_chave, plano_total
+from .plano import Campo, REGRAS, medidas_do_plano, montar, plano_chave, plano_total
 from .validador import ConsultaRecusada, validar
 
 # Situação do resultado (observação estruturada para o agente).
@@ -92,6 +92,7 @@ class Resultado:
     estado: str = ""
     solicitacao: RequestContext | None = None
     duracao_ms: int = 0
+    escopo: dict = field(default_factory=dict)
 
     @property
     def cabecalho(self):
@@ -440,7 +441,20 @@ def executar_solicitacao(user, s: RequestContext) -> Resultado:
     res.ok, res.colunas, res.tipos, res.linhas = True, colunas, tipos, formatadas
     res.premissas, res.truncado, res.total, res.total_valor = plano.premissas, truncado, total, total_valor
     res.totais, res.subtotal = totais, subtotal
+    res.escopo = escopo_do_plano(plano, s.setor_id, filiais)
     return res
+
+
+def escopo_do_plano(plano, setor_id, filiais):
+    campos = {}
+    aliases = {"e1": plano.base, **{j.alias: j.tabela for j in plano.juncoes}}
+    usados = [c.campo for c in plano.colunas] + [f.campo for f in plano.filtros]
+    for j in plano.juncoes:
+        for a, b in j.pares:
+            usados.extend([Campo(j.alias, a), Campo("e1", b)])
+    for campo in usados:
+        campos.setdefault(aliases[campo.alias], set()).add(campo.nome)
+    return {"setor": setor_id, "filiais": list(filiais), "campos": {a: sorted(ns) for a, ns in campos.items()}}
 
 
 def _pode_mesclar(plano):

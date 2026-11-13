@@ -48,6 +48,8 @@ Hipóteses a confirmar com a equipe do ERP: SE1 (títulos), SA1 (clientes, chave
 
 ## 4. Persistência e retenção (proposta)
 
+**Atualização M44 (Diego, 2026-11-13):** a apresentação dos resultados (tabela, resumo e premissas) é salva com a mensagem no banco da aplicação. Conversas com resultados ou tarefas não expiram automaticamente. O acesso ao snapshot reconfere permissões atuais, filiais e restrições; CPF/CNPJ são omitidos. SQL, credenciais e armazenamento do navegador continuam proibidos. Esta decisão substitui a proibição de persistir resultados e o prazo da conversa nos casos indicados abaixo; não altera a retenção de parâmetros pessoais ou auditoria.
+
 | Item | Persistir? | Acesso | Retenção |
 |---|---|---|---|
 | Objetivo estruturado da solicitação | Sim | Dono; setor se compartilhado | 90 dias após encerrar |

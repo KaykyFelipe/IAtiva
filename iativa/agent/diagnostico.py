@@ -196,8 +196,10 @@ def investigar(user, s, inicial, interrompido=None):
                     linhas += [[rotulo(filial)] + [_fmt(v, t) for v, t in zip(row, comp.tipos)] for row in rows]
                     brutas += [dict(zip(comp.rotulos, row)) for row in rows]
                 evidencias[titulo] = brutas
+                from iativa.query.servico import escopo_do_plano
                 out.blocos.append(Bloco(titulo, Resultado(True, titulo, colunas, tipos, linhas,
-                    premissas=list(base.premissas) + ['Critérios originais preservados; hipótese diagnóstica, sem aprovação automática.'])))
+                    premissas=list(base.premissas) + ['Critérios originais preservados; hipótese diagnóstica, sem aprovação automática.'],
+                    escopo=escopo_do_plano(p, s.setor_id, filiais))))
             except PermissaoNegada:
                 raise
             except Exception as exc:

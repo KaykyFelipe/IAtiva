@@ -95,7 +95,7 @@ usuário, como sempre.
 
 - A exigência depende do detector ou do que o modelo declara em `entrega`; se os dois errarem para
   menos, o pedido pode encerrar cedo.
-- Resultado obtido pelo worker numa continuação não aparece sozinho na tela (não é gravado).
+- Desde a M44, resultados do worker são gravados com a mensagem e aparecem pela sincronização automática da conversa, respeitando as permissões atuais.
 - Capacidade que exija mudança grande, regra de negócio ou migração não é corrigida sozinha.
 - A manutenção com IA real (Claude/ChatGPT) corrigindo um incidente de capacidade não foi exercitada
   no teste isolado.

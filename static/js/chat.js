@@ -4,22 +4,27 @@
   const grupos = new Map();
   let busca = "";
   let larguraLateral = parseInt(app.dataset.largura, 10) || 278;
+  // A CSP bloqueia o style inline vindo do HTML; aplicar a largura pelo script autorizado.
+  app.style.setProperty("--largura-lateral", larguraLateral + "px");
 
   let salvarTimer = null;
-  function salvarLayout() {
+  function salvarLayout(imediato = false) {
     // Lembrado na sessão do servidor (só layout, nenhum dado), para valer ao trocar de conversa.
     clearTimeout(salvarTimer);
-    salvarTimer = setTimeout(() => {
+    const gravar = () => {
       fetch(app.dataset.layoutUrl, {
-        method: "POST", headers: {"X-CSRFToken": csrf(), "Content-Type": "application/x-www-form-urlencoded"},
+        method: "POST", keepalive: true, credentials: "same-origin",
+        headers: {"X-CSRFToken": csrf(), "Content-Type": "application/x-www-form-urlencoded"},
         body: new URLSearchParams({
           largura: larguraLateral,
           ampla: app.classList.contains("leitura-ampla") ? "1" : "",
           recolhida: app.classList.contains("lateral-recolhida") ? "1" : "",
         }),
       }).catch(() => {});
-    }, 300);
+    };
+    if (imediato) gravar(); else salvarTimer = setTimeout(gravar, 300);
   }
+  window.addEventListener("pagehide", () => { if (salvarTimer) salvarLayout(true); });
 
   function saudacao(hora) {
     return hora >= 5 && hora < 12 ? "Bom dia" : hora >= 12 && hora < 18 ? "Boa tarde" : "Boa noite";
@@ -130,7 +135,7 @@
   });
   function encerrarArraste() {
     const divisor = document.querySelector("[data-redimensionar].arrastando");
-    if (divisor) divisor.classList.remove("arrastando");
+    if (divisor) { divisor.classList.remove("arrastando"); salvarLayout(true); }
     document.body.classList.remove("redimensionando");
   }
   document.addEventListener("pointerup", encerrarArraste);
@@ -422,26 +427,9 @@
     prepararCampo();
     atualizarBotaoTarefa();
   });
-  // Resultados anteriores continuam na tela ao mandar outra mensagem. Ficam só na memória da
-  // página (somem ao recarregar): o servidor não guarda resultados (R3).
-  let resultadosAnteriores = new Map();
-  document.body.addEventListener("htmx:beforeSwap", () => {
-    resultadosAnteriores = new Map();
-    document.querySelectorAll("[data-resultado-de]").forEach((el) => {
-      if (el.childElementCount) resultadosAnteriores.set(el.dataset.resultadoDe, Array.from(el.childNodes));
-    });
-  });
-  function restaurarResultados() {
-    resultadosAnteriores.forEach((nos, id) => {
-      const lugar = document.querySelector(`[data-resultado-de="${CSS.escape(id)}"]`);
-      if (lugar && !lugar.childElementCount) { lugar.append(...nos); lugar.classList.add("anterior"); }
-    });
-    resultadosAnteriores = new Map();
-  }
   document.body.addEventListener("htmx:afterSwap", (e) => {
     if (e.detail && e.detail.target && e.detail.target.id === "atividade-fixa") { atualizarBotaoTarefa(); return; }
     if (e.detail && e.detail.target && e.detail.target.classList && e.detail.target.classList.contains("tarefa-card")) return;
-    restaurarResultados();
     if (atual && !atual.form.isConnected) { atual = null; pararAcompanhamento(); }
     atualizarBotaoTarefa();
     atualizarSaudacao();
@@ -452,4 +440,45 @@
   setInterval(atualizarSaudacao, 60000);
   document.addEventListener("visibilitychange", () => { if (!document.hidden) atualizarSaudacao(); });
   window.matchMedia("(max-width: 680px)").addEventListener("change", () => app.classList.remove("menu-aberto"));
+
+  let sincronizando = false, versaoRemota = "";
+  async function sincronizar() {
+    const area = document.getElementById("conversa");
+    if (document.hidden || atual || sincronizando || document.body.classList.contains("redimensionando") ||
+        document.querySelector(".renomeando") || !app.dataset.syncUrl) return;
+    sincronizando = true;
+    try {
+      const qs = new URLSearchParams({ conversa: area ? area.dataset.conversaId : "0", versao: versaoRemota });
+      const r = await fetch(app.dataset.syncUrl + "?" + qs, { credentials: "same-origin", cache: "no-store" });
+      if (!r.ok || r.redirected || atual || area !== document.getElementById("conversa")) return;
+      const dados = await r.json();
+      if (atual || area !== document.getElementById("conversa")) return;
+      const lateralOcupada = document.getElementById("lateral").contains(document.activeElement);
+      if (dados.lateral && !lateralOcupada) {
+        const doc = new DOMParser().parseFromString(dados.lateral, "text/html");
+        const novo = doc.getElementById("lateral");
+        const antigo = document.getElementById("lateral");
+        const nav = antigo.querySelector("nav");
+        const scroll = nav ? nav.scrollTop : 0;
+        antigo.replaceWith(novo);
+        if (window.htmx) htmx.process(novo);
+        prepararLateral();
+        if (novo.querySelector("nav")) novo.querySelector("nav").scrollTop = scroll;
+      }
+      if (dados.conversa && area) {
+        const doc = new DOMParser().parseFromString(dados.conversa, "text/html");
+        const mensagens = area.querySelector(".mensagens"), novas = doc.querySelector(".mensagens");
+        const rolagem = area.querySelector("[data-rolagem]");
+        const noFim = rolagem.scrollHeight - rolagem.scrollTop - rolagem.clientHeight < 100;
+        if (mensagens && novas) { mensagens.replaceWith(novas); if (window.htmx) htmx.process(novas); }
+        area.querySelector("h1").textContent = doc.querySelector("h1").textContent;
+        if (noFim) rolagem.scrollTop = rolagem.scrollHeight;
+      }
+      versaoRemota = lateralOcupada ? "" : dados.versao;
+    } catch (_) { /* indisponibilidade transitória: tentar no próximo ciclo */ }
+    finally { sincronizando = false; }
+  }
+  document.body.addEventListener("htmx:afterSwap", () => { versaoRemota = ""; });
+  setInterval(sincronizar, 2000);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) sincronizar(); });
 })();

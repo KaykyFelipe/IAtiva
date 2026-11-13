@@ -246,7 +246,7 @@ def test_repetir_cria_nova_com_mesmos_valores(ana):
     assert r.tipo == "pronta" and nova.pk != s.pk
 
 
-def test_executar_pelo_chat_mostra_resultado_sem_salvar(client, ana):
+def test_executar_pelo_chat_salva_resultado_no_historico_m44(client, ana):
     from django.urls import reverse
 
     from iativa.chat.models import ConversationContext, Mensagem
@@ -257,9 +257,10 @@ def test_executar_pelo_chat_mostra_resultado_sem_salvar(client, ana):
     assert "CLIENTE SINTETICO" in html
     c = ConversationContext.objects.get()
     assert "CLIENTE SINTETICO" not in repr(list(Mensagem.objects.values_list("texto", "ficha")))
-    # Reabrir não mostra os dados; oferece executar de novo.
+    # M44: a tabela original permanece e executar de novo continua disponível para atualizar.
     html = client.get(reverse("chat:conversa", args=[c.pk])).content.decode()
-    assert "CLIENTE SINTETICO" not in html and "Executar de novo" in html
+    assert "CLIENTE SINTETICO" in html and "Executar de novo" in html
+    assert Mensagem.objects.exclude(resultado={}).exclude(resultado=None).exists()
     s = c.solicitacoes.get()
     html = client.post(reverse("chat:executar_de_novo", args=[c.pk, s.pk]), HTTP_HX_REQUEST="true").content.decode()
     assert "CLIENTE SINTETICO" in html and c.solicitacoes.count() == 2

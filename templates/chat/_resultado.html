@@ -1,4 +1,4 @@
-{# Resultado da consulta: existe só nesta resposta. Não é salvo no histórico. #}
+{# Apresentação do resultado ao vivo ou do snapshot autorizado da M44. #}
 <div class="msg ia resultado">
   <p><strong>{{ resultado.mensagem }}</strong></p>
   {% if resultado.linhas %}
@@ -19,5 +19,5 @@
       <ul>{% for p in resultado.premissas %}<li>{{ p }}</li>{% endfor %}</ul>
     </details>
   {% endif %}
-  <p class="nota">Resposta e dados calculados agora, nesta consulta. Não ficam salvos: ao reabrir a conversa, use “Executar de novo” para consultar outra vez.</p>
+  <p class="nota">Resultado salvo no histórico, com os dados da execução original. Use “Executar de novo” para atualizar.</p>
 </div>

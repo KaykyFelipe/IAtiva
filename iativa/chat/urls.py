@@ -20,6 +20,7 @@ urlpatterns = [
     path("mestre/", views.mestre, name="mestre"),
     path("memoria/", views.memoria, name="memoria"),
     path("layout/", views.layout, name="layout"),
+    path("sincronizar/", views.sincronizar, name="sincronizar"),
     path("parar/", views.parar, name="parar"),
     path("memoria/decidir/", views.memoria_decidir, name="memoria_decidir"),
     path("tarefa/<int:tarefa_id>/", views.tarefa, name="tarefa"),
