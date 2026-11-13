@@ -10,6 +10,8 @@
 - Regra de faturamento escolhida por Diego: itens de saída cuja TES gera duplicata.
 - Ciclo: a consulta criada numa etapa fica disponível na seguinte; ação repetida pede outra estratégia; "responda e guarde" faz as duas coisas. Permissão geral (TI) tem aprovação imediata do que ensina.
 - Validado no chat real: com a correção, a IA somou o faturamento de setembro pelos itens com TES que gera duplicata (valor esperado por Diego).
+- Rodada de perguntas no chat real (M40): ranking "todas as filiais" passa a ser geral (grupos somados entre filiais); a resposta diz o maior/menor grupo; consulta nova nasce com os filtros da definição do termo; investigação confere duplicidade (fornecedor/cliente, número, parcela, valor) e natureza, com resumo do assunto certo (sem texto de faturamento fora de SF2/SD2).
+- Pendente de definição de negócio: "contas a pagar" por valor original ou por saldo em aberto (a IA usou o valor; com o pedido explícito, usou o saldo).
 - Testes: 716 aprovados e 10 pulados no Windows (9 novos em `tests/test_ajuste_filtro.py`).
 
 ## Mudança M39 — correções da autonomia e conexões de IA (2026-11-13)
