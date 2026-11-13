@@ -122,3 +122,24 @@ def test_decisao_valida_ajuste():
         validar({**base, "ajuste": {"filtros": [{"campo": "X", "operador": "maior", "valor": "1"}]}}, [], [])
     d = validar({**base, "ajuste": {"filtros": [{"campo": "f4_duplic", "operador": "igual", "valor": "S"}]}}, [], [])
     assert d.ajuste == {"filtros": [{"campo": "F4_DUPLIC", "operador": "igual", "valor": "S"}], "remover": []}
+
+
+def test_mesma_mensagem_cria_ajusta_e_soma(ana):
+    """Caso real (M40): "faturamento é X com filtro Y; me dê o total". A consulta criada no passo 1 precisa
+    estar disponível no passo seguinte; repetir aprender_tabela não pode encerrar o pedido."""
+    c = conversas.nova_individual(ana)
+    criar = _d(acao="criar_consulta", parametros=FILIAL, entrega="calculo",
+               consulta={"tabela": "SE1", "nome": "Titulos do comercio", "colunas": ["E1_NUM", "E1_CLIENTE", "E1_VALOR"]})
+    p = FakeProvider([
+        _d(acao="aprender_tabela", alvo="SE1 titulos", entrega="calculo"),
+        criar,
+        criar,  # repetição: deve virar aviso, não fim
+        _d(acao="ajustar_filtro", alvo="Titulos do comercio",
+           ajuste={"filtros": [{"campo": "A1_XSEGMEN", "operador": "igual", "valor": "COM"}]}),
+        _d(acao="preparar_consulta", objetivo="aprendido-titulos-do-comercio",
+           parametros=FILIAL + [{"codigo": "agregacao", "valor": "soma:E1_VALOR"}]),
+    ])
+    msg, res = conversas.enviar(ana, c, "o total é só de clientes do comércio: some os títulos", p)
+    assert res is not None and res.ok, msg.texto
+    assert any("Soma" in col for col in res.colunas), (msg.texto, list(__import__("iativa.agent.models", fromlist=["x"]).Objetivo.objects.values_list("exigencia", "situacao", "trilha")))
+    assert "manutenção" not in msg.texto

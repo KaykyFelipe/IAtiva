@@ -201,10 +201,7 @@ def conversar(user, c, texto: str, provedor=None, mensagem_usuario_id=None, inte
                    for t in orq.descoberta.conhecimento(user, orq.DOMINIO, texto, limite=3)]
     except Exception:
         trechos = []
-    aprendidos = []
-    if administrador:
-        aprendidos = [{"codigo": cm.codigo, "nome": cm.nome, "tabela": cm.tabela, "situacao": cm.get_situacao_display()}
-                      for cm in ConsultaModelo.objects.exclude(situacao=SituacaoModelo.REMOVIDA)]
+    aprendidos = _aprendidos(administrador)
     andamento.avisar("Lendo o pedido e o histórico da conversa")
     from .models import SituacaoTarefa, Tarefa
 
@@ -241,6 +238,29 @@ def conversar(user, c, texto: str, provedor=None, mensagem_usuario_id=None, inte
         return _ciclo_agente(user, c, texto, provedor, interrompido, entrada, objetivos, codigos_par, defs, atual,
                              administrador, cfg, cobertura, pede_cobertura, mensagem_id=mensagem_usuario_id,
                              acomp=acomp, observacoes=observacoes)
+
+
+def _aprendidos(administrador) -> list[dict]:
+    if not administrador:
+        return []
+    from .aprendizado import descrever_filtros
+
+    return [{"codigo": cm.codigo, "nome": cm.nome, "tabela": cm.tabela, "situacao": cm.get_situacao_display(),
+             "filtros": descrever_filtros(cm), "pode_voltar_filtro": bool(cm.spec.get("anteriores"))}
+            for cm in ConsultaModelo.objects.exclude(situacao=SituacaoModelo.REMOVIDA)]
+
+
+def _consulta_recente(user, c):
+    """Consulta da última solicitação desta conversa (código e filtros), para orientar o próximo passo."""
+    s = _ultima(user, c)
+    if s is None or not s.objetivo:
+        return None
+    cm = ConsultaModelo.objects.filter(codigo=s.objetivo).first()
+    if cm is None:
+        return {"codigo": s.objetivo}
+    from .aprendizado import descrever_filtros
+
+    return {"codigo": cm.codigo, "tabela": cm.tabela, "filtros": descrever_filtros(cm)}
 
 
 SEM_TEMPO = "O tempo total para responder esta mensagem acabou antes de eu concluir."
@@ -320,8 +340,14 @@ def _ciclo_agente(user, c, texto, provedor, interrompido, entrada, objetivos, co
         assinatura = _assinatura(d)
         if assinatura in feitas:
             ac.anotar(d.acao, "acao_repetida")
+            if ac.pode_cutucar():
+                # M40: repetir o que já foi feito não é progresso; antes de desistir, pede outra estratégia.
+                ac.cutucadas += 1
+                observacoes.append(Observacao(d.acao, "acao_repetida", coord.TEXTO_REPETIDA_ACAO))
+                andamento.avisar("A mesma ação já foi feita; mudando de estratégia")
+                continue
             causa = "acao_repetida"
-            break  # a mesma ação com os mesmos dados já falhou: não repete
+            break  # a mesma ação com os mesmos dados já foi feita: não repete
         feitas.add(assinatura)
         registrar("interpretacao", "agente", usuario=user, estado_novo=d.acao, entidade_id=atual.pk if atual else None,
                   linhas=len(d.parametros))
@@ -385,7 +411,14 @@ def _ciclo_agente(user, c, texto, provedor, interrompido, entrada, objetivos, co
                 if lista is not None:
                     cobertura = base
                     entrada = replace(entrada, lista_anterior=lista)
-            observacoes.append(Observacao(d.acao, coord.ETAPA, ac.falta_obs()))
+            if d.acao in ("aprender_tabela", "criar_consulta", "ajustar_filtro", "voltar_filtro"):
+                # M40: a consulta criada/ajustada neste passo precisa estar entre as que o modelo pode escolher.
+                objetivos = objetivos_para(user)
+                codigos_par = sorted({cod for o in objetivos for cod in o.parametros} | set(PARAMETROS_APRENDIDOS))
+                defs = orq._definicoes(codigos_par)
+                entrada = replace(entrada, objetivos=_catalogo(user, objetivos, defs),
+                                  aprendidos=_aprendidos(administrador))
+            observacoes.append(Observacao(d.acao, coord.ETAPA, ac.falta_obs(_consulta_recente(user, c))))
             andamento.avisar("Etapa concluída; ainda falta parte do pedido" if ac.exig != coord.VERIFICACAO
                              else "Lista pronta; agora vou verificar cada pessoa")
             atual = _ativa(user, c)

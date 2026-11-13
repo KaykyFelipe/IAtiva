@@ -65,6 +65,9 @@ PELA_ACAO = {"investigar_lista": VERIFICACAO, "investigar_divergencia": INVESTIG
              "preparar_consulta": CONSULTA, "executar_consulta": CONSULTA, "aprender_tabela": CONSULTA,
              "criar_consulta": CONSULTA}
 
+TEXTO_REPETIDA_ACAO = ("Essa mesma ação, com os mesmos dados, já foi feita nesta mensagem. Não repita: escolha o "
+                       "próximo passo que falta (ex.: ajustar_filtro na consulta criada, ou preparar_consulta com "
+                       "agregacao), ou responda com o que já foi verificado.")
 ANUNCIO = "anuncio_sem_execucao"
 REPETIDA = "resposta_repetida"
 ETAPA = "etapa_concluida"
@@ -165,7 +168,8 @@ def evidencia(decisao, saida) -> str:
     if acao == "conversar":
         return RESPOSTA
     if acao in ("lembrar", "listar_memorias", "esquecer_memoria", "listar_aprendizados", "remover_aprendizado",
-                "listar_pendencias", "aprovar_pendencia", "rejeitar_pendencia", "cancelar_consulta"):
+                "listar_pendencias", "aprovar_pendencia", "rejeitar_pendencia", "cancelar_consulta",
+                "ajustar_filtro", "voltar_filtro"):
         return ACAO
     return ""
 
@@ -265,9 +269,16 @@ class Acompanhamento:
     def cumprido(self, ev: str) -> bool:
         return cumpre(self.exig or RESPOSTA, ev)
 
-    def falta_obs(self) -> str:
-        return (f"{FALTA[self.exig]}. A etapa anterior deu certo, mas é só parte do pedido: {COMO[self.exig]}. Só pare "
-                "para perguntar à pessoa (conversar terminando em pergunta) se faltar uma decisão que só ela pode dar.")
+    def falta_obs(self, consulta=None) -> str:
+        txt = (f"{FALTA[self.exig]}. A etapa anterior deu certo, mas é só parte do pedido: {COMO[self.exig]}. Só pare "
+               "para perguntar à pessoa (conversar terminando em pergunta) se faltar uma decisão que só ela pode dar.")
+        if consulta:
+            txt += (f" Consulta usada na etapa anterior: {consulta['codigo']}"
+                    + (f" (filtros atuais: {consulta['filtros']})" if consulta.get("filtros") else "") + ". "
+                    "Reutilize-a como objetivo em vez de procurar a tabela de novo. Se a pessoa pediu um critério que ela "
+                    "ainda não aplica (inclusive campo de tabela ligada), use antes ajustar_filtro nela; depois calcule "
+                    "com preparar_consulta e agregacao, com o mesmo período e as mesmas filiais.")
+        return txt
 
 
 # --- persistência e encerramento ------------------------------------------------------------------
