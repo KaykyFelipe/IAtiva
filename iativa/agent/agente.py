@@ -387,6 +387,13 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
             # Histórico funcional exige encadear fontes: listar matrículas não conclui esse pedido.
             nome = historico_funcional.nome_contexto(user, c, texto, d)
             d = replace(d, acao="historico_cargo", alvo=nome)
+        if d.acao == "conversar" and resultado_base is None:
+            # Dias úteis/corridos entre duas datas digitadas: é cálculo de calendário, não conversa.
+            from . import calculos
+            metrica = coord.metrica_exigida(texto)
+            if metrica and calculos.datas_do_texto(texto):
+                d = replace(d, acao="calcular_resultado", calculo={"operacao": metrica, "mensagem": 0,
+                                                                   "campo": "", "campo_final": ""})
         ac.definir(d)
         # Texto que só anuncia uma ação, ou repete a resposta anterior para outra pergunta, não é progresso.
         sem_acao = coord.texto_sem_acao(d, c, mensagem_id, texto) if cobertura is None else ""
@@ -776,6 +783,10 @@ def _agir(user, c, d, atual, defs, texto, provedor, entrada, objetivos, administ
         from . import calculos
         try:
             plano = d.calculo
+            if (plano.get('operacao') in ('dias_uteis', 'dias_corridos') and not plano.get('campo')
+                    and not plano.get('mensagem') and resultado_base is None and calculos.datas_do_texto(texto)):
+                return Saida('Calculei sobre as datas informadas.', {**ficha, 'tipo': 'calculo_resultado'},
+                             resultado=calculos.entre_datas(texto, plano['operacao']))
             if resultado_base is None and not plano.get('mensagem') and entrada.resultado_anterior:
                 plano = {**plano, 'mensagem': entrada.resultado_anterior['mensagem']}
             resultado = calculos.executar(user, c, plano, resultado_base)

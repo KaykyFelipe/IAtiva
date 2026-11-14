@@ -1,6 +1,6 @@
 """Cálculos determinísticos sobre resultados autorizados; nunca envia linhas ao modelo."""
 import re
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from types import SimpleNamespace
 
@@ -13,12 +13,81 @@ from iativa.query.servico import Resultado
 OPERACOES = ('dias_uteis', 'dias_corridos', 'meses', 'soma', 'media', 'diferenca', 'percentual')
 
 
-def dias_uteis(inicio, fim):
-    """Segunda a sexta, intervalo [início, fim), como a diferença de datas em dias corridos."""
+def _pascoa(ano):
+    a, b, c = ano % 19, ano // 100, ano % 100
+    d, e = divmod(b, 4)
+    g = (8 * b + 13) // 25
+    h = (19 * a + b - d - g + 15) % 30
+    i, k = divmod(c, 4)
+    l = (32 + 2 * e + 2 * i - h - k) % 7
+    m = (a + 11 * h + 19 * l) // 433
+    mes = (h + l - 7 * m + 90) // 25
+    return date(ano, mes, (h + l - 7 * m + 33 * mes + 19) % 32)
+
+
+def feriados_nacionais(ano):
+    """Feriados nacionais por lei federal (Leis 662/1949, 6.802/1980, 14.759/2023) e a Sexta-feira Santa.
+    Carnaval e Corpus Christi são pontos facultativos, não feriados nacionais."""
+    fixos = [(1, 1), (4, 21), (5, 1), (9, 7), (10, 12), (11, 2), (11, 15), (12, 25)]
+    if ano >= 2024:
+        fixos.append((11, 20))
+    return {date(ano, m, d) for m, d in fixos} | {_pascoa(ano) - timedelta(days=2)}
+
+
+def dias_uteis(inicio, fim, feriados=False):
+    """Segunda a sexta, intervalo [início, fim), como a diferença de datas em dias corridos.
+    Com feriados=True, desconta também os feriados nacionais que caem em dia de semana."""
     if fim < inicio:
         raise ValidationError('A data final deve ser igual ou posterior à inicial.')
     semanas, resto = divmod((fim - inicio).days, 7)
-    return semanas * 5 + sum((inicio.weekday() + i) % 7 < 5 for i in range(resto))
+    n = semanas * 5 + sum((inicio.weekday() + i) % 7 < 5 for i in range(resto))
+    if feriados:
+        n -= sum(1 for ano in range(inicio.year, fim.year + 1) for f in feriados_nacionais(ano)
+                 if inicio <= f < fim and f.weekday() < 5)
+    return n
+
+
+_DATA_TEXTO = re.compile(r'\b(\d{1,2})/(\d{1,2})/(\d{4})\b')
+
+
+def datas_do_texto(texto):
+    """Exatamente duas datas dd/mm/aaaa digitadas pela pessoa; senão, None."""
+    achadas = _DATA_TEXTO.findall(texto or '')
+    if len(achadas) != 2:
+        return None
+    try:
+        return tuple(date(int(a), int(m), int(d)) for d, m, a in achadas)
+    except ValueError:
+        return None
+
+
+def pede_feriados(texto):
+    return bool(re.search(r'feriad', texto or '', re.I))
+
+
+def entre_datas(texto, op):
+    """Cálculo de calendário sobre as duas datas informadas na pergunta (sem dados do ERP)."""
+    datas = datas_do_texto(texto)
+    if datas is None or op not in ('dias_uteis', 'dias_corridos'):
+        raise ValidationError('Informe as duas datas (dd/mm/aaaa) para o cálculo.')
+    inicio, fim = datas
+    if fim < inicio:
+        raise ValidationError('A data final deve ser igual ou posterior à inicial.')
+    feriados = op == 'dias_uteis' and pede_feriados(texto)
+    valor = dias_uteis(inicio, fim, feriados) if op == 'dias_uteis' else (fim - inicio).days
+    unidade = 'dias úteis' if op == 'dias_uteis' else 'dias corridos'
+    if op == 'dias_uteis':
+        regra = ('segunda a sexta, descontando os feriados nacionais' if feriados
+                 else 'segunda a sexta, sem descontar feriados')
+        premissa = f'Dias úteis: {regra}. Inclui a data inicial e exclui a final.'
+    else:
+        premissa = 'Dias corridos: diferença entre as datas; inclui a inicial e exclui a final.'
+    texto_res = f'{valor} {unidade} de {inicio:%d/%m/%Y} a {fim:%d/%m/%Y}. {premissa}'
+    return Resultado(True, texto_res, colunas=['Período', 'Início', 'Fim', unidade.capitalize(), 'Base do cálculo'],
+                     tipos=['texto', 'data', 'data', 'inteiro', 'texto'],
+                     linhas=[['Datas informadas', f'{inicio:%d/%m/%Y}', f'{fim:%d/%m/%Y}', str(valor), 'Calendário']],
+                     premissas=[premissa, 'Cálculo de calendário sobre as datas da pergunta; sem dados do ERP.'],
+                     medida_calculada=op)
 
 
 def _origem(user, conversa, mensagem=0):
