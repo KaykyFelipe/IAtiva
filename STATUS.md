@@ -6,6 +6,8 @@
 
 ## Mudança M51 — pergunta mascarada no diagnóstico da manutenção (2026-11-13)
 
+- Validado em produção (2026-11-14): a manutenção recebeu a pergunta de dias úteis entre datas com feriados nacionais, criou o cálculo de calendário (feriados fixos e Sexta-feira Santa), publicou e refez o pedido sozinha. Falha encontrada: o resultado de calendário não tinha escopo e não era salvo, então a resposta saiu sem o número; corrigido com escopo próprio de calendário (sem ERP, visível a quem fez a pergunta).
+
 - Capacidade ausente leva à manutenção a pergunta da pessoa com nomes próprios, números longos (CPF, CNPJ, matrícula, valores) e e-mails trocados por marcadores; datas curtas ficam. Antes só iam códigos e a manutenção não sabia o que construir (recusava com "não reproduzido"). Nenhum dado do ERP entra. O executor do host revalida o formato. Recorrência atualiza a pergunta do incidente.
 
 ## Mudança M50 — correção na hora com chat ocupado (2026-11-13)

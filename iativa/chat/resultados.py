@@ -40,7 +40,13 @@ def guardar(msg, res):
         msg.conversa.__class__.objects.filter(pk=msg.conversa_id).update(preservar_historico=True)
 
 
+ESCOPO_CALENDARIO = {"calendario": True}
+
+
 def _permitido(user, escopo):
+    # Cálculo só sobre datas digitadas pela pessoa (sem ERP): não depende de setor nem filial.
+    if escopo == ESCOPO_CALENDARIO:
+        return True
     setor = Department.objects.filter(pk=escopo.get("setor"), ativo=True).first()
     if not setor or not tem_permissao(user, Permissao.CONSULTAR, setor):
         return False

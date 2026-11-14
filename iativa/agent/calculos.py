@@ -7,7 +7,7 @@ from types import SimpleNamespace
 from django.core.exceptions import ValidationError
 
 from iativa.accounts.authz import PermissaoNegada
-from iativa.chat.resultados import restaurar, empacotar
+from iativa.chat.resultados import ESCOPO_CALENDARIO, restaurar, empacotar
 from iativa.query.servico import Resultado
 
 OPERACOES = ('dias_uteis', 'dias_corridos', 'meses', 'soma', 'media', 'diferenca', 'percentual')
@@ -87,7 +87,7 @@ def entre_datas(texto, op):
                      tipos=['texto', 'data', 'data', 'inteiro', 'texto'],
                      linhas=[['Datas informadas', f'{inicio:%d/%m/%Y}', f'{fim:%d/%m/%Y}', str(valor), 'Calendário']],
                      premissas=[premissa, 'Cálculo de calendário sobre as datas da pergunta; sem dados do ERP.'],
-                     medida_calculada=op)
+                     escopo=dict(ESCOPO_CALENDARIO), medida_calculada=op)
 
 
 def _origem(user, conversa, mensagem=0):

@@ -34,6 +34,10 @@ def test_dias_uteis_entre_datas_da_pergunta_desconta_feriados(base):
     assert any('feriados nacionais' in p for p in res.premissas)
     assert not Objetivo.objects.exclude(situacao=SituacaoObjetivo.CUMPRIDO).exists()
     assert 'manutenção' not in msg.texto
+    # O valor fica salvo na mensagem e volta ao reabrir (sem setor: é calendário, não ERP).
+    from iativa.chat.resultados import restaurar
+    msg.refresh_from_db()
+    assert msg.resultado and restaurar(base['u'], msg.resultado).curta.startswith('19 dias úteis')
 
 
 def test_sem_pedir_feriados_nao_desconta(base):
