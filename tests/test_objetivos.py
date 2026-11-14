@@ -181,7 +181,9 @@ def test_capacidade_ausente_sem_excecao_vai_para_a_manutencao_sanitizada(base, c
     assert inc.condicoes["exigencia"] == "verificacao" and inc.condicoes["tabela"] == "sra"
     # Só códigos: nada do texto do pedido, de nomes ou de resultados.
     gravado = json.dumps({"o": [o.trilha, o.motivo, o.exigencia], "i": [inc.condicoes, inc.codigo, inc.operacao]})
-    assert "matricula" not in gravado and "SINTETIC" not in gravado and not [n for n in LISTA if n in gravado]
+    # M51: a pergunta vai mascarada (sem dados); nenhuma linha do ERP entra no diagnóstico.
+    assert inc.condicoes["pergunta"] == PEDIDO
+    assert "SINTETIC" not in gravado and not [n for n in LISTA if n in gravado]
     call_command("manutencao", "exportar")
     fila = json.loads(capsys.readouterr().out)
     assert len(fila) == 1 and fila[0]["categoria"] == "capacidade_ausente" and fila[0]["condicoes"]["trilha"]

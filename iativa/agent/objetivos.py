@@ -375,11 +375,13 @@ def registrar(ac: Acompanhamento, user, conversa, mensagem_id, situacao: str, mo
 
 
 def encaminhar_manutencao(ac: Acompanhamento, causa: str, tabela: str = ""):
-    """Capacidade ausente ou defeito sem exceção: diagnóstico só com códigos (exigência, causa, trilha)."""
+    """Capacidade ausente ou defeito sem exceção: códigos (exigência, causa, trilha) e, desde M51, a pergunta
+    mascarada (sem nomes, documentos, e-mails ou valores), para a manutenção saber o que construir."""
     from iativa.manutencao import incidentes
     from iativa.manutencao.models import Categoria
 
-    cond = {"exigencia": ac.exig or RESPOSTA, "causa": causa, "trilha": _trilha_segura(ac.trilha)}
+    cond = {"exigencia": ac.exig or RESPOSTA, "causa": causa, "trilha": _trilha_segura(ac.trilha),
+            "pergunta": ac.texto}
     if re.fullmatch(r"[A-Z0-9]{3}", tabela or ""):
         cond["tabela"] = tabela.lower()
     return incidentes.registrar("agente", f"objetivo.{ac.exig or RESPOSTA}.{causa}", categoria=Categoria.CAPACIDADE,

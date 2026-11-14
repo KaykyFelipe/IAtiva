@@ -48,6 +48,29 @@ def _rastreamento(exc) -> list[str]:
     return out[-12:]
 
 
+_EMAIL = re.compile(r"\S+@\S+")
+_DATA = re.compile(r"\b\d{1,2}/\d{1,2}(?:/\d{2,4})?\b")
+_NUMERO_LONGO = re.compile(r"\d[\d.\-/]{3,}\d")
+_NOME = re.compile(r"(?<=[^\s.!?:])(\s+)[A-ZÀ-Ý][a-zà-ÿ]+(?:\s+(?:d[aeo]s?\s+)?[A-ZÀ-Ý][a-zà-ÿ]+)*")
+PERGUNTA_PERMITIDA = re.compile(r"^[\w\s.,;:!?()\[\]/%+\-–'\"ºª°]{1,300}$")
+
+
+def mascarar_pergunta(texto: str) -> str:
+    """M51: a pergunta vai à manutenção para ela saber QUAL capacidade falta, nunca com dado pessoal:
+    e-mails, números longos (CPF, CNPJ, matrícula, valores) e nomes próprios viram marcadores.
+    Datas curtas ficam (definem o período). Nada que venha do ERP passa por aqui."""
+    t = " ".join(str(texto or "").split())[:300]
+    datas = []
+    t = _DATA.sub(lambda m: datas.append(m.group(0)) or f"\x00{len(datas) - 1}\x00", t)
+    t = _EMAIL.sub("[email]", t)
+    t = _NUMERO_LONGO.sub("[numero]", t)
+    t = re.sub(r"\d+[.,]\d+", "[numero]", t)
+    t = _NOME.sub(lambda m: m.group(1) + "[nome]", t)
+    t = re.sub(r"\x00(\d+)\x00", lambda m: datas[int(m.group(1))], t)
+    t = "".join(ch for ch in t if ch.isprintable())
+    return t if PERGUNTA_PERMITIDA.match(t) else ""
+
+
 def _condicoes(cond: dict | None) -> dict:
     out = {}
     trilha = (cond or {}).get("trilha")
@@ -55,8 +78,11 @@ def _condicoes(cond: dict | None) -> dict:
         limpa = [x for x in trilha if isinstance(x, str) and TRILHA_ITEM.match(x)][-30:]
         if limpa:
             out["trilha"] = limpa
+    pergunta = mascarar_pergunta((cond or {}).get("pergunta", ""))
+    if pergunta:
+        out["pergunta"] = pergunta
     for k, v in (cond or {}).items():
-        if k == "trilha":
+        if k in ("trilha", "pergunta"):
             continue
         v = str(v).strip().lower()
         if k in CONDICOES_PERMITIDAS and VALOR_SEGURO.match(v):
@@ -133,6 +159,8 @@ def _registrar(componente: str, operacao: str, exc=None, categoria: str = "", co
                     atual = Incidente.objects.select_for_update().get(assinatura=assinatura)
             mudancas = {"ocorrencias": F("ocorrencias") + 1, "correlacao": correlacao, "versao": versao(),
                         "ultima_em": timezone.now()}
+            if limpas.get("pergunta"):  # M51: a manutenção trabalha sobre o caso mais recente
+                mudancas["condicoes"] = {**(atual.condicoes or {}), **limpas}
             if atual.situacao == SituacaoIncidente.PUBLICADO:
                 # Voltou a acontecer depois da correção publicada (na versão corrigida ou numa posterior):
                 # a correção não resolveu este caso. M50: antes só reabria na mesma versão, e o pedido ficava

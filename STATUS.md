@@ -4,6 +4,10 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **plano proposto em `PLANO.md` §8, aguardando aprovação.** Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M51 — pergunta mascarada no diagnóstico da manutenção (2026-11-13)
+
+- Capacidade ausente leva à manutenção a pergunta da pessoa com nomes próprios, números longos (CPF, CNPJ, matrícula, valores) e e-mails trocados por marcadores; datas curtas ficam. Antes só iam códigos e a manutenção não sabia o que construir (recusava com "não reproduzido"). Nenhum dado do ERP entra. O executor do host revalida o formato. Recorrência atualiza a pergunta do incidente.
+
 ## Mudança M50 — correção na hora com chat ocupado (2026-11-13)
 
 - Incidente elegível grava `var/manutencao-acordar` no volume; a unidade `iativa-manutencao.path` inicia o executor na hora. O timer passou de 15 min para varredura de hora em hora.
