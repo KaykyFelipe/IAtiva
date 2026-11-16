@@ -434,7 +434,7 @@ def executar_solicitacao(user, s: RequestContext) -> Resultado:
                          ERRO_METADADOS)
 
     mesclou = False
-    if todas and len(filiais) > 1 and plano.agrupar and linhas:
+    if todas and len(filiais) > 1 and plano.agrupar and linhas and not getattr(plano, "por_filial", False):
         linhas, mesclou = _mesclar_filiais(plano, comp, linhas)
         if mesclou:
             origem = [None] * len(linhas)
@@ -447,7 +447,7 @@ def executar_solicitacao(user, s: RequestContext) -> Resultado:
     if truncado and "dinheiro" in tipos and not any(c.agregacao for c in plano.colunas):
         i = tipos.index("dinheiro")
         subtotal = _fmt(sum((_dec(l[i]) for l in linhas if l[i] is not None), Decimal(0)), "dinheiro")
-    if s.objetivo == "titulos-em-atraso" and linhas:
+    if s.objetivo == "titulos-em-atraso" and linhas and "Cliente" in comp.rotulos:
         corte = date.fromisoformat(valores["data-corte"])
         i = comp.rotulos.index("Vencimento mais antigo")
         tipos.append("inteiro")
@@ -495,7 +495,7 @@ def escopo_do_plano(plano, setor_id, filiais):
 
 def _pode_mesclar(plano):
     aggs = [c.agregacao for c in plano.colunas]
-    return (plano.agrupar and any(aggs) and not all(aggs)
+    return (plano.agrupar and any(aggs) and (not all(aggs) or plano.somar_filiais)
             and all(a in ("SUM", "COUNT", "MIN", "MAX") for a in aggs if a))
 
 

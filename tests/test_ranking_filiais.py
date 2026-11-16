@@ -98,9 +98,39 @@ def test_inadimplencia_top_n_geral_pelo_valor(ana):
     assert len(todos.linhas) > 2
 
 
-def test_inadimplencia_recusa_calculo_que_nao_e_top(ana):
-    msg, res = _atraso(ana, [{"codigo": "agregacao", "valor": "soma:E1_VALOR"}])
+def test_inadimplencia_recusa_calculo_desconhecido(ana):
+    msg, res = _atraso(ana, [{"codigo": "agregacao", "valor": "media:E1_VALOR"}])
     assert res is None and "top N" in msg.texto, msg.texto
+
+
+def test_m54_inadimplencia_por_filial_e_total(ana):
+    """M54: "atraso por filial" vem um total por filial; "quanto está em atraso" vem um número só."""
+    _, todos = _atraso(ana, [])
+    i = todos.colunas.index("Valor em atraso")
+    geral = sum(_num(str(l[i]).replace("R$", "").strip()) for l in todos.linhas)
+    msg, pf = _atraso(ana, [{"codigo": "agregacao", "valor": "por filial"}])
+    assert pf is not None and pf.ok, msg.texto
+    assert pf.colunas[0] == "Filial" and "Cliente" not in pf.colunas, pf.colunas
+    j = pf.colunas.index("Valor em atraso")
+    assert sum(_num(str(l[j]).replace("R$", "").strip()) for l in pf.linhas) == geral
+    msg, tot = _atraso(ana, [{"codigo": "agregacao", "valor": "total"}])
+    assert tot is not None and len(tot.linhas) == 1, msg.texto
+    assert _num(tot.curta.split("R$")[-1].split(";")[0].strip()) == geral, tot.curta
+
+
+def test_m54_a_vencer_total_e_por_filial(ana):
+    def rodar(calc):
+        c = conversas.nova_individual(ana)
+        return conversas.enviar(ana, c, "quanto vamos receber?", FakeProvider([_d(
+            acao="preparar_consulta", objetivo="titulos-a-vencer", parametros=[
+                {"codigo": "filial-analise", "valor": "TODAS"},
+                {"codigo": "periodo-analise", "valor": "01/01/2020..31/12/2030"},
+                {"codigo": "tratamento-baixa-parcial", "valor": "considerar-saldo"},
+                {"codigo": "agregacao", "valor": calc}])]))
+    msg, tot = rodar("total")
+    assert tot is not None and len(tot.linhas) == 1 and "Valor a receber" in tot.colunas, msg.texto
+    msg, pf = rodar("por filial")
+    assert pf is not None and pf.colunas[0] == "Filial" and len(pf.linhas) >= 1, msg.texto
 
 
 def test_total_da_consulta_fixa_responde_quanto(ana):

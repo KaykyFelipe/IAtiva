@@ -57,6 +57,8 @@ class Plano:
     chave_unica: tuple[str, ...] = ()  # rótulos que não podem repetir (detecção de duplicação)
     filial: str = ""
     top: int = 0  # "top N": limita as linhas (ranking)
+    por_filial: bool = False  # M54: total de cada filial (não soma as filiais)
+    somar_filiais: bool = False  # M54: "total": soma as filiais numa linha só
 
 
 def _aaaammdd(iso: str) -> str:
@@ -174,6 +176,33 @@ def ler_top(texto: str) -> int:
     if not m:
         raise ValueError("Nesta consulta o cálculo aceito é só o ranking dos maiores: \"top N\"")
     return max(1, min(100, int(m.group(1))))
+
+
+def ler_fixa(texto: str, objetivo: str = "titulos-em-atraso") -> str:
+    """M54: cálculo aceito nas consultas fixas: "por filial" (um total por filial), "total" (um número só)
+    e, na inadimplência, "top N" (ranking dos clientes)."""
+    t = str(texto or "").lower()
+    if "filial" in t:
+        return "por filial"
+    if re.search(r"\btop\s*\d", t):
+        if objetivo != "titulos-em-atraso":
+            raise ValueError("Nesta consulta o cálculo aceito é \"total\" ou \"por filial\"")
+        return f"top {ler_top(t)}"
+    if re.search(r"\b(total|soma|quanto)\b", t):
+        return "total"
+    raise ValueError("Nesta consulta o cálculo aceito é \"total\", \"por filial\""
+                     + (" ou o ranking \"top N\"" if objetivo == "titulos-em-atraso" else ""))
+
+
+def _totalizar(plano, valor, rotulo_valor: str, extra=()):
+    """M54: troca a lista por totais (só agregações). Com "por filial" cada filial fica numa linha; com
+    "total" as filiais são somadas numa linha só."""
+    plano.colunas = [Coluna("Títulos", Campo("e1", "E1_NUM"), "COUNT", "inteiro"),
+                     Coluna(rotulo_valor, valor, "SUM", "dinheiro"), *extra]
+    plano.agrupar = True
+    plano.chave_unica = ()
+    plano.top = 0
+    plano.ordenar = []
 
 
 def apelido(spec: dict, campo: str) -> str:
@@ -382,8 +411,16 @@ def montar(objetivo: str, valores: dict) -> Plano:
         plano.agrupar = True
         plano.ordenar = [("Valor em atraso", True)]
         plano.chave_unica = ("Cliente", "Loja")
-        if valores.get(AGREGACAO):
-            plano.top = ler_top(valores[AGREGACAO])
+        calc = ler_fixa(valores[AGREGACAO]) if valores.get(AGREGACAO) else ""
+        if calc in ("por filial", "total"):
+            _totalizar(plano, valor, "Valor em atraso",
+                       [Coluna("Vencimento mais antigo", Campo(e1, "E1_VENCREA"), "MIN", "data")])
+            plano.por_filial = calc == "por filial"
+            plano.somar_filiais = not plano.por_filial
+            plano.premissas.append("Total em atraso de cada filial." if plano.por_filial else
+                                   "Total em atraso, somando as filiais.")
+        elif calc:
+            plano.top = ler_top(calc)
             plano.premissas.append(f"Ranking: os {plano.top} maiores valores em atraso.")
         plano.premissas.append(
             f"Em atraso: vencimento real antes de {limite:%d/%m/%Y} (corte {corte:%d/%m/%Y} menos a tolerância)."
@@ -402,6 +439,13 @@ def montar(objetivo: str, valores: dict) -> Plano:
         plano.colunas = _colunas_titulo(valor)
         plano.ordenar = [("Vencimento real", False), ("Cliente", False)]
         plano.chave_unica = ("Prefixo", "Número", "Parcela", "Tipo")
+        calc = ler_fixa(valores[AGREGACAO], objetivo) if valores.get(AGREGACAO) else ""
+        if calc:
+            _totalizar(plano, valor, "Valor a receber")
+            plano.por_filial = calc == "por filial"
+            plano.somar_filiais = not plano.por_filial
+            plano.premissas.append("Total a receber de cada filial." if plano.por_filial else
+                                   "Total a receber, somando as filiais.")
         return plano
 
     if objetivo == "posicao-cliente":

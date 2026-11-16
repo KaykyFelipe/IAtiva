@@ -149,10 +149,10 @@ def _registrar_parametro(user, s: RequestContext, definicao, texto: str):
 
         obj = OBJETIVOS[s.objetivo]
         if not obj.modelo_id:
-            from iativa.query.plano import ler_top
+            from iativa.query.plano import ler_fixa
 
             try:
-                valor = f"top {ler_top(valor)}"  # M41: consulta fixa aceita só o ranking
+                valor = ler_fixa(valor, s.objetivo)  # M41/M54: ranking, por filial ou total
             except ValueError as exc:
                 raise ValidationError(f"{exc}.") from None
         else:

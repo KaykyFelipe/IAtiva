@@ -56,9 +56,10 @@ def test_cria_a_primeira_consulta_ja_com_soma(base):
 def test_calculo_em_consulta_fixa_avisa_em_vez_de_listar(base):
     ana = base["ana"]
     p = FakeProvider([_d(acao="preparar_consulta", objetivo="titulos-a-vencer", parametros=[
-        {"codigo": "filial-analise", "valor": "01"}, {"codigo": "agregacao", "valor": "soma:E1_VALOR"}])])
+        {"codigo": "filial-analise", "valor": "01"}, {"codigo": "agregacao", "valor": "media:E1_VALOR"}])])
     msg, res = conversas.enviar(ana, conversas.nova_individual(ana), "some", p)
-    assert res is None and "não faz cálculos" in msg.texto
+    # M54: títulos a vencer aceitam "total" e "por filial"; outro cálculo é recusado com o que é aceito.
+    assert res is None and "por filial" in msg.texto, msg.texto
 
 
 def _consulta(user, setores, colunas=("E1_NUM", "E1_TIPO", "E1_CLIENTE", "E1_VALOR")):

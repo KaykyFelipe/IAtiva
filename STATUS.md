@@ -17,6 +17,10 @@
 - Revisão e prioridades para memória confiável, recuperação entre conversas, indicadores, isolamento e avaliações: `docs/EVOLUCAO_MEMORIA_CORPORATIVA.md`. Evoluções propostas não implementadas nesta mudança.
 - Validação: 827 testes aprovados e 10 pulados na suíte sequencial Windows; Django check sem problemas. Testes específicos verificam recusa fixa sem memória, manutenção, objetivo ou tarefa. Na primeira suíte paralela houve uma falha de catálogo ChatGPT, não reproduzida isoladamente nem na suíte sequencial; avaliação semântica com modelo real ainda pendente.
 
+## Mudança M54 — inadimplência e a vencer por filial ou só o total (2026-11-16)
+
+- Achado no teste do piloto: "atraso por filial" vinha por cliente e "quanto vamos receber" vinha como lista de títulos. Agora as duas consultas fixas aceitam "por filial" (um total por filial) e "total" (um número só, somando as filiais); a inadimplência mantém o "top N".
+
 ## Mudança M53 — IA declara o que falta, manutenção visível e narração ao vivo (2026-11-16)
 
 - Nova ação `falta_capacidade`: depois de verificar que nenhum caminho existente resolve o pedido inteiro, a IA descreve em termos técnicos o que o sistema precisa ganhar; o pedido vai na hora para a manutenção (um incidente por capacidade), e a descrição segue mascarada como especificação para o agente de manutenção.
