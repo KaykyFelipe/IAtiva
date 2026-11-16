@@ -4,6 +4,13 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **Etapa 7 aprovada em 2026-11-16 por Diego; em andamento.** Feito: roteiro do piloto (`docs/piloto/ROTEIRO.md`) e auditoria de não armazenamento (`manage.py auditar_armazenamento`). Falta: usuários do Financeiro, conferência dos números com relatórios do Protheus, avaliação da interpretação e latência. Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M57 — olhar de pensamento e transformações mais frequentes (2026-11-16)
+
+- Referência consultada no OpenMausBot: gestos downScan do diretor de animações. Adaptação própria em CSS: olhos menores e baixos percorrem esquerda/direita com piscada e leve movimento do corpo, mantendo a forma original durante consultas.
+- Repouso antes de cada transformação reduzido de 90 para 12 segundos; duração de 6 segundos e alternância cabine/módulo preservadas. Processamento interrompe; movimento reduzido e aba oculta continuam respeitados.
+- Chrome desktop/celular validou deslocamentos negativos/positivos dos olhos com posição vertical baixa, fases operacionais sem transformação, ciclo de repouso e interrupção. Prévia animada capturada de frames reais do navegador, com dados sintéticos.
+- Validação: 846 testes aprovados e 10 pulados no Windows; Django check sem problemas.
+
 ## Mudança M56 — mascote com formas da frota e pensamento contínuo (2026-11-16)
 
 - Referência visual fornecida por Diego: cabine azul com teto branco arqueado, porta, ferragens e base escura; módulo branco com faixas azuis e verdes, portas, cobertura e degraus. Desenhos SVG estilizados mantêm os olhos do mascote, sem sombras.

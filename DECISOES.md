@@ -133,6 +133,7 @@ Aprovadas em 2026-11-09 por Kayky Felipe (chat), com as opções recomendadas na
 
 ## Mudanças de escopo
 
+| M57 | 2026-11-16 | Pensamento com olhar para baixo varrendo esquerda/direita, inspirado nos gestos downScan do OpenMausBot; aumentar frequência das transformações em repouso. | Autorizado por Diego no pedido do gesto de pensamento e mais transformações |
 | M56 | 2026-11-16 | Ajustar formas e cores do mascote pela foto da frota Ativa; manter pensamento contínuo durante processamento, com transformações ocasionais apenas em repouso. | Autorizado por Diego no pedido de ajustes do mascote |
 | M55 | 2026-11-16 | Restringir chat a consultas/análises dos dados, sem produzir códigos/scripts/SQL, e fazer botões de opções ativarem o mesmo processamento e parada do compositor. | Autorizado por Diego no pedido das duas correções |
 | M54 | 2026-11-16 | Restringir finalidade da IAtiva a assuntos da empresa e atividades profissionais autorizadas; recusa explícita sem consulta, memória ou manutenção para assunto fora do escopo. Revisar arquitetura e documentar propostas de evolução de memória e agentes, sem implementar toda a proposta. | Autorizado por Diego no pedido de revisão e bloqueio de perguntas aleatórias |

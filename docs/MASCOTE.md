@@ -1,5 +1,10 @@
 # Mascote IAtiva (M46)
 
+Atualização M57: pensamento com olhos menores, baixos, varrendo esquerda/direita e piscando,
+inspirado nos gestos downScan do OpenMausBot. Espera entre transformações em repouso agora
+é de 12 segundos (antes 90); a forma aparece por 6 segundos. Durante consultas permanece pensando.
+
+
 Atualização M56 (16/11/2026): formas pela foto enviada por Diego — cabine azul com teto branco
 arqueado e módulo branco com faixas azuis/verdes e degraus. Toda operação mantém pensamento,
 sem transformação por etapa; conclusão apenas sorri. Na cápsula em repouso, cabine e módulo

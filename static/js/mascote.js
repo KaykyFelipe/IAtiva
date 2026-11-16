@@ -33,7 +33,7 @@
           emRepouso = false;
           estado('idle');
         }, 6000);
-      }, 90000);
+      }, 12000);
     }
     document.querySelectorAll('.agente-capsula [data-mascote], .pensando [data-mascote]').forEach(el => { if (!(valor === 'idle' && emRepouso && ['cabine', 'container'].includes(el.dataset.estado))) el.dataset.estado = valor; });
     const label = document.querySelector('[data-mascote-status]');
