@@ -29,7 +29,7 @@ PERMITIDOS = {
 }
 
 # Arquivos que podem conter SQL legitimamente (código e migrações não ficam em var/; isto é só var/).
-IGNORAR_ARQUIVOS = re.compile(r"(\.sqlite3?|\.pyc|\.png|\.jpg|\.gif|\.woff2?|\.zip|\.gz)$", re.I)
+IGNORAR_ARQUIVOS = re.compile(r"(\.sqlite3?(-wal|-shm|-journal)?|\.pyc|\.png|\.jpg|\.gif|\.woff2?|\.zip|\.gz)$", re.I)
 MAX_ARQUIVO = 20 * 1024 * 1024
 
 
@@ -68,7 +68,8 @@ def auditar_arquivos(raiz: Path) -> list[tuple[str, int]]:
     for arq in raiz.rglob("*"):
         try:
             if (not arq.is_file() or arq.is_symlink() or IGNORAR_ARQUIVOS.search(arq.name)
-                    or "/.git/" in arq.as_posix() or arq.stat().st_size > MAX_ARQUIVO):
+                    or "/.git/" in arq.as_posix() or "/skills/" in arq.as_posix()
+                    or arq.stat().st_size > MAX_ARQUIVO):
                 continue
             q = len(SQL.findall(arq.read_text(encoding="utf-8", errors="ignore")))
         except OSError:

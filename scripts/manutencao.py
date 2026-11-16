@@ -530,7 +530,20 @@ def principal(argv) -> int:
         motivo = str(exc) if isinstance(exc, Recusa) else "tempo limite"
         manage("concluir", inc, "falhou_correcao", "--motivo", motivo, verificar=False)
         log(f"incidente #{inc}: não publicado ({motivo})")
+    finally:
+        limpar_transcricoes(pasta)
     return 0
+
+
+def limpar_transcricoes(pasta: str):
+    """Etapa 7 (R3): a sessão do agente de manutenção (código lido, comandos, saídas de teste) não fica
+    guardada depois da correção; só o commit e o log resumido permanecem."""
+    import shutil
+
+    for sub in ("projects", "shell-snapshots", "todos", "file-history", "sessions"):
+        alvo = Path(pasta or "/nao-existe") / sub
+        if alvo.is_dir() and not alvo.is_symlink():
+            shutil.rmtree(alvo, ignore_errors=True)
 
 
 if __name__ == "__main__":

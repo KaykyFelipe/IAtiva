@@ -386,3 +386,12 @@ def test_escrita_da_manutencao_restrita_a_copia(tmp_path, monkeypatch):
     mx.preparar_escrita(wt)
     assert {p for p, *_ in mudancas} == {wt, wt / 'codigo.py'}
     assert all(u == -1 and g == 10001 and kw == {'follow_symlinks': False} for _, u, g, kw in mudancas)
+
+
+def test_transcricao_do_agente_e_apagada(tmp_path):
+    """Etapa 7: a sessão do agente de manutenção não fica guardada depois da correção."""
+    (tmp_path / "projects" / "-app-trabalho").mkdir(parents=True)
+    (tmp_path / "projects" / "-app-trabalho" / "s.jsonl").write_text("{}")
+    (tmp_path / "iativa-ativado").write_text("")
+    mx.limpar_transcricoes(str(tmp_path))
+    assert not (tmp_path / "projects").exists() and (tmp_path / "iativa-ativado").exists()
