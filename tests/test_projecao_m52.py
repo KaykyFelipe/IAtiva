@@ -34,6 +34,6 @@ def test_projecao_linear_por_dias_uteis():
     # 16/11/2026: passados 01..13/11 = 9 dias úteis (02/11 é feriado); mês = 19 dias úteis (02 e 20/11 feriados).
     r = _projecao(res, m, {"campo": "Soma"}, [], hoje=date(2026, 11, 16))
     assert r.medida_calculada == "projecao"
-    assert r.linhas[-1][0] == "Total" and Decimal(r.linhas[-1][1]) == (Decimal(4000) * 19 / 9).quantize(Decimal("0.01"))
+    assert r.linhas[-1] == ["Total", "8.444,44", "4.000,00"]
     assert r.curta.startswith("Projeção para 11/2026: R$ 8.444,44")
     assert any("estimativa" in p for p in r.premissas)

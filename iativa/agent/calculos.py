@@ -219,6 +219,8 @@ def _projecao(res, m, plano, premissas, hoje=None):
     É estimativa: supõe o mesmo ritmo no resto do mês."""
     from django.utils import timezone
 
+    from iativa.query.servico import _numero_br
+
     if 'truncado' not in m.resultado:
         raise ValidationError('Reexecute a consulta do período antes de projetar.')
     if len(m.resultado.get('moedas', [])) > 1:
@@ -240,16 +242,15 @@ def _projecao(res, m, plano, premissas, hoje=None):
     linhas, soma = [], Decimal(0)
     for i, l in enumerate(res.linhas, 1):
         v = _numero(l[a]); soma += v
-        linhas.append([str(l[rot]) if rot is not None else f'Registro {i}', format((v * fator).quantize(Decimal('0.01')), 'f'),
-                       format(v, 'f')])
+        linhas.append([str(l[rot]) if rot is not None else f'Registro {i}', _numero_br((v * fator).quantize(Decimal('0.01'))),
+                       _numero_br(v)])
     projetado = (soma * fator).quantize(Decimal('0.01'))
     if len(linhas) != 1:
-        linhas.append(['Total', format(projetado, 'f'), format(soma, 'f')])
+        linhas.append(['Total', _numero_br(projetado), _numero_br(soma)])
     tipo = res.tipos[a]
     regra = (f'Projeção linear: realizado até ontem ({passados} de {total} dias úteis de {inicio:%m/%Y}, '
              'descontando feriados nacionais) dividido pelos dias úteis passados e multiplicado pelos dias úteis do mês. '
              'É uma estimativa: supõe o mesmo ritmo no restante do mês.')
-    from iativa.query.servico import _numero_br
     rs = "R$ " if tipo == "dinheiro" else ""
     curta = f'Projeção para {inicio:%m/%Y}: {rs}{_numero_br(format(projetado, "f"))}'
     return Resultado(True, f'{curta}. Realizado até agora: {rs}{_numero_br(format(soma, "f"))}. {regra}',
