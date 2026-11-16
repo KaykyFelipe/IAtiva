@@ -10,6 +10,11 @@
 - Opções de resposta agora enviam pelo compositor, usando o mesmo identificador de pedido, acompanhamento e botão parar; não iniciam outro envio enquanto há processamento. Chrome com dados sintéticos validou envio único da opção, identificador, estado parar, bloqueio de duplo clique e retorno ao estado enviar ao interromper.
 - Validação: suíte completa Windows com 836 aprovados e 10 pulados; após ampliar a recusa genérica, os 13 casos específicos passaram. Django check sem problemas. Classificação semântica continua apoiada no modelo para formulações que não correspondem às proteções locais.
 
+## Mudança M55 — achados do roteiro do piloto (2026-11-16)
+
+- Roteiro rodado pela Claude com o usuário de teste (modelo pago): inadimplência, top 10, por filial, resumo, só o número, vencimentos da semana, faturamento do mês, filial que mais faturou e continuação "e em julho?" certos, em ~18–20 s cada.
+- Corrigido: "só o número" de um total mostra o valor em reais (não a contagem); preferência sobre parâmetro ("para mim, atraso só depois de 5 dias") vira preferência salva do usuário (`lembrar` com parâmetros), não regra de campo; posição de cliente pelo nome usa inadimplência/a vencer com busca pelo nome em vez de parar no cadastro.
+
 ## Mudança M54 — finalidade corporativa e revisão da memória (2026-11-16)
 
 - Política de finalidade corporativa compartilhada pelos provedores conversacionais: assuntos profissionais, acompanhamentos contextuais e uso da IAtiva permitidos; assuntos pessoais/aleatórios devem produzir `fora_escopo`. Dúvidas pedem contexto profissional, sem fabricar justificativa.

@@ -127,7 +127,9 @@ class Resultado:
         if len(self.linhas) == 1 and self.colunas:
             pares = [(c, str(v)) for c, v in zip(self.colunas, self.linhas[0])]  # linhas já formatadas
             numeros = [(c, v) for (c, v), t in zip(pares, self.tipos) if t in ("dinheiro", "valor", "inteiro", "numero")]
-            escolhidos = numeros or pares
+            # M55: "só o número" de um total é o valor em reais; a contagem de títulos fica na tabela.
+            dinheiro = [(c, v) for (c, v), t in zip(pares, self.tipos) if t == "dinheiro"]
+            escolhidos = dinheiro or numeros or pares
             return escolhidos[0][1] if len(escolhidos) == 1 else "; ".join(f"{c}: {v}" for c, v in escolhidos)
         if self.totais is not None and self.totais.medidas:
             m = self.totais.medidas

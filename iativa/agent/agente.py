@@ -1290,8 +1290,36 @@ def _ajustar_filtro(user, d, ficha, alcance="", objetivos=()) -> Saida:
                  "Para desfazer, peça para voltar o filtro como era antes.", ficha)
 
 
+def _lembrar_parametros(user, d) -> list[str]:
+    """M55: "para mim, atraso só depois de 5 dias" é o valor de um parâmetro (tolerância), não uma regra de
+    campo: grava como preferência do usuário, que a resolução já aplica nas próximas consultas."""
+    from iativa.memory.models import Escopo, ParameterDefinition
+    from iativa.memory import servicos as memoria_valores
+
+    from .conversao import converter
+    from .orquestrador import _exibir
+
+    feitas = []
+    for codigo, texto in d.parametros:
+        definicao = ParameterDefinition.objects.filter(codigo=codigo, ativo=True).first()
+        if definicao is None or definicao.contem_dado_pessoal:
+            continue
+        try:
+            valor = converter(definicao, texto)
+            memoria_valores.registrar_valor(user, definicao, Escopo.USUARIO, valor)
+        except Exception:
+            continue
+        feitas.append(f"{definicao.nome} = {_exibir(definicao, valor)}")
+    return feitas
+
+
 def _lembrar(user, d, ficha) -> Saida:
     andamento.avisar("Guardando na memória")
+    preferencias = _lembrar_parametros(user, d)
+    if preferencias:
+        return Saida("Guardei como sua preferência: " + "; ".join(preferencias)
+                     + ". Vale nas suas próximas consultas, até você pedir outra coisa.",
+                     {**ficha, "memoria_registrada": True})
     nota = d.nota.strip()
     if not nota:
         return Saida(d.resposta or "O que você quer que eu guarde?", ficha)
