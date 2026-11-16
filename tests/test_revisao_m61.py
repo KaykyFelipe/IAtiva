@@ -181,3 +181,10 @@ def test_m62_pergunta_sobre_a_lista_nao_vira_historico_de_uma_pessoa():
     assert _PLURAL_DA_LISTA.search("qual a função deles?")
     assert _PLURAL_DA_LISTA.search("e o cargo de cada um?")
     assert not _PLURAL_DA_LISTA.search("qual o histórico de cargos do joão?")
+
+
+def test_m62_funcao_deles_nao_exige_historico():
+    from iativa.agent import historico_funcional
+    assert not historico_funcional.solicitado("qual a função deles?")
+    assert historico_funcional.solicitado("qual o histórico de função deles?")
+    assert historico_funcional.solicitado("qual a função atual do joão?")

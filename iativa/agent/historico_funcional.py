@@ -36,6 +36,10 @@ def norm(texto):
 
 def solicitado(texto):
     t = norm(texto)
+    # M62: "qual a função deles?" pergunta um dado das pessoas de uma lista, não o histórico de uma pessoa.
+    if (re.search(r'\b(deles|delas|desses|dessas|destes|destas|de cada um|da lista)\b', t)
+            and not re.search(r'histor|mud|anterior|linha do tempo', t)):
+        return pede_tempo_estagio(texto)
     return pede_tempo_estagio(texto) or bool(re.search(r'carg|funcao|funcoes', t) and re.search(
         r'histor|mud|anterior|recente|atual|qual|quais|linha do tempo|cargo e funcao', t))
 

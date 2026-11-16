@@ -529,10 +529,12 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
             if metrica in ("dias_uteis", "dias_corridos") and calculos.intervalo_do_texto(texto):
                 d = replace(d, acao="calcular_resultado", calculo={"operacao": metrica, "mensagem": 0,
                                                                    "campo": "", "campo_final": ""})
-        ac.definir(d)
         d = _calculo_implicito(d, texto)
         d = _respeitar_preferencias(user, d, texto)
         d = _atributo_da_lista(user, c, d, texto)
+        if d.acao == "preparar_consulta" and ac.exig == coord.HISTORICO and not ac.trilha:
+            ac.exig = ""  # M62: virou dado da lista anterior; a exigência vem da ação corrigida
+        ac.definir(d)
         from . import admissoes
         d = admissoes.orientar(user, texto, d, objetivos)
         if d.acao not in ("conversar", "falta_capacidade") and d.resposta.strip():
