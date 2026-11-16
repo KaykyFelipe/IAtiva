@@ -202,7 +202,7 @@ def _totalizar(plano, valor, rotulo_valor: str, extra=()):
     plano.agrupar = True
     plano.chave_unica = ()
     plano.top = 0
-    plano.ordenar = []
+    plano.ordenar = [(rotulo_valor, True)]  # destaque e ordem pelo valor, não pela contagem
 
 
 def apelido(spec: dict, campo: str) -> str:

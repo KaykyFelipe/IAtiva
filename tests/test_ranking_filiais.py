@@ -188,3 +188,8 @@ def test_m54_quanto_vira_total_sem_depender_do_modelo():
     assert ("agregacao", "total") in _calculo_implicito(d, "quanto vamos receber nos próximos 30 dias?").parametros
     assert ("agregacao", "por filial") in _calculo_implicito(d, "e o atraso por filial?").parametros
     assert _calculo_implicito(d, "quais títulos vencem esta semana?").parametros == ()
+
+
+def test_m54_destaque_por_filial_e_pelo_valor(ana):
+    msg, pf = _atraso(ana, [{"codigo": "agregacao", "valor": "por filial"}])
+    assert pf.mensagem.startswith("Maior Valor em atraso"), pf.mensagem
