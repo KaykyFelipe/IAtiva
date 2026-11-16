@@ -8,6 +8,7 @@ trechos de conhecimento aprovados. Nunca linhas do ERP (D6).
 from dataclasses import dataclass, field
 
 ACOES = (
+    "fora_escopo",          # assunto pessoal/geral sem relação com o trabalho: recusa fixa, sem efeitos
     "conversar",            # só responder (dúvida, saudação, explicação, pedir informação)
     "preparar_consulta",    # escolher/trocar objetivo e/ou informar parâmetros
     "executar_consulta",    # rodar a consulta que já está completa

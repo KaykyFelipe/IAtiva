@@ -1,8 +1,15 @@
 # STATUS — IAtiva
 
-**Atualizado em:** 2026-11-13
+**Atualizado em:** 2026-11-16
 **Etapa atual:** 7 — Piloto local
 **Situação:** **plano proposto em `PLANO.md` §8, aguardando aprovação.** Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
+
+## Mudança M54 — finalidade corporativa e revisão da memória (2026-11-16)
+
+- Política de finalidade corporativa compartilhada pelos provedores conversacionais: assuntos profissionais, acompanhamentos contextuais e uso da IAtiva permitidos; assuntos pessoais/aleatórios devem produzir `fora_escopo`. Dúvidas pedem contexto profissional, sem fabricar justificativa.
+- Backend encerra `fora_escopo` com resposta fixa, sem executar consulta, gravar nota ou abrir objetivo/tarefa/manutenção; não reutiliza conteúdo livre do modelo. Classificação semântica depende do modelo, não substitui autorização de dados e ainda precisa avaliação adversarial com modelo real.
+- Revisão e prioridades para memória confiável, recuperação entre conversas, indicadores, isolamento e avaliações: `docs/EVOLUCAO_MEMORIA_CORPORATIVA.md`. Evoluções propostas não implementadas nesta mudança.
+- Validação: 827 testes aprovados e 10 pulados na suíte sequencial Windows; Django check sem problemas. Testes específicos verificam recusa fixa sem memória, manutenção, objetivo ou tarefa. Na primeira suíte paralela houve uma falha de catálogo ChatGPT, não reproduzida isoladamente nem na suíte sequencial; avaliação semântica com modelo real ainda pendente.
 
 ## Mudança M53 — IA declara o que falta, manutenção visível e narração ao vivo (2026-11-16)
 

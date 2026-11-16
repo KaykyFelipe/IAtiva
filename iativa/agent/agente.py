@@ -388,6 +388,12 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
         if prazo.esgotado():
             causa = "prazo"
             break  # o modelo respondeu tarde: a ação não é executada com o prazo vencido
+        if d.acao == "fora_escopo":
+            # Não usar a resposta livre do modelo: não responder ao assunto nem
+            # ensinar à manutenção capacidades pessoais fora da finalidade do produto.
+            return Saida("Sou a IAtiva, assistente da Ativa Locação. Posso ajudar com dados, processos e "
+                         "atividades da empresa dentro das suas permissões. Relacione seu pedido ao trabalho "
+                         "para eu ajudar.", ficha={"tipo": "fora_escopo"})
         if diagnostico.solicitado(texto) and diagnostico.reutilizavel(texto) and d.acao == 'conversar':
             anterior = _ultima(user, c)
             if (anterior is not None and anterior.objetivo in {o.codigo for o in objetivos}
