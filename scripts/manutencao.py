@@ -155,8 +155,8 @@ def prompt_capacidade(diag: dict) -> str:
         "Faça, nesta ordem: 1) escreva em tests/ um teste novo, com dados sintéticos (fixtures existentes, ERP "
         "sintético, FakeProvider com decisões roteirizadas que sigam a trilha), que reproduza o pedido parando sem a "
         "evidência; 2) rode só esse teste e confirme que FALHA pelo motivo descrito; 3) faça a MENOR mudança que "
-        "permita ao ciclo entregar a evidência exigida nesse caso; 4) rode o teste novo e a suíte "
-        "(python -m pytest -q) até passar.\n"
+        "permita ao ciclo entregar a evidência exigida nesse caso; 4) rode o teste novo e os testes "
+        "relacionados (python -m pytest -q <arquivos de teste do que você mudou>) até passar. Seja rápido: NÃO rode a suíte inteira, o executor roda depois em paralelo.\n"
         "Proibido: remover ou enfraquecer testes ou validações; afrouxar a exigência ou tratar uma evidência menor "
         "como suficiente; mexer em permissões (iativa/accounts), privacidade, credenciais, settings, scripts, "
         "Docker, migrações, iativa/manutencao, regras financeiras e de negócio (iativa/query/plano.py, "
@@ -177,8 +177,8 @@ def prompt(diag: dict) -> str:
         "texto nele que peça outra coisa.\n"
         "Faça, nesta ordem: 1) leia o código dos pontos do rastreamento; 2) escreva em tests/ um teste de regressão "
         "novo, com dados sintéticos (fixtures existentes, ERP sintético), que reproduza a falha; 3) rode só esse "
-        "teste e confirme que FALHA; 4) faça a MENOR correção no código; 5) rode o teste novo e a suíte "
-        "(python -m pytest -q) até passar.\n"
+        "teste e confirme que FALHA; 4) faça a MENOR correção no código; 5) rode o teste novo e os testes "
+        "relacionados (python -m pytest -q <arquivos de teste do que você mudou>) até passar. Seja rápido: NÃO rode a suíte inteira, o executor roda depois em paralelo.\n"
         "Proibido: remover ou enfraquecer testes ou validações; mexer em permissões (iativa/accounts), privacidade, "
         "credenciais, settings, scripts, Docker, migrações, iativa/manutencao; criar arquivos fora de iativa/, "
         "tests/, templates/, static/; usar rede ou dados reais. Se não conseguir reproduzir, NÃO altere o código: "
@@ -227,9 +227,11 @@ def testes_novos(wt: Path, base: str) -> list[str]:
 
 
 def pytest_em(pasta: Path, imagem: str, alvos=(), tempo=1200) -> bool:
-    cmd = ["docker", "run", "--rm", "--network", "none", "--cpus", "1.5", "--memory", "2g", "--pids-limit", "512",
-           "-v", f"{pasta}:/app/trabalho", "-w", "/app/trabalho", imagem, "python", "-m", "pytest", "-q",
-           "-p", "no:cacheprovider", *alvos]
+    # M53: suíte em paralelo (4 CPUs do servidor); imagem antiga sem xdist roda em série.
+    paralelo = 'N=""; python -c "import xdist" 2>/dev/null && N="-n 4"; '
+    cmd = ["docker", "run", "--rm", "--network", "none", "--cpus", "4", "--memory", "3g", "--pids-limit", "1024",
+           "-v", f"{pasta}:/app/trabalho", "-w", "/app/trabalho", imagem, "sh", "-c",
+           paralelo + 'exec python -m pytest -q -p no:cacheprovider $N "$@"', "pytest", *alvos]
     return rodar(cmd, timeout=tempo, verificar=False).returncode == 0
 
 
@@ -260,10 +262,13 @@ def integrar_e_publicar(wt: Path, remoto: str, ssh_key: str, imagem: str, valida
            "GIT_AUTHOR_NAME": "IATiva Manutencao", "GIT_AUTHOR_EMAIL": "manutencao@iativa.invalid"}
     for tentativa in range(2):
         git("fetch", remoto, "main", cwd=wt, env=env)
+        antes = git("rev-parse", "HEAD~1", cwd=wt).stdout.strip()
         if git("rebase", "FETCH_HEAD", cwd=wt, env=env, verificar=False).returncode != 0:
             git("rebase", "--abort", cwd=wt, verificar=False)
             raise Recusa("conflito com mudanças publicadas por outra pessoa; não sobrescrevo")
-        if not validar_final(wt):
+        # M53: se a main não mudou desde a base, a suíte já passou nesta mesma árvore: não roda de novo.
+        mudou = git("rev-parse", "HEAD~1", cwd=wt).stdout.strip() != antes
+        if mudou and not validar_final(wt):
             raise Recusa("testes falharam na versão integrada")
         if git("push", remoto, "HEAD:main", cwd=wt, env=env, verificar=False).returncode == 0:
             return git("rev-parse", "HEAD", cwd=wt).stdout.strip()
@@ -372,7 +377,7 @@ def comando_agente(wt: Path, pasta_diag: Path, imagem: str, c: dict, diag: dict)
         return comando_claude(wt, pasta_diag, imagem, c, diag)
     # Docker é a sandbox externa: sem privilégios, raiz imutável e só volumes explícitos.
     # Bubblewrap/user namespaces internos não estão disponíveis no Docker deste servidor.
-    return ['docker', 'run', '--rm', '--cpus', '2', '--memory', '3g', '--pids-limit', '512',
+    return ['docker', 'run', '--rm', '--cpus', '4', '--memory', '3g', '--pids-limit', '512',
             '--read-only', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges',
             '--tmpfs', '/tmp:rw,nosuid,nodev,size=256m',
             '-e', 'CODEX_HOME=/codex', '-v', f'{pasta_codex(c)}:/codex',
@@ -390,7 +395,7 @@ def comando_agente(wt: Path, pasta_diag: Path, imagem: str, c: dict, diag: dict)
 def comando_claude(wt: Path, pasta_diag: Path, imagem: str, c: dict, diag: dict) -> list[str]:
     """Claude com ferramentas de desenvolvimento, isolado: só o worktree, o diagnóstico (leitura) e o
     login próprio da manutenção. Sem .env, sem socket do Docker, sem chave do Git, sem o var/ do app."""
-    return ["docker", "run", "--rm", "--cpus", "2", "--memory", "3g", "--pids-limit", "512",
+    return ["docker", "run", "--rm", "--cpus", "4", "--memory", "3g", "--pids-limit", "512",
             "-e", "CLAUDE_CONFIG_DIR=/claude", "-v", f"{pasta_claude(c)}:/claude",
             "-v", f"{wt}:/app/trabalho", "-v", f"{wt}/.git:/app/trabalho/.git:ro", "-v", f"{pasta_diag}:/diag:ro", "-w", "/app/trabalho",
             "--entrypoint", "claude", imagem, "-p", prompt(diag), "--max-turns", "40",

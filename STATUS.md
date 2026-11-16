@@ -9,7 +9,9 @@
 - Nova ação `falta_capacidade`: depois de verificar que nenhum caminho existente resolve o pedido inteiro, a IA descreve em termos técnicos o que o sistema precisa ganhar; o pedido vai na hora para a manutenção (um incidente por capacidade), e a descrição segue mascarada como especificação para o agente de manutenção.
 - O card do pedido em correção mostra as etapas da manutenção (na fila, analisando, implementando, testando, publicando, refazendo), atualizadas pelo executor do host (`manage.py manutencao etapa`).
 - As frases do modelo sobre o que está fazendo ("Vou levantar…") aparecem ao vivo no andamento e saem da resposta final quando há resultado.
-- Pendente: instalar `iativa-manutencao.path` com sudo para a manutenção começar na hora (hoje o timer ainda roda a cada 15 min).
+- `iativa-manutencao.path` instalado (2026-11-16): a manutenção começa no instante em que o incidente é registrado; o timer virou conferência horária.
+- Validado: "quantos dias úteis faltam para acabar o mês" foi declarado, implementado pela manutenção, publicado e respondido sozinho (16 min). Para encurtar: suíte em paralelo (pytest-xdist, 4 CPUs) no executor e na atualização, o agente de manutenção roda só os testes relacionados, e a revalidação final é pulada quando a main não mudou.
+- Campo do chat destrava sozinho quando o pedido em correção termina.
 
 ## Mudança M52 — projeção reconhecida como pedido não cumprido pela soma (2026-11-16)
 

@@ -463,6 +463,14 @@
     rolarParaFim();
     prepararCampo();
     atualizarBotaoTarefa();
+    // M53: o cartão do pedido é trocado por outerHTML quando termina; o evento do htmx sai do elemento
+    // já removido e não chega aqui. Observa a página para destravar o campo assim que o cartão some.
+    let pendente = false;
+    new MutationObserver(() => {
+      if (pendente) return;
+      pendente = true;
+      requestAnimationFrame(() => { pendente = false; atualizarBotaoTarefa(); });
+    }).observe(document.body, { childList: true, subtree: true });
   });
   document.body.addEventListener("htmx:afterSwap", (e) => {
     atualizarBotaoTarefa();

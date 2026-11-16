@@ -251,11 +251,25 @@ def test_teste_falhando_impede_publicacao(repo, monkeypatch):
     w1 = _correcao(repo, "c1")
     _commit(w1)
     remoto = str(repo["remoto"])
+    # A main andou depois da base da correção: a versão integrada precisa passar de novo.
+    w0 = _correcao(repo, "c0", arquivo="iativa/b.py")
+    _commit(w0)
+    mx.integrar_e_publicar(w0, remoto, "/dev/null", "img", lambda w: True)
     with pytest.raises(mx.Recusa, match="testes falharam"):
         mx.integrar_e_publicar(w1, remoto, "/dev/null", "img", lambda w: False)
     final = repo["tmp"] / "final"
     _git(repo["tmp"], "clone", "-q", remoto, str(final))
     assert "return 1" in (final / "iativa" / "a.py").read_text()  # nada publicado
+
+
+def test_main_parada_nao_revalida_a_mesma_arvore(repo, monkeypatch):
+    """M53: sem mudança na main desde a base, a suíte já rodou nessa árvore; não roda outra vez."""
+    monkeypatch.setattr(mx.shlex, "quote", lambda s: s)
+    w1 = _correcao(repo, "c1")
+    _commit(w1)
+    chamadas = []
+    mx.integrar_e_publicar(w1, str(repo["remoto"]), "/dev/null", "img", lambda w: chamadas.append(w) or True)
+    assert chamadas == []
 
 
 def test_executor_desligado_nao_faz_nada(tmp_path, monkeypatch):

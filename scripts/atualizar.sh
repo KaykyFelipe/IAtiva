@@ -94,7 +94,7 @@ git merge --quiet --ff-only "$NEW" || rollback "falha no git merge"
 IMAGEM="iativa-app:${NEW:0:12}"
 nice -n 15 ionice -c3 "${DOCKER_CMD[@]}" build --build-arg "IATIVA_VERSAO=${NEW:0:12}" -t "$IMAGEM" . >> "$RUN_OUTPUT" 2>&1 \
     || rollback "falha ao construir a imagem"
-"${DOCKER_CMD[@]}" run --rm --network none --cpus 1.5 --memory 2g "$IMAGEM" pytest -q -p no:cacheprovider \
+"${DOCKER_CMD[@]}" run --rm --network none --cpus 4 --memory 3g "$IMAGEM" pytest -q -p no:cacheprovider -n 4 \
     >> "$RUN_OUTPUT" 2>&1 || rollback "testes falharam na nova versão"
 
 # A mesma imagem testada é a implantada (azul/verde, com drenagem).
