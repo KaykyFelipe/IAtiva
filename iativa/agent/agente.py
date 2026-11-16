@@ -334,6 +334,28 @@ def _ciclo_agente(user, c, texto, provedor, interrompido, entrada, objetivos, co
     return saida
 
 
+def _respeitar_preferencias(user, d, texto: str):
+    """M55: valor de parâmetro que o modelo preencheu por conta própria (a pessoa não disse) não passa por cima
+    da preferência salva dela: tira o valor e deixa a resolução da memória aplicar a preferência."""
+    if d.acao != "preparar_consulta" or not d.parametros:
+        return d
+    from django.db.models import Q
+    from django.utils import timezone
+
+    from iativa.memory.models import Escopo, ParameterBinding, Situacao
+
+    codigos = {c for c, _ in d.parametros}
+    com_preferencia = set(ParameterBinding.objects.filter(
+        usuario=user, escopo=Escopo.USUARIO, situacao=Situacao.APROVADA, definicao__codigo__in=codigos).filter(
+        Q(valido_ate__isnull=True) | Q(valido_ate__gt=timezone.now())).values_list("definicao__codigo", flat=True))
+    if not com_preferencia:
+        return d
+    t = (texto or "").lower()
+    manter = tuple((c, v) for c, v in d.parametros
+                   if c not in com_preferencia or (str(v).strip() and str(v).strip().lower() in t))
+    return replace(d, parametros=manter) if manter != d.parametros else d
+
+
 _FIXAS_COM_TOTAL = ("titulos-em-atraso", "titulos-a-vencer")
 
 
@@ -444,6 +466,7 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
                                                                    "campo": "", "campo_final": ""})
         ac.definir(d)
         d = _calculo_implicito(d, texto)
+        d = _respeitar_preferencias(user, d, texto)
         if d.acao not in ("conversar", "falta_capacidade") and d.resposta.strip():
             andamento.avisar(d.resposta.strip().split("\n")[0])  # M53: o que a IA vai fazer aparece na hora
         if d.acao == "falta_capacidade":
