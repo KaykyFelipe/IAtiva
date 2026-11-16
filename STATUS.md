@@ -4,6 +4,11 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **plano proposto em `PLANO.md` §8, aguardando aprovação.** Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M52 — projeção reconhecida como pedido não cumprido pela soma (2026-11-16)
+
+- "Projeção", "previsão de fechamento" e "quanto vai fechar" passam a exigir um cálculo de projeção: a soma do realizado no período não encerra o pedido. Sem essa capacidade, o pedido segue para a manutenção (com a pergunta mascarada) para que ela seja criada.
+- Usuário de teste `teste.ti` criado no servidor de teste com as mesmas permissões de consulta do usuário de TI, sem administração, para os testes feitos pela Claude no navegador (senha fora do repositório).
+
 ## Mudança M51 — pergunta mascarada no diagnóstico da manutenção (2026-11-13)
 
 - Validado em produção (2026-11-14): a manutenção recebeu a pergunta de dias úteis entre datas com feriados nacionais, criou o cálculo de calendário (feriados fixos e Sexta-feira Santa), publicou e refez o pedido sozinha. Falha encontrada: o resultado de calendário não tinha escopo e não era salvo, então a resposta saiu sem o número; corrigido com escopo próprio de calendário (sem ERP, visível a quem fez a pergunta).

@@ -391,7 +391,7 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
             # Dias úteis/corridos entre duas datas digitadas: é cálculo de calendário, não conversa.
             from . import calculos
             metrica = coord.metrica_exigida(texto)
-            if metrica and calculos.datas_do_texto(texto):
+            if metrica in ("dias_uteis", "dias_corridos") and calculos.datas_do_texto(texto):
                 d = replace(d, acao="calcular_resultado", calculo={"operacao": metrica, "mensagem": 0,
                                                                    "campo": "", "campo_final": ""})
         ac.definir(d)

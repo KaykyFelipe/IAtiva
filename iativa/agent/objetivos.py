@@ -228,6 +228,9 @@ def metrica_exigida(texto):
     t = _norm(texto)
     if re.search(r'\bdias?\s+(?:uteis|util)\b', t):
         return 'dias_uteis'
+    # M52: projeção (estimar o fechamento de um período em andamento) não é a soma do que já aconteceu.
+    if re.search(r'\bproje(?:c|t)\w*|\bprevisao\s+de\s+fechamento\b|\bquanto\s+vai\s+fechar\b', t):
+        return 'projecao'
     return 'dias_corridos' if re.search(r'\bdias?\s+corridos?\b', t) else ''
 
 
@@ -336,6 +339,9 @@ class Acompanhamento:
         txt = (f"{FALTA[self.exig]}. A etapa anterior deu certo, mas é só parte do pedido: {COMO[self.exig]}. Só pare "
                "para perguntar à pessoa (conversar terminando em pergunta) se faltar uma decisão que só ela pode dar.")
         metrica = metrica_exigida(self.texto)
+        if metrica == 'projecao':
+            return txt + (' A pessoa pediu uma PROJEÇÃO: a soma do que já aconteceu no período não basta. Use '
+                          'calcular_resultado com a operação projecao sobre o resultado do período em andamento.')
         if metrica:
             return txt + (f' A unidade pedida é {metrica}: listar datas ou contar registros não basta. '
                           'Use calcular_resultado com essa operação e as colunas inicial/final, ou historico_cargo '
