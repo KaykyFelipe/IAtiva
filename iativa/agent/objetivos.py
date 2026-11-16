@@ -240,7 +240,7 @@ def cumpre(exig: str, ev: str) -> bool:
 
 # --- texto que não é progresso --------------------------------------------------------------------
 
-_VERBOS = (r"consult|verific|busc|calcul|cont|som|investig|confer|rod|execut|levant|analis|refaz|list|chec|procur|"
+_VERBOS = (r"consult|verific|busc|calcul|cont|som|investig|confer|rod|execut|levant|analis|refaz|list|chec|procur|ver\b|olh|"
            r"compar|cruz|apur|pesquis")
 _ANUNCIO_INICIO = re.compile(
     rf"^(?:agora |ja |entao |certo[,.]? |ok[,.]? )?(?:vou|irei|vamos|deixa eu|deixe-me|estou|estarei)\s+(?:agora\s+|ja\s+)?"
