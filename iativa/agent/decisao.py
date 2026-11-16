@@ -96,7 +96,7 @@ def esquema(codigos_objetivo, codigos_parametro) -> dict:
             "resposta": {"type": "string", "description": "Texto ao usuário, em português, tom de conversa."},
             "calculo": {"type": "object", "description": "Ação calcular_resultado: usa o resultado autorizado anterior. "
                 "Para estágio, deixe campos vazios: os intervalos são resolvidos pelo backend.", "properties": {
-                "operacao": {"type": "string", "enum": ['dias_uteis', 'dias_corridos', 'meses', 'soma', 'media', 'diferenca', 'percentual']},
+                "operacao": {"type": "string", "enum": ['dias_uteis', 'dias_corridos', 'meses', 'soma', 'media', 'diferenca', 'percentual', 'projecao']},
                 "mensagem": {"type": "integer", "minimum": 0, "description": "Id de resultado_anterior.mensagem; 0 = último."},
                 "campo": {"type": "string"}, "campo_final": {"type": "string"}}, "required": ["operacao"]},
             "acao": {"type": "string", "enum": list(ACOES)},

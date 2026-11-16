@@ -21,3 +21,19 @@ def test_soma_do_realizado_nao_cumpre_projecao():
 def test_observacao_explica_que_falta_a_projecao():
     ac = coord.Acompanhamento("faça uma projeção do faturamento", exig=coord.CALCULO)
     assert "PROJEÇÃO" in ac.falta_obs()
+
+
+def test_projecao_linear_por_dias_uteis():
+    from datetime import date
+    from decimal import Decimal
+    from iativa.agent.calculos import _projecao
+    from iativa.query.servico import Resultado
+    res = Resultado(True, "", colunas=["Filial", "Soma"], tipos=["texto", "dinheiro"],
+                    linhas=[["001", "1.000,00"], ["002", "3.000,00"]], premissas=[], escopo={"setor": 1})
+    m = SimpleNamespace(pk=0, resultado={"truncado": False, "moedas": []})
+    # 16/11/2026: passados 01..13/11 = 9 dias úteis (02/11 é feriado); mês = 19 dias úteis (02 e 20/11 feriados).
+    r = _projecao(res, m, {"campo": "Soma"}, [], hoje=date(2026, 11, 16))
+    assert r.medida_calculada == "projecao"
+    assert r.linhas[-1][0] == "Total" and Decimal(r.linhas[-1][1]) == (Decimal(4000) * 19 / 9).quantize(Decimal("0.01"))
+    assert r.curta.startswith("Projeção para 11/2026: R$ 8.444,44")
+    assert any("estimativa" in p for p in r.premissas)

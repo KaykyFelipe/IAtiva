@@ -7,6 +7,7 @@
 ## Mudança M52 — projeção reconhecida como pedido não cumprido pela soma (2026-11-16)
 
 - "Projeção", "previsão de fechamento" e "quanto vai fechar" passam a exigir um cálculo de projeção: a soma do realizado no período não encerra o pedido. Sem essa capacidade, o pedido segue para a manutenção (com a pergunta mascarada) para que ela seja criada.
+- Operação de cálculo `projecao`: realizado do mês até ontem ÷ dias úteis passados × dias úteis do mês (feriados nacionais descontados), por linha e total, com a premissa de que é estimativa linear.
 - Usuário de teste `teste.ti` criado no servidor de teste com as mesmas permissões de consulta do usuário de TI, sem administração, para os testes feitos pela Claude no navegador (senha fora do repositório).
 
 ## Mudança M51 — pergunta mascarada no diagnóstico da manutenção (2026-11-13)

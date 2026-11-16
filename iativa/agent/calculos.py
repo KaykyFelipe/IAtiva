@@ -10,7 +10,7 @@ from iativa.accounts.authz import PermissaoNegada
 from iativa.chat.resultados import ESCOPO_CALENDARIO, restaurar, empacotar
 from iativa.query.servico import Resultado
 
-OPERACOES = ('dias_uteis', 'dias_corridos', 'meses', 'soma', 'media', 'diferenca', 'percentual')
+OPERACOES = ('dias_uteis', 'dias_corridos', 'meses', 'soma', 'media', 'diferenca', 'percentual', 'projecao')
 
 
 def _pascoa(ano):
@@ -184,6 +184,8 @@ def executar(user, conversa, plano, resultado_atual=None):
             texto += ' Contagem de segunda a sexta, sem descontar feriados; data inicial incluída e final excluída.'
         colunas = ['Período', 'Início', 'Fim', unidade.capitalize(), 'Base do cálculo']
         tipos = ['texto', 'data', 'data', 'texto' if op == 'meses' else 'inteiro', 'texto']
+    elif op == 'projecao':
+        return _projecao(res, m, plano, premissas)
     else:
         if 'truncado' not in m.resultado:
             raise ValidationError('Este resultado antigo não tem informação de cobertura. Reexecute a consulta antes de somar.')
@@ -209,3 +211,48 @@ def executar(user, conversa, plano, resultado_atual=None):
         texto = ' '.join(f'{l[0]}: {l[1]}{"%" if op == "percentual" and not l[1].startswith("Indefinido") else ""}.' for l in linhas)
     return Resultado(True, texto or 'Nenhum registro para calcular.', colunas=colunas, tipos=tipos, linhas=linhas,
                      premissas=premissas, escopo=res.escopo, medida_calculada=op, periodos=res.periodos)
+
+
+def _projecao(res, m, plano, premissas, hoje=None):
+    """M52: projeção linear do mês corrente pelo ritmo dos dias úteis já passados.
+    Realizado ÷ dias úteis decorridos (até ontem) × dias úteis do mês, descontando feriados nacionais.
+    É estimativa: supõe o mesmo ritmo no resto do mês."""
+    from django.utils import timezone
+
+    if 'truncado' not in m.resultado:
+        raise ValidationError('Reexecute a consulta do período antes de projetar.')
+    if len(m.resultado.get('moedas', [])) > 1:
+        raise ValidationError('Não misture moedas diferentes na projeção; consulte cada moeda separadamente.')
+    try:
+        a = res.colunas.index(plano.get('campo'))
+    except ValueError:
+        raise ValidationError('Escolha a coluna do valor realizado dentre as colunas do resultado.') from None
+    if res.tipos[a] not in ('dinheiro', 'inteiro', 'valor', 'numero'):
+        raise ValidationError('Escolha uma medida numérica para projetar.')
+    hoje = hoje or timezone.localdate()
+    inicio = hoje.replace(day=1)
+    proximo = (inicio + timedelta(days=32)).replace(day=1)
+    passados, total = dias_uteis(inicio, hoje, True), dias_uteis(inicio, proximo, True)
+    if passados == 0:
+        raise ValidationError('Ainda não passou nenhum dia útil completo neste mês para projetar.')
+    fator = Decimal(total) / Decimal(passados)
+    rot = next((i for i, t in enumerate(res.tipos) if t == 'texto' and i != a), None)
+    linhas, soma = [], Decimal(0)
+    for i, l in enumerate(res.linhas, 1):
+        v = _numero(l[a]); soma += v
+        linhas.append([str(l[rot]) if rot is not None else f'Registro {i}', format((v * fator).quantize(Decimal('0.01')), 'f'),
+                       format(v, 'f')])
+    projetado = (soma * fator).quantize(Decimal('0.01'))
+    if len(linhas) != 1:
+        linhas.append(['Total', format(projetado, 'f'), format(soma, 'f')])
+    tipo = res.tipos[a]
+    regra = (f'Projeção linear: realizado até ontem ({passados} de {total} dias úteis de {inicio:%m/%Y}, '
+             'descontando feriados nacionais) dividido pelos dias úteis passados e multiplicado pelos dias úteis do mês. '
+             'É uma estimativa: supõe o mesmo ritmo no restante do mês.')
+    from iativa.query.servico import _numero_br
+    rs = "R$ " if tipo == "dinheiro" else ""
+    curta = f'Projeção para {inicio:%m/%Y}: {rs}{_numero_br(format(projetado, "f"))}'
+    return Resultado(True, f'{curta}. Realizado até agora: {rs}{_numero_br(format(soma, "f"))}. {regra}',
+                     colunas=['Origem', 'Projeção do mês', 'Realizado até agora'], tipos=['texto', tipo, tipo],
+                     linhas=linhas, premissas=premissas + [regra], escopo=res.escopo, medida_calculada='projecao',
+                     curta_salva=curta)
