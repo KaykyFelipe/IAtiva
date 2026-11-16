@@ -373,6 +373,9 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
             causa = "prazo"
             break
         except FalhaModelo as exc:
+            # Motivo é código do provedor (tipo de erro, status), nunca a pergunta nem dados.
+            import logging
+            logging.getLogger(__name__).warning("modelo falhou (%s): %s", provedor.nome, exc)
             if saida is not None or prazo.esgotado() or ac.trilha or ac.registro is not None:
                 if not ac.trilha:
                     ac.anotar('continuacao', 'modelo_falhou')
