@@ -404,7 +404,7 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
             # Dias úteis/corridos entre duas datas digitadas: é cálculo de calendário, não conversa.
             from . import calculos
             metrica = coord.metrica_exigida(texto)
-            if metrica in ("dias_uteis", "dias_corridos") and calculos.datas_do_texto(texto):
+            if metrica in ("dias_uteis", "dias_corridos") and calculos.intervalo_do_texto(texto):
                 d = replace(d, acao="calcular_resultado", calculo={"operacao": metrica, "mensagem": 0,
                                                                    "campo": "", "campo_final": ""})
         ac.definir(d)
@@ -808,7 +808,7 @@ def _agir(user, c, d, atual, defs, texto, provedor, entrada, objetivos, administ
         try:
             plano = d.calculo
             if (plano.get('operacao') in ('dias_uteis', 'dias_corridos') and not plano.get('campo')
-                    and not plano.get('mensagem') and resultado_base is None and calculos.datas_do_texto(texto)):
+                    and not plano.get('mensagem') and resultado_base is None and calculos.intervalo_do_texto(texto)):
                 return Saida('Calculei sobre as datas informadas.', {**ficha, 'tipo': 'calculo_resultado'},
                              resultado=calculos.entre_datas(texto, plano['operacao']))
             if resultado_base is None and not plano.get('mensagem') and entrada.resultado_anterior:

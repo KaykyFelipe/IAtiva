@@ -61,13 +61,30 @@ def datas_do_texto(texto):
         return None
 
 
+_FIM_DO_MES = re.compile(r'\b(?:fim|final|acabar|terminar|encerrar|fechar)\s+(?:d?o\s+)?(?:este\s+|esse\s+)?mes\b')
+
+
+def intervalo_do_texto(texto, hoje=None):
+    """Intervalo [início, fim) pedido: duas datas dd/mm/aaaa ou, relativo, de hoje até o fim do mês corrente."""
+    datas = datas_do_texto(texto)
+    if datas is not None:
+        return datas
+    import unicodedata
+    t = unicodedata.normalize('NFKD', (texto or '').lower()).encode('ascii', 'ignore').decode()
+    if not _DATA_TEXTO.search(texto or '') and _FIM_DO_MES.search(t):
+        from django.utils import timezone
+        hoje = hoje or timezone.localdate()
+        return hoje, (hoje.replace(day=1) + timedelta(days=32)).replace(day=1)
+    return None
+
+
 def pede_feriados(texto):
     return bool(re.search(r'feriad', texto or '', re.I))
 
 
 def entre_datas(texto, op):
     """Cálculo de calendário sobre as duas datas informadas na pergunta (sem dados do ERP)."""
-    datas = datas_do_texto(texto)
+    datas = intervalo_do_texto(texto)
     if datas is None or op not in ('dias_uteis', 'dias_corridos'):
         raise ValidationError('Informe as duas datas (dd/mm/aaaa) para o cálculo.')
     inicio, fim = datas
@@ -82,10 +99,13 @@ def entre_datas(texto, op):
         premissa = f'Dias úteis: {regra}. Inclui a data inicial e exclui a final.'
     else:
         premissa = 'Dias corridos: diferença entre as datas; inclui a inicial e exclui a final.'
+    relativo = datas_do_texto(texto) is None
+    if relativo:
+        premissa += f' Período: de hoje ({inicio:%d/%m/%Y}) até o fim do mês ({fim - timedelta(days=1):%d/%m/%Y}), inclusive.'
     texto_res = f'{valor} {unidade} de {inicio:%d/%m/%Y} a {fim:%d/%m/%Y}. {premissa}'
     return Resultado(True, texto_res, colunas=['Período', 'Início', 'Fim', unidade.capitalize(), 'Base do cálculo'],
                      tipos=['texto', 'data', 'data', 'inteiro', 'texto'],
-                     linhas=[['Datas informadas', f'{inicio:%d/%m/%Y}', f'{fim:%d/%m/%Y}', str(valor), 'Calendário']],
+                     linhas=[['Até o fim do mês' if relativo else 'Datas informadas', f'{inicio:%d/%m/%Y}', f'{fim:%d/%m/%Y}', str(valor), 'Calendário']],
                      premissas=[premissa, 'Cálculo de calendário sobre as datas da pergunta; sem dados do ERP.'],
                      escopo=dict(ESCOPO_CALENDARIO), medida_calculada=op)
 
