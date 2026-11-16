@@ -9,6 +9,7 @@ Formato: `ID | data | decisão | situação | aprovado por | observações`
 | Etapa | Data | Aprovado por |
 |---|---|---|
 | 0 — Levantamento e proposta | 2026-11-09 | Kayky Felipe (chat) |
+| 7 — Piloto local (`PLANO.md` §8, início autorizado) | 2026-11-16 | Diego (chat: "Aprovo a etapa 7") |
 | 1 — Fundação em localhost (inclui T1–T7, M1) | 2026-11-09 | Kayky Felipe (chat: "eu aprovo, pode mandar") — aprovada antes da execução no servidor Windows; a validação do Docker no servidor segue como pendência |
 | 2 — Plano de autorização e memória (início autorizado) | 2026-11-10 | Diego (chat: "Aprovo a etapa 2, pode fazer") — com setores de exemplo enquanto a lista real não chega |
 | 2 — Autorização e memória de parâmetros (entrega validada, inclui T8–T13) | 2026-11-10 | Diego (chat: "Aprovo a Etapa 2") — setores reais e agendamento do expurgo seguem como pendências |

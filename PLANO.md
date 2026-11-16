@@ -114,7 +114,7 @@ Conforme `docs/PEDIDO_INICIAL.md` §17: 0 Levantamento → 1 Fundação localhos
 - [ ] `pytest` passa.
 
 
-## 8. Etapa 7 — piloto local (proposta, aguardando aprovação)
+## 8. Etapa 7 — piloto local (aprovada em 2026-11-16, em andamento)
 
 **Objetivo:** usar o IAtiva com perguntas reais, conferir as respostas contra relatórios confiáveis do Protheus e corrigir o que falhar, antes de liberar a mais pessoas.
 
