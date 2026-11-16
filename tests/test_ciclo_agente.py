@@ -236,7 +236,7 @@ def test_memorias_isoladas_entre_usuarios_e_setores(base):
     sem_ra = _contar(erp, "02", "AND TRIM(E1_TIPO) <> 'RA'")
     assert len(_linhas(bia, cm).linhas) == sem_ra
     assert len(_linhas(caio, cm).linhas) == todos  # outro setor
-    assert len(_linhas(ana, cm).linhas) == sem_ncc  # a regra da própria Ana tem precedência no mesmo campo
+    assert len(_linhas(ana, cm).linhas) == sem_ra  # a regra corporativa prevalece sem exceção aprovada
 
 
 def test_regra_sem_mapeamento_fica_como_hipotese_e_pede_esclarecimento(base):

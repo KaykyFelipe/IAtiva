@@ -88,6 +88,7 @@ class Origem(models.TextChoices):
 
 
 class ParameterBinding(models.Model):
+    excecao_de = models.ForeignKey('self', null=True, blank=True, on_delete=models.PROTECT, related_name='excecoes')
     definicao = models.ForeignKey(
         ParameterDefinition, on_delete=models.PROTECT, related_name="valores", verbose_name="definição"
     )

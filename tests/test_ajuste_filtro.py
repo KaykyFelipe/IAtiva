@@ -264,16 +264,17 @@ def test_filtro_do_usuario_vale_so_para_ele(ana, novo_usuario, politica):
     assert _rodar(ana, c, cm) == total
 
 
-def test_usuario_desliga_filtro_fixo_so_para_si(ana, novo_usuario, politica):
-    """M42: "pra mim, conte também os bloqueados": o filtro fixo do T.I deixa de valer só para quem pediu."""
+def test_usuario_pede_excecao_ao_filtro_fixo_sem_aplicar_antes_da_aprovacao(ana, novo_usuario, politica):
+    """O pedido pessoal não remove o filtro corporativo antes da aprovação."""
     _ti(ana)
     c = conversas.nova_individual(ana)
     cm, total = _consulta(ana, c)
     cm = aprendizado.ajustar_filtros(ana, cm, [{"campo": "A1_XSEGMEN", "operador": "igual", "valor": "COM"}], [])
     filtrado = _rodar(ana, c, cm)
-    aprendizado.ajustar_filtros(ana, cm, [], ["A1_XSEGMEN"], alcance="usuario")
-    assert _rodar(ana, c, cm) == total
+    pedido = aprendizado.ajustar_filtros(ana, cm, [], ["A1_XSEGMEN"], alcance="usuario")
+    assert pedido.excecao_solicitada
+    assert _rodar(ana, c, cm) == filtrado
     cm.refresh_from_db()
     assert [f["campo"] for f in cm.spec["filtros_fixos"]] == ["A1_XSEGMEN"]
-    assert "desligados só para você" in aprendizado.descrever_filtros(cm, ana)
+    assert "desligados só para você" not in aprendizado.descrever_filtros(cm, ana)
     assert 0 < filtrado < total

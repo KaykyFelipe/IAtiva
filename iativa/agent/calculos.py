@@ -270,14 +270,20 @@ def _projecao(res, m, plano, premissas, hoje=None):
         raise ValidationError('Ainda não passou nenhum dia útil completo neste mês para projetar.')
     fator = Decimal(total) / Decimal(passados)
     rot = next((i for i, t in enumerate(res.tipos) if t == 'texto' and i != a), None)
+    tipo = res.tipos[a]
+    def apresentar(v):
+        if tipo == 'dinheiro':
+            from iativa.query.servico import _fmt
+            return _fmt(v, 'dinheiro')
+        return _numero_br(v)
     linhas, soma = [], Decimal(0)
     for i, l in enumerate(res.linhas, 1):
         v = _numero(l[a]); soma += v
-        linhas.append([str(l[rot]) if rot is not None else f'Registro {i}', _numero_br((v * fator).quantize(Decimal('0.01'))),
-                       _numero_br(v)])
+        linhas.append([str(l[rot]) if rot is not None else f'Registro {i}', apresentar((v * fator).quantize(Decimal('0.01'))),
+                       apresentar(v)])
     projetado = (soma * fator).quantize(Decimal('0.01'))
     if len(linhas) != 1:
-        linhas.append(['Total', _numero_br(projetado), _numero_br(soma)])
+        linhas.append(['Total', apresentar(projetado), apresentar(soma)])
     tipo = res.tipos[a]
     regra = (f'Projeção linear: realizado até ontem ({passados} de {total} dias úteis de {inicio:%m/%Y}, '
              'descontando feriados nacionais) dividido pelos dias úteis passados e multiplicado pelos dias úteis do mês. '

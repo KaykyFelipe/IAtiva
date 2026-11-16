@@ -63,6 +63,7 @@ class EntradaAgente:
     resultado_anterior: dict | None = None  # esquema/metadados, nunca linhas
     # M48: consultas já executadas nesta conversa (critérios, filtros, colunas; nunca linhas ou números).
     consultas_conversa: list[dict] = field(default_factory=list)
+    planejamento: dict = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -86,6 +87,7 @@ class Decisao:
     calculo: dict | None = None
     formato: str = ""  # M48: "direto" (só o valor pedido), "resumo" (curto) ou "" (completo)
     capacidade: str = ""  # M53: o que falta no sistema, em termos técnicos (sem dados), para a manutenção
+    atende: tuple[int, ...] = ()
 
 
 FORMATOS = ("", "direto", "resumo")
@@ -96,6 +98,24 @@ def esquema(codigos_objetivo, codigos_parametro) -> dict:
     return {
         "type": "object",
         "properties": {
+            "atende": {"type": "array", "maxItems": 6, "items": {"type": "integer", "minimum": 0, "maximum": 5},
+                       "description": "Índices (base zero) das entregas do planejamento que esta ação pretende cumprir."},
+            "analise": {"type": "object", "properties": {
+                "natureza": {"type": "string", "enum": ["dados", "geral", "fora", "ambigua"]},
+                "setores": {"type": "array", "items": {"type": "string"}, "maxItems": 12},
+                "confianca": {"type": "number", "minimum": 0, "maximum": 1},
+                "resumo": {"type": "string", "maxLength": 1000},
+                "entregas": {"type": "array", "maxItems": 6, "items": {"type": "object", "properties": {
+                    "descricao": {"type": "string", "maxLength": 200},
+                    "tipo": {"type": "string", "enum": ["resposta", "consulta", "calculo", "verificacao", "investigacao", "historico"]},
+                    "metrica": {"type": "string", "enum": ["", "dias_uteis", "dias_corridos", "meses", "soma", "media", "diferenca", "percentual", "projecao"]}},
+                    "required": ["descricao", "tipo", "metrica"]}},
+                "memorias": {"type": "array", "maxItems": 4, "items": {"type": "object", "properties": {
+                    "texto": {"type": "string", "maxLength": 300},
+                    "trecho": {"type": "string", "maxLength": 300},
+                    "tipo": {"type": "string", "enum": ["preferencia", "termo", "correcao"]}},
+                    "required": ["texto", "trecho", "tipo"]}}},
+                "required": ["natureza", "setores", "confianca", "resumo", "entregas", "memorias"]},
             "resposta": {"type": "string", "description": "Texto ao usuário, em português, tom de conversa."},
             "calculo": {"type": "object", "description": "Ação calcular_resultado: usa o resultado autorizado anterior. "
                 "Para estágio, deixe campos vazios: os intervalos são resolvidos pelo backend.", "properties": {
@@ -208,7 +228,7 @@ def validar(saida, codigos_objetivo, codigos_parametro) -> Decisao:
         raise DecisaoInvalida("formato")
     extras = set(saida) - {"resposta", "acao", "objetivo", "parametros", "alvo", "nota", "confirmado", "opcoes",
                            "alcance", "consulta", "tipo_nota", "regra", "validade", "investigacao", "entrega",
-                           "ajuste", "calculo", "formato", "capacidade"}
+                           "ajuste", "calculo", "formato", "capacidade", "analise", "atende"}
     if extras:
         raise DecisaoInvalida("campos extras")
     acao = saida.get("acao")
@@ -281,6 +301,7 @@ def validar(saida, codigos_objetivo, codigos_parametro) -> Decisao:
     if acao == "falta_capacidade" and not capacidade.strip():
         raise DecisaoInvalida("capacidade")
     return Decisao(
+        atende=tuple(_atende(saida.get('atende'))),
         capacidade=capacidade,
         formato=formato,
         calculo=calculo,
@@ -299,6 +320,14 @@ def validar(saida, codigos_objetivo, codigos_parametro) -> Decisao:
         opcoes=tuple(_texto(o, 120, "opcao") for o in opcoes),
         alcance=alcance,
     )
+
+
+def _atende(v):
+    if v is None:
+        return []
+    if not isinstance(v, list) or len(v) > 6 or any(type(i) is not int or not 0 <= i <= 5 for i in v):
+        raise DecisaoInvalida('atende')
+    return sorted(set(v))
 
 
 def _ajuste(a) -> dict | None:

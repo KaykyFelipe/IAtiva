@@ -30,7 +30,7 @@ def ana(erp_sintetico, settings, novo_usuario, politica):
 
 
 def _num(t):
-    return Decimal(str(t).replace(".", "").replace(",", "."))
+    return Decimal(str(t).replace('R$', '').strip().replace(".", "").replace(",", "."))
 
 
 def _rodar(ana, agregacao, filial="TODAS"):

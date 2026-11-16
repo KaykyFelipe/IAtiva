@@ -113,9 +113,15 @@ def registrar_valor(
         raise ValidationError("Escopo desconhecido.")
 
     privado = escopo not in ESCOPOS_COMPARTILHADOS
+    excecao = None
+    if escopo == Escopo.USUARIO:
+        from .resolucao import _candidatos
+        excecao = next((b for b in _candidatos(definicao, ator, None, agora)
+                        if b.obrigatoria and _chave(b.valor) != _chave(valor)), None)
     if not privado:
         substitui = _conferir_conflito(definicao, escopo, setor, valor, obrigatoria, substitui)
     binding = ParameterBinding.objects.create(
+        excecao_de=excecao,
         definicao=definicao,
         escopo=escopo,
         solicitacao=solicitacao,
@@ -123,15 +129,15 @@ def registrar_valor(
         setor=setor,
         valor=valor,
         obrigatoria=obrigatoria,
-        situacao=Situacao.APROVADA if privado else Situacao.PROPOSTA,
+        situacao=Situacao.APROVADA if privado and not excecao else Situacao.PROPOSTA,
         origem=origem,
         evidencia=evidencia,
         valido_ate=valido_ate,
         versao=(substitui.versao + 1) if substitui else 1,
         substitui=substitui,
         criado_por=ator,
-        aprovado_por=ator if privado else None,
-        aprovado_em=agora if privado else None,
+        aprovado_por=ator if privado and not excecao else None,
+        aprovado_em=agora if privado and not excecao else None,
         expira_em=agora + timedelta(days=_dias_dado_pessoal()) if definicao.contem_dado_pessoal else None,
     )
     _revisar(binding, AcaoRevisao.CRIADA, "", ator)
@@ -186,8 +192,14 @@ def aprovar(ator, binding: ParameterBinding, motivo: str = "") -> ParameterBindi
     binding = _travar(binding)
     if binding.situacao != Situacao.PROPOSTA:
         raise ValidationError("Somente propostas podem ser aprovadas.")
-    exigir(ator, Permissao.APROVAR_CONHECIMENTO, binding.setor)
-    if binding.criado_por_id == ator.pk and not autoaprovacao():
+    if binding.excecao_de_id:
+        if not pode_aprovar_excecao(ator, binding):
+            raise PermissaoNegada('Exceções corporativas dependem da Diretoria ou TI com permissão de aprovação.')
+        if binding.excecao_de.situacao != Situacao.APROVADA:
+            raise ValidationError('A regra corporativa mudou; solicite uma nova aprovação.')
+    else:
+        exigir(ator, Permissao.APROVAR_CONHECIMENTO, binding.setor)
+    if not binding.excecao_de_id and binding.criado_por_id == ator.pk and not autoaprovacao():
         raise PermissaoNegada("Quem propôs não aprova a própria proposta.")
     binding.situacao = Situacao.APROVADA
     binding.aprovado_por = ator
@@ -209,12 +221,25 @@ def rejeitar(ator, binding: ParameterBinding, motivo: str = "") -> ParameterBind
     binding = _travar(binding)
     if binding.situacao != Situacao.PROPOSTA:
         raise ValidationError("Somente propostas podem ser rejeitadas.")
-    exigir(ator, Permissao.APROVAR_CONHECIMENTO, binding.setor)
+    if binding.excecao_de_id:
+        if not pode_aprovar_excecao(ator, binding):
+            raise PermissaoNegada('Sem permissão para decidir a exceção corporativa.')
+    else:
+        exigir(ator, Permissao.APROVAR_CONHECIMENTO, binding.setor)
     binding.situacao = Situacao.REJEITADA
     binding.save(update_fields=["situacao"])
     _revisar(binding, AcaoRevisao.REJEITADA, Situacao.PROPOSTA, ator, motivo)
     _auditar("parametro_rejeitado", ator, binding, Situacao.PROPOSTA)
     return binding
+
+
+def pode_aprovar_excecao(ator, binding):
+    from iativa.accounts.models import UserProfile, Funcao
+    from iativa.accounts.authz import tem_permissao
+    return bool(binding.excecao_de_id and UserProfile.objects.filter(user=ator,
+        funcao__in=[Funcao.DIRETORIA, Funcao.TI]).exists() and (
+        ator.is_superuser or tem_permissao(ator, Permissao.APROVAR_CONHECIMENTO, binding.excecao_de.setor)
+        or tem_permissao(ator, Permissao.ADMINISTRAR)))
 
 
 @transaction.atomic

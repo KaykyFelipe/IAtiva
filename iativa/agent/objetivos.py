@@ -312,6 +312,11 @@ class Acompanhamento:
     parado: int = 0  # passos seguidos sem evidência nova
     melhor: str = ""  # melhor evidência obtida
     registro: Objetivo | None = None  # preenchido na continuação pelo worker
+    contrato: list = field(default_factory=list)
+    cumpridas: list = field(default_factory=list)
+
+    def pendentes(self):
+        return [e['descricao'] for i, e in enumerate(self.contrato) if i not in self.cumpridas]
 
     def definir(self, decisao):
         if getattr(decisao, "formato", ""):
@@ -334,7 +339,7 @@ class Acompanhamento:
         return self.parado >= int(cfg()["sem_progresso"])
 
     def cumprido(self, ev: str) -> bool:
-        return cumpre(self.exig or RESPOSTA, ev)
+        return not self.pendentes() and cumpre(self.exig or RESPOSTA, ev)
 
     def falta_obs(self, consulta=None) -> str:
         txt = (f"{FALTA[self.exig]}. A etapa anterior deu certo, mas é só parte do pedido: {COMO[self.exig]}. Só pare "
@@ -366,7 +371,7 @@ def registrar(ac: Acompanhamento, user, conversa, mensagem_id, situacao: str, mo
               espera_s: int = 0, tarefa_id=None) -> Objetivo:
     campos = {"exigencia": ac.exig or RESPOSTA, "origem": ac.origem or "acao", "situacao": situacao,
               "trilha": _trilha_segura(ac.trilha), "motivo": motivo[:300], "melhor_evidencia": ac.melhor,
-              "incidente": incidente,
+              "incidente": incidente, 'contrato': {'entregas': ac.contrato, 'cumpridas': ac.cumpridas},
               "tarefa_id": tarefa_id,
               "lease_ate": timezone.now() + timedelta(seconds=espera_s) if espera_s else None}
     if ac.registro is not None:

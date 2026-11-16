@@ -26,6 +26,10 @@ def criar_solicitacao(ator, dominio: str, objetivo: str, conversa: ConversationC
     explicito = setor is not None
     if setor is None:
         setor = setor_do_usuario(ator)
+        from iativa.accounts.authz import tem_permissao, setores_autorizados
+        from iativa.accounts.models import Department
+        if setor is not None and not tem_permissao(ator, Permissao.CONSULTAR, setor):
+            setor = Department.objects.filter(pk__in=setores_autorizados(ator, Permissao.CONSULTAR), ativo=True).order_by('pk').first()
     if setor is None:
         raise PermissaoNegada("Usuário sem setor ativo.")
     exigir(ator, Permissao.CONSULTAR, setor)
@@ -33,7 +37,7 @@ def criar_solicitacao(ator, dominio: str, objetivo: str, conversa: ConversationC
         raise ValidationError("Domínio desconhecido.")
     if conversa is None:
         conversa = ConversationContext.objects.create(usuario=ator, setor=setor)
-    elif conversa.encerrada_em is not None or (explicito and conversa.tipo != "mestre") or (
+    elif conversa.encerrada_em is not None or (explicito and conversa.tipo == "setor") or (
         conversa.usuario_id != ator.pk if conversa.usuario_id else conversa.setor_id != setor.pk
     ):
         # Individual/mestre: só o dono. Conversa do setor: quem é do setor (M8).

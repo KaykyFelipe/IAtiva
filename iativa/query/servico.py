@@ -17,6 +17,7 @@ from datetime import date
 from decimal import Decimal
 
 from django.conf import settings
+from django.core.exceptions import ImproperlyConfigured
 
 from iativa.accounts.authz import PermissaoNegada, filiais_autorizadas
 from iativa.agent import orquestrador
@@ -322,6 +323,17 @@ def executar_solicitacao(user, s: RequestContext) -> Resultado:
         situacao = ERRO_PARAMETROS if conferencia.tipo == "pergunta" else (
             ERRO_METADADOS if conferencia.mensagem == orquestrador.MOTIVOS["metadados_indisponiveis"] else SEM_PERMISSAO)
         return Resultado(False, conferencia.mensagem, estado=s.estado, solicitacao=s, situacao=situacao)
+    if s.objetivo.startswith(PREFIXO_APRENDIDO):
+        from iativa.agent.planejamento import autorizar_fonte
+        from iativa.agent.provedores import FalhaModelo
+        from iativa.agent.models import ConsultaModelo
+        cm = ConsultaModelo.objects.get(pk=OBJETIVOS[s.objetivo].modelo_id)
+        try:
+            for alias in {cm.tabela} | {j['tabela'] for j in cm.spec.get('juncoes', [])}:
+                autorizar_fonte(user, None, alias)
+        except (PermissaoNegada, FalhaModelo, ImproperlyConfigured):
+            return Resultado(False, 'Não consegui confirmar acesso ao domínio desta fonte. A consulta não foi executada.',
+                             estado=s.estado, solicitacao=s, situacao=SEM_PERMISSAO)
     valores = _valores(user, s)
     autorizadas = filiais_autorizadas(user, s.setor)
     todas = valores.get("filial-analise") == TODAS

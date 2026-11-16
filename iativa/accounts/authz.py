@@ -5,12 +5,30 @@ nem por texto recebido do navegador: a identidade vem da sessão autenticada e a
 das `AccessPolicy` vigentes.
 """
 from enum import StrEnum
+from contextlib import contextmanager
+from contextvars import ContextVar
 
 from django.core.exceptions import PermissionDenied
 from django.db.models import Q
 from django.utils import timezone
 
 from .models import AccessPolicy, Department, UserProfile
+
+_escopo_consulta = ContextVar('iativa_escopo_consulta', default=None)
+
+
+@contextmanager
+def limitar_consulta(user, setores):
+    token = _escopo_consulta.set((user.pk, frozenset(setores)))
+    try:
+        yield
+    finally:
+        _escopo_consulta.reset(token)
+
+
+def _dentro_do_pedido(user, setor_id):
+    escopo = _escopo_consulta.get()
+    return escopo is None or escopo[0] != getattr(user, 'pk', None) or setor_id in escopo[1]
 
 
 class Permissao(StrEnum):
@@ -51,6 +69,8 @@ def politicas_vigentes(user, agora=None):
 
 def tem_permissao(user, permissao: Permissao, setor: Department | None = None, agora=None) -> bool:
     """`setor=None` verifica o nível empresa. Permissão de setor não vale para a empresa e vice-versa."""
+    if permissao == Permissao.CONSULTAR and not _dentro_do_pedido(user, getattr(setor, 'pk', None)):
+        return False
     qs = politicas_vigentes(user, agora).filter(**{Permissao(permissao).value: True})
     qs = qs.filter(department__isnull=True) if setor is None else qs.filter(department=setor)
     return qs.exists()
@@ -69,11 +89,14 @@ def permissao_geral(user) -> bool:
 def setores_autorizados(user, permissao: Permissao, agora=None) -> set[int]:
     """Setores (ids) em que o usuário tem a permissão. Base da visão consolidada."""
     qs = politicas_vigentes(user, agora).filter(**{Permissao(permissao).value: True}, department__isnull=False)
-    return set(qs.values_list("department_id", flat=True))
+    ids = set(qs.values_list("department_id", flat=True))
+    return {sid for sid in ids if _dentro_do_pedido(user, sid)} if permissao == Permissao.CONSULTAR else ids
 
 
 def filiais_autorizadas(user, setor: Department, agora=None) -> frozenset[str]:
     """Filiais que o usuário pode consultar no setor (união das políticas de consulta vigentes)."""
+    if not _dentro_do_pedido(user, setor.pk):
+        return frozenset()
     filiais: set[str] = set()
     for lista in politicas_vigentes(user, agora).filter(pode_consultar=True, department=setor).values_list(
         "filiais", flat=True

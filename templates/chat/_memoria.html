@@ -15,12 +15,33 @@
       {% if erro %}<p class="erro" role="alert">{{ erro }}</p>{% endif %}
 
       <section class="painel">
+        <h2>O que a IAtiva sabe sobre mim</h2>
+        {% for n in memorias_pessoais %}
+          <article class="pendencia">
+            <p><strong>{{ n.texto }}</strong></p>
+            <p class="sutil">{{ n.get_tipo_display }} · {{ n.get_situacao_display }} · {{ n.criado_em|date:"d/m/Y H:i" }}</p>
+            {% if n.origem_mensagem %}<p class="sutil">Origem: <a href="{% url 'chat:conversa' n.origem_mensagem.conversa_id %}">conversa que ensinou esta memória</a></p>{% endif %}
+            {% if n.evidencia %}<p class="sutil">Trecho confirmado: {{ n.evidencia }}</p>{% endif %}
+            {% if n.excecao_de_id or n.excecao_consulta_id %}<p class="sutil">Exceção à regra corporativa. A aprovação depende da Diretoria ou TI.</p>{% endif %}
+            <form method="post" action="{% url 'chat:memoria_decidir' %}" class="acoes">
+              {% csrf_token %}<input type="hidden" name="ref" value="nota-{{ n.pk }}">
+              {% if not n.criterios and not n.excecao_de_id and not n.excecao_consulta_id %}
+                <input type="text" name="texto" value="{{ n.texto }}" maxlength="300" aria-label="Editar memória pessoal">
+                <button type="submit" name="acao" value="editar" class="botao secundario">Salvar alteração</button>
+              {% endif %}
+              <button type="submit" name="acao" value="esquecer" class="botao secundario">Esquecer</button>
+              {% if n.tipo == 'preferencia' and n.substitui_id %}<button type="submit" name="acao" value="desfazer" class="botao secundario">Desfazer alteração</button>{% endif %}
+            </form>
+          </article>
+        {% empty %}<p class="sutil">Nenhuma memória pessoal salva.</p>{% endfor %}
+      </section>
+      <section class="painel">
         <h2>Aguardando aprovação</h2>
         {% for p in pendencias %}
           <div class="pendencia">
             <p><span class="etiqueta">{{ p.tipo }}</span> <span class="sutil">{{ p.nivel }} · proposto por {{ p.autor }} · {{ p.ref }}</span></p>
             <p><strong>{{ p.descricao }}</strong></p>
-            {% if p.atual %}<p class="conflito">Hoje vale: {{ p.atual }}. Aprovar substitui (o histórico fica guardado).</p>{% endif %}
+            {% if p.atual %}<p class="conflito">Hoje vale: {{ p.atual }}. {% if p.excecao %}A regra corporativa continua valendo. Aprovar libera somente esta exceção pessoal.{% else %}Aprovar substitui (o histórico fica guardado).{% endif %}</p>{% endif %}
             {% if p.pode_decidir %}
               <form method="post" action="{% url 'chat:memoria_decidir' %}" class="acoes">
                 {% csrf_token %}

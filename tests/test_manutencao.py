@@ -194,6 +194,10 @@ def test_diferenca_valida_passa(repo):
 @pytest.mark.parametrize("arquivo,conteudo,teste,motivo", [
     ("config/settings.py", "x = 1\n", True, "fora do permitido"),
     ("iativa/accounts/authz.py", "x = 1\n", True, "fora do permitido"),
+    ("iativa/agent/planejamento.py", "x = 1\n", True, "fora do permitido"),
+    ("iativa/agent/aprendizado.py", "x = 1\n", True, "fora do permitido"),
+    ("iativa/agent/memoria.py", "x = 1\n", True, "fora do permitido"),
+    ("iativa/metadata/descoberta.py", "x = 1\n", True, "fora do permitido"),
     ("iativa/agent/migrations/0099_x.py", "x = 1\n", True, "fora do permitido"),
     ("tests/test_a.py", "def test_a():\n    pass\n", False, "remove ou muda testes"),
     ("iativa/a.py", "def f():\n    return 10\n", False, "sem teste de regressão"),

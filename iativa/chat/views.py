@@ -340,6 +340,8 @@ def _render_memoria(request, setor_id=None, aviso="", erro=""):
         escolhido = next((s for s in setores if proprio and s.pk == proprio.pk), setores[0] if setores else None)
     ctx = _contexto(request)
     ctx.update({
+        'memorias_pessoais': memoria.NotaAgente.objects.filter(usuario=request.user, escopo='usuario', ativo=True)
+            .select_related('origem_mensagem__conversa', 'substitui').order_by('-criado_em')[:60],
         "pagina_memoria": True,
         "setores_memoria": setores,
         "memoria": memoria.memoria_do_setor(request.user, escolhido) if escolhido else None,
@@ -361,6 +363,33 @@ def memoria_decidir(request):
     from iativa.agent import memoria as mem
 
     ref, acao = request.POST.get("ref", ""), request.POST.get("acao", "")
+    if acao in ('esquecer', 'editar', 'desfazer') and ref.startswith('nota-') and ref[5:].isdigit():
+        n = mem.NotaAgente.objects.filter(pk=int(ref[5:]), usuario=request.user, escopo='usuario', ativo=True).first()
+        if n is None:
+            return _render_memoria(request, erro='Memória pessoal indisponível.')
+        try:
+            if acao == 'esquecer':
+                mem.desativar(request.user, n)
+            elif acao == 'desfazer':
+                antiga = n.substitui
+                if (n.tipo != 'preferencia' or antiga is None or antiga.usuario_id != request.user.pk
+                        or antiga.tipo != 'preferencia' or antiga.excecao_de_id or antiga.excecao_consulta_id):
+                    raise ValidationError('Esta memória não tem uma preferência pessoal anterior para restaurar.')
+                mem.desativar(request.user, n)
+                antiga.ativo, antiga.situacao = True, 'aprovada'
+                antiga.save(update_fields=['ativo', 'situacao'])
+            else:
+                texto = request.POST.get('texto', '').strip()
+                if n.criterios or n.excecao_de_id or n.excecao_consulta_id or not 1 <= len(texto) <= 300:
+                    raise ValidationError('Regras e exceções são alteradas pelo chat, com aprovação quando necessária.')
+                nova = mem.lembrar(request.user, texto, alcance='usuario', tipo=n.tipo)
+                nova.substitui = n
+                nova.save(update_fields=['substitui'])
+                if nova.situacao == 'aprovada':
+                    mem.desativar(request.user, n)
+            return _render_memoria(request, aviso='Memória pessoal atualizada.')
+        except (ValidationError, PermissaoNegada) as exc:
+            return _render_memoria(request, erro=' '.join(getattr(exc, 'messages', [str(exc)])))
     if acao not in ("aprovar", "rejeitar") or ref not in {p.ref for p in mem.pendencias(request.user)}:
         return _render_memoria(request, request.POST.get("setor"), erro="Proposta indisponível.")
     try:

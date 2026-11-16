@@ -123,7 +123,7 @@ def test_lembrar_guarda_e_volta_no_contexto(ana, admin):
             capturado["notas"] = entrada.notas
             return _decisao(resposta="ok")
 
-    _falar(ana, c2, "oi", Espiao())
+    _falar(ana, c2, "Como definimos inadimplente?", Espiao())
     assert any("5 dias" in n for n in capturado["notas"])
 
 

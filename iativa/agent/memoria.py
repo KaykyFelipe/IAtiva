@@ -76,7 +76,8 @@ def notas_validas(user, setor=None):
     if setor is not None:
         filtro |= Q(escopo=EscopoNota.SETOR, setor=setor)
     vigente = Q(valido_ate__isnull=True) | Q(valido_ate__gte=timezone.localdate())
-    return NotaAgente.objects.filter(ativo=True, situacao=SituacaoNota.APROVADA).filter(filtro).filter(vigente)
+    acesso_origem = Q(setor_origem__isnull=True) | Q(setor_origem_id__in=setores_autorizados(user, Permissao.CONSULTAR)) | Q(tipo=TipoNota.PREFERENCIA)
+    return NotaAgente.objects.filter(ativo=True, situacao=SituacaoNota.APROVADA).filter(filtro).filter(vigente).filter(acesso_origem)
 
 
 PRECEDENCIA = {EscopoNota.USUARIO: 0, EscopoNota.SETOR: 1, EscopoNota.EMPRESA: 2}  # o mais específico vence
@@ -103,7 +104,16 @@ def notas_relevantes(user, texto: str, limite: int = MAX_NOTAS_CONTEXTO,
     termo, vale a mais específica (usuário, depois setor, depois empresa). Respeita os limites."""
     alvo = _radicais(texto)
     candidatas, termos = [], set()
-    for n in sorted(notas_validas(user), key=lambda n: (PRECEDENCIA[n.escopo], -n.pk)):
+    permitidos = set(Department.objects.filter(pk__in=setores_autorizados(user, Permissao.CONSULTAR)).values_list('codigo', flat=True))
+    def prioridade(n):
+        if n.tipo == TipoNota.PREFERENCIA:
+            return PRECEDENCIA[n.escopo]
+        return 0 if n.excecao_de_id else 1 if n.escopo == EscopoNota.EMPRESA else 2 if n.escopo == EscopoNota.SETOR else 3
+    for n in sorted(notas_validas(user), key=lambda n: (prioridade(n), -n.pk)):
+        if n.tipo != TipoNota.PREFERENCIA and not set(n.setores_origem) <= permitidos:
+            continue
+        if n.escopo == EscopoNota.USUARIO and n.tipo != TipoNota.PREFERENCIA and not n.excecao_de_id and regra_corporativa(user, n.texto, n.criterios):
+            continue
         t = termo(n.texto)
         if t and n.tipo != TipoNota.HIPOTESE:
             if t in termos:
@@ -111,11 +121,15 @@ def notas_relevantes(user, texto: str, limite: int = MAX_NOTAS_CONTEXTO,
             termos.add(t)
         pontos = len(alvo & _radicais(n.texto))
         fixa = n.tipo in (TipoNota.PREFERENCIA, TipoNota.REGRA)
+        if not fixa and not pontos:
+            continue
         candidatas.append((-(pontos * 2 + fixa), PRECEDENCIA[n.escopo], -n.pk, n))
     out, usados = [], 0
     for _, _, _, n in sorted(candidatas, key=lambda x: x[:3]):
-        if len(out) >= limite or usados + len(n.texto) > max_caracteres:
+        if len(out) >= limite:
             break
+        if usados + len(n.texto) > max_caracteres:
+            continue
         out.append(n)
         usados += len(n.texto)
     return out
@@ -162,7 +176,12 @@ def regras_aplicaveis(user, setor, tabela: str) -> list[tuple]:
     origem = {EscopoNota.USUARIO: "sua", EscopoNota.SETOR: "do setor", EscopoNota.EMPRESA: "da empresa"}
     out, vistos = [], set()
     notas = notas_validas(user, setor).filter(tipo=TipoNota.REGRA)
-    for n in sorted(notas, key=lambda n: (PRECEDENCIA[n.escopo], -n.pk)):
+    # Uma exceção aprovada pode personalizar a regra; uma nota pessoal comum não pode.
+    ordem = lambda n: (0 if n.excecao_de_id and n.excecao_de.ativo and n.excecao_de.situacao == SituacaoNota.APROVADA
+                       else 1 if n.escopo == EscopoNota.EMPRESA else 2 if n.escopo == EscopoNota.SETOR else 3, -n.pk)
+    for n in sorted(notas.select_related('excecao_de'), key=ordem):
+        if n.excecao_de_id and (not n.excecao_de.ativo or n.excecao_de.situacao != SituacaoNota.APROVADA):
+            continue
         c = n.criterios or {}
         if c.get("tabela") != tabela or c.get("op") not in ("=", "<>") or c.get("campo") in vistos:
             continue
@@ -219,6 +238,17 @@ def _regra_igual(a: dict, b: dict) -> bool:
     return all((a or {}).get(k) == (b or {}).get(k) for k in ("tabela", "campo", "op", "valor"))
 
 
+def regra_corporativa(user, texto, criterios=None):
+    criterios = criterios or {}
+    for n in notas_validas(user).exclude(escopo=EscopoNota.USUARIO).exclude(tipo=TipoNota.PREFERENCIA):
+        if criterios and n.criterios.get('tabela') == criterios.get('tabela') and n.criterios.get('campo') == criterios.get('campo'):
+            if not _regra_igual(n.criterios, criterios):
+                return n
+        elif termo(texto) and termo(texto) == termo(n.texto) and _norm(texto) != _norm(n.texto):
+            return n
+    return None
+
+
 @transaction.atomic
 def lembrar(user, texto: str, alcance: str = "", tipo: str = "", regra: dict | None = None,
             confirmado: bool = False, valido_ate=None) -> NotaAgente:
@@ -269,14 +299,20 @@ def lembrar(user, texto: str, alcance: str = "", tipo: str = "", regra: dict | N
             and anterior.tipo == tipo:
         raise ValidationError("Isso já está na memória.")
     privado = alcance == EscopoNota.USUARIO
+    excecao = None
+    if privado:
+        excecao = regra_corporativa(user, texto, criterios)
     nota = NotaAgente.objects.create(
+        excecao_de=excecao,
         tipo=tipo, criterios=criterios, valido_ate=valido_ate,
         texto=texto, escopo=alcance, usuario=usuario, setor=setor, criado_por=user, substitui=anterior,
-        situacao=SituacaoNota.APROVADA if privado else SituacaoNota.PROPOSTA,
-        aprovado_por=user if privado else None, aprovado_em=timezone.now() if privado else None,
+        situacao=SituacaoNota.APROVADA if privado and not excecao else SituacaoNota.PROPOSTA,
+        aprovado_por=user if privado and not excecao else None, aprovado_em=timezone.now() if privado and not excecao else None,
     )
     registrar("parametro_registrado", "agente", usuario=user, setor=setor_user, entidade_id=nota.pk,
               estado_novo="nota_memoria")
+    if excecao:
+        return nota
     if privado:
         if anterior is not None:
             anterior.situacao = SituacaoNota.SUBSTITUIDA
@@ -291,13 +327,31 @@ def _travar_nota(nota) -> NotaAgente:
     return NotaAgente.objects.select_for_update(of=("self",)).select_related("setor").get(pk=nota.pk)
 
 
+def pode_decidir_nota(user, nota):
+    if nota.excecao_de_id or nota.excecao_consulta_id:
+        from iativa.accounts.models import UserProfile, Funcao
+        papel = UserProfile.objects.filter(user=user, funcao__in=[Funcao.DIRETORIA, Funcao.TI]).exists()
+        nivel = nota.excecao_de.setor if nota.excecao_de_id else None
+        return papel and (user.is_superuser or tem_permissao(user, Permissao.APROVAR_CONHECIMENTO, nivel)
+                          or tem_permissao(user, Permissao.ADMINISTRAR)
+                          or (nota.excecao_consulta_id and bool(setores_autorizados(user, Permissao.APROVAR_CONHECIMENTO)
+                              & set(nota.excecao_consulta.setores.values_list('pk', flat=True)))))
+    if nota.automatica and nota.escopo == EscopoNota.USUARIO:
+        return nota.usuario_id == user.pk
+    return _pode_decidir(user, nota.setor, nota.criado_por_id)
+
+
 @transaction.atomic
 def aprovar_nota(user, nota) -> NotaAgente:
     nota = _travar_nota(nota)
     if nota.situacao != SituacaoNota.PROPOSTA:
         raise ValidationError("Somente propostas podem ser aprovadas.")
-    if not _pode_decidir(user, nota.setor, nota.criado_por_id):
+    if not pode_decidir_nota(user, nota):
         raise PermissaoNegada("Sem permissão para aprovar esta nota (ou foi você quem a propôs).")
+    if nota.excecao_de_id and (not nota.excecao_de.ativo or nota.excecao_de.situacao != SituacaoNota.APROVADA):
+        raise ValidationError('A regra original mudou; solicite uma nova aprovação.')
+    if nota.excecao_consulta_id:
+        aprendizado.aplicar_excecao_filtro(nota)
     nota.situacao, nota.aprovado_por, nota.aprovado_em = SituacaoNota.APROVADA, user, timezone.now()
     nota.save(update_fields=["situacao", "aprovado_por", "aprovado_em"])
     if nota.substitui_id:
@@ -311,7 +365,7 @@ def aprovar_nota(user, nota) -> NotaAgente:
 @transaction.atomic
 def rejeitar_nota(user, nota) -> NotaAgente:
     nota = _travar_nota(nota)
-    if nota.situacao != SituacaoNota.PROPOSTA or not tem_permissao(user, Permissao.APROVAR_CONHECIMENTO, nota.setor):
+    if nota.situacao != SituacaoNota.PROPOSTA or not pode_decidir_nota(user, nota):
         raise PermissaoNegada("Sem permissão para rejeitar esta nota.")
     nota.situacao = SituacaoNota.REJEITADA
     nota.save(update_fields=["situacao"])
@@ -331,6 +385,7 @@ class Pendencia:
     autor: str
     atual: str = ""     # o que vale hoje, quando a proposta substitui algo (conflito)
     pode_decidir: bool = False
+    excecao: bool = False
 
 
 def _autor(u) -> str:
@@ -348,23 +403,31 @@ def _setores_aprovacao(user) -> set[int]:
 def pendencias(user) -> list[Pendencia]:
     """Propostas que o usuário pode ver na fila: as do nível em que aprova e as que ele mesmo fez."""
     setores = _setores_aprovacao(user)
-    empresa = tem_permissao(user, Permissao.APROVAR_CONHECIMENTO)
+    empresa = tem_permissao(user, Permissao.APROVAR_CONHECIMENTO) or tem_permissao(user, Permissao.ADMINISTRAR) or user.is_superuser
     out = []
     nivel_q = Q(setor_id__in=setores) | Q(criado_por=user)
     if empresa:
         nivel_q |= Q(setor__isnull=True)
-    valores = (ParameterBinding.objects.filter(situacao=Situacao.PROPOSTA, escopo__in=[Escopo.SETOR, Escopo.EMPRESA])
+    valores = (ParameterBinding.objects.filter(Q(escopo__in=[Escopo.SETOR, Escopo.EMPRESA]) | Q(excecao_de__isnull=False), situacao=Situacao.PROPOSTA)
                .filter(nivel_q).select_related("definicao", "setor", "criado_por", "substitui").order_by("id"))
     for b in valores:
         atual = _desc_valor(b.substitui) if b.substitui and b.substitui.situacao == Situacao.APROVADA else ""
+        if b.excecao_de_id:
+            atual = _desc_valor(b.excecao_de)
         out.append(Pendencia(f"valor-{b.pk}", "Valor padrão", _desc_valor(b), _nivel(b.setor), _autor(b.criado_por),
-                             atual, _pode_decidir(user, b.setor, b.criado_por_id)))
+                             atual, memoria_valores.pode_aprovar_excecao(user, b) if b.excecao_de_id else _pode_decidir(user, b.setor, b.criado_por_id), bool(b.excecao_de_id)))
     notas = (NotaAgente.objects.filter(situacao=SituacaoNota.PROPOSTA, ativo=True).filter(nivel_q)
              .select_related("setor", "criado_por", "substitui").order_by("id"))
     for n in notas:
         atual = n.substitui.texto if n.substitui and n.substitui.situacao == SituacaoNota.APROVADA else ""
-        out.append(Pendencia(f"nota-{n.pk}", "Nota", n.texto, _nivel(n.setor), _autor(n.criado_por), atual,
-                             _pode_decidir(user, n.setor, n.criado_por_id)))
+        excecao = bool(n.excecao_de_id or n.excecao_consulta_id)
+        if n.excecao_de_id:
+            atual = n.excecao_de.texto
+        elif n.excecao_consulta_id:
+            atual = aprendizado.descrever_filtros(n.excecao_consulta)
+        out.append(Pendencia(f"nota-{n.pk}", 'Exceção pessoal' if excecao else "Nota", n.texto,
+                             'pessoal' if n.escopo == EscopoNota.USUARIO else _nivel(n.setor), _autor(n.criado_por), atual,
+                             pode_decidir_nota(user, n), excecao))
     for cm in ConsultaModelo.objects.filter(situacao=SituacaoModelo.PROPOSTA).select_related("criado_por"):
         pode = aprendizado.pode_aprovar(user, cm)
         if pode or cm.criado_por_id == user.pk or empresa or cm.setores.filter(pk__in=setores).exists():
@@ -390,9 +453,9 @@ def decidir(user, ref: str, aprovar: bool) -> str:
     if not pk.isdigit():
         raise ValidationError("Pendência desconhecida.")
     if tipo == "valor":
-        b = ParameterBinding.objects.get(pk=int(pk), escopo__in=[Escopo.SETOR, Escopo.EMPRESA])
+        b = ParameterBinding.objects.filter(Q(escopo__in=[Escopo.SETOR, Escopo.EMPRESA]) | Q(excecao_de__isnull=False)).get(pk=int(pk))
         if aprovar:
-            if not _pode_decidir(user, b.setor, b.criado_por_id):
+            if not (memoria_valores.pode_aprovar_excecao(user, b) if b.excecao_de_id else _pode_decidir(user, b.setor, b.criado_por_id)):
                 raise PermissaoNegada("Sem permissão para aprovar este valor (ou foi você quem o propôs).")
             memoria_valores.aprovar(user, b)
         else:

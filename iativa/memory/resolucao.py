@@ -68,6 +68,11 @@ def resolver(definicao, user, solicitacao=None, agora=None) -> Resolucao:
             return Resolucao(codigo, CONFLITO, motivo="obrigatorias_divergentes")
         # Mais específica primeiro (setor antes de empresa) para informar a origem.
         regra = sorted(obrigatorias, key=lambda b: PRECEDENCIA.index(b.escopo))[0]
+        excecoes = [b for b in candidatos if b.escopo == Escopo.USUARIO and b.excecao_de_id == regra.pk]
+        if excecoes:
+            if len({_chave(b.valor) for b in excecoes}) > 1:
+                return Resolucao(codigo, CONFLITO, motivo='excecoes_divergentes')
+            regra = excecoes[-1]
         explicitos = [b for b in candidatos if b.escopo == Escopo.SOLICITACAO]
         if any(_chave(b.valor) != _chave(regra.valor) for b in explicitos):
             return Resolucao(codigo, CONFLITO, motivo="solicitacao_contraria_regra_obrigatoria")

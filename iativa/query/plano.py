@@ -152,7 +152,7 @@ def ler_agregacao(texto: str, spec: dict):
             campo = "*"
         elif campo not in tipos:
             raise ValueError(f"campo fora da consulta: {campo or parte}")
-        elif FUNCOES[func] in ("SUM", "AVG") and tipos[campo] != "numero":
+        elif FUNCOES[func] in ("SUM", "AVG") and tipos[campo] not in ('numero', 'dinheiro', 'valor', 'inteiro'):
             raise ValueError(f"{func} precisa de um campo numérico: {campo}")
         metricas.append((FUNCOES[func], campo))
     if not metricas or len(metricas) > 4:
@@ -366,7 +366,7 @@ def montar_modelo(tabela: str, spec: dict, valores: dict, codigo: str) -> Plano:
         for campo, valor in filtros:
             plano.filtros.append(Filtro(Campo(apelido(spec, campo), campo), "=", valor))
             plano.premissas.append(f"Filtro: {campo} = {valor}.")
-    tipos = {"data": "data", "numero": "numero", "texto": "texto"}
+    tipos = {t: t for t in ('data', 'numero', 'texto', 'dinheiro', 'inteiro', 'valor')}
     plano.colunas = [Coluna(c["rotulo"], Campo(c.get("alias", "e1"), c["campo"]), tipo=tipos.get(c["tipo"], "texto"))
                      for c in spec["colunas"]]
     rotulos = [c.rotulo for c in plano.colunas]

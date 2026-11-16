@@ -161,7 +161,16 @@ def campos_da_tabela(user, alias: str, automatico: bool = False) -> dict:
 
 
 def _tipo(campo) -> str:
-    return {"D": "data", "N": "numero"}.get(campo.tipo, "texto")
+    if campo.tipo != 'N':
+        return {'D': 'data'}.get(campo.tipo, 'texto')
+    descricao = _normalizar(' '.join(str(getattr(campo, k, '') or '') for k in ('nome', 'titulo', 'descricao')))
+    if re.search(r'CODIGO|MATRICULA|IDENTIFICADOR', descricao):
+        return 'texto'
+    if re.search(r'QUANTIDADE|PERCENT|ALIQUOTA|HORAS|INDICE', descricao):
+        return 'numero'
+    if re.search(r'VALOR|PRECO|SALDO|FATURAMENTO|CUSTO|_VAL\w*|_TOTAL\b', descricao):
+        return 'dinheiro'
+    return 'numero'
 
 
 MAX_JUNCOES = 2
@@ -425,7 +434,31 @@ def camada_por_codigo(user, codigo: str) -> dict:
     from .models import FiltroUsuario
 
     fu = FiltroUsuario.objects.filter(usuario=user, consulta__codigo=codigo).first() if user is not None else None
-    return {k: v for k, v in fu.camada.items() if k != "anteriores"} if fu is not None else {}
+    if fu is None:
+        return {}
+    camada = dict(fu.camada)
+    fixos = {f['campo']: f for f in fu.consulta.spec.get('filtros_fixos', [])}
+    from .models import NotaAgente
+    aprovada = NotaAgente.objects.filter(pk=camada.get('aprovacao'), usuario=user,
+        excecao_consulta=fu.consulta, ativo=True, situacao='aprovada').first()
+    if not aprovada or aprovada.criterios.get('base') != _base_filtros(fu.consulta):
+        camada['desligados'] = []
+        camada['filtros'] = [f for f in camada.get('filtros', []) if f['campo'] not in fixos
+            or (f.get('op', '=') == fixos[f['campo']].get('op', '=') and f['valor'] == fixos[f['campo']]['valor'])]
+    return {k: v for k, v in camada.items() if k not in ('anteriores', 'aprovacao')}
+
+
+def _base_filtros(cm):
+    import hashlib
+    import json
+    return hashlib.sha256(json.dumps(cm.spec.get('filtros_fixos', []), sort_keys=True).encode()).hexdigest()
+
+
+def aplicar_excecao_filtro(nota):
+    if nota.criterios.get('base') != _base_filtros(nota.excecao_consulta):
+        raise ValidationError('O filtro corporativo mudou. Solicite uma nova aprovação.')
+    ajuste = nota.criterios['ajuste']
+    _ajustar_do_usuario(nota.usuario, nota.excecao_consulta, ajuste['filtros'], ajuste['remover'], aprovacao=nota)
 
 
 def camada_usuario(user, cm) -> dict:
@@ -500,10 +533,21 @@ def ajustar_filtros(user, cm, filtros: list[dict], remover: list[str], alcance: 
     return cm
 
 
-def _ajustar_do_usuario(user, cm, filtros, remover) -> ConsultaModelo:
+def _ajustar_do_usuario(user, cm, filtros, remover, aprovacao=None) -> ConsultaModelo:
     from .models import FiltroUsuario
 
     cm = ConsultaModelo.objects.select_for_update().get(pk=cm.pk)
+    fixos_base = {f['campo']: f for f in cm.spec.get('filtros_fixos', [])}
+    alterados = set(remover) & set(fixos_base)
+    alterados |= {f['campo'] for f in filtros if f['campo'] in fixos_base and (
+        OPERADORES_AJUSTE.get(f['operador']) != fixos_base[f['campo']].get('op', '=') or f['valor'] != fixos_base[f['campo']]['valor'])}
+    if aprovacao is None and alterados:
+        from .models import NotaAgente
+        n = NotaAgente.objects.create(texto=f'Exceção pessoal dos filtros corporativos: {cm.nome}'[:300],
+            tipo='regra', escopo='usuario', usuario=user, criado_por=user, situacao='proposta',
+            excecao_consulta=cm, criterios={'base': _base_filtros(cm), 'ajuste': {'filtros': filtros, 'remover': remover}})
+        cm.excecao_solicitada = n.pk
+        return cm
     _independizar_camadas(cm)
     fu, _ = FiltroUsuario.objects.select_for_update().get_or_create(usuario=user, consulta=cm)
     camada = dict(fu.camada)
@@ -528,6 +572,8 @@ def _ajustar_do_usuario(user, cm, filtros, remover) -> ConsultaModelo:
     anteriores.append({k: camada.get(k, []) for k in ("filtros", "juncoes", "desligados")})
     nova = {"filtros": list(atuais.values()), "juncoes": juncoes, "desligados": desligados,
             "anteriores": anteriores[-MAX_VERSOES:]}
+    if aprovacao is not None:
+        nova['aprovacao'] = aprovacao.pk
     _testar_compilacao(cm, nova)
     fu.camada = nova
     fu.save()

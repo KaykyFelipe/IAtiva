@@ -144,6 +144,7 @@ class Objetivo(models.Model):
     origem = models.CharField(max_length=10)  # detector | modelo | acao
     situacao = models.CharField(max_length=20, choices=SituacaoObjetivo.choices)
     trilha = models.JSONField(default=list)
+    contrato = models.JSONField(default=dict, db_default={})
     melhor_evidencia = models.CharField(max_length=20, blank=True)
     motivo = models.CharField(max_length=300, blank=True)
     passos = models.PositiveIntegerField(default=0)
@@ -198,6 +199,14 @@ class NotaAgente(models.Model):
     tipo = models.CharField(max_length=12, choices=TipoNota.choices, default=TipoNota.TERMO)
     criterios = models.JSONField(default=dict, blank=True)
     valido_ate = models.DateField(null=True, blank=True)
+    origem_mensagem = models.ForeignKey('iativa_chat.Mensagem', null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
+    setor_origem = models.ForeignKey('iativa_accounts.Department', null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
+    setores_origem = models.JSONField(default=list, db_default=[])
+    confianca = models.FloatField(default=1, db_default=1)
+    evidencia = models.CharField(max_length=300, blank=True, db_default='')
+    automatica = models.BooleanField(default=False, db_default=False)
+    excecao_de = models.ForeignKey('self', null=True, blank=True, on_delete=models.PROTECT, related_name='excecoes')
+    excecao_consulta = models.ForeignKey(ConsultaModelo, null=True, blank=True, on_delete=models.PROTECT, related_name='excecoes')
 
     class Meta:
         ordering = ["-criado_em"]
@@ -214,6 +223,26 @@ class NotaAgente(models.Model):
 
     def __str__(self):
         return self.texto[:60]
+
+
+class FonteSetorial(models.Model):
+    tabela = models.CharField(max_length=3, primary_key=True)
+    assinatura = models.CharField(max_length=64)
+    setores = models.JSONField(default=list)
+    confianca = models.FloatField()
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+
+class ContextoPersistente(models.Model):
+    usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    conversa = models.ForeignKey('iativa_chat.ConversationContext', on_delete=models.CASCADE)
+    mensagem = models.ForeignKey('iativa_chat.Mensagem', on_delete=models.CASCADE)
+    resumo = models.CharField(max_length=1000)
+    setores = models.JSONField(default=list)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['usuario', 'conversa'], name='contexto_por_usuario_conversa')]
 
 
 class FiltroUsuario(models.Model):

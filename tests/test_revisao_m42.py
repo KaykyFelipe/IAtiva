@@ -78,7 +78,7 @@ def test_ranking_global_inclui_grupo_que_nao_e_top_em_nenhuma_filial(ana, erp_si
             con.execute(f"INSERT INTO SE1010 ({','.join(row)}) VALUES ({','.join('?' for _ in row)})", tuple(row.values()))
     _, res = ranking(ana, "soma:E1_VALOR por E1_CLIENTE top 1")
     assert res.ok and res.linhas[0][0] == "C"
-    assert res.linhas[0][-1] == "180,00"
+    assert res.linhas[0][-1] == "R$ 180,00"
 
 
 def test_segunda_pergunta_sem_execucao_nao_marca_pedido_cumprido(ana):

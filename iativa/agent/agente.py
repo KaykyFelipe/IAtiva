@@ -224,10 +224,41 @@ def conversar(user, c, texto: str, provedor=None, mensagem_usuario_id=None, inte
         return Saida(RECUSA, ficha={"tipo": "fora_escopo"})
     objetivos = objetivos_para(user)
     administrador = pode_aprender(user)
-    if not objetivos and not administrador:
+    if not objetivos and not administrador and not setores_autorizados(user, Permissao.CONSULTAR):
         registrar("acesso_negado", "agente", usuario=user, estado_novo="dominio", resultado="negado")
         return Saida("Seu usuário ainda não tem acesso a consultas. Fale com o administrador.")
 
+    from . import planejamento
+    try:
+        provedor = provedor or obter_provedor(usuario=user)
+        analise = planejamento.preparar(user, c, texto, provedor, _historico(c, mensagem_usuario_id))
+    except PermissaoNegada as exc:
+        return Saida(str(exc), ficha={'tipo': 'bloqueada'})
+    except ValidationError as exc:
+        return Saida(exc.messages[0], ficha={'tipo': 'esclarecimento_setor'})
+    except FalhaModelo as exc:
+        if acomp is not None and exc.temporaria:
+            acomp.anotar('classificacao', 'modelo_falhou')
+            return _encerrar_sem_cumprir(acomp, user, c, mensagem_usuario_id, None, None, 'modelo_falhou', [])
+        return Saida('Não consegui confirmar o assunto e o acesso deste pedido agora. Tente novamente.',
+                     ficha={'tipo': 'falha_modelo'})
+    except ImproperlyConfigured:
+        return Saida('Não consegui confirmar o assunto e o acesso deste pedido agora. Tente novamente.',
+                     ficha={'tipo': 'falha_modelo'})
+    if analise['natureza'] == 'fora':
+        return Saida(RECUSA, ficha={'tipo': 'fora_escopo'})
+
+    from iativa.accounts.authz import limitar_consulta
+    from iativa.accounts.models import Department
+    ids = Department.objects.filter(codigo__in=analise['setores']).values_list('pk', flat=True)
+    with limitar_consulta(user, ids):
+        return _conversar_autorizado(user, c, texto, provedor, mensagem_usuario_id, interrompido, acomp, observacoes, analise)
+
+
+def _conversar_autorizado(user, c, texto, provedor, mensagem_usuario_id, interrompido, acomp, observacoes, analise):
+    from . import planejamento
+    objetivos = objetivos_para(user)
+    administrador = pode_aprender(user)
     # Parâmetros das consultas aprendidas valem mesmo antes de existir a primeira (M24): a IA pode
     # pedir "some X" e criar a consulta já com o cálculo.
     codigos_par = sorted({cod for o in objetivos for cod in o.parametros} | set(PARAMETROS_APRENDIDOS))
@@ -264,6 +295,7 @@ def conversar(user, c, texto: str, provedor=None, mensagem_usuario_id=None, inte
     except Exception:
         consultas_conversa = []  # contexto auxiliar: nunca impede a resposta
     entrada = EntradaAgente(
+        planejamento={'modo': 'executar', 'analise': analise},
         consultas_conversa=consultas_conversa,
         resultado_anterior=calculos.contexto(user, c),
         lista_anterior=lista,
@@ -286,9 +318,11 @@ def conversar(user, c, texto: str, provedor=None, mensagem_usuario_id=None, inte
     pede_cobertura = _verificar_pessoas(t_norm)
     cobertura = base_lista if (lista is not None and pede_cobertura) else None
     with prazo.definir(float(cfg["tempo_s"])):
-        return _ciclo_agente(user, c, texto, provedor, interrompido, entrada, objetivos, codigos_par, defs, atual,
+        saida = _ciclo_agente(user, c, texto, provedor, interrompido, entrada, objetivos, codigos_par, defs, atual,
                              administrador, cfg, cobertura, pede_cobertura, mensagem_id=mensagem_usuario_id,
                              acomp=acomp, observacoes=observacoes)
+    planejamento.guardar(user, c, mensagem_usuario_id, texto, analise, saida)
+    return saida
 
 
 def _aprendidos(administrador) -> list[dict]:
@@ -324,6 +358,10 @@ def _ciclo_agente(user, c, texto, provedor, interrompido, entrada, objetivos, co
     from . import objetivos as coord
 
     ac = acomp or coord.Acompanhamento(texto)
+    if not ac.contrato:
+        ac.contrato = entrada.planejamento.get('analise', {}).get('entregas', [])
+    if ac.contrato:
+        ac.partes_faltam = 0
     saida = _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, codigos_par, defs, atual,
                           administrador, cfg, cobertura, verificar, mensagem_id, ac, observacoes)
     if ac.formato and saida is not None:
@@ -436,6 +474,11 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
         if prazo.esgotado():
             causa = "prazo"
             break  # o modelo respondeu tarde: a ação não é executada com o prazo vencido
+        if entrada.planejamento.get('analise', {}).get('natureza') == 'geral' and d.acao not in (
+                'conversar', 'fora_escopo', 'lembrar', 'listar_memorias', 'esquecer_memoria',
+                'listar_pendencias', 'aprovar_pendencia', 'rejeitar_pendencia', 'cancelar_consulta'):
+            return Saida('Para consultar dados, preciso confirmar o assunto e o setor da consulta.',
+                         ficha={'tipo': 'esclarecimento_setor'})
         from .escopo import resposta_codigo, RECUSA
         if resposta_codigo(d.resposta):
             return Saida(RECUSA, ficha={"tipo": "fora_escopo"})
@@ -501,6 +544,14 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
             causa = "acao_repetida"
             break  # a mesma ação com os mesmos dados já foi feita: não repete
         feitas.add(assinatura)
+        if d.acao in ('criar_consulta', 'historico_cargo'):
+            from .planejamento import autorizar_fonte
+            alias = d.consulta['tabela'] if d.acao == 'criar_consulta' and d.consulta else 'SRA'
+            try:
+                autorizar_fonte(user, provedor, alias)
+            except (PermissaoNegada, FalhaModelo):
+                return Saida('Não consegui confirmar que a fonte pertence a um setor autorizado para este pedido. '
+                             'Não executei a consulta.', {'tipo': 'bloqueada'})
         registrar("interpretacao", "agente", usuario=user, estado_novo=d.acao, entidade_id=atual.pk if atual else None,
                   linhas=len(d.parametros))
         reduz = _reduz_escopo(d, cobertura)
@@ -546,8 +597,21 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
                                    + (' Após uma correção publicada, retomarei este pedido.' if estado == SO.MANUTENCAO else ''))
                     return saida
             # Investigação parcial mostra o que conseguiu, marcada como incompleta (nunca como conclusão).
+            if ac.contrato:
+                from .planejamento import registrar_entregas
+                registrar_entregas(ac, d, saida)
             return _fechar(ac, user, c, mensagem_id, saida, ev or coord.INVESTIGACAO, parcial=not ev)
         ev = coord.evidencia(d, saida, texto)  # o que ESTA ação entregou (antes de juntar com a etapa anterior)
+        if ac.contrato:
+            from .planejamento import registrar_entregas
+            registrar_entregas(ac, d, saida)
+            if ac.pendentes() and ev not in (coord.PERGUNTA, coord.BLOQUEIO, coord.DELEGADA):
+                previa = _juntar(previa, saida) if previa is not None else saida
+                ac.anotar(d.acao, 'entrega_pendente', ev)
+                observacoes.append(Observacao(d.acao, coord.ETAPA, 'Ainda faltam entregas verificadas: ' + '; '.join(ac.pendentes())))
+                entrada = replace(entrada, planejamento={**entrada.planejamento, 'pendentes': ac.pendentes(), 'cumpridas': ac.cumpridas})
+                atual = _ativa(user, c)
+                continue
         if previa is not None:
             saida = _juntar(previa, saida)
         ac.anotar(d.acao, saida.observacao.situacao if saida.observacao else ("ok" if ev else "sem_resultado"), ev)
@@ -635,7 +699,7 @@ def _fechar(ac, user, c, mensagem_id, saida, ev, parcial=False) -> Saida:
     from .models import SituacaoObjetivo as SO
 
     if (not parcial and ev not in (coord.DELEGADA, coord.PERGUNTA, coord.BLOQUEIO)
-            and (ac.partes_faltam > 0 or (coord.pede_memoria(ac.texto) and not ac.memoria_feita))):
+            and (ac.pendentes() or ac.partes_faltam > 0 or (coord.pede_memoria(ac.texto) and not ac.memoria_feita))):
         return _encerrar_sem_cumprir(ac, user, c, mensagem_id, saida, None, "passos", [])
     situacao = (SO.TAREFA if ev == coord.DELEGADA else SO.AGUARDANDO if ev == coord.PERGUNTA else SO.IMPEDIDO if (ev == coord.BLOQUEIO or parcial)
                 else SO.CUMPRIDO)
@@ -772,7 +836,8 @@ def continuar_objetivo(o):
             return Mensagem.objects.create(conversa=c, papel=Papel.IA,
                 texto='O pedido atingiu o limite de continuações e não foi concluído. Nenhuma nova tentativa foi iniciada.',
                 ficha={'tipo':'objetivo', 'objetivo':o.pk})
-        ac = coord.Acompanhamento(o.mensagem.texto, exig=o.exigencia, origem=o.origem, registro=o)
+        ac = coord.Acompanhamento(o.mensagem.texto, exig=o.exigencia, origem=o.origem, registro=o,
+                                 contrato=o.contrato.get('entregas', []), cumpridas=o.contrato.get('cumpridas', []))
         feito = ", ".join(o.trilha[-6:]) or "nada concluído"
         obs = [Observacao("continuacao", "continuacao",
                           f"Continuação automática do MESMO pedido (a pessoa não mandou nova mensagem). Já tentado "
@@ -1298,6 +1363,10 @@ def _ajustar_filtro(user, d, ficha, alcance="", objetivos=()) -> Saida:
             cm = voltar_filtros(user, cm, alcance)
         else:
             cm = ajustar_filtros(user, cm, d.ajuste["filtros"], d.ajuste["remover"], alcance)
+            if getattr(cm, 'excecao_solicitada', None):
+                return Saida(f'Isso altera um filtro corporativo. Enviei o pedido para aprovação da Diretoria ou TI '
+                             f'(nota-{cm.excecao_solicitada}). O filtro atual continua valendo.',
+                             {**ficha, 'aprovacao_pendente': cm.excecao_solicitada})
     except PermissaoNegada as exc:
         return Saida(str(exc), ficha, observacao=Observacao(d.acao, SEM_PERMISSAO, "ajuste não autorizado"))
     except (ValidationError, ValueError) as exc:
@@ -1329,10 +1398,13 @@ def _lembrar_parametros(user, d) -> list[str]:
             continue
         try:
             valor = converter(definicao, texto)
-            memoria_valores.registrar_valor(user, definicao, Escopo.USUARIO, valor)
+            binding = memoria_valores.registrar_valor(user, definicao, Escopo.USUARIO, valor)
         except Exception:
             continue
-        feitas.append(f"{definicao.nome} = {_exibir(definicao, valor)}")
+        if binding.excecao_de_id:
+            feitas.append(f'{definicao.nome}: exceção pendente de aprovação da Diretoria ou TI (valor-{binding.pk}); a regra corporativa continua valendo')
+        else:
+            feitas.append(f"{definicao.nome} = {_exibir(definicao, valor)}")
     return feitas
 
 
@@ -1340,6 +1412,8 @@ def _lembrar(user, d, ficha) -> Saida:
     andamento.avisar("Guardando na memória")
     preferencias = _lembrar_parametros(user, d)
     if preferencias:
+        if any('pendente de aprovação' in p for p in preferencias):
+            return Saida('; '.join(preferencias) + '.', {**ficha, 'memoria_registrada': True})
         return Saida("Guardei como sua preferência: " + "; ".join(preferencias)
                      + ". Vale nas suas próximas consultas, até você pedir outra coisa.",
                      {**ficha, "memoria_registrada": True})
@@ -1381,6 +1455,9 @@ def _lembrar(user, d, ficha) -> Saida:
         return Saida("Não consegui guardar isso para o setor: seu usuário está sem setor ativo.", ficha,
                      observacao=Observacao("lembrar", SEM_PERMISSAO, "memória não registrada"))
     ficha["memoria_registrada"] = True
+    if n.excecao_de_id or n.excecao_consulta_id:
+        return Saida(f'Pedido registrado para aprovação da Diretoria ou TI (nota-{n.pk}). '
+                     'A regra corporativa continua valendo; a exceção pessoal ainda não foi aplicada.', ficha)
     c = n.criterios or {}
     criterio = (f"nas consultas sobre {c['tabela']}, só registros com {c['campo']} "
                 f"{'igual a' if c['op'] == '=' else 'diferente de'} “{c['valor']}”") if c else ""

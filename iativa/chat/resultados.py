@@ -24,7 +24,8 @@ def empacotar(res):
         return {"consolidado": True, "resumo": _texto(res.resumo), "blocos": blocos}
     if not getattr(res, "ok", False) or not res.escopo:
         return {}
-    return {"mensagem": _texto(res.mensagem), "colunas": [_texto(c) for c in res.colunas], "tipos": res.tipos,
+    return {"versao": 2, "unidades": ['BRL' if t == 'dinheiro' else 'numero' if t in ('numero', 'valor', 'inteiro') else t for t in res.tipos],
+            "mensagem": _texto(res.mensagem), "colunas": [_texto(c) for c in res.colunas], "tipos": res.tipos,
             "linhas": [[_texto(v) if v is not None else "" for v in l] for l in res.linhas],
             "premissas": [_texto(p) for p in res.premissas], "escopo": res.escopo,
             "periodos": [{k: _texto(v) if isinstance(v, str) else v for k, v in p.items()} for p in res.periodos],
