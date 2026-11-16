@@ -14,7 +14,7 @@
   {% if f.opcoes and ultima and pode_escrever %}
     <div class="opcoes">
       {% for o in f.opcoes %}
-        <form method="post" action="{% url 'chat:mensagem' conversa.pk %}"
+        <form data-opcao-mensagem method="post" action="{% url 'chat:mensagem' conversa.pk %}"
               hx-post="{% url 'chat:mensagem' conversa.pk %}" hx-target="#conversa" hx-swap="outerHTML" hx-disabled-elt="find button">
           {% csrf_token %}<input type="hidden" name="mensagem" value="{{ o }}"><button type="submit">{{ o|rotulo_filial }}</button>
         </form>

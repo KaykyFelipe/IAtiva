@@ -419,6 +419,18 @@
   // Captura: roda antes do htmx ler o formulário.
   document.addEventListener("submit", (e) => {
     const form = e.target;
+    if (form.matches("[data-opcao-mensagem]")) {
+      e.preventDefault(); e.stopImmediatePropagation();
+      const compositor = document.querySelector("[data-compositor]");
+      const campo = compositor && compositor.querySelector("[data-campo]");
+      const opcao = form.querySelector('[name="mensagem"]');
+      if (!atual && !tarefaAtiva() && campo && opcao && !campo.disabled) {
+        campo.value = opcao.value;
+        campo.dispatchEvent(new Event("input"));
+        compositor.requestSubmit();
+      }
+      return;
+    }
     const ocupado = tarefaAtiva();
     if (!atual && ocupado && ocupado.hasAttribute("data-objetivo-pendente") && form.matches("[data-compositor]")) {
       e.preventDefault(); e.stopImmediatePropagation();  // M50: chat ocupado; o campo está travado

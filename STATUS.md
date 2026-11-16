@@ -4,6 +4,12 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **plano proposto em `PLANO.md` §8, aguardando aprovação.** Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M55 — consultas sem programação e opções com botão parar (2026-11-16)
+
+- Finalidade restrita a consultar/analisar dados e esclarecer as consultas; programação, SQL livre, scripts e atividades gerais não são entregáveis do chat, inclusive para TI. Pedidos explícitos reconhecidos localmente encerram antes do modelo; instrução compartilhada cobre as demais formulações. Blocos de código e padrões de código na resposta livre do modelo geram recusa fixa antes de executar a ação. Códigos de produtos/filiais continuam sendo dados consultáveis.
+- Opções de resposta agora enviam pelo compositor, usando o mesmo identificador de pedido, acompanhamento e botão parar; não iniciam outro envio enquanto há processamento. Chrome com dados sintéticos validou envio único da opção, identificador, estado parar, bloqueio de duplo clique e retorno ao estado enviar ao interromper.
+- Validação: suíte completa Windows com 836 aprovados e 10 pulados; após ampliar a recusa genérica, os 13 casos específicos passaram. Django check sem problemas. Classificação semântica continua apoiada no modelo para formulações que não correspondem às proteções locais.
+
 ## Mudança M54 — finalidade corporativa e revisão da memória (2026-11-16)
 
 - Política de finalidade corporativa compartilhada pelos provedores conversacionais: assuntos profissionais, acompanhamentos contextuais e uso da IAtiva permitidos; assuntos pessoais/aleatórios devem produzir `fora_escopo`. Dúvidas pedem contexto profissional, sem fabricar justificativa.

@@ -219,6 +219,9 @@ def _interpretar(provedor, entrada, codigos_obj, codigos_par):
 
 def conversar(user, c, texto: str, provedor=None, mensagem_usuario_id=None, interrompido=None, acomp=None,
               observacoes=None) -> Saida:
+    from .escopo import pedido_codigo, RECUSA
+    if pedido_codigo(texto):
+        return Saida(RECUSA, ficha={"tipo": "fora_escopo"})
     objetivos = objetivos_para(user)
     administrador = pode_aprender(user)
     if not objetivos and not administrador:
@@ -388,6 +391,9 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
         if prazo.esgotado():
             causa = "prazo"
             break  # o modelo respondeu tarde: a ação não é executada com o prazo vencido
+        from .escopo import resposta_codigo, RECUSA
+        if resposta_codigo(d.resposta):
+            return Saida(RECUSA, ficha={"tipo": "fora_escopo"})
         if d.acao == "fora_escopo":
             # Não usar a resposta livre do modelo: não responder ao assunto nem
             # ensinar à manutenção capacidades pessoais fora da finalidade do produto.
