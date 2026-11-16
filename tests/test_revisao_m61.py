@@ -174,3 +174,10 @@ def test_m61_incidente_bloqueado_nao_deixa_pedido_esperando():
     inc = Incidente.objects.create(assinatura="x" * 64, categoria=Categoria.CAPACIDADE, codigo="c", componente="a",
                                    operacao="o", situacao="bloqueado_admin", condicoes={"trilha": ["a:b:c"]})
     assert not elegivel(inc)
+
+
+def test_m62_pergunta_sobre_a_lista_nao_vira_historico_de_uma_pessoa():
+    from iativa.agent.agente import _PLURAL_DA_LISTA
+    assert _PLURAL_DA_LISTA.search("qual a função deles?")
+    assert _PLURAL_DA_LISTA.search("e o cargo de cada um?")
+    assert not _PLURAL_DA_LISTA.search("qual o histórico de cargos do joão?")

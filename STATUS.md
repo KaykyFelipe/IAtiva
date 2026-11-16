@@ -4,6 +4,10 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **Etapa 7 aprovada em 2026-11-16 por Diego; em andamento.** Feito: roteiro do piloto (`docs/piloto/ROTEIRO.md`) e auditoria de não armazenamento (`manage.py auditar_armazenamento`). Falta: usuários do Financeiro, conferência dos números com relatórios do Protheus, avaliação da interpretação e latência. Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M62 — "qual a função deles?" depois de uma lista (2026-11-16)
+
+- A IA usava o histórico de cargo (feito para uma pessoa) e caía na manutenção, que recusou com razão (escolha errada, não falta de código). Agora pergunta sobre um dado das pessoas da lista anterior refaz a mesma consulta com os mesmos critérios. A consulta aprendida de admissões passou a trazer a descrição da função (junção SRA→SRJ pelo código da função, conferida no dicionário e compilada antes de salvar), no lugar da coluna de cargo que vinha vazia.
+
 ## Mudança M61 — admissões, contagem e manutenção indevida (2026-11-16)
 
 - Corrigida regressão M60: planejador só tinha soma/média no contrato de agregação e usava soma para contagem; COUNT já calculado não satisfazia SUM, gerando tentativas e manutenção desnecessárias. `contagem` agora tem schema, operação e verificação próprios; totais de contagem sobrevivem ao snapshot autorizado.

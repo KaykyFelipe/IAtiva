@@ -399,6 +399,23 @@ def _respeitar_preferencias(user, d, texto: str):
     return replace(d, parametros=manter) if manter != d.parametros else d
 
 
+_PLURAL_DA_LISTA = re.compile(r"\b(deles|delas|desses|dessas|destes|destas|de cada um|dos admitidos|dos demitidos|"
+                              r"da lista|dessa lista|desta lista)\b")
+
+
+def _atributo_da_lista(user, c, d, texto: str):
+    """M62: "qual a função deles?" depois de uma lista de funcionários é um dado da mesma lista, não o histórico
+    de cargo de uma pessoa: refaz a consulta anterior (que já traz a função) com os mesmos critérios."""
+    if d.acao != "historico_cargo" or not _PLURAL_DA_LISTA.search((texto or "").lower()):
+        return d
+    ultima = _ultima(user, c)
+    if ultima is None or ultima.objetivo not in OBJETIVOS or not OBJETIVOS[ultima.objetivo].modelo_id:
+        return d
+    if OBJETIVOS[ultima.objetivo].tabelas[0] != "SRA":
+        return d
+    return replace(d, acao="preparar_consulta", objetivo=ultima.objetivo, parametros=())
+
+
 _FIXAS_COM_TOTAL = ("titulos-em-atraso", "titulos-a-vencer")
 
 
@@ -515,6 +532,7 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
         ac.definir(d)
         d = _calculo_implicito(d, texto)
         d = _respeitar_preferencias(user, d, texto)
+        d = _atributo_da_lista(user, c, d, texto)
         from . import admissoes
         d = admissoes.orientar(user, texto, d, objetivos)
         if d.acao not in ("conversar", "falta_capacidade") and d.resposta.strip():
