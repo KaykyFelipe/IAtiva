@@ -19,6 +19,8 @@
 
 ## Mudança M54 — inadimplência e a vencer por filial ou só o total (2026-11-16)
 
+- Faturamento: a IA usava às vezes consultas pelo cabeçalho da nota (SF2), sem filtro de TES, que somam remessas e transferências. As duas consultas aprendidas de SF2 foram removidas e a instrução fixa faturamento = D2_TOTAL dos itens de saída com TES que gera duplicata (F4_DUPLIC = S), a confirmar com o Financeiro.
+
 - Achado no teste do piloto: "atraso por filial" vinha por cliente e "quanto vamos receber" vinha como lista de títulos. Agora as duas consultas fixas aceitam "por filial" (um total por filial) e "total" (um número só, somando as filiais); a inadimplência mantém o "top N".
 
 ## Mudança M53 — IA declara o que falta, manutenção visível e narração ao vivo (2026-11-16)
