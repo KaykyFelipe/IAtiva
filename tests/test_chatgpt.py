@@ -83,6 +83,7 @@ def conectar(fake, user, perfil='atendimento', sessao='sessao-a'):
     (f.server.root / 'fake-auth').touch()
     f.server.events.put({'method':'account/login/completed', 'params':{'loginId':'login-ficticio', 'success':True}})
     esperar(lambda: f.estado()['fase'] == 'conectado')
+    esperar(lambda: bool(cg.modelos(user, perfil)))
     return f
 
 

@@ -179,6 +179,7 @@ def executar(user, conversa, plano, resultado_atual=None):
         raise ValidationError('O resultado anterior está cortado. Consulte todos os registros necessários antes de calcular.')
     op = plano['operacao']
     linhas = []
+    curta = ''
     premissas = list(res.premissas) + ['Cálculo sobre a consulta executada nesta mensagem.' if not m.pk else
                                       'Cálculo sobre o resultado salvo da consulta anterior; os dados não foram atualizados.']
     if op in ('dias_uteis', 'dias_corridos', 'meses'):
@@ -219,18 +220,28 @@ def executar(user, conversa, plano, resultado_atual=None):
         if any(res.tipos[i] not in ('dinheiro', 'inteiro', 'valor', 'numero') for i in [a] + ([] if b is None else [b])):
             raise ValidationError('Escolha medidas numéricas, não códigos ou nomes do resultado.')
         valores = [_numero(l[a]) for l in res.linhas]
+        tipo_resultado = 'dinheiro' if (op != 'percentual' and res.tipos[a] == 'dinheiro'
+            and (b is None or res.tipos[b] == 'dinheiro')) else 'numero'
+        def apresentar(valor):
+            if tipo_resultado == 'dinheiro':
+                from iativa.query.servico import _fmt
+                return _fmt(valor, 'dinheiro')
+            return format(valor, ',f').replace(',', '_').replace('.', ',').replace('_', '.')
         if op in ('soma', 'media'):
             valor = sum(valores, Decimal(0)) / (len(valores) if op == 'media' and valores else 1)
-            linhas = [[op.capitalize(), format(valor, 'f') if valores or op == 'soma' else 'Sem valores']]
+            linhas = [[op.capitalize(), apresentar(valor) if valores or op == 'soma' else 'Sem valores']]
         else:
             for i, l in enumerate(res.linhas, 1):
                 x, y = _numero(l[a]), _numero(l[b])
                 valor = x - y if op == 'diferenca' else x / y * 100 if y else None
-                linhas.append([f'Registro {i}', format(valor, 'f') if valor is not None else 'Indefinido (base zero)'])
-        colunas, tipos = ['Cálculo', 'Resultado'], ['texto', 'numero']
-        texto = ' '.join(f'{l[0]}: {l[1]}{"%" if op == "percentual" and not l[1].startswith("Indefinido") else ""}.' for l in linhas)
+                linhas.append([f'Registro {i}', apresentar(valor) if valor is not None else 'Indefinido (base zero)'])
+        colunas, tipos = ['Cálculo', 'Resultado'], ['texto', tipo_resultado]
+        exibidos = [l[1] + ('%' if op == 'percentual' and not l[1].startswith('Indefinido') else '') for l in linhas]
+        texto = ' '.join(f'{l[0]}: {v}.' for l, v in zip(linhas, exibidos))
+        curta = exibidos[0] if len(exibidos) == 1 else '; '.join(f'{l[0]}: {v}' for l, v in zip(linhas, exibidos))
     return Resultado(True, texto or 'Nenhum registro para calcular.', colunas=colunas, tipos=tipos, linhas=linhas,
-                     premissas=premissas, escopo=res.escopo, medida_calculada=op, periodos=res.periodos)
+                     premissas=premissas, escopo=res.escopo, medida_calculada=op, periodos=res.periodos,
+                     curta_salva=curta)
 
 
 def _projecao(res, m, plano, premissas, hoje=None):

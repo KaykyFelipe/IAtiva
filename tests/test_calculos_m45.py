@@ -172,9 +172,30 @@ def test_ferramenta_numerica_soma_e_percentual_sem_dividir_por_zero(estagio):
     b, c, _ = estagio
     m = _numeros(b, c)
     soma = calculos.executar(b['u'], c, {'operacao':'soma','mensagem':m.pk,'campo':'Valor'})
-    assert soma.linhas[0][1] == '75.00'
+    assert soma.linhas[0][1] == '75,00'
     pct = calculos.executar(b['u'], c, {'operacao':'percentual','mensagem':m.pk,'campo':'Valor','campo_final':'Base'})
-    assert pct.linhas[0][1] == '25.00' and pct.linhas[1][1] == 'Indefinido (base zero)'
+    assert pct.linhas[0][1] == '25,00' and pct.linhas[1][1] == 'Indefinido (base zero)'
+    assert '25,00%' in pct.curta
+
+
+@pytest.mark.parametrize('op,esperado', [('soma', 'R$ 1.234.500,50'), ('media', 'R$ 617.250,25'),
+    ('diferenca', 'R$ 1.234.300,00')])
+def test_calculo_preserva_moeda_no_resumo_tabela_resposta_direta_e_historico(estagio, op, esperado):
+    from iativa.chat.resultados import restaurar
+    from django.template.loader import render_to_string
+    b, c, _ = estagio
+    m = _numeros(b, c)
+    m.resultado.update(tipos=['dinheiro', 'dinheiro'],
+        linhas=[['R$ 1.234.400,25', 'R$ 100,25'], ['R$ 100,25', 'R$ 0,00']])
+    m.save(update_fields=['resultado'])
+    res = calculos.executar(b['u'], c, {'operacao':op, 'mensagem':m.pk, 'campo':'Valor', 'campo_final':'Base'})
+    assert res.tipos[1] == 'dinheiro'
+    assert esperado in res.mensagem and res.linhas[0][1] == esperado and esperado in res.curta
+    guardar(m, res)
+    salvo = restaurar(b['u'], m.resultado)
+    assert salvo.curta == res.curta and salvo.linhas == res.linhas
+    assert esperado in render_to_string('chat/_resultado.html', {'resultado':salvo})
+    assert esperado in render_to_string('chat/_resultado.html', {'resultado':salvo, 'formato':'direto'})
 
 
 @pytest.mark.parametrize('truncado,moedas', [(True,()), (False,('1','2'))])

@@ -4,6 +4,13 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **Etapa 7 aprovada em 2026-11-16 por Diego; em andamento.** Feito: roteiro do piloto (`docs/piloto/ROTEIRO.md`) e auditoria de não armazenamento (`manage.py auditar_armazenamento`). Falta: usuários do Financeiro, conferência dos números com relatórios do Protheus, avaliação da interpretação e latência. Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M59 — apresentação monetária dos cálculos (2026-11-16)
+
+- Soma, média e diferença sobre campos monetários preservam tipo dinheiro e usam o formatador brasileiro existente, com R$, agrupamento de milhares e duas casas decimais. Resumo, tabela e resposta direta usam a mesma apresentação.
+- Cálculos numéricos usam vírgula decimal; percentual mantém unidade na resposta curta. Snapshot novo preserva formato e tipo ao reabrir. Resultados antigos que perderam a informação de moeda não são convertidos por suposição: precisam refazer a consulta de origem.
+- Testes sintéticos cobrem soma/média/diferença monetária, percentual, renderização normal/direta e persistência/restauração sem nova consulta ao ERP.
+- Validação: 849 testes aprovados e 10 pulados no Windows; Django check sem problemas. O auxiliar de login dos testes agora aguarda o catálogo assíncrono após autenticar, corrigindo a leitura intermitente antes da conclusão; login de produção não foi alterado.
+
 ## Mudança M58 — pensamento visível no indicador de processamento (2026-11-16)
 
 - Olhar baixo com deslocamento de 19 unidades para cada lado, ciclo de 2,8 segundos, balanço do corpo de até 6 graus e pontos com pulsos defasados. Geometria original e pensamento contínuo preservados; movimento reduzido continua respeitado.

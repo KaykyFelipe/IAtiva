@@ -133,6 +133,7 @@ Aprovadas em 2026-11-09 por Kayky Felipe (chat), com as opções recomendadas na
 
 ## Mudanças de escopo
 
+| M59 | 2026-11-16 | Corrigir apresentação dos valores calculados: preservar moeda e formato brasileiro no resumo, tabela e resposta direta, sem alterar os valores consultados. | Autorizado por Diego ao solicitar correção da aparência do faturamento |
 | M58 | 2026-11-16 | Tornar o mascote mais ativo no indicador de processamento: olhar mais amplo, ciclo menor, balanço e pontos sequenciais, sem transformar durante consultas. | Autorizado por Diego ao apontar que o indicador está muito parado |
 | M57 | 2026-11-16 | Pensamento com olhar para baixo varrendo esquerda/direita, inspirado nos gestos downScan do OpenMausBot; aumentar frequência das transformações em repouso. | Autorizado por Diego no pedido do gesto de pensamento e mais transformações |
 | M56 | 2026-11-16 | Ajustar formas e cores do mascote pela foto da frota Ativa; manter pensamento contínuo durante processamento, com transformações ocasionais apenas em repouso. | Autorizado por Diego no pedido de ajustes do mascote |
