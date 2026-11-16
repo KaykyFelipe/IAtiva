@@ -4,6 +4,14 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **Etapa 7 aprovada em 2026-11-16 por Diego; em andamento.** Feito: roteiro do piloto (`docs/piloto/ROTEIRO.md`) e auditoria de não armazenamento (`manage.py auditar_armazenamento`). Falta: usuários do Financeiro, conferência dos números com relatórios do Protheus, avaliação da interpretação e latência. Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M56 — mascote com formas da frota e pensamento contínuo (2026-11-16)
+
+- Referência visual fornecida por Diego: cabine azul com teto branco arqueado, porta, ferragens e base escura; módulo branco com faixas azuis e verdes, portas, cobertura e degraus. Desenhos SVG estilizados mantêm os olhos do mascote, sem sombras.
+- Consulta, busca, organização, cálculo, escrita e conferência usam somente pensamento. Cartões de tarefa/objetivo/atividade também começam pensando; conclusão mantém corpo original e sorriso, sem virar lavatório.
+- Formas da frota restritas à cápsula em repouso: após 90 segundos, uma forma por 6 segundos, alternando cabine e módulo. Processamento/erro/parada interrompem o ciclo. Aba oculta e movimento reduzido não iniciam a transformação.
+- Chrome desktop/celular com dados sintéticos validou fases como pensamento, retorno de cabine/módulo ao repouso, interrupção ao consultar, falha, objetivo pendente e movimento reduzido; sem transbordamento horizontal.
+- Validação: 846 testes aprovados e 10 pulados no Windows; Django check sem problemas.
+
 ## Mudança M55 — consultas sem programação e opções com botão parar (2026-11-16)
 
 - Finalidade restrita a consultar/analisar dados e esclarecer as consultas; programação, SQL livre, scripts e atividades gerais não são entregáveis do chat, inclusive para TI. Pedidos explícitos reconhecidos localmente encerram antes do modelo; instrução compartilhada cobre as demais formulações. Blocos de código e padrões de código na resposta livre do modelo geram recusa fixa antes de executar a ação. Códigos de produtos/filiais continuam sendo dados consultáveis.

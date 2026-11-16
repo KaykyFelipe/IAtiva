@@ -1,5 +1,12 @@
 # Mascote IAtiva (M46)
 
+Atualização M56 (16/11/2026): formas pela foto enviada por Diego — cabine azul com teto branco
+arqueado e módulo branco com faixas azuis/verdes e degraus. Toda operação mantém pensamento,
+sem transformação por etapa; conclusão apenas sorri. Na cápsula em repouso, cabine e módulo
+alternam após 90 segundos, por 6 segundos. Processamento interrompe o ciclo; movimento reduzido
+ou aba oculta impedem seu início. A tabela abaixo registra a versão anterior.
+
+
 Identidade prÃ³pria aprovada por Diego a partir da prÃ©via de transformaÃ§Ãµes em produtos da Ativa.
 SVG local com corpo e olhos persistentes; CSS altera geometria e acessÃ³rios sem GIF pesado na aplicaÃ§Ã£o.
 A cÃ¡psula fica centralizada no cabeÃ§alho e acompanha o mascote da mensagem em processamento.

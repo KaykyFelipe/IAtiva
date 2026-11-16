@@ -26,8 +26,8 @@
 .mascote[data-estado="organizing"] .mascote-personagem { animation:mascote-balancar 2s ease-in-out infinite; }
 .mascote[data-estado="calculating"] .mascote-personagem,.mascote[data-estado="writing"] .mascote-personagem { animation:mascote-conferir 2.3s ease-in-out infinite; }
 .mascote[data-estado="searching"] .mascote-personagem { animation:mascote-balancar 2.4s ease-in-out infinite; }
-.mascote[data-estado="done"] .mascote-corpo { x:44px; y:55px; width:72px; height:78px; rx:23px; }
-.mascote[data-estado="done"] .mascote-pia,.mascote[data-estado="done"] .mascote-sorriso { opacity:1; }
+
+.mascote[data-estado="done"] .mascote-sorriso { opacity:1; }
 .mascote[data-estado="done"] .mascote-personagem { animation:mascote-comemorar .7s ease-in-out 2; }
 .mascote[data-estado="attention"] { color:#a96d23; }
 .mascote[data-estado="attention"] .mascote-alerta { opacity:1; stroke:white; }
@@ -63,3 +63,25 @@
 @keyframes mascote-comemorar { 50% { transform:translateY(-8px) rotate(4deg); } }
 @media(max-width:760px) { .cabecalho { padding:7px 16px; min-height:62px; } .cabecalho .titulo-conversa { display:none; } .agente-capsula { min-width:140px; } }
 @media(prefers-reduced-motion:reduce) { .mascote *, .mascote *::before { animation:none!important; transition:none!important; } }
+
+/* Formas da frota: apenas no repouso, nunca durante uma consulta. */
+.mascote[data-estado="cabine"] .mascote-corpo { x:40px; y:30px; width:80px; height:108px; rx:7px; fill:#0071bc; }
+.mascote[data-estado="cabine"] .mascote-cabine { opacity:1; stroke:#00548d; stroke-width:2; }
+.cabine-lateral { fill:#005c9e; }
+.cabine-porta { fill:#0071bc; }
+.cabine-base { fill:#263640; stroke:none; }
+.cabine-ferragem { stroke:#c5d2d8; stroke-width:4; }
+.marca-fundo { fill:#fff; stroke:none; }
+.marca-azul { fill:#005c9e; stroke:none; }
+.marca-verde { fill:#00a432; stroke:none; }
+.mascote[data-estado="container"] .mascote-corpo { x:10px; y:47px; width:140px; height:85px; rx:3px; fill:#f5f6f3; }
+.mascote[data-estado="container"] .mascote-container { opacity:1; stroke:#b7c3c8; stroke-width:1.5; }
+.modulo-painel { fill:#f5f6f3; }
+.modulo-azul { fill:#005c9e; stroke:none; }
+.modulo-verde { fill:#00a432; stroke:none; }
+.modulo-portas { fill:none; }
+.modulo-puxador { stroke:#637581; stroke-width:2; }
+.modulo-telhado { fill:#64716f; stroke:#354947; }
+.modulo-base { fill:none; stroke:#53656d; stroke-width:2; }
+.mascote[data-estado="container"] .mascote-olhos { fill:#005c9e; transform:translateY(8px) scale(.82); transform-origin:80px 79px; animation:mascote-piscar 5.7s infinite; }
+.mascote[data-estado="cabine"] .mascote-personagem,.mascote[data-estado="container"] .mascote-personagem { animation:mascote-respirar 3s ease-in-out infinite; }
