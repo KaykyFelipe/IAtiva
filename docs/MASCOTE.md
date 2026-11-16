@@ -1,5 +1,10 @@
 # Mascote IAtiva (M46)
 
+M58: o pensamento tem ciclo de 2,8s, olhar baixo mais amplo, balanço do corpo e pontos
+pulsando em sequência. Atualizações de progresso não reatribuem o estado quando ele já é
+o mesmo. Verificação inclui o clone de 62px dentro do indicador de processamento.
+
+
 Atualização M57: pensamento com olhos menores, baixos, varrendo esquerda/direita e piscando,
 inspirado nos gestos downScan do OpenMausBot. Espera entre transformações em repouso agora
 é de 12 segundos (antes 90); a forma aparece por 6 segundos. Durante consultas permanece pensando.
