@@ -56,7 +56,7 @@ class Incidente(models.Model):
     versao_corrigida = models.CharField(max_length=40, blank=True)
     motivo = models.CharField(max_length=300, blank=True)
     # M53: etapa da correção em andamento, mostrada no chat de quem espera (só códigos de ETAPAS).
-    etapa = models.CharField(max_length=20, blank=True)
+    etapa = models.CharField(max_length=20, blank=True, default="", db_default="")
 
     def etapas_andamento(self) -> list[dict]:
         """M53: lista de etapas para o chat: feitas, a atual e as que faltam."""

@@ -13,6 +13,6 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='incidente',
             name='etapa',
-            field=models.CharField(blank=True, max_length=20),
+            field=models.CharField(blank=True, db_default='', default='', max_length=20),
         ),
     ]
