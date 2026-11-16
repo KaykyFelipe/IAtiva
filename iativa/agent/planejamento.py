@@ -100,12 +100,13 @@ def preparar(user, conversa, texto, provedor, historico):
         raise PermissaoNegada('Seu usuário não tem autorização para os setores envolvidos neste pedido. Solicite acesso à Diretoria ou TI.')
     entregas = analise.get('entregas', [])
     tipos = {'resposta', 'consulta', 'calculo', 'verificacao', 'investigacao', 'historico'}
-    metricas = {'', 'dias_uteis', 'dias_corridos', 'meses', 'soma', 'media', 'diferenca', 'percentual', 'projecao'}
+    metricas = {'', 'contagem', 'dias_uteis', 'dias_corridos', 'meses', 'soma', 'media', 'diferenca', 'percentual', 'projecao'}
     if not isinstance(entregas, list) or len(entregas) > 6 or any(
         not isinstance(e, dict) or e.get('tipo') not in tipos or e.get('metrica', '') not in metricas
         or not isinstance(e.get('descricao'), str) or len(e['descricao']) > 200 for e in entregas):
         raise FalhaModelo('Entregas inválidas.')
-    return {**analise, 'setores': sorted(set(alvos)), 'contextos': entrada.planejamento['contextos_recuperados']}
+    from . import admissoes
+    return admissoes.planejar(texto, {**analise, 'setores': sorted(set(alvos)), 'contextos': entrada.planejamento['contextos_recuperados']})
 
 
 def conferir(analise, decisao, saida):
@@ -115,13 +116,18 @@ def conferir(analise, decisao, saida):
     res = saida.resultado
     faltantes = []
     for item in analise.get('entregas', []):
+        if item.get('detalhe_admissoes'):
+            from .admissoes import tem_detalhes
+            if not tem_detalhes(res):
+                faltantes.append(item['descricao'])
+                continue
         historico_com_calculo = (item['tipo'] == 'historico' and ev == 'calculo'
                                 and (saida.ficha or {}).get('tipo') == 'historico_cargo')
         if not cumpre(item['tipo'], ev) and not historico_com_calculo:
             faltantes.append(item['descricao'])
         elif item.get('metrica') and getattr(res, 'medida_calculada', '') != item['metrica']:
             # Agregações no banco já comprovam soma/média, mas não dias ou projeção.
-            mapa = {'soma': 'SUM', 'media': 'AVG'}
+            mapa = {'soma': 'SUM', 'media': 'AVG', 'contagem': 'COUNT'}
             medidas = getattr(getattr(res, 'totais', None), 'medidas', [])
             if item['metrica'] not in mapa or not any(m.funcao == mapa[item['metrica']] for m in medidas):
                 faltantes.append(item['descricao'])

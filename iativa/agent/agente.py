@@ -360,6 +360,11 @@ def _ciclo_agente(user, c, texto, provedor, interrompido, entrada, objetivos, co
     ac = acomp or coord.Acompanhamento(texto)
     if not ac.contrato:
         ac.contrato = entrada.planejamento.get('analise', {}).get('entregas', [])
+    from . import admissoes
+    if admissoes.solicitado(texto):
+        anterior = ac.contrato
+        ac.contrato = admissoes.planejar(texto, {'entregas': anterior})['entregas']
+        ac.cumpridas = [i for i in ac.cumpridas if i < len(anterior) and anterior[i] == ac.contrato[i]]
     if ac.contrato:
         ac.partes_faltam = 0
     saida = _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, codigos_par, defs, atual,
@@ -510,6 +515,8 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
         ac.definir(d)
         d = _calculo_implicito(d, texto)
         d = _respeitar_preferencias(user, d, texto)
+        from . import admissoes
+        d = admissoes.orientar(user, texto, d, objetivos)
         if d.acao not in ("conversar", "falta_capacidade") and d.resposta.strip():
             andamento.avisar(d.resposta.strip().split("\n")[0])  # M53: o que a IA vai fazer aparece na hora
         if d.acao == "falta_capacidade":
@@ -558,6 +565,10 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
         saida = reduz or _agir(user, c, d, atual, defs, texto, provedor, entrada_passo, objetivos, administrador,
                                interrompido=interrompido, resultado_base=resultado_base)
         if saida.resultado is not None and getattr(saida.resultado, 'ok', False):
+            if admissoes.completar(texto, saida):
+                indices = [i for i, item in enumerate(ac.contrato) if item.get('contagem_admissoes')
+                           or item.get('detalhe_admissoes')]
+                d = replace(d, atende=tuple(sorted(set(d.atende) | set(indices))))
             from . import calculos
             resultado_base = saida.resultado
             entrada = replace(entrada, resultado_anterior=calculos.metadados(resultado_base))
@@ -606,7 +617,8 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
             from .planejamento import registrar_entregas
             registrar_entregas(ac, d, saida)
             if ac.pendentes() and ev not in (coord.PERGUNTA, coord.BLOQUEIO, coord.DELEGADA):
-                previa = _juntar(previa, saida) if previa is not None else saida
+                # Sem entrega comprovada, são revisões da mesma tentativa, não novas respostas.
+                previa = _juntar(previa, saida) if previa is not None and ac.cumpridas else saida
                 ac.anotar(d.acao, 'entrega_pendente', ev)
                 observacoes.append(Observacao(d.acao, coord.ETAPA, 'Ainda faltam entregas verificadas: ' + '; '.join(ac.pendentes())))
                 entrada = replace(entrada, planejamento={**entrada.planejamento, 'pendentes': ac.pendentes(), 'cumpridas': ac.cumpridas})
@@ -765,7 +777,12 @@ def _encerrar_sem_cumprir(ac, user, c, mensagem_id, saida, previa, causa, observ
             tabela = OBJETIVOS[ultima.objetivo].tabelas[0]
         inc = coord.encaminhar_manutencao(ac, causa, tabela)
         retomado = registro is not None and registro.retomado
-        situacao = SO.MANUTENCAO if (inc is not None and mensagem_id is not None and not retomado) else SO.IMPEDIDO
+        # M61: só espera a manutenção se ela vai mesmo atuar agora; incidente bloqueado ou esgotado não deixa o
+        # pedido parado "na fila" para sempre.
+        from iativa.manutencao.incidentes import elegivel as _vai_corrigir
+        situacao = (SO.MANUTENCAO if (inc is not None and mensagem_id is not None and not retomado
+                                      and (_vai_corrigir(inc) or inc.situacao == 'em_correcao'))
+                    else SO.IMPEDIDO)
         if mensagem_id is not None:
             o = coord.registrar(ac, user, c, mensagem_id, situacao, f"sem evidência: {causa}", incidente=inc)
             ficha["objetivo"] = o.pk
@@ -888,8 +905,8 @@ def _juntar(previa: "Saida", saida: "Saida") -> "Saida":
         anterior = getattr(previa.resultado, "mensagem", "")
         if anterior and anterior not in previa.texto:
             previa.texto = f"{previa.texto}\n\n{anterior}".strip()
-    if previa.texto and previa.texto not in saida.texto:
-        saida.texto = f"{previa.texto}\n\n{saida.texto}".strip()
+    saida.texto = '\n\n'.join(dict.fromkeys(p.strip() for p in
+        (previa.texto + '\n\n' + saida.texto).split('\n\n') if p.strip()))
     if saida.solicitacao is None:
         saida.solicitacao = previa.solicitacao
     return saida

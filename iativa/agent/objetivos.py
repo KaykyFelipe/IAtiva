@@ -391,6 +391,12 @@ def encaminhar_manutencao(ac: Acompanhamento, causa: str, tabela: str = ""):
     mascarada (sem nomes, documentos, e-mails ou valores), para a manutenção saber o que construir."""
     from iativa.manutencao import incidentes
     from iativa.manutencao.models import Categoria
+    from . import admissoes
+
+    # Contar/listar admissões já é uma capacidade existente. Uma falha de escolha
+    # de ferramenta ou contrato não é evidência de que precisa publicar código.
+    if admissoes.solicitado(ac.texto):
+        return None
 
     cond = {"exigencia": ac.exig or RESPOSTA, "causa": causa, "trilha": _trilha_segura(ac.trilha),
             "pergunta": ac.texto}
@@ -400,6 +406,11 @@ def encaminhar_manutencao(ac: Acompanhamento, causa: str, tabela: str = ""):
         import hashlib
         cond["capacidade"] = ac.capacidade
         operacao += "." + hashlib.sha256(" ".join(ac.capacidade.lower().split()).encode()).hexdigest()[:10]
+    else:
+        # M61: sem capacidade declarada, o pedido (normalizado) separa os casos; antes todos os "acao_repetida"
+        # caíam num incidente só, que esgotava as reaberturas e deixava pedidos novos sem correção.
+        import hashlib
+        operacao += "." + hashlib.sha256(_norm(ac.texto).encode()).hexdigest()[:10]
     if re.fullmatch(r"[A-Z0-9]{3}", tabela or ""):
         cond["tabela"] = tabela.lower()
     return incidentes.registrar("agente", operacao, categoria=Categoria.CAPACIDADE,

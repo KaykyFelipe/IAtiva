@@ -4,6 +4,16 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **Etapa 7 aprovada em 2026-11-16 por Diego; em andamento.** Feito: roteiro do piloto (`docs/piloto/ROTEIRO.md`) e auditoria de não armazenamento (`manage.py auditar_armazenamento`). Falta: usuários do Financeiro, conferência dos números com relatórios do Protheus, avaliação da interpretação e latência. Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M61 — admissões, contagem e manutenção indevida (2026-11-16)
+
+- Corrigida regressão M60: planejador só tinha soma/média no contrato de agregação e usava soma para contagem; COUNT já calculado não satisfazia SUM, gerando tentativas e manutenção desnecessárias. `contagem` agora tem schema, operação e verificação próprios; totais de contagem sobrevivem ao snapshot autorizado.
+- Pergunta de admissões entrega contagem de vínculos e tabela com nome completo/data de admissão, salvo pedido explícito de apenas o número. Reutiliza consulta aprovada de SRA com filtro de admissão, mantém critérios corporativos/filiais e não agrega por filial para perder os nomes. Período explícito é lido deterministicamente; “este mês” vai do início do mês até hoje em todas as tentativas.
+- Contagem completa usa total do banco; amostra cortada sem total e grupos não viram contagem de pessoas. Matrículas distintas não provam pessoas distintas. Pedido misto não troca fonte financeira/comercial por RH; contratação de equipamentos não é tratada como admissão.
+- Tentativa que não cumpriu nenhuma entrega substitui a revisão anterior; parágrafos idênticos não são repetidos. A falta de escolha da ferramenta de contar/listar admissões não abre correção de código. Defeitos técnicos continuam com os mecanismos existentes; testes/publicação não são pulados para prometer correção instantânea.
+- Contratos antigos de soma em pedidos de admissões são normalizados na continuação. A correção não reescreve respostas antigas nem encerra consultas de outros usuários. Conferência visual sintética em Chrome desktop/celular: uma tabela, nomes e datas preservados, sem transbordamento. Provedor real planejou contagem+lista e respeitou pedido de apenas número; nenhuma linha do ERP usada nessa avaliação.
+- "Preso na fila": pedidos diferentes caíam no mesmo incidente (só pelo código), que esgotava as reaberturas e ficava bloqueado, deixando o chat esperando para sempre. Agora cada pedido tem incidente próprio, e o chat só fica em "corrigindo" quando a manutenção vai mesmo atuar; senão encerra com aviso.
+- Validado (899 testes) e implantado; sem migração de banco nesta mudança.
+
 ## Mudança M60 — inteligência corporativa, memória e conclusão verificável (2026-11-16)
 
 - Diego autorizou os seis ajustes da revisão e confirmou que TI, assim como Diretoria, consulta todos os setores. `preparar_setores_ia` cria RH/Comercial e concede políticas explícitas aos perfis autorizados usando apenas filiais já concedidas; preserva políticas mais restritas existentes. Preparação aplicada somente no servidor-bots, sem alterar ERP ou interruptores da manutenção.

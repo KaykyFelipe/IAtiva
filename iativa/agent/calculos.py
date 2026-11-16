@@ -10,7 +10,7 @@ from iativa.accounts.authz import PermissaoNegada
 from iativa.chat.resultados import ESCOPO_CALENDARIO, restaurar, empacotar
 from iativa.query.servico import Resultado
 
-OPERACOES = ('dias_uteis', 'dias_corridos', 'meses', 'soma', 'media', 'diferenca', 'percentual', 'projecao')
+OPERACOES = ('contagem', 'dias_uteis', 'dias_corridos', 'meses', 'soma', 'media', 'diferenca', 'percentual', 'projecao')
 
 
 def _pascoa(ano):
@@ -163,6 +163,17 @@ def _numero(valor):
         raise ValidationError('O campo escolhido não contém um número válido.') from None
 
 
+def contar(res):
+    if not getattr(res, 'ok', False) or getattr(res, 'consolidado', False):
+        return None
+    if res.totais is not None:
+        return res.totais.registros
+    # Um agregado não pode ser contado como se seus grupos fossem registros da origem.
+    if res.truncado or any(re.search(r'quantidade|contagem|soma|media|média|total', c, re.I) for c in res.colunas):
+        return None
+    return len(res.linhas)
+
+
 def executar(user, conversa, plano, resultado_atual=None):
     if resultado_atual is not None and not plano.get('mensagem'):
         from iativa.chat.conversas import pode_ver
@@ -175,6 +186,13 @@ def executar(user, conversa, plano, resultado_atual=None):
             raise ValidationError('Não misture blocos de setores diferentes no cálculo.')
     else:
         m, res = _origem(user, conversa, plano.get('mensagem', 0))
+    if plano['operacao'] == 'contagem':
+        n = contar(res)
+        if n is None:
+            raise ValidationError('Preciso do total completo do banco ou de uma lista não cortada para contar registros.')
+        return Resultado(True, f'Quantidade de registros: {n}.', colunas=['Cálculo', 'Resultado'],
+                         tipos=['texto', 'inteiro'], linhas=[['Contagem', str(n)]], escopo=res.escopo,
+                         medida_calculada='contagem', curta_salva=str(n), premissas=list(res.premissas))
     if res.truncado:
         raise ValidationError('O resultado anterior está cortado. Consulte todos os registros necessários antes de calcular.')
     op = plano['operacao']
