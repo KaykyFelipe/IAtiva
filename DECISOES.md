@@ -132,6 +132,7 @@ Aprovadas em 2026-11-09 por Kayky Felipe (chat), com as opções recomendadas na
 
 ## Mudanças de escopo
 
+| M53 | 2026-11-16 | A IA pode declarar capacidade ausente (`falta_capacidade`) com uma descrição técnica, que vai mascarada à manutenção como especificação; etapas da correção aparecem no chat; narração do modelo só ao vivo. | Diego (chat): tudo que a IA faz deve ser avisado; sem correção manual, a IA tenta outros caminhos e, sem solução, implementa via manutenção e responde |
 | M51 | 2026-11-13 | Diagnóstico de capacidade ausente enviado à manutenção passa a incluir a pergunta da pessoa mascarada (nomes, números longos e e-mails viram marcadores; datas ficam; até 300 caracteres; formato revalidado no host). Altera a regra anterior de "só códigos". Dados do ERP continuam fora. | Diego (chat: "Pode fazer"), após a manutenção recusar por não saber qual capacidade faltava |
 | M50 | 2026-11-13 | Manutenção disparada na hora por incidente (systemd .path vigiando um carimbo no volume; timer só como varredura horária). Chat com pedido em correção fica ocupado: barra "Corrigindo…", campo travado e botão parar; outra pergunta vai para um chat novo. | Pedido de Diego: corrigir na hora e mostrar que está trabalhando, como o Claude |
 | M49 | 2026-11-13 | Expor ao modelo o relógio do servidor (data, hora, dia da semana, fuso). Não dar acesso de shell/Docker ao agente de atendimento: só informações lidas pelo backend. | Pedido de Diego ("e que horas?" sem resposta) |

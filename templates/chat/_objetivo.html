@@ -3,7 +3,16 @@
      hx-get="{% url 'chat:objetivo' objetivo.pk %}" hx-trigger="every 3s" hx-target="this" hx-swap="outerHTML">
   {% if objetivo.situacao == "manutencao" %}
     {% include "chat/_mascote.html" with estado="checking" %}
-    <span class="atividade-texto">Corrigindo… A manutenção está ajustando o sistema; quando a correção entrar no ar, a resposta aparece aqui.</span>
+    <div class="atividade-corpo">
+      <span class="atividade-texto">Implementando no sistema o que faltava; quando entrar no ar, refaço o seu pedido e a resposta aparece aqui.</span>
+      {% if objetivo.incidente %}
+      <ol class="manutencao-etapas">
+        {% for e in objetivo.incidente.etapas_andamento %}
+        <li class="etapa-{{ e.estado }}">{% if e.estado == "feita" %}✓{% elif e.estado == "atual" %}…{% else %}·{% endif %} {{ e.texto }}</li>
+        {% endfor %}
+      </ol>
+      {% endif %}
+    </div>
   {% else %}
     {% include "chat/_mascote.html" with estado="thinking" %}
     <span class="atividade-texto">Continuando o seu pedido em segundo plano; a resposta aparece aqui.</span>

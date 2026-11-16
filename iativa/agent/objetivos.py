@@ -308,6 +308,7 @@ class Acompanhamento:
     entregue: str = ""  # M40: evidência que já cumpria o pedido antes do passo de memória
     partes_faltam: int = -1  # M41: perguntas da mensagem ainda sem resposta (-1 = ainda não contadas)
     formato: str = ""  # M48: como a pessoa quer a resposta ("direto" = só o valor; "resumo")
+    capacidade: str = ""  # M53: o que o modelo declarou que falta no sistema (vai mascarado à manutenção)
     parado: int = 0  # passos seguidos sem evidência nova
     melhor: str = ""  # melhor evidência obtida
     registro: Objetivo | None = None  # preenchido na continuação pelo worker
@@ -388,9 +389,15 @@ def encaminhar_manutencao(ac: Acompanhamento, causa: str, tabela: str = ""):
 
     cond = {"exigencia": ac.exig or RESPOSTA, "causa": causa, "trilha": _trilha_segura(ac.trilha),
             "pergunta": ac.texto}
+    operacao = f"objetivo.{ac.exig or RESPOSTA}.{causa}"
+    if ac.capacidade:
+        # M53: cada capacidade declarada é um incidente próprio (não junta "projeção" com "feriado estadual").
+        import hashlib
+        cond["capacidade"] = ac.capacidade
+        operacao += "." + hashlib.sha256(" ".join(ac.capacidade.lower().split()).encode()).hexdigest()[:10]
     if re.fullmatch(r"[A-Z0-9]{3}", tabela or ""):
         cond["tabela"] = tabela.lower()
-    return incidentes.registrar("agente", f"objetivo.{ac.exig or RESPOSTA}.{causa}", categoria=Categoria.CAPACIDADE,
+    return incidentes.registrar("agente", operacao, categoria=Categoria.CAPACIDADE,
                                 condicoes=cond)
 
 

@@ -26,6 +26,16 @@ class SituacaoIncidente(models.TextChoices):
     BLOQUEADO = "bloqueado_admin", "Bloqueado: decisão administrativa"
 
 
+ETAPAS = {
+    "na_fila": "Na fila da manutenção",
+    "analisando": "Analisando o que falta no sistema",
+    "implementando": "Implementando a nova capacidade no código",
+    "testando": "Testando a correção (testes novos e a suíte inteira)",
+    "publicando": "Colocando a correção no ar",
+    "refazendo": "Correção no ar; refazendo o seu pedido",
+}
+
+
 class Incidente(models.Model):
     assinatura = models.CharField(max_length=64, unique=True)  # mesma causa = mesmo incidente
     categoria = models.CharField(max_length=20, choices=Categoria.choices)
@@ -45,6 +55,16 @@ class Incidente(models.Model):
     commit = models.CharField(max_length=40, blank=True)
     versao_corrigida = models.CharField(max_length=40, blank=True)
     motivo = models.CharField(max_length=300, blank=True)
+    # M53: etapa da correção em andamento, mostrada no chat de quem espera (só códigos de ETAPAS).
+    etapa = models.CharField(max_length=20, blank=True)
+
+    def etapas_andamento(self) -> list[dict]:
+        """M53: lista de etapas para o chat: feitas, a atual e as que faltam."""
+        atual = self.etapa or ("na_fila" if self.situacao == SituacaoIncidente.ABERTO else "")
+        codigos = list(ETAPAS)
+        i = codigos.index(atual) if atual in codigos else 0
+        return [{"texto": ETAPAS[c], "estado": "feita" if n < i else "atual" if n == i else "falta"}
+                for n, c in enumerate(codigos)]
 
     class Meta:
         ordering = ["-ultima_em"]

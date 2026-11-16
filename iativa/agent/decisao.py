@@ -18,6 +18,7 @@ ACOES = (
     "investigar_lista",     # M25: verificar TODOS os integrantes da lista anterior (tarefa em segundo plano)
     "historico_cargo",      # nome → matrículas → histórico de função/cargo → descrições e conclusão
     "calcular_resultado",   # M45: cálculo determinístico sobre dados autorizados já consultados
+    "falta_capacidade",     # M53: depois de tentar os caminhos existentes, o sistema não sabe fazer: manutenção implementa
     "listar_aprendizados",  # mostrar consultas aprendidas
     "remover_aprendizado",  # administrador: tirar de uso uma consulta aprendida (pede confirmação)
     "ajustar_filtro",       # M40: a pessoa pediu para mudar os filtros fixos de uma consulta aprendida
@@ -83,6 +84,7 @@ class Decisao:
     ajuste: dict | None = None  # M40: {"filtros": [{campo, operador, valor}], "remover": [campo]}
     calculo: dict | None = None
     formato: str = ""  # M48: "direto" (só o valor pedido), "resumo" (curto) ou "" (completo)
+    capacidade: str = ""  # M53: o que falta no sistema, em termos técnicos (sem dados), para a manutenção
 
 
 FORMATOS = ("", "direto", "resumo")
@@ -120,6 +122,8 @@ def esquema(codigos_objetivo, codigos_parametro) -> dict:
                         "description": "O que o pedido exige para estar cumprido: resposta (só explicar), consulta "
                                        "(lista), calculo (soma/contagem/média), verificacao (conferir cada item de uma "
                                        "lista), investigacao (achar a causa de uma diferença), historico (cargos de uma pessoa)."},
+            "capacidade": {"type": "string", "maxLength": 300,
+                           "description": "Só com acao falta_capacidade: o que o SISTEMA não sabe fazer, em termos técnicos e gerais (ex.: \"operação de cálculo de projeção linear do mês pelo ritmo de dias úteis\"), sem nomes, valores ou dados da consulta."},
             "formato": {"type": "string", "enum": list(FORMATOS),
                         "description": "Como a pessoa quer a resposta: \"direto\" quando ela pede só o valor/dado "
                                        "(\"apenas os dias úteis\", \"só o total\", \"me diga só o número\"): o sistema "
@@ -203,7 +207,7 @@ def validar(saida, codigos_objetivo, codigos_parametro) -> Decisao:
         raise DecisaoInvalida("formato")
     extras = set(saida) - {"resposta", "acao", "objetivo", "parametros", "alvo", "nota", "confirmado", "opcoes",
                            "alcance", "consulta", "tipo_nota", "regra", "validade", "investigacao", "entrega",
-                           "ajuste", "calculo", "formato"}
+                           "ajuste", "calculo", "formato", "capacidade"}
     if extras:
         raise DecisaoInvalida("campos extras")
     acao = saida.get("acao")
@@ -272,7 +276,11 @@ def validar(saida, codigos_objetivo, codigos_parametro) -> Decisao:
     formato = saida.get("formato") or ""
     if formato not in FORMATOS:
         raise DecisaoInvalida("formato")
+    capacidade = _texto(saida.get("capacidade") or "", 300, "capacidade")
+    if acao == "falta_capacidade" and not capacidade.strip():
+        raise DecisaoInvalida("capacidade")
     return Decisao(
+        capacidade=capacidade,
         formato=formato,
         calculo=calculo,
         ajuste=ajuste,

@@ -4,6 +4,13 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **plano proposto em `PLANO.md` §8, aguardando aprovação.** Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M53 — IA declara o que falta, manutenção visível e narração ao vivo (2026-11-16)
+
+- Nova ação `falta_capacidade`: depois de verificar que nenhum caminho existente resolve o pedido inteiro, a IA descreve em termos técnicos o que o sistema precisa ganhar; o pedido vai na hora para a manutenção (um incidente por capacidade), e a descrição segue mascarada como especificação para o agente de manutenção.
+- O card do pedido em correção mostra as etapas da manutenção (na fila, analisando, implementando, testando, publicando, refazendo), atualizadas pelo executor do host (`manage.py manutencao etapa`).
+- As frases do modelo sobre o que está fazendo ("Vou levantar…") aparecem ao vivo no andamento e saem da resposta final quando há resultado.
+- Pendente: instalar `iativa-manutencao.path` com sudo para a manutenção começar na hora (hoje o timer ainda roda a cada 15 min).
+
 ## Mudança M52 — projeção reconhecida como pedido não cumprido pela soma (2026-11-16)
 
 - "Projeção", "previsão de fechamento" e "quanto vai fechar" passam a exigir um cálculo de projeção: a soma do realizado no período não encerra o pedido. Sem essa capacidade, o pedido segue para a manutenção (com a pergunta mascarada) para que ela seja criada.

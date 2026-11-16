@@ -325,7 +325,20 @@ def _ciclo_agente(user, c, texto, provedor, interrompido, entrada, objetivos, co
                           administrador, cfg, cobertura, verificar, mensagem_id, ac, observacoes)
     if ac.formato and saida is not None:
         saida.ficha = {**(saida.ficha or {}), "formato": ac.formato}
+    # Tarefa em segundo plano: o "vou verificar…" é o aviso do trabalho que continua, não narração.
+    if saida is not None and saida.resultado is not None and (saida.ficha or {}).get("tipo") != "tarefa":
+        saida.texto = _sem_narracao(saida.texto)
     return saida
+
+
+def _sem_narracao(texto: str) -> str:
+    """M53: "Vou levantar…", "Vou consultar…" já apareceram ao vivo no andamento; na resposta final, com o
+    resultado na tela, ficam só os fatos (o que foi executado e os números conferidos)."""
+    from . import objetivos as coord
+
+    partes = [p for p in (texto or "").split("\n\n") if p.strip()]
+    limpas = [p for p in partes if not coord.anuncia(p)]
+    return "\n\n".join(limpas) if limpas else (texto or "")
 
 
 def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, codigos_par, defs, atual,
@@ -395,6 +408,15 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
                 d = replace(d, acao="calcular_resultado", calculo={"operacao": metrica, "mensagem": 0,
                                                                    "campo": "", "campo_final": ""})
         ac.definir(d)
+        if d.acao not in ("conversar", "falta_capacidade") and d.resposta.strip():
+            andamento.avisar(d.resposta.strip().split("\n")[0])  # M53: o que a IA vai fazer aparece na hora
+        if d.acao == "falta_capacidade":
+            # M53: o modelo verificou que nenhum caminho existente resolve: a manutenção implementa já.
+            ac.capacidade = d.capacidade
+            ac.anotar("falta_capacidade", "declarada")
+            andamento.avisar("Não tenho isso ainda; acionando a manutenção para implementar")
+            causa = "capacidade_declarada"
+            break
         # Texto que só anuncia uma ação, ou repete a resposta anterior para outra pergunta, não é progresso.
         sem_acao = coord.texto_sem_acao(d, c, mensagem_id, texto) if cobertura is None else ""
         if sem_acao:
@@ -633,9 +655,11 @@ def _encerrar_sem_cumprir(ac, user, c, mensagem_id, saida, previa, causa, observ
                                                                or saida.observacao.acao == "conversar")):
                 texto = ""
             parte = f"{falta}. " if texto else ""  # entregou só uma parte: diz qual falta
-            final = Saida(f"{texto}\n\n{parte}Não tenho isso ainda, corrigindo… A manutenção vai ajustar o sistema "
-                          f"(registro nº {inc.pk}) e, assim que a correção entrar no ar, refaço o pedido e "
-                          "respondo aqui, sem você precisar perguntar de novo.", ficha)
+            # M53: diz O QUE vai ser implementado, quando o modelo declarou.
+            oque = f" Vou implementar: {inc.condicoes.get('capacidade')}." if (inc.condicoes or {}).get("capacidade") else ""
+            final = Saida(f"{texto}\n\n{parte}Não tenho isso ainda, corrigindo…{oque} A manutenção vai ajustar o "
+                          f"sistema (registro nº {inc.pk}) e, assim que a correção entrar no ar, refaço o pedido e "
+                          "respondo aqui, sem você precisar perguntar de novo. Você acompanha cada etapa aqui.", ficha)
         else:
             aviso = (" Isso já tinha sido encaminhado à manutenção e voltou a acontecer; ficou para análise de uma "
                      "pessoa da TI." if retomado else "")

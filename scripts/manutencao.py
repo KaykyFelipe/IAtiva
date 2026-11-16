@@ -113,7 +113,7 @@ def validar_diagnostico(d: dict) -> dict:
         raise Recusa("rastreamento fora do formato")
     bruto = d.get("condicoes") or {}
     cond = {k: v for k, v in bruto.items()
-            if isinstance(k, str) and k not in ("trilha", "pergunta") and re.fullmatch(r"[a-z_]{1,20}", k)
+            if isinstance(k, str) and k not in ("trilha", "pergunta", "capacidade") and re.fullmatch(r"[a-z_]{1,20}", k)
             and re.fullmatch(r"[a-z0-9_./:-]{1,60}", str(v))}
     trilha = bruto.get("trilha") or []
     if not isinstance(trilha, list) or not all(isinstance(x, str) and TRILHA_RE.match(x) for x in trilha):
@@ -124,9 +124,10 @@ def validar_diagnostico(d: dict) -> dict:
         raise Recusa("capacidade ausente sem trilha: nada a reproduzir")
     if trilha:
         cond["trilha"] = trilha[-30:]
-    pergunta = bruto.get("pergunta")
-    if isinstance(pergunta, str) and PERGUNTA_RE.match(pergunta):
-        cond["pergunta"] = pergunta
+    for campo in ("pergunta", "capacidade"):
+        valor = bruto.get(campo)
+        if isinstance(valor, str) and PERGUNTA_RE.match(valor):
+            cond[campo] = valor
     return {"incidente": d["incidente"], "codigo": d["codigo"], "categoria": d["categoria"],
             "componente": str(d.get("componente", ""))[:60],
             "operacao": str(d.get("operacao", ""))[:80], "versao": re.sub(r"[^a-z0-9]", "", str(d.get("versao", "")))[:40],
@@ -144,7 +145,11 @@ def prompt_capacidade(diag: dict) -> str:
         "'pergunta', se houver, é o pedido da pessoa com dados pessoais mascarados ([nome], [numero], [email]): use-a "
         "só para entender QUAL capacidade faltou (ex.: um cálculo que o sistema não sabe fazer) e reproduza com "
         "dados sintéticos. Se faltar uma capacidade genérica (cálculo, data, agregação), implemente-a de forma geral, "
-        "não só para esse caso. "
+        "não só para esse caso. 'capacidade', se houver, é o que o agente do chat declarou que falta no sistema "
+        "depois de tentar os caminhos existentes: é a especificação do que implementar (como nova operação, ação ou "
+        "regra genérica), sempre com teste e sem dados reais. Nesse caso a reprodução é: o ciclo, com FakeProvider "
+        "escolhendo falta_capacidade, não consegue entregar; com a sua mudança, um FakeProvider usando a nova "
+        "capacidade entrega. "
         "O ciclo está em iativa/agent/agente.py (_ciclo_agente) e as regras de exigência/evidência em "
         "iativa/agent/objetivos.py.\n"
         "Faça, nesta ordem: 1) escreva em tests/ um teste novo, com dados sintéticos (fixtures existentes, ERP "
@@ -408,6 +413,14 @@ def preparar_escrita(wt: Path):
             os.chmod(path, stat.S_IMODE(path.stat().st_mode) | stat.S_IWGRP)
 
 
+def etapa(inc: int, codigo: str):
+    """M53: avisa a aplicação da etapa atual; quem espera vê no chat. Falha aqui nunca para a correção."""
+    try:
+        manage("etapa", inc, codigo, verificar=False)
+    except Exception:
+        pass
+
+
 def corrigir(diag: dict, c: dict) -> str:
     inc = diag["incidente"]
     imagem = imagem_ativa()
@@ -421,10 +434,12 @@ def corrigir(diag: dict, c: dict) -> str:
     pasta_diag = TRABALHO / f"inc-{inc}-diag"
     pasta_diag.mkdir(exist_ok=True)
     (pasta_diag / "diagnostico.json").write_text(json.dumps(diag, ensure_ascii=False))
+    etapa(inc, "implementando")
     saida = rodar(comando_agente(wt, pasta_diag, imagem, c, diag), timeout=int(c["MANUTENCAO_TEMPO_S"]),
                   verificar=False)
     if "NAO_REPRODUZIDO" in (saida.stdout or ""):
         raise Recusa("não reproduzido: nada publicado")
+    etapa(inc, "testando")
     validar_diff(wt, base)
     novos = testes_novos(wt, base)
     if not novos:
@@ -441,6 +456,7 @@ def corrigir(diag: dict, c: dict) -> str:
         manage("concluir", inc, "pronto_publicar", "--motivo",
                f"Validada no branch manutencao/inc-{inc}; publicação automática desligada ou sem credencial.")
         return "pronto_publicar"
+    etapa(inc, "publicando")
     commit = integrar_e_publicar(wt, c["MANUTENCAO_GIT_REMOTO"], c["MANUTENCAO_GIT_SSH_KEY"], imagem,
                                  lambda w: pytest_em(w, imagem))
     rodar([str(REPO / "scripts" / "atualizar.sh")], timeout=3600, verificar=False)
@@ -451,6 +467,7 @@ def corrigir(diag: dict, c: dict) -> str:
                "Publicada, mas a versão no ar não confere; ver var/implantacao/implantacao.log.")
         return "falhou_correcao"
     manage("concluir", inc, "publicado", "--commit", commit, "--versao", commit[:12])
+    etapa(inc, "refazendo")
     manage("retomar", inc, verificar=False)
     return "publicado"
 

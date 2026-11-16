@@ -32,7 +32,7 @@ def test_chat_em_correcao_fica_ocupado_e_para(base, acordar, client):
     o = Objetivo.objects.get()
     client.force_login(base["u"])
     html = client.get(reverse("chat:conversa", args=[c.pk])).content.decode()
-    assert "data-objetivo-pendente" in html and "Corrigindo…" in html
+    assert "data-objetivo-pendente" in html and "Implementando no sistema" in html
     assert reverse("chat:parar_objetivo", args=[o.pk]) in html
     r = client.post(reverse("chat:parar_objetivo", args=[o.pk]), HTTP_HX_REQUEST="true")
     assert r.status_code == 200
@@ -40,3 +40,11 @@ def test_chat_em_correcao_fica_ocupado_e_para(base, acordar, client):
     assert o.situacao == SO.IMPEDIDO
     assert Mensagem.objects.filter(conversa=c, texto__startswith="Parei este pedido").exists()
     assert "data-objetivo-pendente" not in client.get(reverse("chat:conversa", args=[c.pk])).content.decode()
+
+
+def test_m53_card_mostra_etapas_da_manutencao():
+    from iativa.manutencao.models import Incidente
+    i = Incidente(situacao="em_correcao", etapa="testando")
+    estados = [e["estado"] for e in i.etapas_andamento()]
+    assert estados == ["feita", "feita", "feita", "atual", "falta", "falta"]
+    assert Incidente(situacao="aberto").etapas_andamento()[0]["estado"] == "atual"

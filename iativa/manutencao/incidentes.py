@@ -78,11 +78,12 @@ def _condicoes(cond: dict | None) -> dict:
         limpa = [x for x in trilha if isinstance(x, str) and TRILHA_ITEM.match(x)][-30:]
         if limpa:
             out["trilha"] = limpa
-    pergunta = mascarar_pergunta((cond or {}).get("pergunta", ""))
-    if pergunta:
-        out["pergunta"] = pergunta
+    for campo in ("pergunta", "capacidade"):  # M51/M53: texto livre só mascarado
+        valor = mascarar_pergunta((cond or {}).get(campo, ""))
+        if valor:
+            out[campo] = valor
     for k, v in (cond or {}).items():
-        if k in ("trilha", "pergunta"):
+        if k in ("trilha", "pergunta", "capacidade"):
             continue
         v = str(v).strip().lower()
         if k in CONDICOES_PERMITIDAS and VALOR_SEGURO.match(v):
