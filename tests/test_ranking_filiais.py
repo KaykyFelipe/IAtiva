@@ -164,7 +164,7 @@ def test_mensagem_com_duas_perguntas_responde_as_duas(ana):
     msg, res = conversas.enviar(ana, c, "quanto vamos receber? e quanto está em atraso?", p)
     assert p.chamadas == 2, (p.chamadas, msg.texto)
     assert res is not None and res.ok
-    assert "títulos, somando" in msg.texto, msg.texto  # o número da 1ª pergunta continua visível
+    assert "Valor a receber: R$" in msg.texto, msg.texto  # o número da 1ª pergunta continua visível (M54: total)
 
 
 def test_segunda_pergunta_sem_consulta_nao_vira_resposta(ana):
@@ -178,3 +178,13 @@ def test_segunda_pergunta_sem_consulta_nao_vira_resposta(ana):
     msg, res = conversas.enviar(ana, c, "quanto vamos receber? e quanto está em atraso?", p)
     assert p.chamadas == 2 and res is not None and res.ok
     assert "Já rodei" not in msg.texto, msg.texto
+
+
+def test_m54_quanto_vira_total_sem_depender_do_modelo():
+    from iativa.agent.agente import _calculo_implicito
+    from iativa.agent.decisao import validar
+    d = validar({"resposta": "", "acao": "preparar_consulta", "objetivo": "titulos-a-vencer", "parametros": [],
+                 "alvo": "", "nota": "", "confirmado": False, "opcoes": []}, ["titulos-a-vencer"], ["agregacao"])
+    assert ("agregacao", "total") in _calculo_implicito(d, "quanto vamos receber nos próximos 30 dias?").parametros
+    assert ("agregacao", "por filial") in _calculo_implicito(d, "e o atraso por filial?").parametros
+    assert _calculo_implicito(d, "quais títulos vencem esta semana?").parametros == ()

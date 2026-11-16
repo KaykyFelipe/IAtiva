@@ -334,6 +334,26 @@ def _ciclo_agente(user, c, texto, provedor, interrompido, entrada, objetivos, co
     return saida
 
 
+_FIXAS_COM_TOTAL = ("titulos-em-atraso", "titulos-a-vencer")
+
+
+def _calculo_implicito(d, texto: str):
+    """M54: nas consultas fixas de contas a receber, "por filial" e "quanto…" (sem pedir lista) não dependem de o
+    modelo lembrar o parâmetro: o backend completa a agregação pela própria pergunta."""
+    if d.acao != "preparar_consulta" or d.objetivo not in _FIXAS_COM_TOTAL:
+        return d
+    if any(c == "agregacao" for c, _ in d.parametros):
+        return d
+    t = " ".join((texto or "").lower().split())
+    if re.search(r"\b(por|em cada|de cada) filia(l|is)\b", t):
+        calc = "por filial"
+    elif (re.match(r"^(e\s+)?quanto\b", t) and not re.search(r"\b(quais|quem|lista|liste|mostre|detalh|cliente)", t)):
+        calc = "total"
+    else:
+        return d
+    return replace(d, parametros=d.parametros + (("agregacao", calc),))
+
+
 def _sem_narracao(texto: str) -> str:
     """M53: "Vou levantar…", "Vou consultar…" já apareceram ao vivo no andamento; na resposta final, com o
     resultado na tela, ficam só os fatos (o que foi executado e os números conferidos)."""
@@ -423,6 +443,7 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
                 d = replace(d, acao="calcular_resultado", calculo={"operacao": metrica, "mensagem": 0,
                                                                    "campo": "", "campo_final": ""})
         ac.definir(d)
+        d = _calculo_implicito(d, texto)
         if d.acao not in ("conversar", "falta_capacidade") and d.resposta.strip():
             andamento.avisar(d.resposta.strip().split("\n")[0])  # M53: o que a IA vai fazer aparece na hora
         if d.acao == "falta_capacidade":
