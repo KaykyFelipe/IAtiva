@@ -187,7 +187,64 @@
     if (innerWidth > 680 && !document.activeElement.matches("input, textarea, select")) campo.focus();
   }
 
+  // M71: excluir conversa, com confirmação.
+  function confirmar(titulo, texto, rotulo) {
+    return new Promise((resolver) => {
+      const fundo = document.createElement("div");
+      fundo.className = "confirmar-fundo";
+      fundo.innerHTML = '<div class="confirmar-caixa" role="dialog" aria-modal="true" aria-labelledby="confirmar-titulo">' +
+        '<h2 id="confirmar-titulo"></h2><p></p><div class="confirmar-acoes">' +
+        '<button type="button" data-cancelar>Cancelar</button><button type="button" class="perigo" data-ok></button></div></div>';
+      fundo.querySelector("h2").textContent = titulo; // texto puro
+      fundo.querySelector("p").textContent = texto;
+      fundo.querySelector("[data-ok]").textContent = rotulo;
+      const fechar = (sim) => { document.removeEventListener("keydown", tecla, true); fundo.remove(); resolver(sim); };
+      const tecla = (ev) => { if (ev.key === "Escape") { ev.preventDefault(); fechar(false); } };
+      fundo.addEventListener("click", (ev) => {
+        if (ev.target === fundo || ev.target.closest("[data-cancelar]")) fechar(false);
+        else if (ev.target.closest("[data-ok]")) fechar(true);
+      });
+      document.addEventListener("keydown", tecla, true);
+      document.body.append(fundo);
+      fundo.querySelector("[data-cancelar]").focus();
+    });
+  }
+  async function excluirConversa(botao) {
+    const item = botao.closest("a.conversa");
+    const nome = item ? (item.querySelector("[data-titulo]") || item).textContent.trim() : "esta conversa";
+    if (!(await confirmar("Excluir conversa?", `“${nome}” e todas as mensagens dela serão apagadas. Isso não pode ser desfeito.`, "Excluir"))) return;
+    const dados = new FormData();
+    const token = document.querySelector("[name=csrfmiddlewaretoken]");
+    if (token) dados.append("csrfmiddlewaretoken", token.value);
+    const r = await fetch(botao.dataset.excluir, { method: "POST", body: dados, credentials: "same-origin" }).catch(() => null);
+    if (!r || !r.ok) return;
+    const ativa = item && item.classList.contains("ativa");
+    if (item) item.remove();
+    if (ativa) abrirConversa(document.querySelector("a.nova").href);
+  }
+
+  // M71: trocar de conversa sem recarregar a página (só a área da conversa é trocada).
+  function abrirConversa(url, empilhar = true) {
+    if (!window.htmx || !document.getElementById("conversa")) { location.href = url; return; }
+    htmx.ajax("GET", url, { target: "#conversa", swap: "outerHTML" }).then(() => {
+      if (empilhar) history.pushState({ conversa: true }, "", url);
+      app.classList.remove("menu-aberto");
+    });
+  }
+  window.addEventListener("popstate", () => abrirConversa(location.pathname, false));
+
   document.addEventListener("click", (e) => {
+    const lixeira = e.target.closest("[data-excluir]");
+    if (lixeira) { e.preventDefault(); e.stopPropagation(); excluirConversa(lixeira); return; }
+    const link = e.target.closest("#lateral a.conversa, #lateral a.nova");
+    if (link && !e.target.closest("[data-renomear]") && !e.ctrlKey && !e.metaKey && !e.shiftKey && e.button === 0
+        && !atual && !link.href.includes("/memoria/") && !document.querySelector(".renomeando")) {
+      e.preventDefault();
+      document.querySelectorAll("#lateral a.conversa.ativa").forEach((a) => a.classList.remove("ativa"));
+      if (link.classList.contains("conversa")) link.classList.add("ativa");
+      abrirConversa(link.href);
+      return;
+    }
     const lapis = e.target.closest("[data-renomear]");
     if (lapis) { e.preventDefault(); e.stopPropagation(); renomear(lapis); return; }
     if (e.target.closest("input.renomeando")) { e.preventDefault(); return; }

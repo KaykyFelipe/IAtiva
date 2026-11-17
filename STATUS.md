@@ -4,6 +4,11 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **Etapa 7 aprovada em 2026-11-16 por Diego; em andamento.** Feito: roteiro do piloto (`docs/piloto/ROTEIRO.md`) e auditoria de não armazenamento (`manage.py auditar_armazenamento`). Falta: usuários do Financeiro, conferência dos números com relatórios do Protheus, avaliação da interpretação e latência. Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M71 — excluir conversa e troca de conversa sem recarregar (2026-11-17)
+
+- Lixeira ao lado do lápis na lateral; confirmação "Excluir conversa?" (Cancelar/Excluir). Só o dono exclui a própria conversa individual; mensagens, resultados e pedidos dela vão junto. Rota `c/<id>/excluir/` (POST).
+- Clicar em outra conversa troca só a área da conversa (htmx), sem recarregar a página; voltar/avançar do navegador funcionam. Memória e Ctrl+clique continuam abrindo a página normal.
+
 ## Mudança M70 — texto de cima estável na consulta por filial (2026-11-17)
 
 - Durante "Consultando o ERP — filial", junções e total no banco, o passo atual mostra "Consultando no banco…" (sem trocar a cada filial); o detalhe por filial continua na seta.

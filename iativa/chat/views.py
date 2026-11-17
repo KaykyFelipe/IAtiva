@@ -168,6 +168,15 @@ def renomear(request, conversa_id):
 
 
 @require_POST
+def excluir(request, conversa_id):
+    try:
+        conversas.excluir(request.user, conversa_id)
+    except ConversationContext.DoesNotExist:
+        raise Http404 from None
+    return HttpResponse(status=204)
+
+
+@require_POST
 def nova(request):
     """Primeira mensagem de uma conversa nova: cria a conversa e envia."""
     form = MessageForm(request.POST)

@@ -123,6 +123,11 @@ def renomear(user, conversa_id, titulo: str) -> ConversationContext:
     return c
 
 
+def excluir(user, conversa_id) -> None:
+    """M71: só o dono exclui a própria conversa individual (mensagens, resultados e pedidos vão junto)."""
+    ConversationContext.objects.get(pk=conversa_id, tipo=T.INDIVIDUAL, usuario=user).delete()
+
+
 def _estado_lateral(c) -> str:
     if hasattr(c, "estado_ativo"):
         return "pronta" if c.estado_ativo == "pronta" else "pendente" if c.estado_ativo else ""
