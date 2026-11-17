@@ -53,6 +53,8 @@ def test_indice_unico_parcial_de_campo_novo_e_aditivo():
     from iativa.core.management.commands.verificar_migracoes import avaliar_operacao
     mig = importlib.import_module('iativa.chat.migrations.0006_mensagem_pedido').Migration
     assert all(avaliar_operacao(mig, op) == '' for op in mig.operations)
+    modulo = importlib.import_module('iativa.chat.migrations.0006_mensagem_pedido')
+    assert all(avaliar_operacao(modulo, op) == '' for op in mig.operations)  # o comando passa o módulo
     # Índice único sobre campo antigo (ou sem condição) continua bloqueado.
     velha = migrations.AddConstraint('mensagem', models.UniqueConstraint(fields=['conversa', 'texto'], name='x'))
     assert avaliar_operacao(mig, velha) != ''

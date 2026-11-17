@@ -29,7 +29,9 @@ def _unica_parcial_de_campo_novo(migracao, op) -> bool:
     c = op.constraint
     if not isinstance(c, UniqueConstraint) or not isinstance(c.condition, Q):
         return False
-    novos = {o.name for o in migracao.operations if isinstance(o, migrations.AddField)
+    # Recebe a classe Migration ou o módulo da migração (o comando passa o módulo).
+    ops = getattr(migracao, "operations", None) or getattr(getattr(migracao, "Migration", None), "operations", [])
+    novos = {o.name for o in ops if isinstance(o, migrations.AddField)
              and o.model_name == op.model_name and o.field.null}
     filhos = c.condition.children
     return (not c.condition.negated and c.condition.connector == Q.AND and bool(filhos)
