@@ -395,7 +395,8 @@ def encaminhar_manutencao(ac: Acompanhamento, causa: str, tabela: str = ""):
 
     # Contar/listar admissões já é uma capacidade existente. Uma falha de escolha
     # de ferramenta ou contrato não é evidência de que precisa publicar código.
-    if admissoes.solicitado(ac.texto):
+    from . import entregas, comparacao
+    if admissoes.solicitado(ac.texto) or entregas.somente_lista(ac.texto) or comparacao.periodos(ac.texto):
         return None
 
     cond = {"exigencia": ac.exig or RESPOSTA, "causa": causa, "trilha": _trilha_segura(ac.trilha),

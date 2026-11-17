@@ -222,6 +222,9 @@ def conversar(user, c, texto: str, provedor=None, mensagem_usuario_id=None, inte
     from .escopo import pedido_codigo, RECUSA
     if pedido_codigo(texto):
         return Saida(RECUSA, ficha={"tipo": "fora_escopo"})
+    from . import estrutura
+    if estrutura.solicitado(texto):
+        return estrutura.consultar(user)
     objetivos = objetivos_para(user)
     administrador = pode_aprender(user)
     if not objetivos and not administrador and not setores_autorizados(user, Permissao.CONSULTAR):
@@ -369,6 +372,10 @@ def _ciclo_agente(user, c, texto, provedor, interrompido, entrada, objetivos, co
         anterior = ac.contrato
         ac.contrato = admissoes.planejar(texto, {'entregas': anterior})['entregas']
         ac.cumpridas = [i for i in ac.cumpridas if i < len(anterior) and anterior[i] == ac.contrato[i]]
+    from . import entregas, comparacao
+    anterior = ac.contrato
+    ac.contrato = comparacao.planejar(texto, entregas.planejar(texto, {'entregas': anterior}))['entregas']
+    ac.cumpridas = [i for i in ac.cumpridas if i < len(anterior) and i < len(ac.contrato) and anterior[i] == ac.contrato[i]]
     if ac.contrato:
         ac.partes_faltam = 0
     saida = _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, codigos_par, defs, atual,
@@ -536,6 +543,14 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
         d = _calculo_implicito(d, texto)
         d = _respeitar_preferencias(user, d, texto)
         d = _atributo_da_lista(user, c, d, texto)
+        from . import entregas
+        d = entregas.orientar(user, texto, d, objetivos)
+        from . import comparacao
+        if comparacao.periodos(texto) and d.acao in ('investigar_divergencia','executar_consulta','preparar_consulta'):
+            d = replace(d,acao='preparar_consulta',entrega='calculo')
+            if not ac.trilha: ac.exig = coord.CALCULO
+        if entregas.somente_lista(texto) and d.acao == 'preparar_consulta' and not ac.trilha:
+            ac.exig = coord.CONSULTA
         if d.acao == "preparar_consulta" and ac.exig == coord.HISTORICO and not ac.trilha:
             ac.exig = ""  # M62: virou dado da lista anterior; a exigência vem da ação corrigida
         ac.definir(d)
@@ -586,9 +601,13 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
         registrar("interpretacao", "agente", usuario=user, estado_novo=d.acao, entidade_id=atual.pk if atual else None,
                   linhas=len(d.parametros))
         reduz = _reduz_escopo(d, cobertura)
-        saida = reduz or _agir(user, c, d, atual, defs, texto, provedor, entrada_passo, objetivos, administrador,
+        comparada = comparacao.executar(user,c,d,defs,objetivos,texto) if comparacao.periodos(texto) and d.acao=='preparar_consulta' else None
+        if comparada is not None:
+            d=replace(d,atende=tuple(i for i,e in enumerate(ac.contrato) if e.get('comparacao')))
+        saida = reduz or comparada or _agir(user, c, d, atual, defs, texto, provedor, entrada_passo, objetivos, administrador,
                                interrompido=interrompido, resultado_base=resultado_base)
         if saida.resultado is not None and getattr(saida.resultado, 'ok', False):
+            entregas.completar(texto,saida.resultado)
             if admissoes.completar(texto, saida):
                 indices = [i for i, item in enumerate(ac.contrato) if item.get('contagem_admissoes')
                            or item.get('detalhe_admissoes')]

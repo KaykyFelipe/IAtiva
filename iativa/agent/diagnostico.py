@@ -29,6 +29,8 @@ from .contratos import OBJETIVOS, objetivos_para
 
 def solicitado(texto):
     t = unicodedata.normalize('NFKD', texto or '').encode('ascii', 'ignore').decode().lower()
+    if re.search(r'compar|variacao|percentual',t) and not re.search(r'divergen|nao bate|inflad|valor correto|por que|porque|investig',t):
+        return False
     return bool(re.search(r'fatur|total|soma|valor|milh', t) and re.search(
         r'investig|divergen|diferenc|inflad|valor correto|motivo|por que|porque|test.*valor|corrig|nao bate', t))
 

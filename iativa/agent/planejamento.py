@@ -100,13 +100,13 @@ def preparar(user, conversa, texto, provedor, historico):
         raise PermissaoNegada('Seu usuário não tem autorização para os setores envolvidos neste pedido. Solicite acesso à Diretoria ou TI.')
     entregas = analise.get('entregas', [])
     tipos = {'resposta', 'consulta', 'calculo', 'verificacao', 'investigacao', 'historico'}
-    metricas = {'', 'contagem', 'dias_uteis', 'dias_corridos', 'meses', 'soma', 'media', 'diferenca', 'percentual', 'projecao'}
+    metricas = {'', 'comparacao', 'contagem', 'dias_uteis', 'dias_corridos', 'meses', 'soma', 'media', 'diferenca', 'percentual', 'projecao'}
     if not isinstance(entregas, list) or len(entregas) > 6 or any(
         not isinstance(e, dict) or e.get('tipo') not in tipos or e.get('metrica', '') not in metricas
         or not isinstance(e.get('descricao'), str) or len(e['descricao']) > 200 for e in entregas):
         raise FalhaModelo('Entregas inválidas.')
-    from . import admissoes
-    return admissoes.planejar(texto, {**analise, 'setores': sorted(set(alvos)), 'contextos': entrada.planejamento['contextos_recuperados']})
+    from . import admissoes, entregas, comparacao
+    return comparacao.planejar(texto, entregas.planejar(texto, admissoes.planejar(texto, {**analise, 'setores': sorted(set(alvos)), 'contextos': entrada.planejamento['contextos_recuperados']})))
 
 
 def conferir(analise, decisao, saida):
@@ -116,6 +116,11 @@ def conferir(analise, decisao, saida):
     res = saida.resultado
     faltantes = []
     for item in analise.get('entregas', []):
+        if item.get('campos_pedidos'):
+            from .entregas import faltam
+            if not getattr(res,'ok',False) or faltam(getattr(res,'colunas',[]),item['campos_pedidos']):
+                faltantes.append(item['descricao'])
+                continue
         if item.get('detalhe_admissoes'):
             from .admissoes import tem_detalhes
             if not tem_detalhes(res):

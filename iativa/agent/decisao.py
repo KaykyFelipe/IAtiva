@@ -108,7 +108,7 @@ def esquema(codigos_objetivo, codigos_parametro) -> dict:
                 "entregas": {"type": "array", "maxItems": 6, "items": {"type": "object", "properties": {
                     "descricao": {"type": "string", "maxLength": 200},
                     "tipo": {"type": "string", "enum": ["resposta", "consulta", "calculo", "verificacao", "investigacao", "historico"]},
-                    "metrica": {"type": "string", "enum": ["", "contagem", "dias_uteis", "dias_corridos", "meses", "soma", "media", "diferenca", "percentual", "projecao"]}},
+                    "metrica": {"type": "string", "enum": ["", "comparacao", "contagem", "dias_uteis", "dias_corridos", "meses", "soma", "media", "diferenca", "percentual", "projecao"]}},
                     "required": ["descricao", "tipo", "metrica"]}},
                 "memorias": {"type": "array", "maxItems": 4, "items": {"type": "object", "properties": {
                     "texto": {"type": "string", "maxLength": 300},

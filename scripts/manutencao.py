@@ -58,7 +58,7 @@ PROIBIDOS = ("iativa/accounts/", "iativa/core/saude.py", "iativa/manutencao/", "
              "iativa/query/plano.py", "iativa/agent/contratos.py", "iativa/memory/", "iativa/metadata/dominios.py",
              "iativa/agent/planejamento.py", "iativa/agent/memoria.py", "iativa/agent/aprendizado.py",
              "iativa/agent/escopo.py", "iativa/metadata/descoberta.py", "tests/test_evolucao_m60.py",
-             "iativa/agent/admissoes.py",
+             "iativa/agent/admissoes.py", "iativa/agent/entregas.py", "iativa/agent/comparacao.py", "iativa/agent/estrutura.py",
              "knowledge/",
              "tests/test_segredos.py", "tests/test_acessos.py", "tests/test_manutencao.py")
 MAX_ARQUIVOS, MAX_LINHAS = 6, 250

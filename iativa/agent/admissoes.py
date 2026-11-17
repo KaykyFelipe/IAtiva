@@ -80,7 +80,7 @@ def orientar(user, texto, decisao, objetivos):
         return decisao  # Não trocar a consulta da outra parte de um pedido misto.
     modelos = ConsultaModelo.objects.filter(codigo__in=permitidas, tabela='SRA', situacao='aprovada').order_by('pk')
     adequados = [m for m in modelos if m.spec.get('campo_data') == 'RA_ADMISSA'
-                 and {'RA_NOME', 'RA_ADMISSA'} <= {c['campo'] for c in m.spec.get('colunas', [])}]
+                 and 'RA_ADMISSA' in {c['campo'] for c in m.spec.get('colunas', [])} and {'RA_NOME','RA_NOMECMP'} & {c['campo'] for c in m.spec.get('colunas', [])}]
     cm = next((m for m in adequados if m.codigo == decisao.objetivo), adequados[0] if adequados else None)
     return replace(decisao, objetivo=cm.codigo, parametros=pares) if cm else decisao
 
@@ -94,7 +94,7 @@ def tem_detalhes(res):
         cm = ConsultaModelo.objects.filter(codigo=res.solicitacao.objetivo).first()
         if cm is None or cm.spec.get('campo_data') != 'RA_ADMISSA':
             return False
-    return ({'RA_NOME', 'RA_ADMISSA'} <= set(campos)
+    return ('RA_ADMISSA' in campos and bool({'RA_NOME','RA_NOMECMP'} & set(campos))
             and any('nome' in _norm(c) for c in res.colunas)
             and any('admi' in _norm(c) and t == 'data' for c, t in zip(res.colunas, res.tipos)))
 

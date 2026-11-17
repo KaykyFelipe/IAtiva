@@ -133,6 +133,8 @@ Aprovadas em 2026-11-09 por Kayky Felipe (chat), com as opções recomendadas na
 
 ## Mudanças de escopo
 
+M64 (Diego, 2026-11-17): corrigir os problemas das perguntas reais de RH, Financeiro, Diretoria e cadastro de filiais, incluindo lista de ativos com nomes completos, funções e admissões. Preservar campos pedidos na resposta final, separar comparação de períodos de investigação e reutilizar consultas/filtros aprovados. Autoriza adequar a apresentação da consulta de RH ao campo de nome completo validado no dicionário, sem mudar critérios, acessos ou dados do ERP. Manter publicação testada e drenagem no servidor-bots exclusivo.
+
 M63 (Diego, 2026-11-17): autorizada a correção dos problemas reproduzidos no piloto de TI: navegação/recarregamento, continuação com detalhes, memória pelo chat, dias úteis e salvamento de layout. Manter políticas corporativas, permissões, testes e implantação azul/verde no servidor-bots exclusivo.
 
 M61 (Diego, 2026-11-16, autorizada no pedido das imagens de admissões): corrigir contagem tratada como soma, repetição de respostas intermediárias e encaminhamento indevido à manutenção. Perguntas sobre quantidade de admissões passam a entregar total e nomes completos/datas de admissão, salvo pedido explícito de apenas número. Usar ferramentas/consultas aprovadas existentes, sem trocar regras corporativas, filiais ou permissões para obter outro total. “Este mês” preserva início do mês até hoje. Falha de orquestração em contar/listar admissões não é evidência de capacidade técnica ausente e não dispara publicação de código. Mantidos gates de manutenção, regressão e implantação azul/verde; não prometer implementação instantânea sem validação.
