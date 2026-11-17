@@ -285,6 +285,12 @@ def _conversar_autorizado(user, c, texto, provedor, mensagem_usuario_id, interro
         trechos = []
     aprendidos = _aprendidos(administrador)
     andamento.avisar("Lendo o pedido e o histórico da conversa")
+    from . import protegidos
+    dado = protegidos.protegido(texto) if acomp is None else ""
+    if dado and not protegidos.liberado(user, dado):
+        # M85: dado pessoal protegido (ex.: aniversários = data de nascimento): responde na hora com o motivo.
+        andamento.avisar("O pedido envolve dado pessoal protegido")
+        return Saida(protegidos.resposta(dado), ficha={"tipo": "bloqueada", "dado_protegido": dado})
     from . import definicoes
     falta = definicoes.pergunta(user, c, texto) if acomp is None else None
     if falta is not None:
