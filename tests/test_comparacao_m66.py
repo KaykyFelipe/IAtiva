@@ -82,3 +82,9 @@ def test_agrupamento_por_mes_e_duplo_normalizado():
     assert comparacao._agregacao(d, 'compare julho e agosto por filial') == 'soma:D2_TOTAL por D2_FILIAL'
     d = SimpleNamespace(parametros=(('agregacao', 'soma:D2_TOTAL por mes'),))
     assert comparacao._agregacao(d, 'compare julho e agosto') == 'soma:D2_TOTAL'
+
+
+def test_periodos_so_da_oracao_da_comparacao():
+    t = ('compare o faturamento de julho e agosto de 2026 por filial e liste os funcionários admitidos em '
+         'agosto de 2026 com nome e função')
+    assert [x for _, _, x in comparacao.periodos(t)] == ['07/2026', '08/2026']

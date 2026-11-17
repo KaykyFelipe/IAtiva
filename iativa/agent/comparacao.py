@@ -30,8 +30,12 @@ def _mes(a, m):
 def periodos(texto):
     """Dois períodos comparados: [(inicio, fim, rotulo), (inicio, fim, rotulo)] ou []."""
     t = _norm(texto)
-    if not _COMPARA.search(t):
+    m = _COMPARA.search(t)
+    if not m:
         return []
+    # M67: só a oração da comparação; "... e liste os admitidos em agosto" é outra entrega.
+    t = re.split(r'\s+e\s+(?=(?:me\s+)?(?:liste|listar|mostre|mostrar|quais|quem|quantos|quantas|traga|diga)\b)'
+                 r'|[.;?]', t[m.start():])[0]
     hoje = timezone.localdate()
     meses = list(re.finditer(r'\b(' + '|'.join(MESES) + r')\b(?:\s+de)?(?:\s+(20\d\d))?', t))
     if len(meses) == 2:
