@@ -146,6 +146,11 @@ def registrar_entregas(acompanhamento, decisao, saida):
         if (indice < len(contrato) and indice not in acompanhamento.cumpridas
                 and not conferir({'entregas': [contrato[indice]]}, decisao, saida)):
             acompanhamento.cumpridas.append(indice)
+            if saida.resultado is not None and not getattr(saida.resultado, 'consolidado', False):
+                try:  # M68: título do bloco na resposta final com várias entregas
+                    saida.resultado.titulo_entrega = contrato[indice]['descricao']
+                except AttributeError:
+                    pass
 
 
 def guardar(user, conversa, mensagem_id, texto, analise, saida):

@@ -546,7 +546,8 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
         from . import entregas
         d = entregas.orientar(user, texto, d, objetivos)
         from . import comparacao
-        if comparacao.periodos(texto) and d.acao in ('investigar_divergencia','executar_consulta','preparar_consulta'):
+        if (comparacao.periodos(texto) and d.acao in ('investigar_divergencia','executar_consulta','preparar_consulta')
+                and comparacao.deste_passo(ac, d)):
             d = replace(d,acao='preparar_consulta',entrega='calculo')
             if not ac.trilha: ac.exig = coord.CALCULO
         if entregas.somente_lista(texto) and d.acao == 'preparar_consulta' and not ac.trilha:
@@ -601,7 +602,8 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
         registrar("interpretacao", "agente", usuario=user, estado_novo=d.acao, entidade_id=atual.pk if atual else None,
                   linhas=len(d.parametros))
         reduz = _reduz_escopo(d, cobertura)
-        comparada = comparacao.executar(user,c,d,defs,objetivos,texto,interrompido) if comparacao.periodos(texto) and d.acao=='preparar_consulta' else None
+        comparada = (comparacao.executar(user,c,d,defs,objetivos,texto,interrompido)
+                     if comparacao.periodos(texto) and d.acao=='preparar_consulta' and comparacao.deste_passo(ac,d) else None)
         if comparada is not None:
             d=replace(d,atende=tuple(i for i,e in enumerate(ac.contrato) if e.get('comparacao')))
         saida = reduz or comparada or _agir(user, c, d, atual, defs, texto, provedor, entrada_passo, objetivos, administrador,
@@ -972,18 +974,42 @@ def _classe_sem_codigo(ac) -> str:
 
 def _juntar(previa: "Saida", saida: "Saida") -> "Saida":
     """A resposta final inclui a etapa anterior (ex.: a lista que foi mostrada) e o passo seguinte."""
+    entregue = [r for r in _blocos(previa.resultado) + _blocos(saida.resultado) if getattr(r, 'titulo_entrega', '')]
     if saida.resultado is None:
         saida.resultado = previa.resultado
+    elif len({id(r) for r in entregue}) > 1:
+        # M68: cada entrega comprovada aparece com a sua tabela (antes só a última aparecia e a lista sumia).
+        from .diagnostico import Bloco, Diagnostico
+        unicos = list({id(r): r for r in entregue}.values())
+        saida.resultado = Diagnostico([Bloco(r.titulo_entrega, r) for r in unicos], '')
+    elif entregue and not getattr(saida.resultado, 'titulo_entrega', ''):
+        # A tabela deste passo não cumpriu nada; a entregue continua sendo a resposta (não troca pelo que não foi pedido).
+        saida.resultado = entregue[0]
     elif previa.resultado is not None and previa.resultado is not saida.resultado:
         # M41: só a última tabela aparece; o número já conferido da etapa anterior vai no texto.
         anterior = getattr(previa.resultado, "mensagem", "")
         if anterior and anterior not in previa.texto:
             previa.texto = f"{previa.texto}\n\n{anterior}".strip()
+    # O "vou fazer" das etapas anteriores já foi feito; o do último passo (ex.: tarefa agendada) fica.
+    anteriores = [p for p in previa.texto.split('\n\n') if not _INTENCAO.search(p)]
     saida.texto = '\n\n'.join(dict.fromkeys(p.strip() for p in
-        (previa.texto + '\n\n' + saida.texto).split('\n\n') if p.strip()))
+        anteriores + saida.texto.split('\n\n') if p.strip()))
     if saida.solicitacao is None:
         saida.solicitacao = previa.solicitacao
     return saida
+
+
+# M68: "Agora vou buscar a lista..." é andamento (já apareceu enquanto trabalhava), não parte da resposta.
+_INTENCAO = re.compile(r'\b(agora|em seguida|depois|a seguir|na sequencia|na sequência)\b[^.]*\bvou\b'
+                       r'|\bvou (buscar|consultar|listar|calcular|conferir|verificar|levantar|trazer)\b', re.I)
+
+
+def _blocos(res):
+    if res is None:
+        return []
+    if getattr(res, 'consolidado', False):
+        return [b.resultado for b in res.blocos if b.resultado is not None]
+    return [res]
 
 
 def _lista_vista(user, c):

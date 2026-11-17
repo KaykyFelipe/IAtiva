@@ -6,6 +6,9 @@
 
 ## Mudança M68 — lista de pedido misto exige os campos dela (2026-11-17)
 
+- Segunda parte (pedido #51 travado e incompleto): a comparação só roda no passo que é dela (antes a consulta de admissões virava "comparação julho x agosto" de contagens); o contrato tira os períodos separados ("Faturamento de julho/agosto") e contagens que a pessoa não pediu; a resposta final mostra todas as tabelas entregues em blocos (antes só a última e a lista sumia); o "agora vou buscar..." das etapas anteriores sai da resposta (já apareceu no andamento).
+- Tela: passos do andamento sem repetição e até 12 visíveis; a resposta nova aparece palavra a palavra e as tabelas surgem em seguida (também na resposta em segundo plano). Comparação avisa "Calculando 07/2026 em …".
+
 - Em pedido misto (comparação + lista), a entrega de lista passa a exigir os campos da própria descrição (ex.: nome e função). Antes, a tabela da comparação por filial era aceita como a lista e o pedido fechava como cumprido sem os funcionários.
 - Teste: `tests/test_comparacao_m66.py::test_lista_do_pedido_misto_nao_e_cumprida_pela_comparacao`. 942 testes passam. Falta revalidar no chat.
 

@@ -109,3 +109,54 @@ def test_lista_do_pedido_misto_nao_e_cumprida_pela_comparacao():
     assert planejamento.conferir({'entregas': [lista]}, validar(d_(), [], []), Saida('', resultado=fat))
     rh = Resultado(True, '', colunas=['Nome', 'Função', 'Admissão'], tipos=['texto'] * 3, linhas=[['x', 'y', 'z']])
     assert not planejamento.conferir({'entregas': [lista]}, validar(d_(), [], []), Saida('', resultado=rh))
+
+
+def _contrato_misto():
+    from iativa.agent import entregas
+    t = ('compare o faturamento de julho e agosto de 2026 por filial e liste os funcionários admitidos em '
+         'agosto de 2026 com nome e função')
+    modelo = {'entregas': [
+        {'descricao': 'Faturamento de julho de 2026 por filial (venda com TES que gera duplicata)', 'tipo': 'consulta', 'metrica': 'soma'},
+        {'descricao': 'Faturamento de agosto de 2026 por filial (venda com TES que gera duplicata)', 'tipo': 'consulta', 'metrica': 'soma'},
+        {'descricao': 'Total de funcionários admitidos em agosto de 2026', 'tipo': 'calculo', 'metrica': 'contagem'},
+        {'descricao': 'Lista dos funcionários admitidos em agosto de 2026, com nome completo e função', 'tipo': 'consulta', 'metrica': ''}]}
+    return t, comparacao.planejar(t, entregas.planejar(t, modelo))['entregas']
+
+
+def test_pedido_misto_so_tem_as_entregas_pedidas():
+    """M68: períodos separados e a contagem não pedida saem; ficam a comparação e a lista."""
+    _, contrato = _contrato_misto()
+    assert [e.get('comparacao', False) for e in contrato] == [True, False]
+    assert contrato[1]['campos_pedidos'] == ['nome', 'funcao']
+    t = 'quantos funcionários foram admitidos em agosto e liste com nome'
+    from iativa.agent import entregas
+    a = entregas.planejar(t + ' e compare', {'entregas': [{'descricao': 'Total', 'tipo': 'calculo', 'metrica': 'contagem'}]})
+    assert a['entregas']  # "quantos" pede a contagem
+
+
+def test_comparacao_nao_roda_no_passo_da_lista():
+    from types import SimpleNamespace
+    _, contrato = _contrato_misto()
+    ac = SimpleNamespace(contrato=contrato, cumpridas=[])
+    assert comparacao.deste_passo(ac, SimpleNamespace(atende=(0,), objetivo='x'))
+    assert not comparacao.deste_passo(ac, SimpleNamespace(atende=(1,), objetivo='x'))
+    ac.cumpridas = [0]
+    assert not comparacao.deste_passo(ac, SimpleNamespace(atende=(), objetivo='x'))
+
+
+def test_resposta_final_mostra_todas_as_entregas_sem_texto_de_intencao():
+    from iativa.agent.agente import Saida, _juntar
+    from iativa.query.servico import Resultado
+    comp = Resultado(True, 'Comparação', colunas=['Filial', 'Valor'], tipos=['texto', 'dinheiro'], linhas=[['01', '1']])
+    comp.titulo_entrega = 'Comparar os dois períodos'
+    lista = Resultado(True, 'Lista', colunas=['Nome', 'Função'], tipos=['texto', 'texto'], linhas=[['x', 'y']])
+    lista.titulo_entrega = 'Lista dos admitidos'
+    previa = Saida('Comparação pronta.\n\nA comparação está pronta. Agora vou buscar a lista dos admitidos.', resultado=comp)
+    s = _juntar(previa, Saida('Lista pronta.', resultado=lista))
+    assert getattr(s.resultado, 'consolidado', False)
+    assert [b.titulo for b in s.resultado.blocos] == ['Comparar os dois períodos', 'Lista dos admitidos']
+    assert 'Agora vou' not in s.texto and 'Lista pronta.' in s.texto
+    # Passo seguinte que não cumpriu nada não troca a tabela entregue.
+    outra = Resultado(True, 'Outra', colunas=['A'], tipos=['texto'], linhas=[['1']])
+    s2 = _juntar(Saida('', resultado=lista), Saida('', resultado=outra))
+    assert s2.resultado is lista

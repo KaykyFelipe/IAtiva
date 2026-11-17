@@ -276,6 +276,7 @@
     }
     lista.append(bolha, pensando);
     rolarParaFim();
+    animarProxima = true;
     return [bolha, pensando];
   }
 
@@ -299,11 +300,13 @@
         const agora = bolha.querySelector("[data-pensando-atual]");
         for (let i = Math.max(0, vistos - 1); i < passos.length - 1; i++) {
           if (i < vistos - 1) continue;
+          // M68: um passo já listado não se repete (antes "Conferindo as junções" aparecia várias vezes).
+          if (Array.from(lista.children).some((li) => li.textContent === passos[i])) continue;
           const li = document.createElement("li");
           li.textContent = passos[i]; // texto puro
           lista.append(li);
         }
-        while (lista.children.length > 5) lista.firstElementChild.remove();
+        while (lista.children.length > 12) lista.firstElementChild.remove();
         agora.textContent = passos[passos.length - 1] + "…";
         if (window.IAtivaMascote) IAtivaMascote.estado(IAtivaMascote.etapa(agora.textContent));
         agora.classList.remove("trocou"); void agora.offsetWidth; agora.classList.add("trocou");
@@ -492,11 +495,39 @@
       requestAnimationFrame(() => { pendente = false; atualizarBotaoTarefa(); });
     }).observe(document.body, { childList: true, subtree: true });
   });
+  // M68: a resposta nova aparece aos poucos (texto palavra a palavra; tabelas surgem depois), como num chat.
+  function animarResposta(msg) {
+    if (!msg || msg.dataset.animada || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    msg.dataset.animada = "1";
+    const textos = Array.from(msg.querySelectorAll("p")).filter((p) =>
+      !p.closest("table, .resultado, .consolidado, details") && !p.children.length && p.textContent.trim());
+    const resto = Array.from(msg.children).filter((el) => !textos.some((p) => el === p || el.contains(p)));
+    resto.forEach((el) => { el.style.opacity = "0"; el.style.transition = "opacity .35s ease"; });
+    const fila = textos.map((p) => { const t = p.textContent; p.textContent = ""; return [p, t.split(/(\s+)/)]; });
+    let i = 0, j = 0;
+    const passo = () => {
+      if (i >= fila.length) { resto.forEach((el) => { el.style.opacity = ""; }); rolarParaFim(); return; }
+      const [p, partes] = fila[i];
+      p.textContent += partes.slice(j, j + 6).join("");
+      j += 6;
+      if (j >= partes.length) { i++; j = 0; }
+      rolarParaFim();
+      setTimeout(passo, 30);
+    };
+    passo();
+  }
+  let animarProxima = false;
+
   document.body.addEventListener("htmx:afterSwap", (e) => {
     atualizarBotaoTarefa();
     // Progresso, objetivos e conclusões atualizam apenas seus cartões. Não
     // devem mexer na leitura nem reinicializar a sincronização da conversa.
     if (!e.detail || !e.detail.target || e.detail.target.id !== "conversa") return;
+    if (animarProxima) {
+      animarProxima = false;
+      const ias = document.querySelectorAll(".mensagens .msg.ia:not(.pensando)");
+      animarResposta(ias[ias.length - 1]);
+    }
     if (atual && !atual.form.isConnected) { atual = null; pararAcompanhamento(); }
     atualizarBotaoTarefa();
     atualizarSaudacao();
@@ -541,7 +572,10 @@
         const posicao = rolagem.scrollTop;
         const mudou = !recebida.dataset.historicoVersao || recebida.dataset.historicoVersao !== area.dataset.historicoVersao;
         if (mudou && mensagens && novas) {
+          const antes = mensagens.querySelectorAll(".msg.ia").length;
           mensagens.replaceWith(novas);
+          const ias = novas.querySelectorAll(".msg.ia");
+          if (ias.length > antes) animarResposta(ias[ias.length - 1]); // resposta do segundo plano
           area.dataset.historicoVersao = recebida.dataset.historicoVersao || "";
           if (window.htmx) htmx.process(novas);
           rolagem.scrollTop = noFim ? rolagem.scrollHeight : posicao;

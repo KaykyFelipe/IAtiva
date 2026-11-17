@@ -27,15 +27,31 @@ def _mes(a, m):
     return (date(a, m, 1), date(a, m, calendar.monthrange(a, m)[1]), f'{m:02d}/{a}')
 
 
-def periodos(texto):
-    """Dois períodos comparados: [(inicio, fim, rotulo), (inicio, fim, rotulo)] ou []."""
+def _oracao(texto):
+    """M67: só a oração da comparação; "... e liste os admitidos em agosto" é outra entrega."""
     t = _norm(texto)
     m = _COMPARA.search(t)
     if not m:
+        return ''
+    return re.split(r'\s+e\s+(?=(?:me\s+)?(?:liste|listar|mostre|mostrar|quais|quem|quantos|quantas|traga|diga)\b)'
+                    r'|[.;?]', t[m.start():])[0]
+
+
+_NAO_ASSUNTO = re.compile(r'^(compar\w*|variac\w*|versus|filia\w*|cada|entre|com|mes|ano|anos|meses|passado|'
+                          r'anterior|este|esse|neste|nesse|diferenc\w*|percent\w*|relacao|frente|contra|'
+                          + '|'.join(MESES) + r'|\d+)$')
+
+
+def assunto(texto):
+    """Palavras do que é comparado ("faturamento"), sem períodos, agrupamento ou o verbo."""
+    return {w for w in re.findall(r'[a-z]{5,}', _oracao(texto)) if not _NAO_ASSUNTO.match(w)}
+
+
+def periodos(texto):
+    """Dois períodos comparados: [(inicio, fim, rotulo), (inicio, fim, rotulo)] ou []."""
+    t = _oracao(texto)
+    if not t:
         return []
-    # M67: só a oração da comparação; "... e liste os admitidos em agosto" é outra entrega.
-    t = re.split(r'\s+e\s+(?=(?:me\s+)?(?:liste|listar|mostre|mostrar|quais|quem|quantos|quantas|traga|diga)\b)'
-                 r'|[.;?]', t[m.start():])[0]
     hoje = timezone.localdate()
     meses = list(re.finditer(r'\b(' + '|'.join(MESES) + r')\b(?:\s+de)?(?:\s+(20\d\d))?', t))
     if len(meses) == 2:
@@ -57,8 +73,20 @@ def planejar(texto, analise):
     if not periodos(texto):
         return analise
     # Troca só a entrega de cálculo/comparação; as outras perguntas da mensagem continuam (M63).
-    outras = [dict(e) for e in analise.get('entregas', [])
-              if not (e.get('tipo') == 'calculo' and re.search(r'compar|variac|fatur|diferen', _norm(e.get('descricao', ''))))]
+    # M68: "Faturamento de julho por filial" e "... de agosto" são partes da própria comparação, não entregas
+    # a mais (a pessoa não pediu cada período separado). Listas com campos pedidos ficam.
+    alvo = assunto(texto)
+    meses = {_norm(r) for _, _, r in periodos(texto)} | {m for m in MESES if re.search(rf'\b{m}\b', _oracao(texto))}
+
+    def parte(e):
+        d = _norm(e.get('descricao', ''))
+        if e.get('campos_pedidos'):
+            return False
+        if e.get('tipo') == 'calculo' and re.search(r'compar|variac|diferen', d):
+            return True
+        return bool(alvo & set(re.findall(r'[a-z]{5,}', d))) and any(re.search(rf'\b{re.escape(m)}\b', d) for m in meses)
+
+    outras = [dict(e) for e in analise.get('entregas', []) if not parte(e)]
     return {**analise, 'entregas': [{'descricao': 'Comparar os dois períodos pela mesma definição, com diferença e '
                                                   'variação percentual', 'tipo': 'calculo', 'metrica': 'comparacao',
                                      'comparacao': True}] + outras}
@@ -105,6 +133,25 @@ def _valores(r):
     return out, r.colunas[i], r.tipos[i], titulo
 
 
+def deste_passo(ac, d):
+    """M68: a comparação só roda no passo que é dela. Antes, a consulta de admissões (outra entrega do mesmo
+    pedido) também virava "comparação julho x agosto", com números que ninguém pediu."""
+    alvo = {i for i, e in enumerate(ac.contrato or []) if e.get('comparacao')}
+    if not ac.contrato:
+        return True
+    if not alvo or alvo <= set(ac.cumpridas):
+        return False
+    if d.atende:
+        return bool(set(d.atende) & alvo)
+    # Sem "atende": consulta que tem os campos de uma lista ainda pendente é o passo dessa lista.
+    from .entregas import faltam
+    from .models import ConsultaModelo
+    cm = ConsultaModelo.objects.filter(codigo=d.objetivo, situacao='aprovada').first()
+    colunas = cm.spec.get('colunas', []) if cm is not None else []
+    return not any(e.get('campos_pedidos') and not faltam(colunas, e['campos_pedidos'])
+                   for i, e in enumerate(ac.contrato) if i not in ac.cumpridas)
+
+
 def executar(user, c, d, defs, objetivos, texto, interrompido=None):
     from .agente import Interrompido, Saida, _preparar
     from .contratos import OBJETIVOS
@@ -125,9 +172,11 @@ def executar(user, c, d, defs, objetivos, texto, interrompido=None):
     if cm is None or not cm.spec.get('campo_data') or agreg is None:
         return None  # sem período ou sem medida: o ciclo normal decide (não inventa uma definição)
     saidas = []
-    for inicio, fim, _ in datas:
+    from . import andamento
+    for inicio, fim, rot in datas:
         if interrompido is not None and interrompido():
             raise Interrompido
+        andamento.avisar(f'Calculando {rot} em “{cm.nome}” ({cm.tabela})')
         pares = tuple((k, v) for k, v in d.parametros if k not in ('periodo-analise', 'agregacao'))
         dd = replace(d, acao='preparar_consulta', resposta='',
                      parametros=pares + (('periodo-analise', f'{inicio:%d/%m/%Y}..{fim:%d/%m/%Y}'), ('agregacao', agreg)))

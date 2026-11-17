@@ -62,15 +62,24 @@ def faltam(colunas, exigidos):
     return [c for c in exigidos if not any(_atende(col, c) for col in colunas)]
 
 
+def _nao_pedida(texto, e):
+    """M68: contagem que a pessoa não pediu ("Total de funcionários admitidos" quando ela só pediu a lista)."""
+    if e.get('metrica')!='contagem' or any(k in e for k in ('contagem_admissoes','detalhe_admissoes','comparacao')):
+        return False
+    return not re.search(r'\b(quant[oa]s?|quantidade|total|totais|numero|contagem|conte|contar|soma|some)\b',_norm(texto))
+
+
 def planejar(texto, analise):
     requeridos=campos(texto)
     if not somente_lista(texto):
         # M68: pedido misto ("compare ... e liste os admitidos com nome e função"): cada lista exige os campos
         # da sua própria descrição; outra tabela (ex.: faturamento por filial) não a cumpre.
-        itens=[dict(e) for e in analise.get('entregas',[])]
+        itens=[dict(e) for e in analise.get('entregas',[]) if not _nao_pedida(texto,e)]
         for e in itens:
-            if e.get('tipo')=='consulta' and not e.get('campos_pedidos') and campos(e.get('descricao','')):
-                e['campos_pedidos']=campos(e['descricao'])
+            # A descrição de uma consulta já é uma lista ("Lista dos admitidos com nome e função").
+            pedidos=campos('liste '+e.get('descricao','')) if e.get('tipo')=='consulta' else []
+            if pedidos and not e.get('campos_pedidos') and set(pedidos)&{'nome','funcao','admissao','cliente','vencimento','saldo'}:
+                e['campos_pedidos']=pedidos
         return {**analise,'entregas':itens}
     itens=[dict(e) for e in analise.get('entregas',[]) if e['tipo'] not in ('calculo','historico')]
     consultas=[e for e in itens if e['tipo']=='consulta']
