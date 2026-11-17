@@ -55,6 +55,9 @@
           </div>
         {% endif %}
       {% endfor %}
+      {% if envio_pendente %}{# M79: a IA ainda trabalha neste pedido (a página foi recarregada ou reaberta) #}
+        <div class="msg ia pensando" role="status" aria-live="polite" data-envio-pendente data-pedido="{{ envio_pendente.pedido }}" data-parar-url="{% url 'chat:parar' %}"></div>
+      {% endif %}
       {% if aprendizado %}{% include "chat/_aprendizado.html" %}{% endif %}
     </div>
   </div>

@@ -4,6 +4,10 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **Etapa 7 aprovada em 2026-11-16 por Diego; em andamento.** Feito: roteiro do piloto (`docs/piloto/ROTEIRO.md`) e auditoria de não armazenamento (`manage.py auditar_armazenamento`). Falta: usuários do Financeiro, conferência dos números com relatórios do Protheus, avaliação da interpretação e latência. Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M79 — mensagem e "trabalhando" sobrevivem ao recarregar (2026-11-17)
+
+- A mensagem da pessoa é gravada antes de a IA trabalhar (transação própria); se o envio for parado ou falhar, ela sai. Ao recarregar ou voltar à conversa, o pedido em andamento aparece com o "trabalhando", as etapas e o botão de parar; a resposta entra sozinha quando fica pronta. Testes: `tests/test_m79_envio_salvo.py`.
+
 ## Mudança M78 — campo bloqueado enquanto a IA responde (2026-11-17)
 
 - Durante a resposta o campo de mensagem fica desabilitado ("Aguarde a resposta ou clique em parar."); volta ao terminar, ao parar ou em erro.

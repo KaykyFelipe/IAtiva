@@ -50,6 +50,11 @@ def _obter(request, conversa_id) -> ConversationContext:
         raise Http404 from None
 
 
+def _pendente(user, c):
+    m = conversas.envio_pendente(c) if c else None
+    return m if m is not None and m.autor_id == user.pk else None
+
+
 def _contexto(request, c=None, form=None, erro="", resultado=None, resultado_msg=None, aprendizado=None,
               enviado=None):
     setor = setor_do_usuario(request.user)
@@ -69,6 +74,8 @@ def _contexto(request, c=None, form=None, erro="", resultado=None, resultado_msg
         "conversa": c,
         "mensagens": msgs,
         "historico_versao": historico_versao,
+        # M79: pedido desta pessoa ainda em andamento (página recarregada ou reaberta): mostra o "trabalhando".
+        "envio_pendente": _pendente(request.user, c),
         "mascote_falha": bool(erro or (form is not None and form.errors) or getattr(resultado, 'ok', None) is False or ultimo_tipo in (
             'falha_modelo', 'falha_execucao', 'bloqueada', 'impedimento_dados')),
         "pode_escrever": conversas.pode_escrever(request.user, c) if c else bool(setor),

@@ -204,10 +204,12 @@ def limpar_interrupcao(user, pedido) -> None:
         PedidoInterrompido.objects.filter(pedido=pedido, usuario=user).delete()
 
 
-@transaction.atomic
 def enviar(user, c: ConversationContext, texto: str, provedor=None, pedido=None) -> None:
     """`pedido`: id do envio gerado no navegador; se a pessoa clicar em "parar" antes da IA agir,
-    `agente.Interrompido` é lançado e a transação desfaz tudo (inclusive a mensagem dela).
+    `agente.Interrompido` é lançado e o envio é desfeito (inclusive a mensagem dela).
+
+    M79: a mensagem da pessoa é gravada ANTES de a IA trabalhar (transação própria). Assim ela aparece ao
+    recarregar a página ou voltar depois, junto do "trabalhando"; se o envio falhar ou for parado, ela sai.
 
     M22: o histórico guarda só `saida.texto` (intenção, critérios, estado). A resposta com números
     vai em `resultado.mensagem`, que existe só nesta resposta HTTP e nunca é gravada."""
@@ -216,23 +218,49 @@ def enviar(user, c: ConversationContext, texto: str, provedor=None, pedido=None)
     from iativa.agent import agente
 
     texto = _validar_texto(texto)
-    repetido = _envio_repetido(c, pedido)
-    if repetido is not None:
-        return repetido
-    _ocupar(c)
-    m = Mensagem.objects.create(conversa=c, papel=Papel.USUARIO, autor=user, texto=texto, pedido=pedido)
+    with transaction.atomic():
+        repetido = _envio_repetido(c, pedido)
+        if repetido is not None:
+            return repetido
+        _ocupar(c)
+        if envio_pendente(c) is not None:
+            raise ValidationError(OCUPADA)
+        m = Mensagem.objects.create(conversa=c, papel=Papel.USUARIO, autor=user, texto=texto, pedido=pedido)
     from iativa.agent import andamento
 
-    with andamento.acompanhar(user.pk, pedido):
-        saida = agente.conversar(user, c, texto, provedor=provedor, mensagem_usuario_id=m.pk,
-                                 interrompido=_verificador(user, pedido))
-        andamento.avisar("Escrevendo a resposta")
-    msg = Mensagem.objects.create(conversa=c, papel=Papel.IA, texto=saida.texto[:MAX_TEXTO], ficha=saida.ficha,
-                                  solicitacao=saida.solicitacao)
-    from .resultados import guardar
-    guardar(msg, saida.resultado)
-    _tocar(c, texto)
+    try:
+        with transaction.atomic():
+            # Trava o chat durante a resposta (o worker e outra aba não entram); espera a 1ª etapa soltar.
+            list(ConversationContext.objects.select_for_update(no_key=True).filter(pk=c.pk))
+            with andamento.acompanhar(user.pk, pedido):
+                saida = agente.conversar(user, c, texto, provedor=provedor, mensagem_usuario_id=m.pk,
+                                         interrompido=_verificador(user, pedido))
+                andamento.avisar("Escrevendo a resposta")
+            msg = Mensagem.objects.create(conversa=c, papel=Papel.IA, texto=saida.texto[:MAX_TEXTO],
+                                          ficha=saida.ficha, solicitacao=saida.solicitacao)
+            from .resultados import guardar
+            guardar(msg, saida.resultado)
+            _tocar(c, texto)
+    except BaseException:
+        Mensagem.objects.filter(pk=m.pk).delete()  # parado ou falhou: a mensagem sai, como antes
+        raise
     return msg, saida.resultado
+
+
+ENVIO_VALIDO_MIN = 15  # depois disso, mensagem sem resposta não é mais "em andamento" (processo caiu)
+
+
+def envio_pendente(c):
+    """M79: a última mensagem é da pessoa, de um envio do navegador ainda sem resposta e recente: a IA está
+    trabalhando nela (mesmo que a página tenha sido recarregada). Devolve a mensagem ou None."""
+    from datetime import timedelta
+
+    from django.utils import timezone
+    ultima = c.mensagens.order_by("-criado_em", "-id").first()
+    if (ultima is None or ultima.papel != Papel.USUARIO or ultima.pedido is None
+            or ultima.criado_em < timezone.now() - timedelta(minutes=ENVIO_VALIDO_MIN)):
+        return None
+    return ultima
 
 
 OCUPADA = ("Esta conversa ainda está trabalhando no pedido anterior. Aguarde a resposta ou abra um novo chat "

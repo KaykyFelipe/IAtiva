@@ -308,23 +308,7 @@
     svg.append(use); b.append(svg);
   }
 
-  function mostrarPensando(texto) {
-    const lista = document.querySelector(".mensagens");
-    if (!lista) return [];
-    const vazio = lista.querySelector(".vazio");
-    if (vazio) vazio.hidden = true;
-    document.getElementById("conversa").classList.remove("inicio");
-    const sugestoes = document.querySelector("[data-sugestoes-inicio]");
-    if (sugestoes) sugestoes.hidden = true;
-    const bolha = document.createElement("div");
-    bolha.className = "msg usuario";
-    const p = document.createElement("p");
-    p.textContent = texto; // texto puro, nunca HTML
-    bolha.appendChild(p);
-    const pensando = document.createElement("div");
-    pensando.className = "msg ia pensando";
-    pensando.setAttribute("role", "status");
-    pensando.setAttribute("aria-live", "polite");
+  function montarPensando(pensando) {
     // M69: etapas recolhidas atrás de uma seta ao lado do passo atual (clica e abre; clica de novo e fecha).
     pensando.innerHTML = '<ol class="pensando-passos" data-pensando-passos hidden></ol>' +
       '<div class="pensando-linha"><span class="pontos" aria-hidden="true"><i></i><i></i><i></i></span>' +
@@ -349,6 +333,26 @@
       rosto.append(linha); pensando.prepend(rosto);
       IAtivaMascote.estado('thinking');
     }
+  }
+
+  function mostrarPensando(texto) {
+    const lista = document.querySelector(".mensagens");
+    if (!lista) return [];
+    const vazio = lista.querySelector(".vazio");
+    if (vazio) vazio.hidden = true;
+    document.getElementById("conversa").classList.remove("inicio");
+    const sugestoes = document.querySelector("[data-sugestoes-inicio]");
+    if (sugestoes) sugestoes.hidden = true;
+    const bolha = document.createElement("div");
+    bolha.className = "msg usuario";
+    const p = document.createElement("p");
+    p.textContent = texto; // texto puro, nunca HTML
+    bolha.appendChild(p);
+    const pensando = document.createElement("div");
+    pensando.className = "msg ia pensando";
+    pensando.setAttribute("role", "status");
+    pensando.setAttribute("aria-live", "polite");
+    montarPensando(pensando);
     lista.append(bolha, pensando);
     rolarParaFim();
     animarProxima = true;
@@ -366,7 +370,7 @@
     const ler = () => fetch(url, { credentials: "same-origin", cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))
       .then((dados) => {
-        if (!dados || !atual) return;
+        if (!dados || (!atual && !document.querySelector("[data-envio-pendente]"))) return;
         const bolha = document.querySelector(".msg.pensando");
         if (!bolha) return;
         const passos = dados.passos || [];
@@ -396,6 +400,18 @@
       })
       .catch(() => {});
     acompanhamento = setInterval(ler, 700);
+  }
+
+  // M79: página recarregada (ou reaberta) com a IA ainda trabalhando: mostra o "trabalhando" e acompanha.
+  function retomarEnvio() {
+    const el = document.querySelector("[data-envio-pendente]");
+    const form = document.querySelector("[data-compositor]");
+    if (!el || atual || el.dataset.montado || !form) return;
+    el.dataset.montado = "1";
+    montarPensando(el);
+    acompanhar(form, el.dataset.pedido);
+    atualizarBotaoTarefa();
+    rolarParaFim();
   }
   function pararAcompanhamento() {
     if (acompanhamento) clearInterval(acompanhamento);
@@ -446,14 +462,14 @@
   // M26: com uma verificação em segundo plano rodando, o botão de enviar vira "parar" e cancela a tarefa.
   // M50: um pedido em segundo plano (continuação ou correção pela manutenção) ocupa o chat, como uma
   // tarefa: o botão vira "parar" e outra pergunta vai para um chat novo.
-  function tarefaAtiva() { return document.querySelector("#atividade-fixa[data-tarefa-ativa], [data-objetivo-pendente]"); }
+  function tarefaAtiva() { return document.querySelector("#atividade-fixa[data-tarefa-ativa], [data-objetivo-pendente], [data-envio-pendente]"); }
   function atualizarBotaoTarefa() {
     const form = document.querySelector("[data-compositor]");
     if (!form || atual) return;
     const ativa = tarefaAtiva();
     botao(form, Boolean(ativa));
     const b = form.querySelector("[data-botao-enviar]");
-    const objetivo = ativa && ativa.hasAttribute("data-objetivo-pendente");
+    const objetivo = ativa && (ativa.hasAttribute("data-objetivo-pendente") || ativa.hasAttribute("data-envio-pendente"));
     if (b && ativa) {
       const rotulo = objetivo ? "Parar este pedido" : "Parar a verificação";
       b.setAttribute("aria-label", rotulo); b.title = rotulo;
@@ -467,6 +483,15 @@
     }
   }
   function cancelarTarefa(form, barra) {
+    if (barra.hasAttribute("data-envio-pendente")) {
+      const dados = new FormData();
+      dados.append("csrfmiddlewaretoken", form.querySelector("[name=csrfmiddlewaretoken]").value);
+      dados.append("pedido", barra.dataset.pedido);
+      const agora = barra.querySelector("[data-pensando-atual]");
+      if (agora) agora.textContent = "Parando…";
+      fetch(barra.dataset.pararUrl, { method: "POST", body: dados, credentials: "same-origin" }).catch(() => {});
+      return;  // a mensagem sai quando o servidor desiste; a sincronização atualiza a conversa
+    }
     if (barra.hasAttribute("data-objetivo-pendente")) {
       const texto = barra.querySelector(".atividade-texto");
       if (texto) texto.textContent = "Parando o pedido…";
@@ -577,6 +602,7 @@
     rolarParaFim();
     prepararCampo();
     atualizarBotaoTarefa();
+    retomarEnvio();
     // M53: o cartão do pedido é trocado por outerHTML quando termina; o evento do htmx sai do elemento
     // já removido e não chega aqui. Observa a página para destravar o campo assim que o cartão some.
     let pendente = false;
@@ -625,6 +651,7 @@
     prepararLateral();
     rolarParaFim();
     prepararCampo();
+    retomarEnvio();
   });
   setInterval(atualizarSaudacao, 60000);
   document.addEventListener("visibilitychange", () => { if (!document.hidden) atualizarSaudacao(); });
@@ -663,10 +690,12 @@
         const posicao = rolagem.scrollTop;
         const mudou = !recebida.dataset.historicoVersao || recebida.dataset.historicoVersao !== area.dataset.historicoVersao;
         if (mudou && mensagens && novas) {
-          const antes = mensagens.querySelectorAll(".msg.ia").length;
+          const antes = mensagens.querySelectorAll(".msg.ia:not(.pensando)").length;
           mensagens.replaceWith(novas);
-          const ias = novas.querySelectorAll(".msg.ia");
+          const ias = novas.querySelectorAll(".msg.ia:not(.pensando)");
           if (ias.length > antes) animarResposta(ias[ias.length - 1]); // resposta do segundo plano
+          if (!document.querySelector("[data-envio-pendente]")) pararAcompanhamento();
+          retomarEnvio();
           area.dataset.historicoVersao = recebida.dataset.historicoVersao || "";
           if (window.htmx) htmx.process(novas);
           rolagem.scrollTop = noFim ? rolagem.scrollHeight : posicao;
