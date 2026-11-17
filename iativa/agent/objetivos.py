@@ -437,11 +437,23 @@ def resumo_tentativas(ac: Acompanhamento) -> str:
 
 # --- continuação pelo worker ----------------------------------------------------------------------
 
+def conversas_ocupadas(agora=None):
+    """M73: chats com um agente trabalhando agora (tarefa ou continuação com lease vivo). Outro agente do
+    worker não pega pedido desses chats: cada chat tem o seu agente, e chats diferentes andam em paralelo."""
+    from .models import Tarefa
+    agora = agora or timezone.now()
+    tarefas = Tarefa.objects.filter(situacao='executando', lease_ate__gte=agora).values_list('conversa_id', flat=True)
+    continuando = (Objetivo.objects.filter(situacao=SO.CONTINUAR, lease_ate__gte=agora).exclude(execucao='')
+                   .values_list('conversa_id', flat=True))
+    return set(tarefas) | set(continuando)
+
+
 def reivindicar() -> Objetivo | None:
     agora = timezone.now()
     lease = timedelta(seconds=180)
-    fila = Objetivo.objects.filter(situacao=SO.CONTINUAR).filter(Q(lease_ate__isnull=True) | Q(lease_ate__lt=agora))
-    for o in fila.order_by("id")[:5]:
+    fila = (Objetivo.objects.filter(situacao=SO.CONTINUAR).filter(Q(lease_ate__isnull=True) | Q(lease_ate__lt=agora))
+            .exclude(conversa_id__in=conversas_ocupadas(agora)))
+    for o in fila.order_by("id")[:20]:
         if o.continuacoes >= int(cfg()['continuacoes']):
             if Objetivo.objects.filter(pk=o.pk, execucao=o.execucao, situacao=SO.CONTINUAR).filter(
                     Q(lease_ate__isnull=True) | Q(lease_ate__lt=agora)).update(

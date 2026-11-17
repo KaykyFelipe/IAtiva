@@ -89,3 +89,7 @@ IATIVA_TAREFAS = {
     "registros": int(env("IATIVA_TAREFA_REGISTROS", "2000")),
 }
 IATIVA_VINCULO_POR_DOCUMENTO = env("IATIVA_VINCULO_POR_DOCUMENTO", "0") == "1"
+
+# M73: manutenção automática desligada salvo IATIVA_MANUTENCAO_AUTOMATICA=1; agentes paralelos no worker.
+IATIVA_MANUTENCAO_AUTOMATICA = env("IATIVA_MANUTENCAO_AUTOMATICA", "0") == "1"
+IATIVA_WORKER_AGENTES = max(1, int(env("IATIVA_WORKER_AGENTES", "6")))

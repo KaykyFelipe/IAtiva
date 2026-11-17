@@ -12,3 +12,6 @@ DATABASES = {"default": {"ENGINE": "django.db.backends.sqlite3", "NAME": ":memor
 SYNTHETIC_ERP_PATH = Path(tempfile.gettempdir()) / "iativa-testes-erp-sintetico.sqlite3"
 
 PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]
+
+# Testes antigos cobrem a manutenção automática ligada; os de M73 desligam explicitamente.
+IATIVA_MANUTENCAO_AUTOMATICA = True

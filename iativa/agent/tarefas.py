@@ -94,8 +94,10 @@ def cancelar(user, tarefa_id) -> Tarefa:
 def reivindicar() -> Tarefa | None:
     agora = timezone.now()
     lease = timedelta(seconds=int(limites()["lease_s"]))
-    candidatas = Tarefa.objects.filter(Q(situacao=S.PENDENTE) | Q(situacao=S.EXECUTANDO, lease_ate__lt=agora)).order_by("id")
-    for t in candidatas[:5]:
+    from .objetivos import conversas_ocupadas
+    candidatas = (Tarefa.objects.filter(Q(situacao=S.PENDENTE) | Q(situacao=S.EXECUTANDO, lease_ate__lt=agora))
+                  .exclude(conversa_id__in=conversas_ocupadas(agora)).order_by("id"))
+    for t in candidatas[:20]:
         nova = uuid.uuid4().hex
         n = Tarefa.objects.filter(pk=t.pk, execucao=t.execucao, situacao=t.situacao).filter(
             Q(lease_ate__isnull=True) | Q(lease_ate__lt=agora) | Q(situacao=S.PENDENTE)).update(

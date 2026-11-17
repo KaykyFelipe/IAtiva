@@ -4,6 +4,11 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **Etapa 7 aprovada em 2026-11-16 por Diego; em andamento.** Feito: roteiro do piloto (`docs/piloto/ROTEIRO.md`) e auditoria de não armazenamento (`manage.py auditar_armazenamento`). Falta: usuários do Financeiro, conferência dos números com relatórios do Protheus, avaliação da interpretação e latência. Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M73 — manutenção desligada; um agente por chat (2026-11-17)
+
+- Manutenção automática desligada por padrão (decisão M73): sem correção automática; a resposta pede para comunicar alguém da TI com o nº do registro.
+- Worker com 6 agentes em paralelo; um chat com pedido rodando não é pego por outro agente. Testes: `tests/test_m73_manutencao_desligada.py`.
+
 ## Mudança M72 — ajustes da exclusão e da troca de conversa (2026-11-17)
 
 - Botão Cancelar da confirmação visível (cor própria). Ao trocar de conversa, a lateral mantém a posição da barra de rolagem.

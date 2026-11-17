@@ -210,3 +210,11 @@ LOGGING = {
         "django.db.backends": {"handlers": [], "level": "CRITICAL", "propagate": False},
     },
 }
+
+# M73 — manutenção automática (Opus corrigindo o código) DESLIGADA por padrão, a pedido de Diego (custo).
+# Desligada: o incidente fica registrado para a TI, nada é corrigido sozinho e a resposta pede para a
+# pessoa avisar alguém da TI. Religar: IATIVA_MANUTENCAO_AUTOMATICA=1 no .env.
+IATIVA_MANUTENCAO_AUTOMATICA = False  # local.py lê IATIVA_MANUTENCAO_AUTOMATICA do .env
+
+# M73 — agentes em paralelo no worker (um por chat ao mesmo tempo; o mesmo chat nunca roda duas vezes).
+IATIVA_WORKER_AGENTES = 6  # local.py lê IATIVA_WORKER_AGENTES do .env

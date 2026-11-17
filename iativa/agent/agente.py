@@ -563,7 +563,9 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
             # M53: o modelo verificou que nenhum caminho existente resolve: a manutenção implementa já.
             ac.capacidade = d.capacidade
             ac.anotar("falta_capacidade", "declarada")
-            andamento.avisar("Não tenho isso ainda; acionando a manutenção para implementar")
+            from iativa.manutencao.incidentes import automatica
+            andamento.avisar("Não tenho isso ainda; acionando a manutenção para implementar" if automatica()
+                             else "Não tenho isso ainda; registrando para a TI")
             causa = "capacidade_declarada"
             break
         # Texto que só anuncia uma ação, ou repete a resposta anterior para outra pergunta, não é progresso.
@@ -866,8 +868,10 @@ def _encerrar_sem_cumprir(ac, user, c, mensagem_id, saida, previa, causa, observ
                           f"sistema (registro nº {inc.pk}) e, assim que a correção entrar no ar, refaço o pedido e "
                           "respondo aqui, sem você precisar perguntar de novo. Você acompanha cada etapa aqui.", ficha)
         else:
+            from iativa.manutencao.incidentes import AVISAR_TI, automatica
             aviso = (" Isso já tinha sido encaminhado à manutenção e voltou a acontecer; ficou para análise de uma "
-                     "pessoa da TI." if retomado else "")
+                     "pessoa da TI." if retomado else
+                     " " + AVISAR_TI.format(n=inc.pk) if inc is not None and not automatica() else "")
             final = Saida(f"{texto}\n\n{falta}." + (f" Tentei: {tentei}." if tentei else "")
                           + " Não vou repetir a mesma tentativa nem dizer que está pronto." + aviso, ficha)
         registrar("modelo_falhou", "agente", usuario=user, estado_novo=f"objetivo_{causa}"[:40], resultado="erro")

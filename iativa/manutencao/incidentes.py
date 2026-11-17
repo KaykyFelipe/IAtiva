@@ -179,7 +179,19 @@ def _registrar(componente: str, operacao: str, exc=None, categoria: str = "", co
         return None
 
 
+def automatica() -> bool:
+    """M73: manutenção automática ligada? Desligada, nenhum incidente vai para correção automática."""
+    from django.conf import settings
+    return bool(getattr(settings, "IATIVA_MANUTENCAO_AUTOMATICA", False))
+
+
+AVISAR_TI = ("Não consigo resolver isso sozinha sem um ajuste no sistema. Comunique alguém da TI, "
+             "informando o registro nº {n}, para que avaliem e implementem.")
+
+
 def elegivel(inc: Incidente) -> bool:
+    if not automatica():
+        return False
     if inc.situacao != SituacaoIncidente.ABERTO or inc.tentativas >= MAX_TENTATIVAS:
         return False
     if inc.categoria == Categoria.ERRO_TECNICO:
