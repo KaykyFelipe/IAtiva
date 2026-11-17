@@ -299,4 +299,6 @@ button.secundario:hover { background: #f0f5f1; }
 .confirmar-acoes { display: flex; justify-content: flex-end; gap: 8px; }
 .confirmar-acoes button { border: 1px solid #cfd8d3; background: transparent; border-radius: 9px; padding: 8px 14px;
   font: inherit; font-size: 14px; cursor: pointer; }
+.confirmar-acoes [data-cancelar] { background: #fff; color: #244c3a; border-color: #b9c7bf; }
+.confirmar-acoes [data-cancelar]:hover { background: #eef3f0; }
 .confirmar-acoes .perigo { background: #b3392c; border-color: #b3392c; color: #fff; }

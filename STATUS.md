@@ -4,6 +4,10 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **Etapa 7 aprovada em 2026-11-16 por Diego; em andamento.** Feito: roteiro do piloto (`docs/piloto/ROTEIRO.md`) e auditoria de não armazenamento (`manage.py auditar_armazenamento`). Falta: usuários do Financeiro, conferência dos números com relatórios do Protheus, avaliação da interpretação e latência. Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M72 — ajustes da exclusão e da troca de conversa (2026-11-17)
+
+- Botão Cancelar da confirmação visível (cor própria). Ao trocar de conversa, a lateral mantém a posição da barra de rolagem.
+
 ## Mudança M71 — excluir conversa e troca de conversa sem recarregar (2026-11-17)
 
 - Lixeira ao lado do lápis na lateral; confirmação "Excluir conversa?" (Cancelar/Excluir). Só o dono exclui a própria conversa individual; mensagens, resultados e pedidos dela vão junto. Rota `c/<id>/excluir/` (POST).
