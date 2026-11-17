@@ -25,6 +25,10 @@ def adm(base, monkeypatch):
     monkeypatch.setattr(timezone, 'localdate', lambda *a, **kw: date(2026, 10, 16))
     cm=base['cm'];cm.spec['campo_data']='RA_ADMISSA';cm.nome='Admissões sintéticas'
     cm.save(update_fields=['spec','nome'])
+    # M75: a lista junto da contagem vem da preferência da pessoa na memória (como no servidor), não de atalho.
+    from iativa.agent.models import NotaAgente
+    NotaAgente.objects.create(texto='Em perguntas sobre funcionários admitidos no mês, mostrar o nome completo e a '
+                              'data de admissão de cada um.', tipo='preferencia', escopo='usuario', usuario=base['u'])
     return base
 
 
@@ -42,7 +46,7 @@ def test_contagem_e_lista_concluem_em_uma_consulta_sem_manutencao(adm):
     m,r=conversas.enviar(b['u'],c,PEDIDO,p)
     assert p.chamadas==1 and r is not None and r.ok,m.texto
     assert admissoes.tem_detalhes(r) and r.medida_calculada=='contagem'
-    assert len(r.linhas)>0 and 'admissão' in r.mensagem
+    assert len(r.linhas)>0 and 'Total: ' in r.mensagem and 'admitidos' in r.mensagem
     assert 'Soma:' not in m.texto and m.texto.count('Consulta executada')<=1
     assert not Incidente.objects.exists()
     assert not Objetivo.objects.exclude(situacao='cumprido').exists()
@@ -62,8 +66,8 @@ def test_apenas_numero_respeita_formato_direto(adm):
 
 
 def test_planejamento_corrige_soma_e_exige_nomes_datas(adm):
-    a=admissoes.planejar(PEDIDO,analise(adm,entregas=[{'descricao':'Contagem de admitidos','tipo':'calculo','metrica':'soma'}]))
-    assert a['entregas'][0]['metrica']=='contagem' and a['entregas'][1]['detalhe_admissoes']
+    a=admissoes.planejar(PEDIDO,analise(adm,entregas=[{'descricao':'Contagem de admitidos','tipo':'calculo','metrica':'soma'}]),adm['u'])
+    assert a['entregas'][0]['metrica']=='contagem' and a['entregas'][1]['detalhe_contagem']
     r=Resultado(True,'ok',colunas=['Filial','Quantidade'],tipos=['texto','inteiro'],linhas=[['01','3']],
                 medida_calculada='contagem')
     d=validar(_d(acao='conversar'),[],[])
@@ -134,9 +138,14 @@ def test_continuacao_corrige_contrato_antigo_de_soma(adm):
     assert ac.contrato[0]['metrica']=='contagem' and p.chamadas==1
 
 
-def test_contratacao_de_equipamentos_nao_e_admissao():
-    assert not admissoes.solicitado('Quantos containers foram contratados este mês?')
-    assert admissoes.solicitado('Quantos funcionários foram contratados este mês?')
+def test_contratacao_de_equipamentos_nao_e_admissao(adm):
+    # M75: contar é geral; a lista só vem pela preferência guardada sobre funcionários (ou se pedida no texto).
+    assert admissoes.solicitado('Quantos containers foram contratados este mês?')
+    assert not admissoes.quer_detalhe(adm['u'], 'Quantos containers foram contratados este mês?')
+    assert admissoes.quer_detalhe(adm['u'], 'Quantos funcionários foram contratados este mês?')
+    assert not admissoes.quer_detalhe(None, 'Quantos foram demitidos?')
+    assert admissoes.quer_detalhe(None, 'Quantos foram demitidos? Mostre os nomes.')
+    assert not admissoes.solicitado('Quantos dias úteis faltam para o fim do mês?')
 
 
 def test_contar_admissoes_nao_cumpre_contagem_de_demitidos(adm):

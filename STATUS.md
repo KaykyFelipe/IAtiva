@@ -4,6 +4,11 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **Etapa 7 aprovada em 2026-11-16 por Diego; em andamento.** Feito: roteiro do piloto (`docs/piloto/ROTEIRO.md`) e auditoria de não armazenamento (`manage.py auditar_armazenamento`). Falta: usuários do Financeiro, conferência dos números com relatórios do Protheus, avaliação da interpretação e latência. Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M75 — etapa 2 concluída: contagem com detalhe é regra geral (2026-11-17)
+
+- `contagem.py` substitui o atalho de admissões: vale para qualquer consulta aprovada com campo de data; lista só quando pedida ou por preferência na memória; cada contagem cumprida pela consulta do seu evento. Testes: `tests/test_m75_contagem_geral.py` e os de admissões ajustados para usar a preferência guardada.
+- Itens da etapa 2 do prompt de melhorias concluídos (M63–M75). Próximo: etapa 3 (fila justa, idempotência).
+
 ## Mudança M74 — etapa 2: período/filial por entrega e pergunta de definição (2026-11-17)
 
 - Entrega com período ou filial diferentes do pedido fica pendente; o modelo recebe o motivo e refaz (`planejamento.divergencia`).

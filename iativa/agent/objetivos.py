@@ -397,7 +397,7 @@ def encaminhar_manutencao(ac: Acompanhamento, causa: str, tabela: str = ""):
     mascarada (sem nomes, documentos, e-mails ou valores), para a manutenção saber o que construir."""
     from iativa.manutencao import incidentes
     from iativa.manutencao.models import Categoria
-    from . import admissoes
+    from . import contagem as admissoes
 
     # Contar/listar admissões já é uma capacidade existente. Uma falha de escolha
     # de ferramenta ou contrato não é evidência de que precisa publicar código.

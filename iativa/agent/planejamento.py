@@ -105,8 +105,8 @@ def preparar(user, conversa, texto, provedor, historico):
         not isinstance(e, dict) or e.get('tipo') not in tipos or e.get('metrica', '') not in metricas
         or not isinstance(e.get('descricao'), str) or len(e['descricao']) > 200 for e in entregas):
         raise FalhaModelo('Entregas inválidas.')
-    from . import admissoes, entregas, comparacao
-    return comparacao.planejar(texto, entregas.planejar(texto, admissoes.planejar(texto, {**analise, 'setores': sorted(set(alvos)), 'contextos': entrada.planejamento['contextos_recuperados']})))
+    from . import contagem as admissoes, entregas, comparacao
+    return comparacao.planejar(texto, entregas.planejar(texto, admissoes.planejar(texto, {**analise, 'setores': sorted(set(alvos)), 'contextos': entrada.planejamento['contextos_recuperados']}, user)))
 
 
 def conferir(analise, decisao, saida):
@@ -121,8 +121,8 @@ def conferir(analise, decisao, saida):
             if not getattr(res,'ok',False) or faltam(getattr(res,'colunas',[]),item['campos_pedidos']):
                 faltantes.append(item['descricao'])
                 continue
-        if item.get('detalhe_admissoes'):
-            from .admissoes import tem_detalhes
+        if item.get('detalhe_contagem'):
+            from .contagem import tem_detalhes
             if not tem_detalhes(res):
                 faltantes.append(item['descricao'])
                 continue

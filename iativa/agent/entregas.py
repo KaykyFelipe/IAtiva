@@ -64,7 +64,7 @@ def faltam(colunas, exigidos):
 
 def _nao_pedida(texto, e):
     """M68: contagem que a pessoa não pediu ("Total de funcionários admitidos" quando ela só pediu a lista)."""
-    if e.get('metrica')!='contagem' or any(k in e for k in ('contagem_admissoes','detalhe_admissoes','comparacao')):
+    if e.get('metrica')!='contagem' or any(k in e for k in ('contagem_detalhada','detalhe_contagem','comparacao')):
         return False
     return not re.search(r'\b(quant[oa]s?|quantidade|total|totais|numero|contagem|conte|contar|soma|some)\b',_norm(texto))
 

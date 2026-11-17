@@ -232,7 +232,7 @@ def conversar(user, c, texto: str, provedor=None, mensagem_usuario_id=None, inte
         return Saida("Seu usuário ainda não tem acesso a consultas. Fale com o administrador.")
 
     from . import planejamento
-    from .admissoes import contextualizar
+    from .contagem import contextualizar
     texto = contextualizar(user, c, texto)
     try:
         provedor = provedor or obter_provedor(usuario=user)
@@ -373,10 +373,10 @@ def _ciclo_agente(user, c, texto, provedor, interrompido, entrada, objetivos, co
     ac = acomp or coord.Acompanhamento(texto)
     if not ac.contrato:
         ac.contrato = entrada.planejamento.get('analise', {}).get('entregas', [])
-    from . import admissoes
-    if admissoes.solicitado(texto):
+    from . import contagem as admissoes
+    if admissoes.assunto_acompanhado(user, texto):
         anterior = ac.contrato
-        ac.contrato = admissoes.planejar(texto, {'entregas': anterior})['entregas']
+        ac.contrato = admissoes.planejar(texto, {'entregas': anterior}, user)['entregas']
         ac.cumpridas = [i for i in ac.cumpridas if i < len(anterior) and anterior[i] == ac.contrato[i]]
     from . import entregas, comparacao
     anterior = ac.contrato
@@ -561,7 +561,7 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
         if d.acao == "preparar_consulta" and ac.exig == coord.HISTORICO and not ac.trilha:
             ac.exig = ""  # M62: virou dado da lista anterior; a exigência vem da ação corrigida
         ac.definir(d)
-        from . import admissoes
+        from . import contagem as admissoes
         d = admissoes.orientar(user, texto, d, objetivos)
         if d.acao not in ("conversar", "falta_capacidade") and d.resposta.strip():
             andamento.avisar(d.resposta.strip().split("\n")[0])  # M53: o que a IA vai fazer aparece na hora
@@ -618,9 +618,8 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
                                interrompido=interrompido, resultado_base=resultado_base)
         if saida.resultado is not None and getattr(saida.resultado, 'ok', False):
             entregas.completar(texto,saida.resultado)
-            if admissoes.completar(texto, saida):
-                indices = [i for i, item in enumerate(ac.contrato) if item.get('contagem_admissoes')
-                           or item.get('detalhe_admissoes')]
+            if admissoes.completar(texto, saida, user):
+                indices = admissoes.entregas_atendidas(ac.contrato, saida.resultado)
                 d = replace(d, atende=tuple(sorted(set(d.atende) | set(indices))))
             from . import calculos
             resultado_base = saida.resultado
