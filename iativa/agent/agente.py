@@ -794,6 +794,11 @@ def _encerrar_sem_cumprir(ac, user, c, mensagem_id, saida, previa, causa, observ
     falta = ("Ainda faltam perguntas desta mensagem sem resposta comprovada" if ac.partes_faltam > 0
              else "O ensinamento pedido ainda não foi guardado" if coord.pede_memoria(ac.texto) and not ac.memoria_feita
              else coord.FALTA[exig])
+    if ac.contrato and ac.pendentes():
+        # M67: estado explícito por entrega — o que já está comprovado e o que não foi feito.
+        feitas = [e['descricao'] for i, e in enumerate(ac.contrato) if i in ac.cumpridas]
+        falta = (("Entregue: " + "; ".join(feitas) + ". " if feitas else "")
+                 + "Não concluído: " + "; ".join(ac.pendentes()))
     if exig == coord.VERIFICACAO:
         ficha["verificacao_pendente"] = True
     registro = ac.registro
