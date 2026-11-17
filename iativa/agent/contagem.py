@@ -206,9 +206,36 @@ def entregas_atendidas(contrato, res):
             or (contrato[i].get('detalhe_contagem') and not contrato[i].get('contagem_detalhada'))]
 
 
+def _trocar_assunto(conversa, texto):
+    """M76: continuação curta ("e demitidos?", "e os desligados?") de uma contagem: refaz a pergunta anterior
+    trocando a palavra do mesmo tipo (mesma terminação: admiti-DOS -> desliga-DOS). Geral: vale para qualquer
+    assunto contado ("e as canceladas?" depois de "quantas notas foram emitidas?")."""
+    t = _norm(texto).strip(' ?!.')
+    m = re.fullmatch(r'e\s+(?:(?:os|as|o|a|quant[oa]s)\s+)?([a-z]{5,})(?:\s+\w+)?', t)
+    if not m or solicitado(texto):
+        return ''
+    nova = m.group(1)
+    anterior = next((x.texto for x in conversa.mensagens.filter(papel='usuario').order_by('-pk')[:8]
+                     if solicitado(x.texto)), None)
+    if anterior is None:
+        return ''
+    palavras = re.findall(r'\w+', anterior)
+    alvo = next((w for w in palavras if len(w) >= 5 and _norm(w) != nova and _norm(w)[-3:] == nova[-3:]
+                 and not _CONTA.search(_norm(w))), None)
+    if alvo is None:
+        return ''
+    original = next(w for w in re.findall(r'\w+', texto) if _norm(w) == nova)
+    return re.sub(rf'\b{re.escape(alvo)}\b', original, anterior, count=1)
+
+
 def contextualizar(user, conversa, texto):
-    """"E no mês passado?" depois de uma contagem: a mesma contagem, no novo período."""
+    """"E no mês passado?" depois de uma contagem: a mesma contagem, no novo período.
+    "E demitidos?" depois de "Quantos funcionários foram admitidos em agosto?": a mesma pergunta, com o
+    assunto trocado (mesmo período, mesmos detalhes)."""
     from django.utils import timezone
+    trocada = _trocar_assunto(conversa, texto)
+    if trocada:
+        return trocada
     palavras = set(re.findall(r'[a-z]+', _norm(texto)))
     if not palavras <= set(MESES) | {'e', 'no', 'na', 'em', 'desde', 'de', 'do', 'mes', 'ano', 'passado', 'ultimo',
                                      'este', 'esse', 'neste', 'nesse', 'a', 'partir'}:

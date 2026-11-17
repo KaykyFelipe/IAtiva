@@ -31,3 +31,21 @@ def test_cada_contagem_cumprida_pela_consulta_do_seu_evento(monkeypatch):
                 {'descricao': 'Mostrar os registros', 'detalhe_contagem': True}]
     monkeypatch.setattr(contagem, '_consulta', lambda res: _cm('adm', 'RA_ADMISSA', 'Data de admissão'))
     assert contagem.entregas_atendidas(contrato, object()) == [0, 2]
+
+
+def test_continuacao_curta_troca_o_assunto_da_contagem_anterior():
+    """M76: "e demitidos?" depois de "quantos admitidos em agosto?" é a mesma pergunta para demitidos."""
+    class Msgs:
+        def __init__(self, textos):
+            self.textos = textos
+
+        def filter(self, **kw):
+            return self
+
+        def order_by(self, *a):
+            return [SimpleNamespace(texto=t) for t in reversed(self.textos)]
+    conversa = SimpleNamespace(mensagens=Msgs(['Quantos funcionários foram admitidos em agosto de 2026?']))
+    assert contagem._trocar_assunto(conversa, 'e demitidos?') == 'Quantos funcionários foram demitidos em agosto de 2026?'
+    assert contagem._trocar_assunto(conversa, 'e os desligados?') == 'Quantos funcionários foram desligados em agosto de 2026?'
+    assert contagem._trocar_assunto(conversa, 'e o faturamento?') == ''
+    assert contagem._trocar_assunto(conversa, 'quantos foram demitidos?') == ''

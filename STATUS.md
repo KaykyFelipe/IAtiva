@@ -4,6 +4,10 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **Etapa 7 aprovada em 2026-11-16 por Diego; em andamento.** Feito: roteiro do piloto (`docs/piloto/ROTEIRO.md`) e auditoria de não armazenamento (`manage.py auditar_armazenamento`). Falta: usuários do Financeiro, conferência dos números com relatórios do Protheus, avaliação da interpretação e latência. Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M76 — continuação curta herda a contagem anterior (2026-11-17)
+
+- "e demitidos?" depois de "quantos funcionários foram admitidos em agosto?" vira a mesma pergunta com o assunto trocado (mesmo período, lista pela preferência guardada). Geral para qualquer contagem (`contagem._trocar_assunto`).
+
 ## Mudança M75 — etapa 2 concluída: contagem com detalhe é regra geral (2026-11-17)
 
 - `contagem.py` substitui o atalho de admissões: vale para qualquer consulta aprovada com campo de data; lista só quando pedida ou por preferência na memória; cada contagem cumprida pela consulta do seu evento. Testes: `tests/test_m75_contagem_geral.py` e os de admissões ajustados para usar a preferência guardada.
