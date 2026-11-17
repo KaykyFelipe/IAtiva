@@ -4,6 +4,10 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **Etapa 7 aprovada em 2026-11-16 por Diego; em andamento.** Feito: roteiro do piloto (`docs/piloto/ROTEIRO.md`) e auditoria de não armazenamento (`manage.py auditar_armazenamento`). Falta: usuários do Financeiro, conferência dos números com relatórios do Protheus, avaliação da interpretação e latência. Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M83 — setor Compras e busca por nome sem diferenciar maiúsculas (2026-11-17)
+
+- Setor Compras criado; acesso para diego.pessoa e teste.ti; teste.ti virou administrador da TI. SC1 classificada em Compras. Busca por nome usa `UPPER(campo) LIKE` (havia 49 solicitações com o nome pedido e a consulta trazia 0).
+
 ## Mudança M82 — IA procura no dicionário o assunto que não conhece (2026-11-17)
 
 - "Solicitações de compra" (sem setor Compras) agora vai para a busca no dicionário: a IA achou a SC1 e montou a consulta "Solicitações de compra" sozinha (teste no servidor com teste.ti). Como teste.ti só consulta a TI, a consulta ficou como proposta para a TI aprovar (M81). O que a IA aprende vira nota na memória. Testes: `tests/test_m82_explorar.py`.

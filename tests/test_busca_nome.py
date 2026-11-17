@@ -237,3 +237,13 @@ def test_layout_lembrado_entre_conversas(client, admin):
     assert client.post(reverse("chat:layout"), {"largura": "999", "ampla": "1"}).status_code == 204
     html = client.get(reverse("chat:index")).content.decode()
     assert "leitura-ampla" in html and "--largura-lateral: 430px" in html and "lateral-recolhida" not in html
+
+
+def test_busca_acha_nome_gravado_em_minusculas(admin, erp_sintetico):
+    """M83: a base compara exatamente; o nome gravado em minúsculas também é achado."""
+    import sqlite3
+    with sqlite3.connect(erp_sintetico) as conn:
+        conn.execute("UPDATE SA1010 SET A1_NOME = lower(A1_NOME) WHERE A1_NOME LIKE '%SINTETICO 001%'")
+    c = conversas.nova_individual(admin)
+    _, res = conversas.enviar(admin, c, ATRASO + ", cliente sintetico 001")
+    assert res.ok and len(res.linhas) > 0

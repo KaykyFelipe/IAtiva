@@ -92,7 +92,9 @@ class _Montador:
             return f"{esquerda} NOT IN ({', '.join('?' for _ in itens)})"
         if f.op == "LIKE":  # busca por nome: padrão montado por `plano.padrao_busca`
             params.append(f.valor)
-            return f"{esquerda} LIKE ?"
+            # M83: o padrão vem em maiúsculas e a base compara exatamente (collation binária); campos gravados em
+            # minúsculas ou misto (ex.: solicitante "fernando.nonato") não eram achados.
+            return f"UPPER({esquerda}) LIKE ?"
         if f.op == "NOT_LIKE":
             params.append(f.valor)
             return f"{esquerda} NOT LIKE ?"
