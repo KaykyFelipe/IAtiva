@@ -79,11 +79,16 @@ class Mensagem(models.Model):
         "RequestContext", on_delete=models.SET_NULL, null=True, blank=True, related_name="mensagens"
     )
     criado_em = models.DateTimeField(auto_now_add=True, db_index=True)
+    # M77 (etapa 3): id do envio gerado no navegador. O mesmo envio repetido (clique duplo, reenvio da rede)
+    # devolve a resposta já dada em vez de rodar o pedido de novo.
+    pedido = models.UUIDField(null=True, blank=True, db_default=None)
 
     class Meta:
         ordering = ["criado_em", "id"]
         verbose_name = "mensagem"
         verbose_name_plural = "mensagens"
+        constraints = [models.UniqueConstraint(fields=["conversa", "pedido"], condition=models.Q(pedido__isnull=False),
+                                               name="mensagem_pedido_unico")]
 
 
 class RequestContext(models.Model):

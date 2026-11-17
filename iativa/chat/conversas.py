@@ -216,7 +216,11 @@ def enviar(user, c: ConversationContext, texto: str, provedor=None, pedido=None)
     from iativa.agent import agente
 
     texto = _validar_texto(texto)
-    m = Mensagem.objects.create(conversa=c, papel=Papel.USUARIO, autor=user, texto=texto)
+    repetido = _envio_repetido(c, pedido)
+    if repetido is not None:
+        return repetido
+    _ocupar(c)
+    m = Mensagem.objects.create(conversa=c, papel=Papel.USUARIO, autor=user, texto=texto, pedido=pedido)
     from iativa.agent import andamento
 
     with andamento.acompanhar(user.pk, pedido):
@@ -229,6 +233,38 @@ def enviar(user, c: ConversationContext, texto: str, provedor=None, pedido=None)
     guardar(msg, saida.resultado)
     _tocar(c, texto)
     return msg, saida.resultado
+
+
+OCUPADA = ("Esta conversa ainda está trabalhando no pedido anterior. Aguarde a resposta ou abra um novo chat "
+           "para perguntar outra coisa.")
+
+
+def _envio_repetido(c, pedido):
+    """M77: o mesmo envio (mesmo id do navegador) não roda duas vezes: devolve a resposta já dada."""
+    if not pedido:
+        return None
+    original = Mensagem.objects.filter(conversa=c, pedido=pedido, papel=Papel.USUARIO).first()
+    if original is None:
+        return None
+    resposta = (Mensagem.objects.filter(conversa=c, papel=Papel.IA, pk__gt=original.pk).order_by("pk").first())
+    if resposta is None:
+        raise ValidationError(OCUPADA)
+    from .resultados import restaurar
+    return resposta, restaurar(original.autor, resposta.resultado) if original.autor else None
+
+
+def _ocupar(c):
+    """M77: um pedido por chat. Trava a linha do chat até o fim desta resposta (o worker não pega pedido deste
+    chat enquanto isso) e recusa se outro agente já trabalha nele. Chats diferentes seguem em paralelo."""
+    from django.db import DatabaseError
+
+    from iativa.agent.objetivos import conversas_ocupadas
+    try:
+        list(ConversationContext.objects.select_for_update(nowait=True, no_key=True).filter(pk=c.pk))
+    except DatabaseError:
+        raise ValidationError(OCUPADA) from None
+    if c.pk in conversas_ocupadas():
+        raise ValidationError(OCUPADA)
 
 
 @transaction.atomic

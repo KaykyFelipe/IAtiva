@@ -20,6 +20,7 @@ from datetime import timedelta
 
 from django.conf import settings
 from django.db.models import F, Q
+from django.db import transaction
 from django.utils import timezone
 
 from iativa.audit.servicos import registrar
@@ -97,11 +98,15 @@ def reivindicar() -> Tarefa | None:
     from .objetivos import conversas_ocupadas
     candidatas = (Tarefa.objects.filter(Q(situacao=S.PENDENTE) | Q(situacao=S.EXECUTANDO, lease_ate__lt=agora))
                   .exclude(conversa_id__in=conversas_ocupadas(agora)).order_by("id"))
-    for t in candidatas[:20]:
+    from .objetivos import chat_livre, justa
+    for t in justa(candidatas[:40], agora):
         nova = uuid.uuid4().hex
-        n = Tarefa.objects.filter(pk=t.pk, execucao=t.execucao, situacao=t.situacao).filter(
-            Q(lease_ate__isnull=True) | Q(lease_ate__lt=agora) | Q(situacao=S.PENDENTE)).update(
-            execucao=nova, situacao=S.EXECUTANDO, lease_ate=agora + lease, execucoes=F("execucoes") + 1)
+        with transaction.atomic():
+            if not chat_livre(t.conversa_id, agora):
+                continue
+            n = Tarefa.objects.filter(pk=t.pk, execucao=t.execucao, situacao=t.situacao).filter(
+                Q(lease_ate__isnull=True) | Q(lease_ate__lt=agora) | Q(situacao=S.PENDENTE)).update(
+                execucao=nova, situacao=S.EXECUTANDO, lease_ate=agora + lease, execucoes=F("execucoes") + 1)
         if n == 1:
             t.refresh_from_db()
             return t

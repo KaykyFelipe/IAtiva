@@ -218,3 +218,6 @@ IATIVA_MANUTENCAO_AUTOMATICA = False  # local.py lê IATIVA_MANUTENCAO_AUTOMATIC
 
 # M73 — agentes em paralelo no worker (um por chat ao mesmo tempo; o mesmo chat nunca roda duas vezes).
 IATIVA_WORKER_AGENTES = 6  # local.py lê IATIVA_WORKER_AGENTES do .env
+
+# M77 — fila justa: no máximo N pedidos da mesma pessoa rodando ao mesmo tempo no worker.
+IATIVA_AGENTES_POR_USUARIO = 2

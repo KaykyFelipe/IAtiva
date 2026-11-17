@@ -24,6 +24,7 @@ from datetime import timedelta
 
 from django.conf import settings
 from django.db.models import Q, F
+from django.db import transaction
 from django.utils import timezone
 
 from .contratos import FIXOS
@@ -449,12 +450,43 @@ def conversas_ocupadas(agora=None):
     return set(tarefas) | set(continuando)
 
 
+def usuarios_ocupados(agora=None):
+    """M77: quantos pedidos cada usuário tem rodando agora no worker (para a fila justa)."""
+    from collections import Counter
+
+    from .models import Tarefa
+    agora = agora or timezone.now()
+    ids = list(Tarefa.objects.filter(situacao='executando', lease_ate__gte=agora).values_list('usuario_id', flat=True))
+    ids += list(Objetivo.objects.filter(situacao=SO.CONTINUAR, lease_ate__gte=agora).exclude(execucao='')
+                .values_list('usuario_id', flat=True))
+    return Counter(ids)
+
+
+def justa(candidatos, agora=None):
+    """M77: fila justa. Primeiro quem tem menos pedidos rodando (depois o mais antigo); ninguém passa de
+    IATIVA_AGENTES_POR_USUARIO ao mesmo tempo, para uma pessoa com muitos pedidos não segurar as outras."""
+    from django.conf import settings
+    limite = int(getattr(settings, 'IATIVA_AGENTES_POR_USUARIO', 2))
+    rodando = usuarios_ocupados(agora)
+    return sorted((x for x in candidatos if rodando[x.usuario_id] < limite),
+                  key=lambda x: (rodando[x.usuario_id], x.pk))
+
+
+def chat_livre(conversa_id, agora=None) -> bool:
+    """M77: chamar dentro de transaction.atomic. Trava a linha do chat (pula se a web ou outro agente está nele)
+    e confere de novo que ninguém trabalha nele; assim dois agentes nunca pegam o mesmo chat."""
+    from iativa.chat.models import ConversationContext
+    if not list(ConversationContext.objects.select_for_update(skip_locked=True, no_key=True).filter(pk=conversa_id)):
+        return False
+    return conversa_id not in conversas_ocupadas(agora)
+
+
 def reivindicar() -> Objetivo | None:
     agora = timezone.now()
     lease = timedelta(seconds=180)
     fila = (Objetivo.objects.filter(situacao=SO.CONTINUAR).filter(Q(lease_ate__isnull=True) | Q(lease_ate__lt=agora))
             .exclude(conversa_id__in=conversas_ocupadas(agora)))
-    for o in fila.order_by("id")[:20]:
+    for o in justa(fila.order_by("id")[:40], agora):
         if o.continuacoes >= int(cfg()['continuacoes']):
             if Objetivo.objects.filter(pk=o.pk, execucao=o.execucao, situacao=SO.CONTINUAR).filter(
                     Q(lease_ate__isnull=True) | Q(lease_ate__lt=agora)).update(
@@ -467,9 +499,12 @@ def reivindicar() -> Objetivo | None:
                         ficha={'tipo':'objetivo', 'objetivo':o.pk})
             continue
         nova = uuid.uuid4().hex
-        n = Objetivo.objects.filter(pk=o.pk, situacao=SO.CONTINUAR, execucao=o.execucao).filter(
-            Q(lease_ate__isnull=True) | Q(lease_ate__lt=agora)).update(
-                execucao=nova, lease_ate=agora + lease, continuacoes=F('continuacoes') + 1)
+        with transaction.atomic():
+            if not chat_livre(o.conversa_id, agora):
+                continue
+            n = Objetivo.objects.filter(pk=o.pk, situacao=SO.CONTINUAR, execucao=o.execucao).filter(
+                Q(lease_ate__isnull=True) | Q(lease_ate__lt=agora)).update(
+                    execucao=nova, lease_ate=agora + lease, continuacoes=F('continuacoes') + 1)
         if n == 1:
             o.refresh_from_db()
             return o
