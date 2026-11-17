@@ -4,6 +4,15 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **Etapa 7 aprovada em 2026-11-16 por Diego; em andamento.** Feito: roteiro do piloto (`docs/piloto/ROTEIRO.md`) e auditoria de não armazenamento (`manage.py auditar_armazenamento`). Falta: usuários do Financeiro, conferência dos números com relatórios do Protheus, avaliação da interpretação e latência. Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M66 — comparação geral de dois períodos (2026-11-17)
+
+Etapa 2 do prompt de melhorias (parte da comparação).
+- Comparação deixa de ser só faturamento/SD2/D2_TOTAL/por filial: qualquer consulta aprovada com campo de data e uma medida (soma, contagem, média, máximo, mínimo), com o agrupamento pedido (filial, cliente, CFOP, total) e a mesma definição nos dois períodos. Períodos: dois meses, "este mês × mês passado", dois anos, "este ano × ano passado".
+- Sem medida escolhida pelo modelo, só usa a soma quando a consulta tem uma única medida numérica; senão o ciclo normal decide (não inventa definição). Ranking ("top N") não é comparado.
+- Estados distintos: período sem registros (zero em soma/contagem; sem valor em média), grupo ausente em um período, base zero (variação indefinida), período em andamento (marcado "parcial" com premissa), período cortado (recusa), falha de um período (devolve a falha, não compara com vazio). Cancelamento é conferido entre os dois períodos.
+- Herança de critérios em continuações já era por assunto (mesma consulta; busca e cálculo não herdados) — conferido, sem mudança.
+- Testes: `tests/test_comparacao_m66.py`; suíte 937 passando.
+
 ## Mudança M65 — defeitos reproduzidos na auditoria de 17/11 (2026-11-17)
 
 Base: `AUDITORIA-IATIVA-2026-11-17.md` (fornecida por Diego) e o prompt de melhorias. Etapa 1 do prompt concluída; etapas 2–5 pendentes.

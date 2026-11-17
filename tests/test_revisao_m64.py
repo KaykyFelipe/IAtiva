@@ -55,7 +55,7 @@ def test_rh_preserva_lista_de_ativos_e_datas(base,acao):
 def test_comparacao_nao_e_investigacao():
     t='Compare o faturamento de julho e agosto de 2026 por filial com diferença e variação percentual'
     assert not diagnostico.solicitado(t)
-    assert comparacao.periodos(t)==[(2026,7),(2026,8)]
+    assert [r for _,_,r in comparacao.periodos(t)]==['07/2026','08/2026']
     assert diagnostico.solicitado('Investigue por que o faturamento de agosto não bate')
 
 

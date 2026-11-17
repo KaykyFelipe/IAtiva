@@ -601,7 +601,7 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
         registrar("interpretacao", "agente", usuario=user, estado_novo=d.acao, entidade_id=atual.pk if atual else None,
                   linhas=len(d.parametros))
         reduz = _reduz_escopo(d, cobertura)
-        comparada = comparacao.executar(user,c,d,defs,objetivos,texto) if comparacao.periodos(texto) and d.acao=='preparar_consulta' else None
+        comparada = comparacao.executar(user,c,d,defs,objetivos,texto,interrompido) if comparacao.periodos(texto) and d.acao=='preparar_consulta' else None
         if comparada is not None:
             d=replace(d,atende=tuple(i for i,e in enumerate(ac.contrato) if e.get('comparacao')))
         saida = reduz or comparada or _agir(user, c, d, atual, defs, texto, provedor, entrada_passo, objetivos, administrador,
