@@ -30,3 +30,13 @@ def test_fonte_nova_de_quem_nao_e_da_ti_fica_proposta(base):
     assert cm.situacao == SituacaoModelo.PROPOSTA
     assert not aprendizado.pode_aprovar(ana, cm)
     assert aprendizado.pode_aprovar(base['admin'], cm)  # administrador da TI
+
+
+def test_mesma_fonte_proposta_nao_duplica_e_a_ti_aprova(base):
+    from iativa.agent.models import ConsultaModelo
+    pedido = {'tabela': 'SE1', 'nome': 'Títulos novos', 'colunas': ['E1_NUM', 'E1_VALOR']}
+    a = aprendizado.criar_automatico(base['ana'], pedido)
+    assert aprendizado.criar_automatico(base['ana'], pedido).pk == a.pk  # não duplica
+    b = aprendizado.criar_automatico(base['admin'], pedido)  # TI pede o mesmo: aprova a proposta
+    assert b.pk == a.pk and b.situacao == SituacaoModelo.APROVADA
+    assert ConsultaModelo.objects.filter(nome='Títulos novos').count() == 1

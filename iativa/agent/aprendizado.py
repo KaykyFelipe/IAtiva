@@ -245,6 +245,16 @@ def criar_automatico(user, consulta: dict) -> ConsultaModelo:
                 raise ValidationError("Já existe uma consulta com esse nome e outros filtros. "
                                       "Use outro nome para criar a consulta com os critérios pedidos.")
         return igual
+    from iativa.accounts.authz import e_da_ti as _ti
+    pendente = ConsultaModelo.objects.filter(tabela=alias, nome=dados["nome"], situacao=SituacaoModelo.PROPOSTA).first()
+    if pendente is not None and not consulta.get("filtros") and not consulta.get("juncoes"):
+        # M82: a mesma fonte já proposta não vira outra proposta; a TI a aprova ao pedir de novo.
+        if not _ti(user):
+            return pendente
+        pendente.situacao, pendente.aprovado_por, pendente.aprovado_em = SituacaoModelo.APROVADA, user, timezone.now()
+        pendente.save(update_fields=["situacao", "aprovado_por", "aprovado_em"])
+        registrar("parametro_aprovado", "agente", usuario=user, entidade_id=pendente.pk, estado_novo="fonte_aprovada_ti")
+        return pendente
     cm = salvar_proposta(user, alias, dados, automatico=True)
     pedidas = consulta.get("juncoes") or []
     if pedidas:
