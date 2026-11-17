@@ -419,6 +419,10 @@
     }
     botao(form, false);
     const campo = form.querySelector("[data-campo]");
+    if (campo) {
+      campo.disabled = false;
+      if (campo.dataset.placeholderOriginal) campo.placeholder = campo.dataset.placeholderOriginal;
+    }
     if (campo && restaurar) {
       campo.value = texto;
       campo.dispatchEvent(new Event("input"));
@@ -541,7 +545,13 @@
     // O htmx já leu os valores: pode limpar o campo.
     if (atual && e.detail.elt === atual.form) {
       const campo = atual.form.querySelector("[data-campo]");
-      if (campo) { campo.value = ""; campo.dispatchEvent(new Event("input")); }
+      if (campo) {
+        campo.value = ""; campo.dispatchEvent(new Event("input"));
+        // M78: enquanto a IA trabalha, não dá para escrever; só o botão de parar fica ativo.
+        if (!campo.dataset.placeholderOriginal) campo.dataset.placeholderOriginal = campo.placeholder;
+        campo.disabled = true;
+        campo.placeholder = "Aguarde a resposta ou clique em parar.";
+      }
     }
   });
   ["htmx:responseError", "htmx:sendError", "htmx:timeout"].forEach((ev) =>

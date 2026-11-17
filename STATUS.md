@@ -4,6 +4,10 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **Etapa 7 aprovada em 2026-11-16 por Diego; em andamento.** Feito: roteiro do piloto (`docs/piloto/ROTEIRO.md`) e auditoria de não armazenamento (`manage.py auditar_armazenamento`). Falta: usuários do Financeiro, conferência dos números com relatórios do Protheus, avaliação da interpretação e latência. Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M78 — campo bloqueado enquanto a IA responde (2026-11-17)
+
+- Durante a resposta o campo de mensagem fica desabilitado ("Aguarde a resposta ou clique em parar."); volta ao terminar, ao parar ou em erro.
+
 ## Mudança M77 — etapa 3: envio idempotente, um pedido por chat, fila justa (2026-11-17)
 
 - Mesmo envio repetido não roda de novo; chat ocupado recusa outro pedido; worker reivindica com trava do chat; fila justa com até 2 pedidos por pessoa ao mesmo tempo. Testes: `tests/test_m77_concorrencia.py` (as travas do PostgreSQL não rodam no SQLite dos testes).
