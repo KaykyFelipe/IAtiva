@@ -69,6 +69,10 @@ def _agregacao(d, texto):
     if not _MEDIDA.match(agreg or ''):
         return None
     agreg = re.sub(r'\s+top\s+\d+', '', agreg)  # ranking não se compara: a lista muda de um período para o outro
+    # Mês/ano já são os próprios períodos comparados; fica no máximo um agrupamento (o primeiro pedido).
+    medida, *grupos = re.split(r'\s+por\s+', agreg.strip(), flags=re.I)
+    grupos = [g for g in grupos if g.strip().lower() not in ('mes', 'mês', 'ano')]
+    agreg = medida + (f' por {grupos[0].strip()}' if grupos else '')
     if ' por ' not in agreg and re.search(r'\bpor filia(l|is)\b|\bcada filial\b', _norm(texto)):
         agreg += ' por filial'
     return agreg

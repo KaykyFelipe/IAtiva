@@ -74,3 +74,11 @@ def test_por_campo_de_filial_equivale_a_por_filial():
     spec = {'colunas': [{'campo': 'D2_TOTAL', 'tipo': 'dinheiro'}], 'campo_data': 'D2_EMISSAO'}
     assert ler_agregacao('soma:D2_TOTAL por D2_FILIAL', spec)[1] == ''
     assert ler_agregacao('soma:D2_TOTAL por filial', spec)[1] == ''
+
+
+def test_agrupamento_por_mes_e_duplo_normalizado():
+    from types import SimpleNamespace
+    d = SimpleNamespace(parametros=(('agregacao', 'soma:D2_TOTAL por D2_FILIAL por mes'),))
+    assert comparacao._agregacao(d, 'compare julho e agosto por filial') == 'soma:D2_TOTAL por D2_FILIAL'
+    d = SimpleNamespace(parametros=(('agregacao', 'soma:D2_TOTAL por mes'),))
+    assert comparacao._agregacao(d, 'compare julho e agosto') == 'soma:D2_TOTAL'
