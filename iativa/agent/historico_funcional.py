@@ -40,6 +40,10 @@ def solicitado(texto):
     if (re.search(r'\b(deles|delas|desses|dessas|destes|destas|de cada um|da lista)\b', t)
             and not re.search(r'histor|mud|anterior|linha do tempo', t)):
         return pede_tempo_estagio(texto)
+    # Lista de funcionários com a função atual ("quais funcionários estão ativos... função") é consulta, não histórico.
+    if (re.search(r'\b(funcionarios|colaboradores|empregados|pessoas|servidores)\b', t)
+            and not re.search(r'histor|mud|anterior|linha do tempo|ja teve|ja exerc', t)):
+        return pede_tempo_estagio(texto)
     return pede_tempo_estagio(texto) or bool(re.search(r'carg|funcao|funcoes', t) and re.search(
         r'histor|mud|anterior|recente|atual|qual|quais|linha do tempo|cargo e funcao', t))
 
