@@ -270,6 +270,13 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 .pensando-passos { list-style: none; margin: 0; padding: 0; font-size: 12px; opacity: .7; }
 .pensando-passos:empty { display: none; }
 .pensando-passos li::before { content: "✓ "; color: var(--acento); }
+.pensando-passos[hidden] { display: none; }
+.pensando-seta { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px;
+  padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--sutil); cursor: pointer; }
+.pensando-seta[hidden] { display: none; }
+.pensando-seta:hover { background: rgba(127,127,127,.12); }
+.pensando-seta svg { width: 14px; height: 14px; transition: transform .2s ease; }
+.pensando-seta[aria-expanded="true"] svg { transform: rotate(180deg); }
 @keyframes surgir { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: none; } }
 
 .pontos { display: inline-flex; gap: 4px; }

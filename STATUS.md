@@ -4,6 +4,11 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **Etapa 7 aprovada em 2026-11-16 por Diego; em andamento.** Feito: roteiro do piloto (`docs/piloto/ROTEIRO.md`) e auditoria de não armazenamento (`manage.py auditar_armazenamento`). Falta: usuários do Financeiro, conferência dos números com relatórios do Protheus, avaliação da interpretação e latência. Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M69 — pedido misto fecha quando todas as entregas conferem; etapas recolhíveis (2026-11-17)
+
+- Pedido #52: comparação e lista foram entregues no 2º passo, mas a exigência "cálculo" do 1º passo barrava o fim; o pedido repetia a ação e terminava com "O cálculo pedido ainda não foi feito". Agora, com várias entregas, todas conferidas = cumprido.
+- Tela: etapas ficam atrás de uma seta ao lado do passo atual (abre/fecha); a lista não é mais cortada (servidor guarda até 80 passos).
+
 ## Mudança M68 — lista de pedido misto exige os campos dela (2026-11-17)
 
 - Segunda parte (pedido #51 travado e incompleto): a comparação só roda no passo que é dela (antes a consulta de admissões virava "comparação julho x agosto" de contagens); o contrato tira os períodos separados ("Faturamento de julho/agosto") e contagens que a pessoa não pediu; a resposta final mostra todas as tabelas entregues em blocos (antes só a última e a lista sumia); o "agora vou buscar..." das etapas anteriores sai da resposta (já apareceu no andamento).

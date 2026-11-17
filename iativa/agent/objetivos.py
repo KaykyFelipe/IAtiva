@@ -339,6 +339,11 @@ class Acompanhamento:
         return self.parado >= int(cfg()["sem_progresso"])
 
     def cumprido(self, ev: str) -> bool:
+        if self.contrato and ev and ev not in (PERGUNTA, BLOQUEIO, DELEGADA) and len(self.contrato) > 1:
+            # M69: pedido com várias entregas, cada uma conferida pelo seu tipo: todas comprovadas = cumprido.
+            # Antes a exigência do 1º passo ("cálculo", da comparação) barrava o fim depois da lista entregue,
+            # e o pedido repetia a ação até o limite.
+            return not self.pendentes()
         return not self.pendentes() and cumpre(self.exig or RESPOSTA, ev)
 
     def falta_obs(self, consulta=None) -> str:

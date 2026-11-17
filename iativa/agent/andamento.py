@@ -17,7 +17,7 @@ _ATUAL: ContextVar[tuple | None] = ContextVar("iativa_andamento", default=None)
 _PASSOS: dict = {}
 _TRAVA = threading.Lock()
 VALIDADE_S = 600
-MAX_PASSOS = 20
+MAX_PASSOS = 80  # M69: a lista inteira fica disponível na seta (antes cortava e "parava" na 5ª filial)
 
 
 def _limpar(agora):

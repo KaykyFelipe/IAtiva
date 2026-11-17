@@ -263,9 +263,22 @@
     pensando.className = "msg ia pensando";
     pensando.setAttribute("role", "status");
     pensando.setAttribute("aria-live", "polite");
-    pensando.innerHTML = '<ol class="pensando-passos" data-pensando-passos></ol>' +
+    // M69: etapas recolhidas atrás de uma seta ao lado do passo atual (clica e abre; clica de novo e fecha).
+    pensando.innerHTML = '<ol class="pensando-passos" data-pensando-passos hidden></ol>' +
       '<div class="pensando-linha"><span class="pontos" aria-hidden="true"><i></i><i></i><i></i></span>' +
-      '<span class="pensando-atual" data-pensando-atual>Pensando…</span></div>';
+      '<span class="pensando-atual" data-pensando-atual>Pensando…</span>' +
+      '<button type="button" class="pensando-seta" data-pensando-seta aria-expanded="false" ' +
+      'aria-label="Mostrar as etapas" title="Mostrar as etapas" hidden>' +
+      '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" ' +
+      'stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>';
+    pensando.querySelector("[data-pensando-seta]").addEventListener("click", (ev) => {
+      const b = ev.currentTarget, aberto = b.getAttribute("aria-expanded") !== "true";
+      b.setAttribute("aria-expanded", String(aberto));
+      b.setAttribute("aria-label", aberto ? "Esconder as etapas" : "Mostrar as etapas");
+      b.title = b.getAttribute("aria-label");
+      pensando.querySelector("[data-pensando-passos]").hidden = !aberto;
+      rolarParaFim();
+    });
     if (window.IAtivaMascote) {
       const rosto = document.createElement('div'); rosto.className = 'pensando-mascote';
       rosto.append(IAtivaMascote.criar('thinking'));
@@ -306,7 +319,8 @@
           li.textContent = passos[i]; // texto puro
           lista.append(li);
         }
-        while (lista.children.length > 12) lista.firstElementChild.remove();
+        const seta = bolha.querySelector("[data-pensando-seta]");
+        if (seta) seta.hidden = !lista.children.length;
         agora.textContent = passos[passos.length - 1] + "…";
         if (window.IAtivaMascote) IAtivaMascote.estado(IAtivaMascote.etapa(agora.textContent));
         agora.classList.remove("trocou"); void agora.offsetWidth; agora.classList.add("trocou");

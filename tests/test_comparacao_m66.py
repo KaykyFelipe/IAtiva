@@ -160,3 +160,13 @@ def test_resposta_final_mostra_todas_as_entregas_sem_texto_de_intencao():
     outra = Resultado(True, 'Outra', colunas=['A'], tipos=['texto'], linhas=[['1']])
     s2 = _juntar(Saida('', resultado=lista), Saida('', resultado=outra))
     assert s2.resultado is lista
+
+
+def test_pedido_misto_cumprido_quando_todas_as_entregas_conferem():
+    """M69: comparação (cálculo) + lista (consulta): lista entregue por último fecha o pedido."""
+    from iativa.agent.objetivos import Acompanhamento, CALCULO, PERGUNTA
+    _, contrato = _contrato_misto()
+    ac = Acompanhamento('x', exig=CALCULO, contrato=contrato, cumpridas=[0])
+    assert not ac.cumprido('consulta')
+    ac.cumpridas.append(1)
+    assert ac.cumprido('consulta') and not ac.cumprido(PERGUNTA) and not ac.cumprido('')
