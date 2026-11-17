@@ -193,3 +193,15 @@ def test_m54_quanto_vira_total_sem_depender_do_modelo():
 def test_m54_destaque_por_filial_e_pelo_valor(ana):
     msg, pf = _atraso(ana, [{"codigo": "agregacao", "valor": "por filial"}])
     assert pf.mensagem.startswith("Maior Valor em atraso"), pf.mensagem
+
+
+def test_m67_parametro_invalido_repetido_nao_abre_manutencao(ana):
+    """Auditoria 17/11, item 11: critério inválido escolhido pelo modelo não é falta de código."""
+    from iativa.manutencao.models import Incidente
+    ruim = _d(acao="preparar_consulta", objetivo="titulos-em-atraso", entrega="calculo", parametros=[
+        {"codigo": "filial-analise", "valor": "TODAS"}, {"codigo": "data-corte", "valor": "13/11/2026"},
+        {"codigo": "dias-tolerancia-atraso", "valor": "0"}, {"codigo": "tratamento-baixa-parcial", "valor": "considerar-saldo"},
+        {"codigo": "agregacao", "valor": "media:E1_VALOR"}])
+    msg, res = conversas.enviar(ana, conversas.nova_individual(ana), "qual a média do atraso?", FakeProvider([ruim] * 4))
+    assert not Incidente.objects.exists(), msg.texto
+    assert "não é falta de função" in msg.texto, msg.texto

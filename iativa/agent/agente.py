@@ -662,7 +662,9 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
             if ac.pendentes() and ev not in (coord.PERGUNTA, coord.BLOQUEIO, coord.DELEGADA):
                 # Sem entrega comprovada, são revisões da mesma tentativa, não novas respostas.
                 previa = _juntar(previa, saida) if previa is not None and ac.cumpridas else saida
-                ac.anotar(d.acao, 'entrega_pendente', ev)
+                # M67: guarda a causa real (parâmetro inválido, metadado, permissão...), não só "pendente".
+                ac.anotar(d.acao, saida.observacao.situacao if saida.observacao is not None
+                          and saida.observacao.situacao != SUCESSO else 'entrega_pendente', ev)
                 observacoes.append(Observacao(d.acao, coord.ETAPA, 'Ainda faltam entregas verificadas: ' + '; '.join(ac.pendentes())))
                 entrada = replace(entrada, planejamento={**entrada.planejamento, 'pendentes': ac.pendentes(), 'cumpridas': ac.cumpridas})
                 atual = _ativa(user, c)
@@ -811,6 +813,19 @@ def _encerrar_sem_cumprir(ac, user, c, mensagem_id, saida, previa, causa, observ
         final = Saida(f"{texto}\n\n{falta}. Continuo em segundo plano e respondo aqui, sem você precisar pedir de novo."
                       .strip(), {**ficha, "tipo": ficha.get("tipo") or "objetivo", "objetivo": o.pk})
         registrar("modelo_falhou", "agente", usuario=user, estado_novo="objetivo_continua", resultado="erro")
+    elif causa not in PASSAGEIRAS and (classe := _classe_sem_codigo(ac)):
+        # M67 (auditoria 17/11, item 11): a falha tem causa conhecida que não é falta de código — escolha ou
+        # parâmetro do modelo, metadado/ERP indisponível ou permissão. Não abre manutenção.
+        if mensagem_id is not None:
+            o = coord.registrar(ac, user, c, mensagem_id, SO.IMPEDIDO, f"sem evidência: {classe}")
+            ficha["objetivo"] = o.pk
+        motivo = {ERRO_PARAMETROS: "os critérios que montei não são aceitos por essa consulta",
+                  ERRO_METADADOS: "o dicionário/ERP não respondeu como esperado",
+                  TEMPO_ESGOTADO: "o ERP não respondeu a tempo",
+                  FALHA_TRANSITORIA: "o ERP ou a IA tiveram uma falha passageira",
+                  SEM_PERMISSAO: "parte do pedido está fora das suas permissões"}[classe]
+        final = Saida(f"{texto}\n\n{falta}. Parei porque {motivo}; isso não é falta de função no sistema, então não "
+                      "abri correção de código. Tente de novo ou reformule o pedido.".strip(), ficha)
     elif causa in PASSAGEIRAS:
         # Falha passageira que persistiu: não é defeito de código, não vai para a manutenção.
         if mensagem_id is not None:
@@ -942,6 +957,17 @@ COBERTURA_RE = re.compile(r"\b(todos|todas|cada um|cada uma|demais|a lista|da li
 VERIFICAR_RE = re.compile(r"\b(verifi|confir|confer|chec|investig|descubr)\w*")
 REFERENCIA_RE = re.compile(r"\b(deles|delas|eles|elas|esses|essas|cada|todos|todas|lista|demitid|desligad|admitid|"
                            r"readmit|matricula|vinculo|funcionari|pessoas)\w*")
+
+
+def _classe_sem_codigo(ac) -> str:
+    """M67: causa conhecida que não é defeito de código, pela trilha do pedido (a mais grave primeiro)."""
+    # Só passos que tocaram dados contam; "conversar" carrega a observação de um passo anterior.
+    situacoes = [x.split(":")[1] for x in ac.trilha if x.count(":") == 2
+                 and x.split(":")[0] not in ("conversar", "continuacao", "falta_capacidade", "-")]
+    for classe in (SEM_PERMISSAO, ERRO_METADADOS, TEMPO_ESGOTADO, FALHA_TRANSITORIA, ERRO_PARAMETROS):
+        if classe in situacoes:
+            return classe
+    return ""
 
 
 def _juntar(previa: "Saida", saida: "Saida") -> "Saida":

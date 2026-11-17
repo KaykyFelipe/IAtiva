@@ -67,3 +67,10 @@ def test_media_sem_registros_nao_vira_zero(faturamento):
     assert r is not None, m.texto
     # Julho sem registros: média não existe (não é zero); a variação não é calculável.
     assert r.linhas[0][1] == 'Sem valor' and r.linhas[0][3] == 'Não calculável', r.linhas
+
+
+def test_por_campo_de_filial_equivale_a_por_filial():
+    from iativa.query.plano import ler_agregacao
+    spec = {'colunas': [{'campo': 'D2_TOTAL', 'tipo': 'dinheiro'}], 'campo_data': 'D2_EMISSAO'}
+    assert ler_agregacao('soma:D2_TOTAL por D2_FILIAL', spec)[1] == ''
+    assert ler_agregacao('soma:D2_TOTAL por filial', spec)[1] == ''

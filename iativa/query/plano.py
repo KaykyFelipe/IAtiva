@@ -158,7 +158,8 @@ def ler_agregacao(texto: str, spec: dict):
     if not metricas or len(metricas) > 4:
         raise ValueError("informe de 1 a 4 cálculos (ex.: soma:CAMPO)")
     grupo = grupo.strip().upper()
-    if grupo in ('FILIAL', 'FILIAIS'):
+    if grupo in ('FILIAL', 'FILIAIS') or re.fullmatch(r'[A-Z0-9]{1,3}_FILIAL', grupo):
+        # M67: "por D2_FILIAL" (o modelo usa o campo) é o mesmo pedido que "por filial".
         # Cada filial autorizada já é executada separadamente pelo serviço. Não é nome de
         # coluna nem motivo para ampliar o escopo: TODAS/filial continua sendo parâmetro próprio.
         grupo = ''
