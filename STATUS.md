@@ -4,6 +4,15 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **Etapa 7 aprovada em 2026-11-16 por Diego; em andamento.** Feito: roteiro do piloto (`docs/piloto/ROTEIRO.md`) e auditoria de não armazenamento (`manage.py auditar_armazenamento`). Falta: usuários do Financeiro, conferência dos números com relatórios do Protheus, avaliação da interpretação e latência. Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M67 — estado por entrega e causa da falha (2026-11-17)
+
+Etapa 2 do prompt de melhorias (restante), validada no chat com pedido misto (comparação de faturamento + lista de admitidos).
+- Limite/pausa mostra "Entregue: …" e "Não concluído: …" por entrega do contrato, em vez de mensagem genérica.
+- Trilha guarda a causa real de cada passo (parâmetro inválido, metadado/ERP, permissão, transitória), não só "entrega pendente". Pedido que para por essas causas encerra com o motivo e NÃO abre manutenção (antes um parâmetro inválido repetido virava "capacidade ausente").
+- "por D2_FILIAL" (campo de filial da tabela) vale como "por filial"; na comparação, "por mês" e agrupamento duplo são normalizados e os períodos são lidos só na oração da comparação (uma segunda data em outra pergunta da mensagem não desfaz a comparação).
+- Já existente e conferido: contrato de entregas por pedido (M60) com conferência por entrega e continuação até todas comprovadas; herança de critérios só no mesmo assunto.
+- Pendente desta etapa: verificação de período/filtros por entrega (hoje confere tipo, medida e campos), pergunta objetiva quando falta definição de negócio, e troca dos desvios por regex (admissões, "função deles", "quanto") por classificação geral.
+
 ## Mudança M66 — comparação geral de dois períodos (2026-11-17)
 
 Etapa 2 do prompt de melhorias (parte da comparação).
