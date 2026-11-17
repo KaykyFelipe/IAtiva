@@ -127,10 +127,14 @@ def _explorar_dicionario(user, texto) -> bool:
     from .aprendizado import candidatos, pode_aprender_sozinho
     if not pode_aprender_sozinho(user) or len(texto.split()) < 3:
         return False
-    try:
-        return bool(candidatos(user, texto, limite=1, automatico=True))
-    except Exception:
-        return False
+    import logging
+    for tentativa in (1, 2):  # a conexão ao dicionário do ERP às vezes cai na 1ª tentativa
+        try:
+            return bool(candidatos(user, texto, limite=1, automatico=True))
+        except Exception as exc:
+            logging.getLogger(__name__).warning("busca no dicionário falhou (tentativa %s): %s", tentativa,
+                                                type(exc).__name__)
+    return False
 
 
 def conferir(analise, decisao, saida):
