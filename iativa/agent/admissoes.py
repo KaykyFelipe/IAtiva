@@ -17,6 +17,26 @@ def so_numero(texto):
     return bool(re.search(r'\b(so|somente|apenas)\s+(?:o |a )?(numero|quantidade|total)\b', _norm(texto)))
 
 
+def contextualizar(user, conversa, texto):
+    from django.utils import timezone
+    from .periodo import MESES
+    palavras = set(re.findall(r'[a-z]+', _norm(texto)))
+    if not palavras <= set(MESES) | {'e','no','na','em','desde','de','do','mes','ano','passado','ultimo','este','esse','neste','nesse','a','partir'}:
+        return texto
+    if solicitado(texto) or len(texto.split()) > 8 or not periodo_da_mensagem(texto, timezone.localdate()):
+        return texto
+    if not re.match(r'^(e\b|no\b|em\b|desde\b|nesse\b|neste\b)', _norm(texto)):
+        return texto
+    from .models import ConsultaModelo
+    ultima = conversa.solicitacoes.filter(usuario=user).order_by('-pk').first()
+    cm = ConsultaModelo.objects.filter(codigo=ultima.objetivo, tabela='SRA').first() if ultima else None
+    if cm and cm.spec.get('campo_data') == 'RA_ADMISSA':
+        anteriores = conversa.mensagens.filter(papel='usuario').order_by('-pk')[:8]
+        if any(solicitado(m.texto) for m in anteriores):
+            return 'Quantos funcionários foram admitidos? Mostre nomes completos e datas de admissão. ' + texto
+    return texto
+
+
 def planejar(texto, analise):
     if not solicitado(texto):
         return analise

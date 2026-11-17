@@ -229,6 +229,8 @@ def conversar(user, c, texto: str, provedor=None, mensagem_usuario_id=None, inte
         return Saida("Seu usuário ainda não tem acesso a consultas. Fale com o administrador.")
 
     from . import planejamento
+    from .admissoes import contextualizar
+    texto = contextualizar(user, c, texto)
     try:
         provedor = provedor or obter_provedor(usuario=user)
         analise = planejamento.preparar(user, c, texto, provedor, _historico(c, mensagem_usuario_id))
@@ -237,6 +239,8 @@ def conversar(user, c, texto: str, provedor=None, mensagem_usuario_id=None, inte
     except ValidationError as exc:
         return Saida(exc.messages[0], ficha={'tipo': 'esclarecimento_setor'})
     except FalhaModelo as exc:
+        import logging
+        logging.getLogger(__name__).warning('planejamento_falhou: %s', exc)
         if acomp is not None and exc.temporaria:
             acomp.anotar('classificacao', 'modelo_falhou')
             return _encerrar_sem_cumprir(acomp, user, c, mensagem_usuario_id, None, None, 'modelo_falhou', [])

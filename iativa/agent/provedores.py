@@ -37,6 +37,12 @@ class LLMProvider:
     nome = "base"
 
     def planejar(self, entrada):
+        if hasattr(self, '_gerar'):
+            schema = {'type': 'object', 'properties': {'analise': esquema_decisao([], [])['properties']['analise']},
+                      'required': ['analise'], 'additionalProperties': False}
+            raw = self._gerar(INSTRUCOES_AGENTE + '\nNesta fase retorne APENAS analise, sem ação ou campos de execução.\n'
+                              + _contexto_agente(entrada), schema, lambda *args: None, [], [])
+            return raw.get('analise')
         return self.decidir(entrada).get('analise')
 
     def interpretar(self, entrada: EntradaModelo) -> dict:  # pragma: no cover - interface

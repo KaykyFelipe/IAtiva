@@ -1,8 +1,15 @@
 # STATUS — IAtiva
 
-**Atualizado em:** 2026-11-16
+**Atualizado em:** 2026-11-17
 **Etapa atual:** 7 — Piloto local
 **Situação:** **Etapa 7 aprovada em 2026-11-16 por Diego; em andamento.** Feito: roteiro do piloto (`docs/piloto/ROTEIRO.md`) e auditoria de não armazenamento (`manage.py auditar_armazenamento`). Falta: usuários do Financeiro, conferência dos números com relatórios do Protheus, avaliação da interpretação e latência. Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
+
+## Mudança M63 — correções do piloto de TI (2026-11-17)
+
+- Classificação com schema próprio nos provedores Claude/ChatGPT: não exige decisão executável nem parâmetros de consulta durante o planejamento. Falhas técnicas de planejamento passam a ter diagnóstico sem conteúdo do usuário nos logs.
+- Continuação curta de período de uma consulta de admissões recupera o assunto e exige novamente total, nomes e datas; novos assuntos explícitos não são substituídos. Permissões e filtros permanecem conferidos.
+- URL da primeira conversa é atualizada pelo cabeçalho do servidor, sem habilitar cache de páginas no navegador. Clique de layout envia salvamento imediato com keepalive.
+- Regressões sintéticas e suíte completa em validação; publicação azul/verde e repetição dos casos no Chrome seguem antes de considerar a mudança concluída. Sem alteração de regra financeira ou migração de banco.
 
 ## Mudança M62 — "qual a função deles?" depois de uma lista (2026-11-16)
 

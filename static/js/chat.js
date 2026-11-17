@@ -196,19 +196,19 @@
     if (alvo.hasAttribute("data-abrir-lateral")) {
       if (innerWidth <= 680) app.classList.add("menu-aberto");
       else app.classList.remove("lateral-recolhida");
-      salvarLayout();
+      salvarLayout(true);
     }
     if (alvo.hasAttribute("data-fechar-lateral")) app.classList.remove("menu-aberto");
     if (alvo.hasAttribute("data-recolher-lateral")) {
       if (innerWidth <= 680) app.classList.remove("menu-aberto");
       else app.classList.add("lateral-recolhida");
-      salvarLayout();
+      salvarLayout(true);
     }
     if (alvo.hasAttribute("data-expandir-leitura")) {
       const ampla = app.classList.toggle("leitura-ampla");
       alvo.setAttribute("aria-pressed", String(ampla));
       alvo.title = ampla ? "Restaurar largura de leitura" : "Expandir área de leitura";
-      salvarLayout();
+      salvarLayout(true);
     }
     if (alvo.hasAttribute("data-sugestao")) {
       const campo = document.querySelector("[data-campo]");
@@ -465,6 +465,14 @@
       if (atual && e.detail.elt === atual.form) encerrar(true, 'attention');
     }));
   document.body.addEventListener("htmx:afterRequest", (e) => {
+    const xhr = e.detail && e.detail.xhr;
+    const caminho = xhr && xhr.status >= 200 && xhr.status < 300 && xhr.getResponseHeader("HX-Push-Url");
+    if (caminho) {
+      const destino = new URL(caminho, location.href);
+      if (destino.origin === location.origin && /^\/c\/\d+\/$/.test(destino.pathname)) {
+        history.replaceState(null, "", destino.pathname);
+      }
+    }
     // 204 = envio interrompido no servidor: a tela já foi restaurada.
     if (atual && e.detail.elt === atual.form && e.detail.xhr && e.detail.xhr.status === 204) encerrar(true);
   });
