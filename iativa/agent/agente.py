@@ -819,6 +819,10 @@ def _encerrar_sem_cumprir(ac, user, c, mensagem_id, saida, previa, causa, observ
         ficha["verificacao_pendente"] = True
     registro = ac.registro
     feitas = registro.continuacoes if registro is not None else 0
+    if causa not in PASSAGEIRAS and _classe_sem_codigo(ac) in (TEMPO_ESGOTADO, FALHA_TRANSITORIA):
+        # M80: o ERP demorou/falhou de passagem e a IA repetiu a mesma ação: é lentidão, não pedido impossível.
+        # Tenta de novo sozinha em segundo plano (com espera), em vez de pedir para a pessoa repetir.
+        causa = _classe_sem_codigo(ac)
     andando = not ac.estagnado() or causa in (TEMPO_ESGOTADO, FALHA_TRANSITORIA, "modelo_falhou", "prazo")
     if (causa in PASSAGEIRAS and andando and mensagem_id is not None and feitas < int(coord.cfg()["continuacoes"])
             and not (registro is not None and registro.retomado and causa == "passos")):
