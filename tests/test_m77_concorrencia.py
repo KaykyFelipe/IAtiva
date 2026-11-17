@@ -45,3 +45,14 @@ def test_fila_justa_e_limite_por_usuario(monkeypatch, settings):
              SimpleNamespace(pk=3, usuario_id=3), SimpleNamespace(pk=4, usuario_id=2)]
     # Usuário 1 já tem 2 rodando (limite); o 3 (nenhum rodando) vem antes do 2 (um rodando).
     assert [x.pk for x in coord.justa(itens)] == [3, 2, 4]
+
+
+def test_indice_unico_parcial_de_campo_novo_e_aditivo():
+    import importlib
+    from django.db import migrations, models
+    from iativa.core.management.commands.verificar_migracoes import avaliar_operacao
+    mig = importlib.import_module('iativa.chat.migrations.0006_mensagem_pedido').Migration
+    assert all(avaliar_operacao(mig, op) == '' for op in mig.operations)
+    # Índice único sobre campo antigo (ou sem condição) continua bloqueado.
+    velha = migrations.AddConstraint('mensagem', models.UniqueConstraint(fields=['conversa', 'texto'], name='x'))
+    assert avaliar_operacao(mig, velha) != ''

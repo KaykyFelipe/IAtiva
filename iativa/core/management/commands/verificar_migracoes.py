@@ -21,6 +21,22 @@ from django.db.models import NOT_PROVIDED
 ADITIVAS = (migrations.CreateModel, migrations.AddIndex)
 
 
+def _unica_parcial_de_campo_novo(migracao, op) -> bool:
+    """M77: índice único que só vale quando um campo NOVO e nulo desta mesma migração está preenchido
+    (condição `campo__isnull=False`). A versão anterior não conhece o campo e grava nulo: nunca é barrada."""
+    from django.db.models import Q, UniqueConstraint
+
+    c = op.constraint
+    if not isinstance(c, UniqueConstraint) or not isinstance(c.condition, Q):
+        return False
+    novos = {o.name for o in migracao.operations if isinstance(o, migrations.AddField)
+             and o.model_name == op.model_name and o.field.null}
+    filhos = c.condition.children
+    return (not c.condition.negated and c.condition.connector == Q.AND and bool(filhos)
+            and all(isinstance(x, tuple) and x[0].endswith("__isnull") and x[1] is False
+                    and x[0][:-len("__isnull")] in novos and x[0][:-len("__isnull")] in c.fields for x in filhos))
+
+
 def avaliar_operacao(migracao, op) -> str:
     """Motivo da incompatibilidade, ou vazio se a operação é aditiva e segura."""
     if isinstance(op, ADITIVAS):
@@ -32,6 +48,8 @@ def avaliar_operacao(migracao, op) -> str:
         if f.null or getattr(f, "db_default", NOT_PROVIDED) is not NOT_PROVIDED:
             return ""
         return f"campo obrigatório sem padrão no banco ({op.model_name}.{op.name}): a versão anterior não o preenche"
+    if isinstance(op, migrations.AddConstraint) and _unica_parcial_de_campo_novo(migracao, op):
+        return ""
     if isinstance(op, migrations.RunPython):
         return "" if getattr(migracao, "IATIVA_COMPATIVEL", False) else "RunPython sem IATIVA_COMPATIVEL = True"
     return f"{type(op).__name__} não é aditiva"
