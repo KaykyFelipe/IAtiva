@@ -285,6 +285,12 @@ def _conversar_autorizado(user, c, texto, provedor, mensagem_usuario_id, interro
         trechos = []
     aprendidos = _aprendidos(administrador)
     andamento.avisar("Lendo o pedido e o histórico da conversa")
+    from . import definicoes
+    falta = definicoes.pergunta(user, c, texto) if acomp is None else None
+    if falta is not None:
+        # M74: definição de negócio sem aprovação vira pergunta objetiva; não supõe critério nem consulta.
+        andamento.avisar("Falta uma definição de negócio; perguntando")
+        return Saida(falta[1], ficha={"tipo": "definicao", "definicao_pedida": falta[0]})
     from .models import SituacaoTarefa, Tarefa
 
     aguardando = Tarefa.objects.filter(usuario=user, conversa=c, situacao=SituacaoTarefa.AGUARDANDO).order_by(
@@ -669,7 +675,12 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
                 # M67: guarda a causa real (parâmetro inválido, metadado, permissão...), não só "pendente".
                 ac.anotar(d.acao, saida.observacao.situacao if saida.observacao is not None
                           and saida.observacao.situacao != SUCESSO else 'entrega_pendente', ev)
-                observacoes.append(Observacao(d.acao, coord.ETAPA, 'Ainda faltam entregas verificadas: ' + '; '.join(ac.pendentes())))
+                diverg = [f"{k} ({v})" for k, v in ac.divergencias.items() if k in ac.pendentes()]
+                observacoes.append(Observacao(d.acao, coord.ETAPA, 'Ainda faltam entregas verificadas: ' + '; '.join(ac.pendentes())
+                    + (('. Critério diferente do pedido, refaça com o período/filial da entrega: ' + '; '.join(diverg))
+                       if diverg else '')))
+                if diverg:
+                    andamento.avisar('O critério usado não é o pedido; refazendo com o período/filial certos')
                 entrada = replace(entrada, planejamento={**entrada.planejamento, 'pendentes': ac.pendentes(), 'cumpridas': ac.cumpridas})
                 atual = _ativa(user, c)
                 continue

@@ -314,6 +314,7 @@ class Acompanhamento:
     registro: Objetivo | None = None  # preenchido na continuação pelo worker
     contrato: list = field(default_factory=list)
     cumpridas: list = field(default_factory=list)
+    divergencias: dict = field(default_factory=dict)  # M74: entrega -> período/filial usado diferente do pedido
 
     def pendentes(self):
         return [e['descricao'] for i, e in enumerate(self.contrato) if i not in self.cumpridas]

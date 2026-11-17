@@ -4,6 +4,12 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **Etapa 7 aprovada em 2026-11-16 por Diego; em andamento.** Feito: roteiro do piloto (`docs/piloto/ROTEIRO.md`) e auditoria de não armazenamento (`manage.py auditar_armazenamento`). Falta: usuários do Financeiro, conferência dos números com relatórios do Protheus, avaliação da interpretação e latência. Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M74 — etapa 2: período/filial por entrega e pergunta de definição (2026-11-17)
+
+- Entrega com período ou filial diferentes do pedido fica pendente; o modelo recebe o motivo e refaz (`planejamento.divergencia`).
+- Termo sem definição aprovada no glossário vira pergunta objetiva antes de consultar (`iativa/agent/definicoes.py`).
+- Falta da etapa 2: trocar os atalhos por frase por regra geral. Testes: `tests/test_m74_etapa2.py`.
+
 ## Mudança M73 — manutenção desligada; um agente por chat (2026-11-17)
 
 - Manutenção automática desligada por padrão (decisão M73): sem correção automática; a resposta pede para comunicar alguém da TI com o nº do registro.
