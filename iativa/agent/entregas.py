@@ -64,7 +64,14 @@ def faltam(colunas, exigidos):
 
 def planejar(texto, analise):
     requeridos=campos(texto)
-    if not somente_lista(texto): return analise
+    if not somente_lista(texto):
+        # M68: pedido misto ("compare ... e liste os admitidos com nome e função"): cada lista exige os campos
+        # da sua própria descrição; outra tabela (ex.: faturamento por filial) não a cumpre.
+        itens=[dict(e) for e in analise.get('entregas',[])]
+        for e in itens:
+            if e.get('tipo')=='consulta' and not e.get('campos_pedidos') and campos(e.get('descricao','')):
+                e['campos_pedidos']=campos(e['descricao'])
+        return {**analise,'entregas':itens}
     itens=[dict(e) for e in analise.get('entregas',[]) if e['tipo'] not in ('calculo','historico')]
     consultas=[e for e in itens if e['tipo']=='consulta']
     if not consultas:

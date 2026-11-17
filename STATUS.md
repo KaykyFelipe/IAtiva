@@ -4,6 +4,11 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **Etapa 7 aprovada em 2026-11-16 por Diego; em andamento.** Feito: roteiro do piloto (`docs/piloto/ROTEIRO.md`) e auditoria de não armazenamento (`manage.py auditar_armazenamento`). Falta: usuários do Financeiro, conferência dos números com relatórios do Protheus, avaliação da interpretação e latência. Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M68 — lista de pedido misto exige os campos dela (2026-11-17)
+
+- Em pedido misto (comparação + lista), a entrega de lista passa a exigir os campos da própria descrição (ex.: nome e função). Antes, a tabela da comparação por filial era aceita como a lista e o pedido fechava como cumprido sem os funcionários.
+- Teste: `tests/test_comparacao_m66.py::test_lista_do_pedido_misto_nao_e_cumprida_pela_comparacao`. 942 testes passam. Falta revalidar no chat.
+
 ## Mudança M67 — estado por entrega e causa da falha (2026-11-17)
 
 Etapa 2 do prompt de melhorias (restante), validada no chat com pedido misto (comparação de faturamento + lista de admitidos).

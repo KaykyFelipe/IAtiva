@@ -88,3 +88,24 @@ def test_periodos_so_da_oracao_da_comparacao():
     t = ('compare o faturamento de julho e agosto de 2026 por filial e liste os funcionários admitidos em '
          'agosto de 2026 com nome e função')
     assert [x for _, _, x in comparacao.periodos(t)] == ['07/2026', '08/2026']
+
+
+def test_lista_do_pedido_misto_nao_e_cumprida_pela_comparacao():
+    """M68: a tabela de faturamento por filial não cumpre "liste os admitidos com nome e função"."""
+    from iativa.agent import entregas, planejamento
+    from iativa.agent.agente import Saida
+    from iativa.query.servico import Resultado
+    from .test_ciclo_agente import _d as d_
+    from iativa.agent.decisao import validar
+    t = ('compare o faturamento de julho e agosto de 2026 por filial e liste os funcionários admitidos em '
+         'agosto de 2026 com nome e função')
+    a = comparacao.planejar(t, entregas.planejar(t, {'entregas': [
+        {'descricao': 'Comparar faturamento', 'tipo': 'calculo', 'metrica': 'comparacao'},
+        {'descricao': 'Listar os funcionários admitidos em agosto de 2026 com nome e função', 'tipo': 'consulta',
+         'metrica': ''}]}))
+    lista = a['entregas'][1]
+    assert lista['campos_pedidos'] == ['nome', 'funcao']
+    fat = Resultado(True, '', colunas=['Filial', 'Valor'], tipos=['texto', 'dinheiro'], linhas=[['01', '1']])
+    assert planejamento.conferir({'entregas': [lista]}, validar(d_(), [], []), Saida('', resultado=fat))
+    rh = Resultado(True, '', colunas=['Nome', 'Função', 'Admissão'], tipos=['texto'] * 3, linhas=[['x', 'y', 'z']])
+    assert not planejamento.conferir({'entregas': [lista]}, validar(d_(), [], []), Saida('', resultado=rh))
