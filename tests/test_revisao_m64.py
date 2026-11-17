@@ -90,3 +90,9 @@ def test_filiais_somente_autorizadas_na_plataforma(base):
     assert r is not None and r.ok and {l[0] for l in r.linhas}=={'01','02'}
     assert 'cadastro de acessos' in r.premissas[0]
     assert not estrutura.solicitado('Quais filiais cadastradas têm clientes inadimplentes?')
+    from iativa.chat.resultados import empacotar, restaurar
+    snapshot=empacotar(r)
+    assert restaurar(b['ana'],snapshot) is not None
+    assert restaurar(b['caio'],snapshot) is None  # outro setor, sem acesso ao escopo salvo
+    snapshot['escopo'].pop('cadastro_filiais')
+    assert restaurar(b['ana'],snapshot) is None  # não libera resultados ERP sem campos

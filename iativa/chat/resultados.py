@@ -55,6 +55,10 @@ def _permitido(user, escopo):
     filiais = escopo.get("filiais") or []
     if not filiais or not set(filiais) <= filiais_autorizadas(user, setor):
         return False
+    # Cadastro da plataforma, sem tabelas do ERP; setor e filiais continuam obrigatórios.
+    if (escopo.get('cadastro_filiais') is True and escopo.get('campos') == {}
+            and set(escopo) == {'setor', 'filiais', 'campos', 'cadastro_filiais'}):
+        return True
     campos = escopo.get("campos") or {}
     vis = _Visibilidade({setor.pk}, list(campos))
     return bool(campos) and all(vis.tabela(a) and all(vis.campo(a, c) for c in cs) for a, cs in campos.items())

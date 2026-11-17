@@ -21,7 +21,7 @@ def consultar(user):
     filiais=sorted(filiais_autorizadas(user,setor))
     r=Resultado(True,'Filiais cadastradas nos acessos da IAtiva e autorizadas para esta conta no setor '+setor.nome+'.',
         colunas=['Código','Nome'],tipos=['texto','texto'],linhas=[[c,nome(c) or 'Nome não cadastrado'] for c in filiais],
-        escopo={'setor':setor.pk,'filiais':filiais,'campos':{}},premissas=[
+        escopo={'setor':setor.pk,'filiais':filiais,'campos':{},'cadastro_filiais':True},premissas=[
         'Fonte: cadastro de acessos da IAtiva. Não representa uma consulta ao cadastro completo de empresas/filiais do ERP.',
         'Somente filiais autorizadas; código sem nome não é completado por suposição.'])
     return Saida('',{'tipo':'executada'},resultado=r)

@@ -9,8 +9,9 @@
 - Incorpora a correção automática 884d393 que separa lista de funcionários com função atual de histórico individual. A nova verificação exige os campos expressamente pedidos; agregados não satisfazem nome/função/admissão ou cliente/vencimento/saldo. "Por filial" organiza a lista quando há detalhes; indicadores e rankings continuam agregados.
 - Comparação de dois meses de faturamento executa a mesma consulta SD2 aprovada com os mesmos filtros nos dois períodos e calcula diferença e variação por filial no backend. Não vira investigação de divergência, não escolhe filtros para atingir um alvo e não envia resultados ao modelo. Base zero e valores indisponíveis são explicitados.
 - Pergunta de cadastro de filiais devolve códigos/nomes autorizados na plataforma, com fonte e limite de cobertura explícitos; não apresenta o cadastro de acessos como inventário completo do ERP.
-- Preparada adaptação da consulta de RH para o campo de nome completo já autorizado no dicionário, mantendo os filtros aprovados e a descrição da função. Validação prévia compilou sem executar dados; aplicar após a versão compatível estar ativa.
+- Adaptação da consulta de RH aplicada para o campo de nome completo já autorizado no dicionário, mantendo os filtros aprovados e a descrição da função. Compilação e AST conferidas antes de salvar.
 - Validação local: 916 testes aprovados e 10 pulados por dependências Linux; Django check sem problemas. Implantação azul/verde e conferência real no Chrome seguem antes de considerar a mudança concluída. Nenhuma regra financeira ou permissão foi alterada.
+- Publicação f9b8d93 por azul/verde concluída com drenagem. Chrome confirmou uma tabela detalhada de RH preservada ao recarregar, títulos com cliente/vencimento/saldo e comparação com diferença/percentual. Não houve validação de números financeiros. Conferência encontrou bloqueio do snapshot de cadastro de filiais: ajuste identifica exclusivamente esse cadastro e revalida setor/filiais, sem liberar snapshots ERP sem campos; regressão cobre restauração e negativa para outro setor. Ajuste final em validação/publicação.
 
 ## Mudança M63 — correções do piloto de TI (2026-11-17)
 
