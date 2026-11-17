@@ -42,6 +42,7 @@ def admin(erp_sintetico, settings, novo_usuario, politica):
     cob = Department.objects.get(codigo="financeiro-cobranca")
     u = novo_usuario("diego", cob)
     politica(u, cob, consultar=True, administrar=True, aprovar_conhecimento=True, filiais=["01"])
+    politica(u, __import__("iativa.accounts.models", fromlist=["Department"]).Department.objects.get(codigo="ti"), administrar=True)  # M81: TI aprova fontes
     return u
 
 

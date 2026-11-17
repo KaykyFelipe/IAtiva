@@ -86,6 +86,16 @@ def permissao_geral(user) -> bool:
     return (tem_permissao(user, Permissao.APROVAR_CONHECIMENTO) or tem_permissao(user, Permissao.ADMINISTRAR))
 
 
+def e_da_ti(user) -> bool:
+    """M81 (etapa 4): quem autoriza fonte nova. Permissão geral, ou administrador/aprovador do setor TI."""
+    if permissao_geral(user):
+        return True
+    from .models import Department
+    ti = Department.objects.filter(codigo="ti", ativo=True).first()
+    return ti is not None and (tem_permissao(user, Permissao.ADMINISTRAR, ti)
+                               or tem_permissao(user, Permissao.APROVAR_CONHECIMENTO, ti))
+
+
 def setores_autorizados(user, permissao: Permissao, agora=None) -> set[int]:
     """Setores (ids) em que o usuário tem a permissão. Base da visão consolidada."""
     qs = politicas_vigentes(user, agora).filter(**{Permissao(permissao).value: True}, department__isnull=False)

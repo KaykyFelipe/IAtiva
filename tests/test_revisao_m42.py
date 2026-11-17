@@ -67,6 +67,7 @@ def test_ranking_global_inclui_grupo_que_nao_e_top_em_nenhuma_filial(ana, erp_si
     from iativa.accounts.models import Department
 
     politica(ana, Department.objects.get(codigo="financeiro-cobranca"), consultar=True, filiais=["02"])
+    politica(ana, __import__("iativa.accounts.models", fromlist=["Department"]).Department.objects.get(codigo="ti"), administrar=True)  # M81: a IA só aprova fonte nova para a TI
     with sqlite3.connect(erp_sintetico) as con:
         con.row_factory = sqlite3.Row
         modelo = dict(con.execute("SELECT * FROM SE1010 LIMIT 1").fetchone())
@@ -117,6 +118,7 @@ def test_ranking_incompleto_nao_afirma_lider_geral(ana, settings, politica):
     from iativa.accounts.models import Department
 
     politica(ana, Department.objects.get(codigo="financeiro-cobranca"), consultar=True, filiais=["02"])
+    politica(ana, __import__("iativa.accounts.models", fromlist=["Department"]).Department.objects.get(codigo="ti"), administrar=True)  # M81: a IA só aprova fonte nova para a TI
     settings.IATIVA_CONSULTA = {**settings.IATIVA_CONSULTA, "limite_linhas": 1}
     msg, res = ranking(ana, "soma:E1_VALOR por E1_CLIENTE top 1")
     assert res is None or not res.ok

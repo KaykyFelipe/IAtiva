@@ -71,10 +71,15 @@ def _pode_decidir(user, setor, criado_por_id) -> bool:
 def notas_validas(user, setor=None):
     """Notas que valem para o usuário agora: dele, do setor dele e da empresa; aprovadas, ativas e
     dentro da validade. Nota de outro usuário ou de outro setor nunca entra."""
+    explicito = setor is not None  # regras de UM setor (ex.: premissas por setor no chat mestre)
     setor = setor if setor is not None else setor_do_usuario(user)
     filtro = Q(escopo=EscopoNota.EMPRESA) | Q(escopo=EscopoNota.USUARIO, usuario=user)
     if setor is not None:
         filtro |= Q(escopo=EscopoNota.SETOR, setor=setor)
+    # M81 (etapa 4): conhecimento por domínio. A nota de um setor (ex.: "Faturamento" da Cobrança) vale para
+    # quem consulta os dados desse setor, não só para quem é do setor; quem não acessa o domínio não a recebe.
+    if not explicito:
+        filtro |= Q(escopo=EscopoNota.SETOR, setor_id__in=setores_autorizados(user, Permissao.CONSULTAR))
     vigente = Q(valido_ate__isnull=True) | Q(valido_ate__gte=timezone.localdate())
     acesso_origem = Q(setor_origem__isnull=True) | Q(setor_origem_id__in=setores_autorizados(user, Permissao.CONSULTAR)) | Q(tipo=TipoNota.PREFERENCIA)
     return NotaAgente.objects.filter(ativo=True, situacao=SituacaoNota.APROVADA).filter(filtro).filter(vigente).filter(acesso_origem)

@@ -28,6 +28,7 @@ def base(erp_sintetico, settings, novo_usuario, politica):
     dire = Department.objects.get(codigo="diretoria")
     ana = novo_usuario("ana", cob)
     politica(ana, cob, consultar=True, filiais=["01", "02"])
+    politica(ana, __import__("iativa.accounts.models", fromlist=["Department"]).Department.objects.get(codigo="ti"), administrar=True)  # M81: a IA só aprova fonte nova para a TI
     return {"ana": ana, "cob": cob, "dire": dire}
 
 
@@ -75,6 +76,7 @@ def test_mestre_nao_soma_setores_com_regras_diferentes(base, novo_usuario, polit
     u = novo_usuario("diretor", dire)
     politica(u, cob, consultar=True, aprovar_conhecimento=True, administrar=True, filiais=["01"])
     politica(u, dire, consultar=True, aprovar_conhecimento=True, administrar=True, filiais=["02"])
+    politica(u, __import__("iativa.accounts.models", fromlist=["Department"]).Department.objects.get(codigo="ti"), administrar=True)  # M81: TI aprova fontes
     filial = ParameterDefinition.objects.get(codigo="filial-analise")
     for setor, cod in ((cob, "01"), (dire, "02")):
         servicos.aprovar(u, servicos.registrar_valor(u, filial, Escopo.SETOR, cod, setor=setor))
@@ -135,6 +137,8 @@ def _admin(base):
     UserProfile.objects.create(user=u, department=base["cob"], funcao="colaborador")
     AccessPolicy.objects.create(user=u, department=base["cob"], filiais=["01", "02"], pode_consultar=True,
                                 pode_administrar=True, pode_aprovar_conhecimento=True)
+    AccessPolicy.objects.create(user=u, department=__import__("iativa.accounts.models", fromlist=["Department"])
+                                .Department.objects.get(codigo="ti"), pode_administrar=True)  # M81: TI aprova fontes
     return u
 
 

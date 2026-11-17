@@ -1422,6 +1422,11 @@ def _aprender_sozinho(user, c, d, texto, ficha, provedor, entrada, atual, motivo
         detalhe = "; ".join(getattr(exc, "messages", None) or [str(exc)])
         motivo.append(f"consulta sobre {consulta.get('tabela', '')} recusada: {detalhe}"[:300])
         return None
+    if cm.situacao != SituacaoModelo.APROVADA:
+        # M81: fonte nova proposta por quem não é da TI: espera a autorização, não consulta antes.
+        return Saida(f"Para responder preciso de uma fonte nova: “{cm.nome}” ({cm.tabela}). Deixei a proposta para "
+                     "a TI autorizar; assim que for autorizada, é só perguntar de novo.",
+                     {**ficha, "tipo": "bloqueada", "fonte_proposta": cm.pk})
     registrar("interpretacao", "agente", usuario=user, estado_novo="aprendeu_sozinho", entidade_id=cm.pk)
     codigos = set(OBJETIVOS[cm.codigo].parametros)
     defs = orq._definicoes(sorted(codigos))

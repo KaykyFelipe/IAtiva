@@ -35,6 +35,9 @@ class Roteiro(Espiao):
 
 
 def test_calculo_usa_consulta_recem_aprendida(faturamento):  # noqa: F811
+    # M81: a IA só aprova e usa fonte nova na hora para a TI; aqui a pessoa é da TI.
+    from iativa.accounts.models import AccessPolicy
+    AccessPolicy.objects.create(user=faturamento["ana"], department=__import__("iativa.accounts.models", fromlist=["Department"]).Department.objects.get(codigo="ti"), pode_administrar=True)
     c = conversas.nova_individual(faturamento["ana"])
     p = Roteiro([])
     msg, res = conversas.enviar(faturamento["ana"], c, "some o total dos itens de nota da filial 01 em setembro", p)

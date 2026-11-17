@@ -35,6 +35,7 @@ def ti():
 def admin_ti(novo_usuario, politica, ti):
     u = novo_usuario("diego", ti)
     politica(u, ti, consultar=True, administrar=True, filiais=["01"])
+    politica(u, __import__("iativa.accounts.models", fromlist=["Department"]).Department.objects.get(codigo="ti"), administrar=True)  # M81: TI aprova fontes
     return u
 
 
@@ -98,13 +99,17 @@ def test_proposta_valida_contra_catalogo(admin_ti, ti):
         aprendizado.campos_da_tabela(admin_ti, "SX3")
 
 
-def test_sem_autoaprovacao_e_aprovacao_por_outro(admin_ti, aprovador, ti, settings):
+def test_so_a_ti_aprova_fonte_nova(admin_ti, aprovador, ti, novo_usuario, politica):
+    """M81: a TI aprova (inclusive o que ela mesma propôs); gestor de outro setor não aprova."""
+    cob = Department.objects.get(codigo="financeiro-cobranca")
+    gestor = novo_usuario("gestor-cob", cob)
+    politica(gestor, cob, consultar=True, administrar=True, aprovar_conhecimento=True, filiais=["01"])
     cm = aprendizado.salvar_proposta(admin_ti, "SE1", _dados(ti))
     with pytest.raises(PermissaoNegada):
-        aprendizado.aprovar(admin_ti, cm)
-    aprendizado.aprovar(aprovador, cm)
+        aprendizado.aprovar(gestor, cm)
+    aprendizado.aprovar(admin_ti, cm)
     cm.refresh_from_db()
-    assert cm.situacao == SituacaoModelo.APROVADA and cm.aprovado_por == aprovador
+    assert cm.situacao == SituacaoModelo.APROVADA and cm.aprovado_por == admin_ti
 
 
 def test_autoaprovacao_quando_liberada(admin_ti, ti, politica, settings):
@@ -140,7 +145,7 @@ def test_fluxo_pelo_chat(client, admin_ti, aprovador, ti):
     dados = _dados(ti)
     dados["tabela"] = "SE1"
     html = client.post(reverse("chat:aprender_salvar", args=[c.pk]), dados, HTTP_HX_REQUEST="true").content.decode()
-    assert "Aguardando aprovação" in html and "Aprovar</button>" not in html  # autor não aprova
+    assert "Aguardando aprovação" in html and "Aprovar</button>" in html  # M81: a TI aprova a própria proposta
     cm = ConsultaModelo.objects.get()
     client.force_login(aprovador)
     # O aprovador não vê a conversa individual do Diego: aprova pelo admin ou por uma conversa sua.

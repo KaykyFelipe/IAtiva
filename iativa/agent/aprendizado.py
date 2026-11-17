@@ -272,6 +272,11 @@ def criar_automatico(user, consulta: dict) -> ConsultaModelo:
     if consulta.get("filtros"):
         # Criação e critérios são uma única transação: nunca aprovar/executar a versão sem o filtro.
         cm = ajustar_filtros(user, cm, consulta["filtros"], [], criacao=True)
+    from iativa.accounts.authz import e_da_ti
+    if not e_da_ti(user):
+        # M81: fora da TI, a fonte nova fica como proposta até a TI autorizar (a IA não a usa antes disso).
+        registrar("parametro_registrado", "agente", usuario=user, entidade_id=cm.pk, estado_novo="fonte_proposta")
+        return cm
     cm.situacao, cm.aprovado_por, cm.aprovado_em = SituacaoModelo.APROVADA, user, timezone.now()
     cm.save(update_fields=["situacao", "aprovado_por", "aprovado_em"])
     registrar("parametro_aprovado", "agente", usuario=user, entidade_id=cm.pk, estado_novo="modelo_aprovado_automatico")
@@ -374,13 +379,10 @@ def pode_aprovar(user, cm) -> bool:
         return False
     from iativa.accounts.authz import permissao_geral
 
-    if permissao_geral(user):
-        return True  # M40: permissão geral (TI) aprova na hora, inclusive a própria consulta
-    if cm.criado_por_id == user.pk and not _autoaprovacao():
-        return False
-    if tem_permissao(user, Permissao.APROVAR_CONHECIMENTO):
-        return True
-    return any(tem_permissao(user, Permissao.APROVAR_CONHECIMENTO, s) for s in cm.setores.all())
+    # M81 (etapa 4, Diego: "T.I aprova"): fonte nova vira consulta oficial só com aprovação da TI (permissão
+    # geral ou administrador/aprovador do setor TI). Qualquer usuário autorizado pode PROPOR.
+    from iativa.accounts.authz import e_da_ti
+    return e_da_ti(user)
 
 
 @transaction.atomic

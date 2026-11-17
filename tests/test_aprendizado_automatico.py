@@ -24,6 +24,7 @@ def ana(novo_usuario, politica):
     cob = Department.objects.get(codigo="financeiro-cobranca")
     u = novo_usuario("ana", cob)  # sem administrar: só consulta
     politica(u, cob, consultar=True, filiais=["01"])
+    politica(u, __import__("iativa.accounts.models", fromlist=["Department"]).Department.objects.get(codigo="ti"), administrar=True)  # M81: a IA só aprova fonte nova para a TI
     return u
 
 

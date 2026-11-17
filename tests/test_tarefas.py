@@ -40,6 +40,7 @@ def base(erp_sintetico, settings, novo_usuario, politica):
     cob = Department.objects.get(codigo="financeiro-cobranca")
     admin = novo_usuario("diego", cob)
     politica(admin, cob, consultar=True, administrar=True, aprovar_conhecimento=True, filiais=["01", "02", "03"])
+    politica(admin, __import__("iativa.accounts.models", fromlist=["Department"]).Department.objects.get(codigo="ti"), administrar=True)  # M81: TI aprova fontes
     q = QueryDict(mutable=True)
     q.update({"nome": "Funcionarios demitidos", "campo_data": "RA_DEMISSA"})
     q.setlist("colunas", ["RA_MAT", "RA_NOME", "RA_ADMISSA", "RA_DEMISSA"])
