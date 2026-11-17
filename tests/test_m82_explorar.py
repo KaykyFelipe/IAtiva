@@ -29,3 +29,17 @@ def test_sem_tabela_no_dicionario_continua_pedindo_esclarecimento(base, monkeypa
     c = conversas.nova_individual(base['admin'])
     with pytest.raises(ValidationError, match='esclarecer'):
         planejamento.preparar(base['admin'], c, TEXTO, FakeProvider([], analises=[_analise('ambigua', [])]), [])
+
+
+def test_continuacao_do_mesmo_setor_nao_pede_esclarecimento(base, monkeypatch):
+    """M84: confiança baixa, mas setor válido e mesmo assunto da última consulta da conversa: segue."""
+    monkeypatch.setattr(planejamento, '_explorar_dicionario', lambda user, texto: False)
+    monkeypatch.setattr(planejamento, '_continua_assunto', lambda conversa, alvos: True)
+    c = conversas.nova_individual(base['admin'])
+    a = planejamento.preparar(base['admin'], c, 'tem observação do item X?',
+                              FakeProvider([], analises=[_analise('dados', [base['cob'].codigo], 0.6)]), [])
+    assert a['natureza'] == 'dados'
+    monkeypatch.setattr(planejamento, '_continua_assunto', lambda conversa, alvos: False)
+    with pytest.raises(ValidationError, match='esclarecer'):
+        planejamento.preparar(base['admin'], c, 'tem observação do item X?',
+                              FakeProvider([], analises=[_analise('dados', [base['cob'].codigo], 0.6)]), [])

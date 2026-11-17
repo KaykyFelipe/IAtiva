@@ -94,6 +94,11 @@ def preparar(user, conversa, texto, provedor, historico):
         raise FalhaModelo('Setores inválidos.')
     sem_setor = analise['natureza'] == 'dados' and (not alvos or not set(alvos) <= {s['codigo'] for s in setores})
     incerta = analise['natureza'] == 'ambigua' or confianca < .85
+    if (incerta and analise['natureza'] == 'dados' and confianca >= .5 and alvos and set(alvos) <= set(permitidos)
+            and _continua_assunto(conversa, alvos)):
+        # M84: "tem observação do item X?" logo após listar solicitações de compra: o assunto é o da conversa.
+        # Setor válido e autorizado + continuação do mesmo domínio: não pede esclarecimento.
+        incerta = False
     if (sem_setor or (incerta and analise['natureza'] != 'fora')) and _explorar_dicionario(user, texto):
         # M82: assunto que nenhum setor cadastrado cobre (ex.: compras), mas o dicionário do Protheus tem tabela
         # para ele: a IA procura e aprende sozinha (aprender_tabela) em vez de pedir para a pessoa esclarecer.
@@ -119,6 +124,23 @@ def preparar(user, conversa, texto, provedor, historico):
         raise FalhaModelo('Entregas inválidas.')
     from . import contagem as admissoes, entregas, comparacao
     return comparacao.planejar(texto, entregas.planejar(texto, admissoes.planejar(texto, {**analise, 'setores': sorted(set(alvos)), 'contextos': entrada.planejamento['contextos_recuperados']}, user)))
+
+
+def _continua_assunto(conversa, alvos) -> bool:
+    """M84: a última consulta desta conversa é do mesmo setor que o pedido foi classificado."""
+    s = conversa.solicitacoes.exclude(objetivo="").order_by("-id").first() if conversa is not None else None
+    if s is None:
+        return False
+    codigo = getattr(s.setor, 'codigo', '')
+    if codigo in alvos:
+        return True
+    from .contratos import OBJETIVOS
+    obj = OBJETIVOS[s.objetivo] if s.objetivo in OBJETIVOS else None
+    if obj is not None and obj.modelo_id:
+        from .models import FonteSetorial
+        fonte = FonteSetorial.objects.filter(tabela=obj.tabelas[0]).first()
+        return fonte is not None and bool(set(fonte.setores) & set(alvos))
+    return False
 
 
 def _explorar_dicionario(user, texto) -> bool:
