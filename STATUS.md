@@ -4,6 +4,10 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **Etapa 7 aprovada em 2026-11-16 por Diego; em andamento.** Feito: roteiro do piloto (`docs/piloto/ROTEIRO.md`) e auditoria de não armazenamento (`manage.py auditar_armazenamento`). Falta: usuários do Financeiro, conferência dos números com relatórios do Protheus, avaliação da interpretação e latência. Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M70 — texto de cima estável na consulta por filial (2026-11-17)
+
+- Durante "Consultando o ERP — filial", junções e total no banco, o passo atual mostra "Consultando no banco…" (sem trocar a cada filial); o detalhe por filial continua na seta.
+
 ## Mudança M69 — pedido misto fecha quando todas as entregas conferem; etapas recolhíveis (2026-11-17)
 
 - Pedido #52: comparação e lista foram entregues no 2º passo, mas a exigência "cálculo" do 1º passo barrava o fim; o pedido repetia a ação e terminava com "O cálculo pedido ainda não foi feito". Agora, com várias entregas, todas conferidas = cumprido.

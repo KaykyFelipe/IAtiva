@@ -321,9 +321,14 @@
         }
         const seta = bolha.querySelector("[data-pensando-seta]");
         if (seta) seta.hidden = !lista.children.length;
-        agora.textContent = passos[passos.length - 1] + "…";
+        // M70: consulta filial por filial não troca o texto de cima a cada filial (o detalhe fica na seta).
+        const ultimo = passos[passos.length - 1];
+        const texto = /^(Consultando o ERP —|Conferindo se as junções|Calculando o total no banco)/.test(ultimo)
+          ? "Consultando no banco" : ultimo;
+        const mudouTexto = agora.textContent !== texto + "…";
+        agora.textContent = texto + "…";
         if (window.IAtivaMascote) IAtivaMascote.estado(IAtivaMascote.etapa(agora.textContent));
-        agora.classList.remove("trocou"); void agora.offsetWidth; agora.classList.add("trocou");
+        if (mudouTexto) { agora.classList.remove("trocou"); void agora.offsetWidth; agora.classList.add("trocou"); }
         vistos = passos.length;
         rolarParaFim();
       })
