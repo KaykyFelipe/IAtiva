@@ -4,6 +4,16 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **Etapa 7 aprovada em 2026-11-16 por Diego; em andamento.** Feito: roteiro do piloto (`docs/piloto/ROTEIRO.md`) e auditoria de não armazenamento (`manage.py auditar_armazenamento`). Falta: usuários do Financeiro, conferência dos números com relatórios do Protheus, avaliação da interpretação e latência. Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M65 — defeitos reproduzidos na auditoria de 17/11 (2026-11-17)
+
+Base: `AUDITORIA-IATIVA-2026-11-17.md` (fornecida por Diego) e o prompt de melhorias. Etapa 1 do prompt concluída; etapas 2–5 pendentes.
+
+- Validador AST (segunda barreira): exclusão lógica (`= ' '` exato) e filial agora precisam ser termos de AND no nível de cima, na tabela certa (WHERE da base, ON da junção), contra literal/parâmetro. Recusados: filial dentro de OR sempre verdadeiro, NOT, valor de exclusão errado, autoigualdade, filtro de outra tabela, TOP 0. O SQL do compilador continua aceito.
+- Pedidos mistos: comparação de faturamento troca só a entrega de comparação e preserva as outras perguntas; lista com "calcule/diferença/percentual/variação/projeção" deixa de apagar o cálculo.
+- Coluna parecida não é prova: "Valor original" não atende saldo, "Nome abreviado"/fantasia não atende nome; quando o campo do dicionário é conhecido, ele decide (E1_SALDO, RA_NOMECMP). Títulos a vencer/posição rotulam "Saldo em aberto" ou "Valor original" conforme o tratamento.
+- "Inativos", "desligados", "não estão ativos" não aplicam mais o filtro de ativos (antes `ativ` casava "inativos").
+- Regressões em `tests/test_auditoria_m63.py`: 15 falham no código anterior e passam agora; suíte 933 passando.
+
 ## Mudança M64 — entregas detalhadas por setor (2026-11-17)
 
 - Incorpora a correção automática 884d393 que separa lista de funcionários com função atual de histórico individual. A nova verificação exige os campos expressamente pedidos; agregados não satisfazem nome/função/admissão ou cliente/vencimento/saldo. "Por filial" organiza a lista quando há detalhes; indicadores e rankings continuam agregados.

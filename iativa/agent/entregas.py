@@ -4,7 +4,14 @@ from dataclasses import replace
 from .periodo import _norm
 
 PADROES = {'nome': r'nome', 'funcao': r'fun[cç][aã]o|cargo', 'admissao': r'admi',
-           'cliente': r'cliente|nome', 'vencimento': r'venc', 'saldo': r'saldo|valor', 'filial': r'filia'}
+           'cliente': r'cliente|nome', 'vencimento': r'venc', 'saldo': r'saldo', 'filial': r'filia',
+           'nome_completo': r'nome\s*compl|nomecmp'}
+# M63 (auditoria 17/11): rótulo parecido não prova o dado. "Valor original" não é saldo em aberto;
+# "Nome abreviado"/"Fantasia" não é nome completo. O campo do dicionário, quando conhecido, decide.
+CAMPOS_EXATOS = {'saldo': r'_SALDO$', 'nome_completo': r'_NOMECMP$|^A1_NOME$|^A2_NOME$',
+                 'nome': r'_NOME$|_NOMECMP$', 'admissao': r'_ADMISSA$'}
+NAO_E = {'nome': r'abrev|reduz|fantasia|apelido', 'nome_completo': r'abrev|reduz|fantasia|apelido',
+         'saldo': r'original|emitid|bruto'}
 
 
 def campos(texto):
@@ -25,12 +32,34 @@ def somente_lista(texto):
         return False
     if re.search(r'faturamento|receita|lucro',t) and not re.search(r'notas|documento|itens',t):
         return False
-    return bool(campos(texto)) and not re.search(r'histor|linha do tempo|mudanc|exerceu|anteriores|\b(quantos|quantas|some|soma|total|media|ranking|maiores|menores|compare|comparar)\b',_norm(texto))
+    return bool(campos(texto)) and not re.search(r'histor|linha do tempo|mudanc|exerceu|anteriores|calcul|diferenc|percent|variac|projec|\b(quantos|quantas|some|soma|total|media|ranking|maiores|menores|compare|comparar)\b',_norm(texto))
 
 
-def faltam(rotulos, exigidos):
-    return [c for c in exigidos if not any(re.search(PADROES[c],_norm(r)) and not (
-        c=='funcao' and re.search(r'cod|codigo',_norm(r))) for r in rotulos)]
+def quer_ativos(texto) -> bool:
+    """M63: "ativos" restringe aos ativos; "inativos", "desligados", "não ativos" não (antes r'ativ' casava "inativos")."""
+    t = _norm(texto)
+    if re.search(r'\binativ|\bdesligad|\bdemitid|\b(nao|sem)\s+(estao\s+)?ativ|\bex[- ]?funcionari', t):
+        return False
+    return bool(re.search(r'\bativ[oa]s?\b', t))
+
+
+def _atende(coluna, exigido) -> bool:
+    if isinstance(coluna, dict):
+        rotulo, campo = _norm(coluna.get('rotulo', '')), str(coluna.get('campo', '')).upper()
+    else:
+        rotulo, campo = _norm(coluna), ''
+    if campo and exigido in CAMPOS_EXATOS:
+        return bool(re.search(CAMPOS_EXATOS[exigido], campo))
+    if exigido in NAO_E and re.search(NAO_E[exigido], rotulo):
+        return False
+    if exigido == 'funcao' and re.search(r'cod|codigo', rotulo):
+        return False
+    return bool(re.search(PADROES[exigido], rotulo))
+
+
+def faltam(colunas, exigidos):
+    """Exigidos que nenhuma coluna atende. `colunas`: rótulos ou {"campo", "rotulo"} (o campo decide)."""
+    return [c for c in exigidos if not any(_atende(col, c) for col in colunas)]
 
 
 def planejar(texto, analise):
@@ -63,8 +92,13 @@ def orientar(user, texto, d, objetivos):
     if re.search(r'funcionari|colaborador',_norm(texto)):
         from .models import ConsultaModelo
         modelos=ConsultaModelo.objects.filter(codigo__in=[o.codigo for o in objetivos if o.modelo_id],tabela='SRA',situacao='aprovada')
-        bons=[m for m in modelos if not faltam([c['rotulo'] for c in m.spec.get('colunas',[])],[c for c in campos(texto) if c!='filial'])]
-        if re.search(r'ativ',_norm(texto)):
+        pedidos=[c for c in campos(texto) if c!='filial']
+        bons=[m for m in modelos if not faltam(m.spec.get('colunas',[]),pedidos)]
+        if re.search(r'nome\s+complet',_norm(texto)):
+            # M63: "nome completo" prefere a consulta com o nome completo do cadastro (RA_NOMECMP); sem ela, o
+            # nome do cadastro (nunca abreviado/fantasia, ver NAO_E) é o mais próximo disponível.
+            bons.sort(key=lambda m: bool(faltam(m.spec.get('colunas',[]),['nome_completo'])))
+        if quer_ativos(texto):
             bons=[m for m in bons if any(f['campo']=='RA_SITFOLH' and f.get('op')=='<>' and f.get('valor')=='D'
                   for f in m.spec.get('filtros_fixos',[]))]
         cm=next((m for m in bons if m.codigo==objetivo),bons[0] if bons else None)

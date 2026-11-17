@@ -479,5 +479,6 @@ def _colunas_titulo(valor: Campo) -> list[Coluna]:
         Coluna("Tipo", Campo(e1, "E1_TIPO")),
         Coluna("Emissão", Campo(e1, "E1_EMISSAO"), tipo="data"),
         Coluna("Vencimento real", Campo(e1, "E1_VENCREA"), tipo="data"),
-        Coluna("Valor", valor, tipo="dinheiro"),
+        # M63: o rótulo diz qual valor é (a verificação não confunde saldo com valor original).
+        Coluna("Saldo em aberto" if valor.nome == "E1_SALDO" else "Valor original", valor, tipo="dinheiro"),
     ]

@@ -19,8 +19,11 @@ def periodos(texto):
 
 def planejar(texto,analise):
     if not periodos(texto): return analise
+    # M63: troca só a entrega de cálculo/comparação de faturamento; as outras perguntas da mensagem continuam.
+    outras=[dict(e) for e in analise.get('entregas',[])
+            if not (e.get('tipo')=='calculo' and re.search(r'fatur|compar|variac',_norm(e.get('descricao',''))))]
     return {**analise,'entregas':[{'descricao':'Comparar os dois meses por filial, com diferença e variação percentual',
-        'tipo':'calculo','metrica':'comparacao','comparacao':True}]}
+        'tipo':'calculo','metrica':'comparacao','comparacao':True}]+outras}
 
 
 def executar(user,c,d,defs,objetivos,texto):
