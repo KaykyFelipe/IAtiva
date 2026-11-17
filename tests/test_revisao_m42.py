@@ -161,5 +161,5 @@ def test_falha_ao_guardar_nao_marca_ensinamento_como_feito(ana, monkeypatch):
         _d(resposta="Anotado e concluído."),
     ])
     msg, _ = conversas.enviar(ana, c, "some os títulos e guarde: use o saldo", p)
-    assert not NotaAgente.objects.exists()
+    assert not NotaAgente.objects.exclude(evidencia__startswith="consulta ").exists()  # M82: a fonte aprendida fica na memória
     assert not Objetivo.objects.filter(conversa=c, situacao=SituacaoObjetivo.CUMPRIDO).exists()

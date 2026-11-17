@@ -92,9 +92,21 @@ def preparar(user, conversa, texto, provedor, historico):
         raise FalhaModelo('Classificação sem confiança ou setores válidos.')
     if any(not isinstance(s, str) for s in alvos):
         raise FalhaModelo('Setores inválidos.')
-    if analise['natureza'] == 'dados' and (not alvos or not set(alvos) <= {s['codigo'] for s in setores}):
+    sem_setor = analise['natureza'] == 'dados' and (not alvos or not set(alvos) <= {s['codigo'] for s in setores})
+    incerta = analise['natureza'] == 'ambigua' or confianca < .85
+    if (sem_setor or (incerta and analise['natureza'] != 'fora')) and _explorar_dicionario(user, texto):
+        # M82: assunto que nenhum setor cadastrado cobre (ex.: compras), mas o dicionário do Protheus tem tabela
+        # para ele: a IA procura e aprende sozinha (aprender_tabela) em vez de pedir para a pessoa esclarecer.
+        analise = {**analise, 'natureza': 'dados', 'confianca': max(confianca, .85),
+                   'setores': sorted(set(permitidos)), 'explorar_dicionario': True,
+                   'orientacao': ('Nenhuma consulta conhecida cobre este assunto, mas o dicionário do Protheus tem '
+                                  'tabelas para ele. Use aprender_tabela com o assunto do pedido (ex.: "solicitações '
+                                  'de compra") antes de perguntar qualquer coisa à pessoa.')}
+        alvos = analise['setores']
+        sem_setor = incerta = False
+    if sem_setor:
         raise ValidationError('De qual setor são os dados que você deseja consultar?')
-    if analise['natureza'] == 'ambigua' or confianca < .85:
+    if incerta:
         raise ValidationError('Preciso esclarecer o assunto antes de consultar: qual informação você deseja obter?')
     if not set(alvos) <= set(permitidos):
         raise PermissaoNegada('Seu usuário não tem autorização para os setores envolvidos neste pedido. Solicite acesso à Diretoria ou TI.')
@@ -107,6 +119,18 @@ def preparar(user, conversa, texto, provedor, historico):
         raise FalhaModelo('Entregas inválidas.')
     from . import contagem as admissoes, entregas, comparacao
     return comparacao.planejar(texto, entregas.planejar(texto, admissoes.planejar(texto, {**analise, 'setores': sorted(set(alvos)), 'contextos': entrada.planejamento['contextos_recuperados']}, user)))
+
+
+def _explorar_dicionario(user, texto) -> bool:
+    """M82: o pedido fala de dados que o dicionário do ERP tem (tabela encontrada pelos termos do pedido) e a
+    pessoa pode fazer a IA aprender consultas novas. Só estrutura do dicionário; nenhuma linha do ERP."""
+    from .aprendizado import candidatos, pode_aprender_sozinho
+    if not pode_aprender_sozinho(user) or len(texto.split()) < 3:
+        return False
+    try:
+        return bool(candidatos(user, texto, limite=1, automatico=True))
+    except Exception:
+        return False
 
 
 def conferir(analise, decisao, saida):

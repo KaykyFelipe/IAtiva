@@ -1385,6 +1385,20 @@ def _campos_para_modelo(user, alias):
     return {"tabela": info["alias"], "nome": info["nome"], "campos": campos[:150], "juncoes_possiveis": juncoes}
 
 
+def _lembrar_fonte(user, cm):
+    """M82: o que a IA aprendeu sozinha fica na memória (visível em Memória e aprovações): o assunto, a consulta
+    e a tabela do Protheus. Só estrutura; nunca nomes, valores ou linhas do ERP."""
+    from .models import EscopoNota, NotaAgente, TipoNota
+    texto = (f"Para perguntas sobre {cm.descricao or cm.nome}, use a consulta “{cm.nome}” (tabela {cm.tabela} do "
+             f"Protheus), aprendida pela IA.")[:300]
+    try:
+        if not NotaAgente.objects.filter(texto=texto, ativo=True).exists():
+            NotaAgente.objects.create(texto=texto, tipo=TipoNota.TERMO, escopo=EscopoNota.EMPRESA, criado_por=user,
+                                      aprovado_por=user, aprovado_em=timezone.now(), evidencia=f"consulta {cm.codigo}"[:300])
+    except Exception:
+        pass  # a memória é auxiliar: nunca impede a resposta
+
+
 def _aprender_sozinho(user, c, d, texto, ficha, provedor, entrada, atual, motivo=None):
     motivo = motivo if motivo is not None else []
     consulta = d.consulta
@@ -1428,6 +1442,7 @@ def _aprender_sozinho(user, c, d, texto, ficha, provedor, entrada, atual, motivo
                      "a TI autorizar; assim que for autorizada, é só perguntar de novo.",
                      {**ficha, "tipo": "bloqueada", "fonte_proposta": cm.pk})
     registrar("interpretacao", "agente", usuario=user, estado_novo="aprendeu_sozinho", entidade_id=cm.pk)
+    _lembrar_fonte(user, cm)
     codigos = set(OBJETIVOS[cm.codigo].parametros)
     defs = orq._definicoes(sorted(codigos))
     d3 = replace(d, acao="preparar_consulta", objetivo=cm.codigo,
