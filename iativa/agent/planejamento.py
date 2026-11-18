@@ -20,7 +20,7 @@ class FonteInconclusiva(ValueError):
     """A descoberta pode continuar, mas esta fonte ainda não pode ser executada."""
 
 
-def autorizar_fonte(user, provedor, alias):
+def autorizar_fonte(user, provedor, alias, *, conversa=None, transversais=None):
     """Inferência por metadados do dicionário, sem linhas nem mapeamento manual de tabelas."""
     import hashlib
     import json
@@ -38,6 +38,8 @@ def autorizar_fonte(user, provedor, alias):
                             for c in selecionados]}
     usos = []
     for cm in ConsultaModelo.objects.filter(situacao='aprovada').order_by('pk').iterator():
+        if cm.spec.get("leitura_transversal"):
+            continue
         if alias == cm.tabela or alias in {j['tabela'] for j in cm.spec.get('juncoes', [])}:
             usos.append({'nome': cm.nome, 'descricao': cm.descricao, 'fonte_principal': cm.tabela,
                          'setores_da_receita': sorted(cm.setores.values_list('codigo', flat=True)),
@@ -62,6 +64,11 @@ def autorizar_fonte(user, provedor, alias):
                 or not .85 <= a['confianca'] <= 1 or not isinstance(a.get('setores'), list) or not a['setores']
                 or any(not isinstance(s, str) for s in a['setores'])
                 or not set(a['setores']) <= {s['codigo'] for s in setores}):
+            from iativa.accounts.authz import leitura_de_todos_os_setores
+            if (transversais is not None and conversa is not None and conversa.tipo == "individual"
+                    and conversa.usuario_id == user.pk and permitidos and leitura_de_todos_os_setores(user, [alias])):
+                transversais.add(alias)
+                return set(permitidos)
             raise FonteInconclusiva(f'O dicionário confirma {alias}, mas o setor da fonte ainda é inconclusivo.')
         fonte, _ = FonteSetorial.objects.update_or_create(tabela=alias, defaults={
             'assinatura': assinatura, 'setores': sorted(set(a['setores'])), 'confianca': a['confianca']})

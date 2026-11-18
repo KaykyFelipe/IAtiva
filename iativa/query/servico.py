@@ -361,6 +361,7 @@ def _executar_solicitacao(user, s: RequestContext) -> Resultado:
             ERRO_METADADOS if conferencia.mensagem in (orquestrador.MOTIVOS["metadados_indisponiveis"],
                                                        orquestrador.MOTIVOS["fonte_ausente"]) else SEM_PERMISSAO)
         return Resultado(False, conferencia.mensagem, estado=s.estado, solicitacao=s, situacao=situacao)
+    transversais = set()
     if s.objetivo.startswith(PREFIXO_APRENDIDO):
         from iativa.agent.planejamento import FonteInconclusiva, autorizar_fonte
         from iativa.agent.provedores import FalhaModelo
@@ -372,9 +373,16 @@ def _executar_solicitacao(user, s: RequestContext) -> Resultado:
         from iativa.agent.aprendizado import camada_por_codigo
         camada = camada_por_codigo(user, s.objetivo)
         juncoes = cm.spec.get('juncoes', []) + camada.get('juncoes', [])
+        aliases = list(dict.fromkeys([cm.tabela] + [j["tabela"] for j in juncoes]))
         try:
-            for alias in dict.fromkeys([cm.tabela] + [j['tabela'] for j in juncoes]):
-                setores = autorizar_fonte(user, None, alias)
+            if cm.spec.get("leitura_transversal"):
+                from iativa.accounts.authz import leitura_de_todos_os_setores
+                if (cm.criado_por_id != user.pk or s.conversa.tipo != "individual" or s.conversa.usuario_id != user.pk
+                        or not leitura_de_todos_os_setores(user, aliases)):
+                    raise PermissaoNegada("A consulta depende de acesso vigente às mesmas filiais em todos os setores.")
+                transversais.update(aliases)
+            for alias in aliases:
+                setores = autorizar_fonte(user, None, alias, conversa=s.conversa, transversais=transversais)
                 if s.setor.codigo not in setores:
                     raise PermissaoNegada("A fonte não é autorizada para o setor desta solicitação.")
         except FonteInconclusiva as exc:
@@ -615,6 +623,8 @@ def _executar_solicitacao(user, s: RequestContext) -> Resultado:
                  "agregacao": expressao_validada(valores.get(AGREGACAO, ""), cm.spec)}
         receitas.registrar_validacao(cm, prova)
     res.escopo = escopo_do_plano(plano, s.setor_id, filiais)
+    if transversais:
+        res.escopo["fontes_transversais"] = sorted(transversais)
     return res
 
 

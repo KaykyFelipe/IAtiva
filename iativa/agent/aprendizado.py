@@ -244,7 +244,7 @@ def _busca_por_pessoa(busca, colunas, por_nome):
 
 
 @transaction.atomic
-def criar_automatico(user, consulta: dict, setores_confirmados=None) -> ConsultaModelo:
+def criar_automatico(user, consulta: dict, setores_confirmados=None, leitura_transversal=False) -> ConsultaModelo:
     """M18: a IA montou a consulta; o sistema confere, cria e já aprova (sem revisão humana).
     Colunas sensíveis são descartadas; setores = os que a pessoa consulta."""
     from iativa.accounts.authz import Permissao, setores_autorizados
@@ -272,7 +272,9 @@ def criar_automatico(user, consulta: dict, setores_confirmados=None) -> Consulta
     }
     if not dados["setores"]:
         raise PermissaoNegada("Sem setor para usar a consulta.")
-    igual = ConsultaModelo.objects.filter(tabela=alias, nome=dados["nome"], situacao=SituacaoModelo.APROVADA).first()
+    modelos = ConsultaModelo.objects.filter(tabela=alias, nome=dados["nome"])
+    igual = next((m for m in modelos.filter(situacao=SituacaoModelo.APROVADA)
+                  if not m.spec.get("leitura_transversal") or m.criado_por_id == user.pk), None)
     if igual is not None:
         if (dados["campo_data"] and igual.spec.get("campo_data") != dados["campo_data"]
                 or not set(colunas) <= {c["campo"] for c in igual.spec.get("colunas", [])}):
@@ -288,7 +290,7 @@ def criar_automatico(user, consulta: dict, setores_confirmados=None) -> Consulta
         return igual
     from iativa.accounts.authz import e_da_ti as _ti
     pendente = ConsultaModelo.objects.filter(tabela=alias, nome=dados["nome"], situacao=SituacaoModelo.PROPOSTA).first()
-    if pendente is not None and not consulta.get("filtros") and not consulta.get("juncoes"):
+    if pendente is not None and not leitura_transversal and not consulta.get("filtros") and not consulta.get("juncoes"):
         # M82: a mesma fonte já proposta não vira outra proposta; a TI a aprova ao pedir de novo.
         if not _ti(user):
             return pendente
@@ -297,6 +299,9 @@ def criar_automatico(user, consulta: dict, setores_confirmados=None) -> Consulta
         registrar("parametro_aprovado", "agente", usuario=user, entidade_id=pendente.pk, estado_novo="fonte_aprovada_ti")
         return pendente
     cm = salvar_proposta(user, alias, dados, automatico=True)
+    if leitura_transversal:
+        cm.spec = {**cm.spec, "leitura_transversal": True}
+        cm.save(update_fields=["spec"])
     pedidas = consulta.get("juncoes") or []
     if pedidas:
         possiveis = {j["tabela"]: j for j in juncoes_possiveis(user, alias)}

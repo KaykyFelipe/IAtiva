@@ -49,6 +49,10 @@ def _permitido(user, escopo):
     # Cálculo só sobre datas digitadas pela pessoa (sem ERP): não depende de setor nem filial.
     if escopo == ESCOPO_CALENDARIO:
         return True
+    if escopo.get("fontes_transversais"):
+        from iativa.accounts.authz import leitura_de_todos_os_setores
+        if not leitura_de_todos_os_setores(user, escopo["fontes_transversais"]):
+            return False
     setor = Department.objects.filter(pk=escopo.get("setor"), ativo=True).first()
     if not setor or not tem_permissao(user, Permissao.CONSULTAR, setor):
         return False

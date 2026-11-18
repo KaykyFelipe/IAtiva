@@ -115,6 +115,23 @@ def filiais_autorizadas(user, setor: Department, agora=None) -> frozenset[str]:
     return frozenset(filiais)
 
 
+def leitura_de_todos_os_setores(user, aliases):
+    """Prova independente do modelo para uma fonte sem setor: mesmos direitos em qualquer classificação possível."""
+    from iativa.metadata.models import RestricaoMetadado
+    if not _usuario_valido(user):
+        return False
+    perfil = UserProfile.objects.filter(user=user, department__ativo=True).select_related("department").first()
+    if not perfil or not ({perfil.funcao, perfil.department.codigo} & {"ti", "diretoria"}):
+        return False
+    if RestricaoMetadado.objects.filter(ativo=True, tabela__in=aliases).exists():
+        return False
+    escopos = {pk: set() for pk in Department.objects.filter(ativo=True).values_list("pk", flat=True)}
+    for setor, filiais in politicas_vigentes(user).filter(pode_consultar=True, department_id__in=escopos).values_list(
+            "department_id", "filiais"):
+        escopos[setor].update(filiais)
+    return bool(escopos) and all(escopos.values()) and len({frozenset(fs) for fs in escopos.values()}) == 1
+
+
 def exigir(user, permissao: Permissao, setor: Department | None = None, agora=None) -> None:
     if tem_permissao(user, permissao, setor, agora):
         return

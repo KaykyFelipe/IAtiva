@@ -1567,7 +1567,7 @@ def _aprender_sozinho(user, c, d, texto, ficha, provedor, entrada, atual, motivo
             if indicadas and d.alvo == " ".join(indicadas):
                 from .planejamento import FonteInconclusiva, autorizar_fonte
                 try:
-                    autorizar_fonte(user, provedor, item["alias"])
+                    autorizar_fonte(user, provedor, item["alias"], conversa=c, transversais=set())
                 except FonteInconclusiva as exc:
                     motivo.append(str(exc))
                     continue
@@ -1601,10 +1601,12 @@ def _aprender_sozinho(user, c, d, texto, ficha, provedor, entrada, atual, motivo
     try:
         from .planejamento import FonteInconclusiva, autorizar_fonte
         setores = None
+        transversais = set()
         for alias in dict.fromkeys([consulta['tabela']] + [j['tabela'] for j in consulta.get('juncoes', [])]):
-            autorizados = autorizar_fonte(user, provedor, alias)
+            autorizados = autorizar_fonte(user, provedor, alias, conversa=c, transversais=transversais)
             setores = autorizados if setores is None else setores & autorizados
-        cm = aprendizado.criar_automatico(user, consulta, setores_confirmados=setores)
+        cm = aprendizado.criar_automatico(user, consulta, setores_confirmados=setores,
+                                         leitura_transversal=bool(transversais))
     except PermissaoNegada as exc:
         return Saida(str(exc), {**ficha, 'tipo': 'bloqueada'},
                      observacao=Observacao(d.acao, SEM_PERMISSAO, str(exc)))
@@ -1628,7 +1630,8 @@ def _aprender_sozinho(user, c, d, texto, ficha, provedor, entrada, atual, motivo
                  parametros=tuple((k, v) for k, v in d.parametros if k in codigos),
                  resposta=(f"Aprendi a consultar “{cm.nome}” ({cm.tabela}). " + (d.resposta or "")).strip())
     saida = _preparar(user, c, d3, atual, defs, ficha, texto)
-    if getattr(saida.resultado, "ok", False) and not getattr(saida.resultado, "legenda_pendente", ""):
+    if (getattr(saida.resultado, "ok", False) and not cm.spec.get("leitura_transversal")
+            and not getattr(saida.resultado, "legenda_pendente", "")):
         _lembrar_fonte(user, cm, saida.solicitacao.setor)
     return saida
 

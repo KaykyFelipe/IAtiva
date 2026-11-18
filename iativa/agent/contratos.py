@@ -147,5 +147,5 @@ def objetivos_para(user) -> list[Objetivo]:
     setores = setores_autorizados(user, Permissao.CONSULTAR)
     if setores:
         modelos = ConsultaModelo.objects.filter(situacao=SituacaoModelo.APROVADA, setores__in=setores).distinct()
-        out += [de_modelo(cm) for cm in modelos]
+        out += [de_modelo(cm) for cm in modelos if not cm.spec.get("leitura_transversal") or cm.criado_por_id == user.pk]
     return out
