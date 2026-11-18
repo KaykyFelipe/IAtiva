@@ -4,6 +4,10 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **Etapa 7 aprovada em 2026-11-16 por Diego; em andamento.** Feito: roteiro do piloto (`docs/piloto/ROTEIRO.md`) e auditoria de não armazenamento (`manage.py auditar_armazenamento`). Falta: usuários do Financeiro, conferência dos números com relatórios do Protheus, avaliação da interpretação e latência. Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M97 — setor Operações (2026-11-18)
+
+- Setor Operações criado; ST9 classificada nele. Teste no servidor: "disponibilidade atual dos bens da ST9" trouxe 3626 bens em 18 s; "taxa de ocupação dos ativos" agrupou por status e perguntou qual status significa ocupado (definição de negócio).
+
 ## Mudança M96 — opções de filial completas e tempo esgotado sem erro 500 (2026-11-18)
 
 - As opções do parâmetro mostram até 12 (8 filiais + "Todas as filiais"; antes cortava em 6).
