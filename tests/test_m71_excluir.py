@@ -15,7 +15,7 @@ def test_dono_exclui_a_propria_conversa(base, client):
     outra = conversas.nova_individual(base['caio'])
     client.force_login(base['ana'])
     assert client.post(reverse('chat:excluir', args=[outra.pk])).status_code == 404
-    assert client.get(reverse('chat:excluir', args=[c.pk])).status_code == 405
+    assert client.get(reverse('chat:excluir', args=[c.pk])).status_code == 302  # M87: GET volta à conversa
     assert client.post(reverse('chat:excluir', args=[c.pk])).status_code == 204
     assert not ConversationContext.objects.filter(pk=c.pk).exists()
     assert ConversationContext.objects.filter(pk=outra.pk).exists()
@@ -28,3 +28,12 @@ def test_lateral_tem_lixeira_e_conversa_parcial_por_htmx(base, client):
     assert 'data-excluir' in open('templates/chat/_lateral.html', encoding='utf-8').read()
     parcial = client.get(reverse('chat:conversa', args=[c.pk]), HTTP_HX_REQUEST='true').content.decode()
     assert 'id="conversa"' in parcial and '<html' not in parcial
+
+
+def test_endereco_de_envio_aberto_no_navegador_volta_para_a_conversa(base, client):
+    """M87: depois do login, voltar para /c/<id>/mensagem/ (só envio) leva à conversa, não ao erro 405."""
+    c = conversas.nova_individual(base['ana'])
+    client.force_login(base['ana'])
+    r = client.get(reverse('chat:mensagem', args=[c.pk]))
+    assert r.status_code == 302 and r.url == reverse('chat:conversa', args=[c.pk])
+    assert client.get(reverse('chat:nova')).url == reverse('chat:index')

@@ -8,7 +8,7 @@ import hashlib
 import json
 
 from django.core.exceptions import ValidationError
-from django.http import Http404, HttpResponse, JsonResponse
+from django.http import HttpResponseNotAllowed, Http404, HttpResponse, JsonResponse
 from django.template.loader import render_to_string
 from django.db.models import Max, Q
 from django.shortcuts import redirect, render
@@ -30,6 +30,24 @@ FRASES_INICIO = (
     "Por onde vamos começar hoje?", "Vamos olhar os dados juntos?",
 )
 
+
+
+def _so_post(view):
+    """M87: ação do chat só por envio (POST). Aberta pelo navegador (ex.: volta do login depois de a sessão
+    expirar no meio de um envio), leva à conversa em vez de mostrar "HTTP 405"."""
+    from functools import wraps
+
+    from django.shortcuts import redirect
+
+    @wraps(view)
+    def _view(request, *args, **kwargs):
+        if request.method == "POST":
+            return view(request, *args, **kwargs)
+        if request.method in ("GET", "HEAD"):
+            cid = kwargs.get("conversa_id")
+            return redirect("chat:conversa", conversa_id=cid) if cid else redirect("chat:index")
+        return HttpResponseNotAllowed(["POST"])
+    return _view
 
 def _pedido(request):
     """Id do envio gerado no navegador (para o botão "parar"); qualquer coisa fora do formato é ignorada."""
@@ -125,7 +143,7 @@ def _layout(request):
             "ampla": bool(l.get("ampla")), "recolhida": bool(l.get("recolhida"))}
 
 
-@require_POST
+@_so_post
 def layout(request):
     """Lembra só o layout da tela (largura da lateral, leitura expandida, lateral recolhida)."""
     try:
@@ -163,7 +181,7 @@ def sincronizar(request):
                          "conversa": render_to_string("chat/_conversa.html", ctx, request) if c else ""})
 
 
-@require_POST
+@_so_post
 def renomear(request, conversa_id):
     try:
         c = conversas.renomear(request.user, conversa_id, request.POST.get("titulo", ""))
@@ -174,7 +192,7 @@ def renomear(request, conversa_id):
     return HttpResponse(c.titulo)
 
 
-@require_POST
+@_so_post
 def excluir(request, conversa_id):
     try:
         conversas.excluir(request.user, conversa_id)
@@ -183,7 +201,7 @@ def excluir(request, conversa_id):
     return HttpResponse(status=204)
 
 
-@require_POST
+@_so_post
 def nova(request):
     """Primeira mensagem de uma conversa nova: cria a conversa e envia."""
     form = MessageForm(request.POST)
@@ -214,7 +232,7 @@ def _ir(request, c):
     return redirect(url)
 
 
-@require_POST
+@_so_post
 def mensagem(request, conversa_id):
     c = _obter(request, conversa_id)
     form = MessageForm(request.POST)
@@ -232,7 +250,7 @@ def mensagem(request, conversa_id):
     return _render(request, c, resultado=resultado, resultado_msg=msg.pk)
 
 
-@require_POST
+@_so_post
 def parametro(request, conversa_id):
     c = _obter(request, conversa_id)
     codigo = request.POST.get("codigo", "")[:60]
@@ -248,7 +266,7 @@ def parametro(request, conversa_id):
     return _render(request, c)
 
 
-@require_POST
+@_so_post
 def executar(request, conversa_id):
     c = _obter(request, conversa_id)
     try:
@@ -258,7 +276,7 @@ def executar(request, conversa_id):
     return _render(request, c, resultado=resultado, resultado_msg=msg.pk)
 
 
-@require_POST
+@_so_post
 def executar_de_novo(request, conversa_id, solicitacao_id):
     c = _obter(request, conversa_id)
     try:
@@ -268,7 +286,7 @@ def executar_de_novo(request, conversa_id, solicitacao_id):
     return _render(request, c, resultado=resultado, resultado_msg=msg.pk)
 
 
-@require_POST
+@_so_post
 def aprender(request, conversa_id):
     """Abre o formulário de aprendizado para a tabela escolhida (M9). O formulário é transitório."""
     c = _obter(request, conversa_id)
@@ -295,7 +313,7 @@ def _enviado_aprendizado(post=None) -> dict:
     }
 
 
-@require_POST
+@_so_post
 def aprender_salvar(request, conversa_id):
     c = _obter(request, conversa_id)
     alias = request.POST.get("tabela", "")[:3].upper()
@@ -311,7 +329,7 @@ def aprender_salvar(request, conversa_id):
     return _render(request, c)
 
 
-@require_POST
+@_so_post
 def aprender_decidir(request, conversa_id, modelo_id):
     c = _obter(request, conversa_id)
     try:
@@ -321,7 +339,7 @@ def aprender_decidir(request, conversa_id, modelo_id):
     return _render(request, c)
 
 
-@require_POST
+@_so_post
 def cancelar(request, conversa_id):
     c = _obter(request, conversa_id)
     conversas.cancelar_atual(request.user, c)
@@ -374,7 +392,7 @@ def memoria(request):
     return _render_memoria(request, request.GET.get("setor"))
 
 
-@require_POST
+@_so_post
 def memoria_decidir(request):
     from iativa.agent import memoria as mem
 
@@ -417,7 +435,7 @@ def memoria_decidir(request):
     return _render_memoria(request, request.POST.get("setor"), aviso=f"Proposta “{descricao}” {feito}.")
 
 
-@require_POST
+@_so_post
 def parar(request):
     """Botão "parar" do compositor: a resposta em andamento é descartada se a IA ainda não agiu."""
     pedido = _pedido(request)
@@ -445,7 +463,7 @@ def tarefa(request, tarefa_id):
     return render(request, "chat/_tarefa.html", {"tarefa": t})
 
 
-@require_POST
+@_so_post
 def tarefa_cancelar(request, tarefa_id):
     from iativa.agent import tarefas
 
@@ -512,7 +530,7 @@ def objetivo_pendente(user, c):
         SituacaoObjetivo.CONTINUAR, SituacaoObjetivo.MANUTENCAO)).order_by("-id").first()
 
 
-@require_POST
+@_so_post
 def parar_objetivo(request, objetivo_id):
     """M50: botão parar do chat ocupado: encerra o pedido em segundo plano (a correção, se houver, segue
     na manutenção, mas este pedido não é refeito)."""
