@@ -140,6 +140,9 @@ def candidatos(user, texto: str, limite: int = 5, automatico: bool = False) -> l
         validos = [i for i in pontos.values()
                    if ALIAS_RE.match(i["alias"]) and not i["alias"].startswith(SISTEMA) and i["alias"] not in restritas]
         validos.sort(key=lambda i: (-i["pontos"], i["alias"]))
+        # M104: tabela sem nenhum registro na instalação (ex.: CN9 quando a empresa usa outra rotina) não é candidata.
+        fisicas = cat.tabelas([i["alias"] for i in validos[:limite * 3]])
+        validos = [i for i in validos if not (i["alias"] in fisicas and cat.vazia(fisicas[i["alias"]].fisica))]
         escolhidos = validos[:limite]
         existentes = cat.dicionario.tabelas([i["alias"] for i in escolhidos])
     out = []
