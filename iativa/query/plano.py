@@ -143,6 +143,12 @@ def ler_agregacao(texto: str, spec: dict):
         top = max(1, min(100, int(m.group(1))))
         t = (t[:m.start()] + t[m.end():]).strip()
     metricas_txt, _, grupo = t.partition(" por ")
+    # M100: "por CAMPO por filial" (ou "por filial por CAMPO"): o grupo fica separado por filial; a filial não é
+    # coluna da consulta (cada filial roda à parte) e é tratada pelo serviço (`ler_por_filial`).
+    partes = [g.strip() for g in re.split(r"\s+por\s+", grupo) if g.strip()]
+    if len(partes) > 1:
+        outros = [g for g in partes if not re.fullmatch(r"(filial|filiais|[a-z0-9]{1,3}_filial)", g)]
+        grupo = outros[0] if outros else ""
     tipos = {c["campo"]: c["tipo"] for c in spec.get("colunas", [])}
     metricas = []
     for parte in metricas_txt.split(","):
@@ -174,6 +180,13 @@ def ler_agregacao(texto: str, spec: dict):
     elif grupo and grupo not in tipos:
         raise ValueError(f"agrupamento por campo fora da consulta: {grupo}")
     return metricas, grupo, top
+
+
+def ler_por_filial(texto: str) -> bool:
+    """M100: agregação pedida também por filial junto de outro grupo ("contagem:* por T9_CODESTO por filial")."""
+    grupos = [g.strip() for g in re.split(r"\s+por\s+", _sem_acento(texto or "")) [1:]]
+    filiais = [g for g in grupos if re.fullmatch(r"(filial|filiais|[a-z0-9]{1,3}_filial)(\s+top\s*\d+)?", g)]
+    return bool(filiais) and len(grupos) > len(filiais)
 
 
 def ler_top(texto: str) -> int:
@@ -244,6 +257,8 @@ def _aplicar_agregacao(plano, spec: dict, texto: str):
             colunas.append(Coluna(f"{NOME_FUNCAO[func]} de {rotulos[campo]}", Campo(apelido(spec, campo), campo), agregacao=func,
                                   tipo=tipo))
     plano.colunas, plano.agrupar, plano.top = colunas, bool(grupo), top
+    if grupo and ler_por_filial(texto):
+        plano.por_filial = True  # cada filial com os seus grupos; o serviço não soma as filiais
     primeira_metrica = colunas[1 if grupo else 0].rotulo
     if top:
         plano.ordenar = [(primeira_metrica, True)]
@@ -252,7 +267,8 @@ def _aplicar_agregacao(plano, spec: dict, texto: str):
     else:
         plano.ordenar = []
     plano.premissas.append("Cálculo: " + ", ".join(c.rotulo for c in colunas if c.agregacao)
-                           + (f", por {colunas[0].rotulo}" if grupo else "") + (f", top {top}" if top else "") + ".")
+                           + (f", por {colunas[0].rotulo}" if grupo else "")
+                           + (" e por filial" if plano.por_filial and grupo else "") + (f", top {top}" if top else "") + ".")
 
 
 FILTROS_USUARIO = "_filtros_usuario"  # M42: camada de filtros da pessoa (FiltroUsuario.camada)

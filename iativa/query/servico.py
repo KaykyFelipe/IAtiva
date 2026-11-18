@@ -541,7 +541,7 @@ def escopo_do_plano(plano, setor_id, filiais):
 
 def _pode_mesclar(plano):
     aggs = [c.agregacao for c in plano.colunas]
-    return (plano.agrupar and any(aggs) and (not all(aggs) or plano.somar_filiais)
+    return (plano.agrupar and any(aggs) and (not all(aggs) or plano.somar_filiais) and not plano.por_filial
             and all(a in ("SUM", "COUNT", "MIN", "MAX") for a in aggs if a))
 
 
