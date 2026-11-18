@@ -4,6 +4,12 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **Etapa 7 aprovada em 2026-11-16 por Diego; em andamento.** Feito: roteiro do piloto (`docs/piloto/ROTEIRO.md`) e auditoria de não armazenamento (`manage.py auditar_armazenamento`). Falta: usuários do Financeiro, conferência dos números com relatórios do Protheus, avaliação da interpretação e latência. Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M96 — opções de filial completas e tempo esgotado sem erro 500 (2026-11-18)
+
+- As opções do parâmetro mostram até 12 (8 filiais + "Todas as filiais"; antes cortava em 6).
+- Tempo total esgotado durante a ação (ex.: aprendendo tabela nova, "taxa de ocupação dos ativos") virava erro 500 e apagava a mensagem; agora segue o caminho do prazo (continua em segundo plano) e há rede de segurança no envio.
+- ST9 (Bens) aprendida, mas sem setor dono: a fonte não executa até definir o setor (pendente de Diego).
+
 ## Mudança M95 — memória técnica do Protheus e receitas persistentes (2026-11-18)
 
 - Índice local da memória técnica (versão por hash, atômico, web e worker), busca obrigatória antes de toda execução, descoberta pela referência confirmada no dicionário local, receitas em Markdown no volume. Prova com dados sintéticos em RH (desligados), Comercial (clientes bloqueados) e Financeiro (movimentos bancários, tabela fora da referência): `tests/test_m95_*.py`. Documentação: `docs/MEMORIA_TECNICA.md`.

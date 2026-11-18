@@ -620,8 +620,15 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
                      if comparacao.periodos(texto) and d.acao=='preparar_consulta' and comparacao.deste_passo(ac,d) else None)
         if comparada is not None:
             d=replace(d,atende=tuple(i for i,e in enumerate(ac.contrato) if e.get('comparacao')))
-        saida = reduz or comparada or _agir(user, c, d, atual, defs, texto, provedor, entrada_passo, objetivos, administrador,
-                               interrompido=interrompido, resultado_base=resultado_base)
+        try:
+            saida = reduz or comparada or _agir(user, c, d, atual, defs, texto, provedor, entrada_passo, objetivos,
+                                                administrador, interrompido=interrompido, resultado_base=resultado_base)
+        except prazo.PrazoEsgotado:
+            # M96: o tempo total acabou DENTRO da ação (ex.: aprendendo uma tabela nova). Antes virava erro 500 e a
+            # mensagem sumia; agora segue o caminho do prazo: continua em segundo plano e responde no chat.
+            ac.anotar(d.acao, TEMPO_ESGOTADO)
+            causa = "prazo"
+            break
         outra = None if (reduz or comparada) else _busca_na_descricao(d)
         if outra is not None and getattr(saida.resultado, 'ok', False) and not getattr(saida.resultado, 'linhas', None):
             # M94: a busca por nome (campo de pessoa) não achou; o texto pode ser de produto/descrição
@@ -1276,7 +1283,7 @@ def _frase_pendencias(r) -> str:
     for p in r.perguntas:
         extra = ""
         if p.opcoes:
-            extra = " (" + ", ".join(p.opcoes[:6]) + ")"
+            extra = " (" + ", ".join(p.opcoes[:12]) + ")"
         elif p.tipo == TipoValor.DATA:
             extra = " (DD/MM/AAAA)"
         elif p.tipo == TipoValor.PERIODO:
@@ -1303,7 +1310,7 @@ def _avaliar_e_executar(user, s, resposta_modelo, erros, ficha) -> Saida:
     texto_erros = " ".join(r.erros)
     if r.tipo == "pergunta":
         if not ficha["opcoes"] and len(r.perguntas) == 1 and r.perguntas[0].opcoes:
-            ficha["opcoes"] = r.perguntas[0].opcoes[:6]
+            ficha["opcoes"] = r.perguntas[0].opcoes[:12]  # M96: 8 filiais + "Todas as filiais" (antes cortava em 6)
         texto = resposta_modelo or _frase_pendencias(r)
         # Falta uma decisão da pessoa: pergunta. Só há o que corrigir sozinha se um valor foi recusado.
         obs = _obs_erros(texto_erros) if texto_erros else None
