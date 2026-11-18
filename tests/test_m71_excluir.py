@@ -37,3 +37,16 @@ def test_endereco_de_envio_aberto_no_navegador_volta_para_a_conversa(base, clien
     r = client.get(reverse('chat:mensagem', args=[c.pk]))
     assert r.status_code == 302 and r.url == reverse('chat:conversa', args=[c.pk])
     assert client.get(reverse('chat:nova')).url == reverse('chat:index')
+
+
+def test_login_sempre_cai_na_pagina_principal_e_conversa_excluida_volta_ao_inicio(base, client):
+    """M88: o "next" do login é ignorado; conversa que não existe mais leva à página principal."""
+    from django.contrib.auth.models import User  # noqa: F401
+    u = base['ana']
+    u.set_password('senha-de-teste-123'); u.save()
+    r = client.post(reverse('login') + '?next=/c/999/mensagem/', {'username': u.username, 'password': 'senha-de-teste-123'})
+    assert r.status_code == 302 and r.url == reverse('chat:index')
+    c = conversas.nova_individual(u)
+    conversas.excluir(u, c.pk)
+    r = client.get(reverse('chat:conversa', args=[c.pk]))
+    assert r.status_code == 302 and r.url == reverse('chat:index')

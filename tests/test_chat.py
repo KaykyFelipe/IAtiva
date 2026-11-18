@@ -168,7 +168,8 @@ def test_conversa_de_outro_usuario_da_404(logado, novo_usuario, politica, cobran
     politica(bia, cobranca, consultar=True)
     c = conversas.nova_individual(bia)
     conversas.enviar(bia, c, INADIMPLENTES)
-    assert logado.get(reverse("chat:conversa", args=[c.pk])).status_code == 404
+    r = logado.get(reverse("chat:conversa", args=[c.pk]))
+    assert r.status_code == 302 and r.url == reverse("chat:index")  # M88: sem acesso, volta à principal
     assert logado.post(reverse("chat:mensagem", args=[c.pk]), {"mensagem": "oi"}).status_code == 404
 
 

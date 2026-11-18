@@ -149,7 +149,7 @@ def test_fluxo_pelo_chat(client, admin_ti, aprovador, ti):
     cm = ConsultaModelo.objects.get()
     client.force_login(aprovador)
     # O aprovador não vê a conversa individual do Diego: aprova pelo admin ou por uma conversa sua.
-    assert client.get(reverse("chat:conversa", args=[c.pk])).status_code == 404
+    assert client.get(reverse("chat:conversa", args=[c.pk])).url == reverse("chat:index")  # M88
     c2 = conversas.nova_individual(aprovador)
     with pytest.raises(PermissaoNegada):
         conversas.decidir_aprendizado(aprovador, c2, cm.pk, True)

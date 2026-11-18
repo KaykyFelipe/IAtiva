@@ -6,6 +6,14 @@ from django.urls import include, path, re_path
 from iativa.agent import claude_views, codex_views
 from iativa.core import saude
 
+class EntrarView(auth_views.LoginView):
+    """M88: ao entrar, sempre a página principal, sem conversa aberta (ignora o "next": a conversa pode ter
+    sido excluída, ou o endereço guardado ser de uma ação de envio)."""
+
+    def get_redirect_url(self):
+        return ""
+
+
 urlpatterns = [
     path("saude/pronto/", saude.pronto, name="saude-pronto"),
     path("saude/ativas/", saude.em_andamento, name="saude-ativas"),
@@ -17,7 +25,7 @@ urlpatterns = [
     path("configuracoes/chatgpt/estado/<uuid:fluxo_id>/", codex_views.estado, name="chatgpt-estado"),
     path("configuracoes/claude/estado/<uuid:fluxo_id>/", claude_views.estado, name="claude-estado"),
     path("", include("iativa.chat.urls")),
-    path("entrar/", auth_views.LoginView.as_view(), name="login"),
+    path("entrar/", EntrarView.as_view(), name="login"),
     path("sair/", auth_views.LogoutView.as_view(), name="logout"),
     path("admin/", admin.site.urls),
 ]

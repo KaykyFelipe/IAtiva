@@ -132,7 +132,13 @@ def index(request):
 
 @require_GET
 def conversa(request, conversa_id):
-    return _render(request, _obter(request, conversa_id))
+    try:
+        c = _obter(request, conversa_id)
+    except Http404:
+        # M88: conversa excluída ou sem acesso: volta à página principal em vez de mostrar erro.
+        from django.shortcuts import redirect
+        return redirect("chat:index")
+    return _render(request, c)
 
 
 def _layout(request):
