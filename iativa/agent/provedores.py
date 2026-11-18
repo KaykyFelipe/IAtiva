@@ -80,8 +80,11 @@ def _catalogo(entrada: EntradaModelo) -> str:
 
 def _codigos(entrada: EntradaModelo) -> tuple[list[str], list[str]]:
     objetivos = [o["codigo"] for o in entrada.objetivos]
-    parametros = sorted({p["codigo"] for o in entrada.objetivos for p in o["parametros"]})
-    return objetivos, parametros
+    parametros = {p["codigo"] for o in entrada.objetivos for p in o["parametros"]}
+    if getattr(entrada, "tabelas_para_aprender", None):
+        from .contratos import PARAMETROS_APRENDIDOS
+        parametros.update(PARAMETROS_APRENDIDOS)
+    return objetivos, sorted(parametros)
 
 
 class AnthropicProvider(LLMProvider):
@@ -362,12 +365,6 @@ def _contexto_agente(entrada) -> str:
     )
 
 
-def _codigos_agente(entrada) -> tuple[list[str], list[str]]:
-    objetivos = [o["codigo"] for o in entrada.objetivos]
-    parametros = sorted({p["codigo"] for o in entrada.objetivos for p in o["parametros"]})
-    return objetivos, parametros
-
-
 def _exigir_envio_liberado():
     if not settings.IATIVA_AGENTE.get("envio_liberado"):
         raise ImproperlyConfigured(
@@ -419,7 +416,7 @@ class GeminiProvider(LLMProvider):
     def decidir(self, entrada) -> dict:
         from google.genai import errors
 
-        objetivos, parametros = _codigos_agente(entrada)
+        objetivos, parametros = _codigos(entrada)
         resposta, ultimo = None, None
         tentativas = [(self.modelo, 0)] + [(self.modelo, s) for s in self.ESPERAS] + [(m, 0) for m in self.reserva]
         for modelo, espera in tentativas:
@@ -521,7 +518,7 @@ class OpenRouterProvider(LLMProvider):
             raise FalhaModelo("JSON inválido") from None
 
     def decidir(self, entrada) -> dict:
-        objetivos, parametros = _codigos_agente(entrada)
+        objetivos, parametros = _codigos(entrada)
         esquema = esquema_decisao(objetivos, parametros)
         tentativas = [(self.modelo, 0)] + [(self.modelo, s) for s in self.ESPERAS] + [(m, 0) for m in self.reserva]
         ultimo, com_formato = None, True

@@ -14,6 +14,7 @@ PREFIXO_APRENDIDO = "aprendido-"
 BUSCA = "texto-busca"  # opcional: filtra pelo nome (cliente, fornecedor, funcionário...)
 FILTRO = "filtro-campo"  # opcional: CAMPO=valor exato num campo filtrável da consulta aprendida
 AGREGACAO = "agregacao"  # opcional: soma/média/contagem/maior/menor, por grupo, top N (consultas aprendidas)
+PARAMETROS_APRENDIDOS = ("filial-analise", "periodo-analise", BUSCA, FILTRO, AGREGACAO)
 MAX_FILTRAVEIS = 6
 DOMINIO_APRENDIDO = "aprendido"
 

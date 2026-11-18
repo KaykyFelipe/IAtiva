@@ -6,7 +6,7 @@
 
 ## Mudança M102 — continuar o pedido quando o usuário indica as tabelas (2026-11-18)
 
-Uma indicação curta de aliases no mesmo chat retoma a pergunta anterior do mesmo autor. A descoberta inspeciona os aliases após autorização. Uma fonte inconclusiva retorna ao ciclo para pesquisar alternativas. O domínio literal e a legenda calculada pelo Protheus têm tratamentos distintos. Se faltar uma legenda dinâmica, a tabela agrupada por código é parcial e o pedido continua pendente de esclarecimento. Cobertura em `tests/test_descoberta_contratos.py`.
+Uma indicação curta de aliases no mesmo chat retoma a pergunta anterior do mesmo autor. A descoberta inspeciona os aliases após autorização. Uma fonte inconclusiva retorna ao ciclo para pesquisar alternativas. O domínio literal e a legenda calculada pelo Protheus têm tratamentos distintos. Se faltar uma legenda dinâmica, a tabela agrupada por código é parcial e o pedido continua pendente de esclarecimento. O esquema enviado aos provedores inclui período, filial e agregação durante a descoberta, inclusive quando o setor ainda não tem receitas. Cobertura em `tests/test_descoberta_contratos.py`.
 
 ## Mudança M101 — descoberta e contagem de entidades por situação (2026-11-18)
 

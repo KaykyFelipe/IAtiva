@@ -39,7 +39,7 @@ from . import orquestrador as orq
 from . import andamento, investigacao, prazo
 from . import aprendizado
 from .aprendizado import candidatos, pode_aprender, pode_aprender_sozinho
-from .contratos import BUSCA, OBJETIVOS, objetivos_para
+from .contratos import BUSCA, OBJETIVOS, PARAMETROS_APRENDIDOS, objetivos_para
 from .conversao import exibir
 from .decisao import Decisao, DecisaoInvalida, EntradaAgente, validar
 from .models import ConsultaModelo, SituacaoModelo
@@ -54,7 +54,6 @@ TENTATIVAS = 2
 # M41: pedido explícito de mudar o critério de uma consulta ("ajuste o filtro", "tire os cancelados", "volte como era").
 PEDE_AJUSTE_RE = re.compile(r"filtr|ajust|crit[eé]rio|regra|consider|inclu|exclu|\btir[ae]|remov|\bvolt|\bmud|\btroc|desfa",
                             re.I)
-PARAMETROS_APRENDIDOS = ("filial-analise", "periodo-analise", "texto-busca", "filtro-campo", "agregacao")
 
 
 # Situações de uma observação (as de consulta vêm de `iativa.query.servico`).

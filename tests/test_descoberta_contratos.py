@@ -224,3 +224,14 @@ def test_contagem_dinamica_entrega_codigos_e_mantem_a_legenda_pendente(contratos
     assert dict(res.linhas) == {"A": "1", "E": "1", "F": "1"}
     assert "LOCSTATUS" in res.mensagem and "legenda" in msg.texto
     assert "operacao_validada" not in ConsultaModelo.objects.get().spec
+
+
+def test_provedor_aceita_periodo_e_agregacao_na_primeira_receita():
+    from types import SimpleNamespace
+    from iativa.agent.decisao import esquema, validar
+    from iativa.agent.provedores import _codigos
+    entrada = SimpleNamespace(objetivos=[], tabelas_para_aprender=[{"tabela": "ZZC"}])
+    objetivos, parametros = _codigos(entrada)
+    permitidos = esquema(objetivos, parametros)["properties"]["parametros"]["items"]["properties"]["codigo"]["enum"]
+    assert {"agregacao", "filial-analise", "periodo-analise"} <= set(permitidos)
+    assert validar(criar("ZZC"), objetivos, parametros).consulta["tabela"] == "ZZC"
