@@ -247,18 +247,3 @@ def test_busca_acha_nome_gravado_em_minusculas(admin, erp_sintetico):
     c = conversas.nova_individual(admin)
     _, res = conversas.enviar(admin, c, ATRASO + ", cliente sintetico 001")
     assert res.ok and len(res.linhas) > 0
-
-
-def test_busca_vale_em_qualquer_coluna_de_texto(admin, erp_sintetico):
-    """M90: o texto buscado pode estar em outra coluna (ex.: produto/descrição, não o solicitante)."""
-    import sqlite3
-    from iativa.agent.provedores import FakeProvider
-    with sqlite3.connect(erp_sintetico) as conn:
-        codigo = conn.execute("SELECT A1_COD FROM SA1010 WHERE A1_FILIAL = '01' OR A1_FILIAL = '  ' LIMIT 1").fetchone()[0].strip()
-    cm = _modelo_sa1(admin)  # busca padrão no nome; o código está em outra coluna
-    c = conversas.nova_individual(admin)
-    p = {"resposta": "", "acao": "preparar_consulta", "objetivo": cm.codigo, "alvo": "", "nota": "",
-         "confirmado": False, "opcoes": [],
-         "parametros": [{"codigo": "filial-analise", "valor": "01"}, {"codigo": "texto-busca", "valor": codigo}]}
-    _, res = conversas.enviar(admin, c, f"o cliente {codigo} existe?", FakeProvider([p]))
-    assert res.ok and res.linhas and all(codigo in linha[1] or codigo in " ".join(map(str, linha)) for linha in res.linhas)

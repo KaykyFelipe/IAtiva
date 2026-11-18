@@ -24,7 +24,7 @@ class Campo:
 @dataclass(frozen=True)
 class Filtro:
     campo: Campo
-    op: str  # = <> < <= > >= IN NOT_IN LIKE NOT_LIKE MES_IN LIKE_ANY
+    op: str  # = <> < <= > >= IN NOT_IN LIKE NOT_LIKE MES_IN
     valor: object  # valor literal (vira parâmetro) ou Campo
 
 
@@ -92,19 +92,11 @@ def padrao_busca(texto: str) -> str:
     return f"%{miolo}%" if miolo else ""
 
 
-def _aplicar_busca(plano, campo: Campo, valores: dict, outros=()):
-    """`outros`: demais colunas de texto da consulta. M90: o texto buscado pode ser o nome de quem pediu, o produto
-    ou a descrição ("CARREGADOR APPLE" não está no solicitante); a busca vale em qualquer uma delas (OU)."""
+def _aplicar_busca(plano, campo: Campo, valores: dict):
     padrao = padrao_busca(valores.get(BUSCA) or "")
-    if not padrao:
-        return
-    campos = [campo] + [c for c in outros if c != campo]
-    if len(campos) == 1:
+    if padrao:
         plano.filtros.append(Filtro(campo, "LIKE", padrao))
-    else:
-        plano.filtros.append(Filtro(campo, "LIKE_ANY", (padrao, tuple(campos))))
-    nomes = ", ".join(c.nome for c in campos)
-    plano.premissas.append(f"Busca por nome: {nomes} contendo “{padrao.strip('%').replace('%', ' ')}”.")
+        plano.premissas.append(f"Busca por nome: {campo.nome} contendo “{padrao.strip('%').replace('%', ' ')}”.")
 
 
 FILTRO = "filtro-campo"
@@ -373,10 +365,7 @@ def montar_modelo(tabela: str, spec: dict, valores: dict, codigo: str) -> Plano:
     from iativa.agent.contratos import campo_busca  # noqa: I001
 
     if campo_busca(spec):
-        textos = [Campo(apelido(spec, c["campo"]), c["campo"]) for c in spec.get("colunas", [])
-                  if c.get("tipo", "texto") == "texto" and not c["campo"].endswith("_FILIAL")
-                  and c["campo"] != spec.get("campo_data")][:8]
-        _aplicar_busca(plano, Campo(apelido(spec, campo_busca(spec)), campo_busca(spec)), valores, textos)
+        _aplicar_busca(plano, Campo(apelido(spec, campo_busca(spec)), campo_busca(spec)), valores)
     if valores.get(FILTRO):
         from iativa.agent.contratos import campos_filtraveis
 

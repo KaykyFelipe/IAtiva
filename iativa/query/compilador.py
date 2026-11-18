@@ -96,13 +96,6 @@ class _Montador:
                 raise PlanoInvalido("Mês inválido.")
             params.extend(meses)
             return f"SUBSTRING({esquerda}, 5, 2) IN ({', '.join('?' for _ in meses)})"
-        if f.op == "LIKE_ANY":  # M90: busca por nome em várias colunas de texto (qualquer uma serve)
-            padrao, campos = f.valor
-            partes = []
-            for c in campos:
-                params.append(padrao)
-                partes.append(f"UPPER({self.ref(c)}) LIKE ?")
-            return "(" + " OR ".join(partes) + ")"
         if f.op == "LIKE":  # busca por nome: padrão montado por `plano.padrao_busca`
             params.append(f.valor)
             # M83: o padrão vem em maiúsculas e a base compara exatamente (collation binária); campos gravados em

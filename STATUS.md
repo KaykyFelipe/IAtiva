@@ -4,10 +4,6 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **Etapa 7 aprovada em 2026-11-16 por Diego; em andamento.** Feito: roteiro do piloto (`docs/piloto/ROTEIRO.md`) e auditoria de não armazenamento (`manage.py auditar_armazenamento`). Falta: usuários do Financeiro, conferência dos números com relatórios do Protheus, avaliação da interpretação e latência. Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
-## Mudança M90 — busca por nome em qualquer coluna de texto (2026-11-18)
-
-- "tem observação do item CARREGADOR APPLE?" buscava o texto no solicitante (0 linhas). A busca agora vale em qualquer coluna de texto da consulta (OU), ignorando maiúsculas.
-
 ## Mudança M89 — conversa abre na última mensagem (2026-11-18)
 
 - Ao trocar de conversa ou abrir a página, a rolagem vai para o fim de novo depois que tabelas e mascote terminam de montar.
