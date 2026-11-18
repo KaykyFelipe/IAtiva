@@ -4,6 +4,10 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **Etapa 7 aprovada em 2026-11-16 por Diego; em andamento.** Feito: roteiro do piloto (`docs/piloto/ROTEIRO.md`) e auditoria de não armazenamento (`manage.py auditar_armazenamento`). Falta: usuários do Financeiro, conferência dos números com relatórios do Protheus, avaliação da interpretação e latência. Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M103 — pedido abre no setor da receita (2026-11-18)
+
+- Receita aprendida liberada só para outro setor (ex.: contratos no Comercial) era recusada quando quem pedia é de outro setor com acesso a ele; o pedido agora abre no setor da receita em que a pessoa tem acesso.
+
 ## Mudança M102 — continuar o pedido quando o usuário indica as tabelas (2026-11-18)
 
 Uma indicação curta de aliases no mesmo chat retoma a pergunta anterior do mesmo autor. A descoberta inspeciona os aliases após autorização. Uma fonte inconclusiva retorna ao ciclo para pesquisar alternativas. O domínio literal e a legenda calculada pelo Protheus têm tratamentos distintos. Se faltar uma legenda dinâmica, a tabela agrupada por código é parcial e o pedido continua pendente de esclarecimento. O esquema enviado aos provedores inclui período, filial e agregação durante a descoberta, inclusive quando o setor ainda não tem receitas. Cobertura em `tests/test_descoberta_contratos.py`.

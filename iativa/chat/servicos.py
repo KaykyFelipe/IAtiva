@@ -30,6 +30,17 @@ def criar_solicitacao(ator, dominio: str, objetivo: str, conversa: ConversationC
         from iativa.accounts.models import Department
         if setor is not None and not tem_permissao(ator, Permissao.CONSULTAR, setor):
             setor = Department.objects.filter(pk__in=setores_autorizados(ator, Permissao.CONSULTAR), ativo=True).order_by('pk').first()
+        # M103: receita aprendida liberada para outros setores (ex.: contratos só para o Comercial): o pedido abre no
+        # setor da receita em que a pessoa tem acesso, não no setor dela (que a receita não cobre).
+        from iativa.agent.contratos import OBJETIVOS
+        obj = OBJETIVOS[objetivo] if objetivo in OBJETIVOS else None
+        if obj is not None and obj.modelo_id:
+            from iativa.agent.models import ConsultaModelo
+            da_receita = set(ConsultaModelo.objects.filter(pk=obj.modelo_id).values_list("setores", flat=True))
+            if setor is None or setor.pk not in da_receita:
+                alternativa = Department.objects.filter(
+                    pk__in=da_receita & set(setores_autorizados(ator, Permissao.CONSULTAR)), ativo=True).order_by("pk").first()
+                setor = alternativa or setor
     if setor is None:
         raise PermissaoNegada("Usuário sem setor ativo.")
     exigir(ator, Permissao.CONSULTAR, setor)

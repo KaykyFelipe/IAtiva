@@ -68,3 +68,16 @@ def test_receita_transversal_e_pessoal(ti_total, setores, novo_usuario, politica
         politica(outro, s, consultar=True, filiais=["01", "02"])
     assert cm.codigo in {o.codigo for o in objetivos_para(ti_total)}
     assert cm.codigo not in {o.codigo for o in objetivos_para(outro)}
+
+
+def test_pedido_abre_no_setor_da_receita_em_que_a_pessoa_tem_acesso(ti_total, setores):
+    """M103: receita só do Comercial (vendas) pedida por alguém da TI com acesso ao Comercial: o pedido abre em vendas."""
+    from iativa.agent.contratos import OBJETIVOS
+    from iativa.chat.servicos import criar_solicitacao
+    cm = ConsultaModelo.objects.create(codigo="aprendido-contratos-x", nome="Contratos X", tabela="SE1",
+                                       spec={"colunas": [{"campo": "E1_NUM", "rotulo": "Num", "tipo": "texto"}]},
+                                       situacao="aprovada", criado_por=ti_total)
+    cm.setores.add(setores["vendas"])
+    assert cm.codigo in OBJETIVOS
+    s = criar_solicitacao(ti_total, OBJETIVOS[cm.codigo].dominio, cm.codigo)
+    assert s.setor == setores["vendas"]
