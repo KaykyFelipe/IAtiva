@@ -24,7 +24,7 @@ class Campo:
 @dataclass(frozen=True)
 class Filtro:
     campo: Campo
-    op: str  # = <> < <= > >= IN NOT_IN LIKE NOT_LIKE
+    op: str  # = <> < <= > >= IN NOT_IN LIKE NOT_LIKE MES_IN
     valor: object  # valor literal (vira parâmetro) ou Campo
 
 
@@ -336,7 +336,18 @@ def montar_modelo(tabela: str, spec: dict, valores: dict, codigo: str) -> Plano:
         plano.filtros.append(Filtro(Campo(f.get("alias") or e1, f["campo"]), f.get("op") or "=", f["valor"]))
         plano.premissas.append(f"Seu filtro (só para você): {f['campo']} {f.get('op') or '='} {f['valor']}.")
     campo_data = spec.get("campo_data")
-    if campo_data:
+    if campo_data and spec.get("data_aniversario"):
+        # M86: data de aniversário (ex.: nascimento): o período escolhe os MESES, de qualquer ano.
+        periodo = valores["periodo-analise"]
+        ini, fim = _aaaammdd(periodo["inicio"]), _aaaammdd(periodo["fim"])
+        a, m = int(ini[:4]), int(ini[4:6])
+        meses = []
+        while (a, m) <= (int(fim[:4]), int(fim[4:6])) and len(meses) < 12:
+            meses.append(f"{m:02d}")
+            a, m = (a, m + 1) if m < 12 else (a + 1, 1)
+        plano.filtros.append(Filtro(Campo(e1, campo_data), "MES_IN", tuple(dict.fromkeys(meses))))
+        plano.premissas.append(f"Aniversários: mês de {campo_data} em {', '.join(dict.fromkeys(meses))}, de qualquer ano.")
+    elif campo_data:
         periodo = valores["periodo-analise"]
         plano.filtros += [
             Filtro(Campo(e1, campo_data), ">=", _aaaammdd(periodo["inicio"])),

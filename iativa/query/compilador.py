@@ -90,6 +90,12 @@ class _Montador:
             itens = [self.valor(f.campo, v) for v in f.valor]
             params.extend(itens)
             return f"{esquerda} NOT IN ({', '.join('?' for _ in itens)})"
+        if f.op == "MES_IN":  # M86: mês (MM) de uma data AAAAMMDD, de qualquer ano (aniversários)
+            meses = [m for m in f.valor if isinstance(m, str) and m.isdigit() and len(m) == 2 and 1 <= int(m) <= 12]
+            if not meses:
+                raise PlanoInvalido("Mês inválido.")
+            params.extend(meses)
+            return f"SUBSTRING({esquerda}, 5, 2) IN ({', '.join('?' for _ in meses)})"
         if f.op == "LIKE":  # busca por nome: padrão montado por `plano.padrao_busca`
             params.append(f.valor)
             # M83: o padrão vem em maiúsculas e a base compara exatamente (collation binária); campos gravados em
