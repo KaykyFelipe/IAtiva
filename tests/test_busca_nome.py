@@ -264,3 +264,13 @@ def test_filtro_contem_em_coluna_de_texto(admin):
          "parametros": [{"codigo": "filial-analise", "valor": "01"}, {"codigo": "filtro-campo", "valor": "A1_NOME~sintetico 002"}]}
     _, res = conversas.enviar(admin, c, "o cliente sintético 002 existe?", FakeProvider([p]))
     assert res.ok and res.linhas and all("SINTETICO 002" in " ".join(map(str, linha)) for linha in res.linhas)
+
+
+def test_busca_por_nome_prefere_campo_de_pessoa():
+    """M92: busca apontada para a descrição do produto vai para o campo de pessoa (solicitante) se houver."""
+    from types import SimpleNamespace
+    from iativa.agent.aprendizado import _busca_por_pessoa
+    por_nome = {c: SimpleNamespace(tipo="C") for c in ("C1_SOLICIT", "C1_DESCRI", "C1_PRODUTO")}
+    assert _busca_por_pessoa("C1_DESCRI", ["C1_PRODUTO", "C1_DESCRI", "C1_SOLICIT"], por_nome) == "C1_SOLICIT"
+    assert _busca_por_pessoa("C1_DESCRI", ["C1_PRODUTO", "C1_DESCRI"], por_nome) == "C1_DESCRI"
+    assert _busca_por_pessoa("A1_NOME", ["A1_COD", "A1_NOME"], {"A1_NOME": SimpleNamespace(tipo="C")}) == "A1_NOME"

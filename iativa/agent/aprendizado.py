@@ -211,6 +211,21 @@ def juncoes_possiveis(user, alias: str) -> list[dict]:
     return out
 
 
+_PESSOA = re.compile(r"SOLICIT|_NOME$|_NOMCLI|_NOMFOR|_NREDUZ|_RAZAO|_USER|_NOMUSR", re.I)
+_DESCRICAO = re.compile(r"DESC|_OBS|_HIST|_PRODUTO|_COD", re.I)
+
+
+def _busca_por_pessoa(busca, colunas, por_nome):
+    """M92: a busca por nome é para pessoa/empresa (solicitante, cliente, fornecedor). Se o modelo apontou para
+    uma descrição de produto e a consulta tem um campo de nome de pessoa, usa o de pessoa; o texto do produto
+    é filtrado por "contém" na coluna dele (filtro-campo ~)."""
+    if busca and _DESCRICAO.search(busca):
+        pessoa = next((c for c in colunas if _PESSOA.search(c) and por_nome.get(c) is not None
+                       and por_nome[c].tipo == "C"), "")
+        return pessoa or busca
+    return busca
+
+
 @transaction.atomic
 def criar_automatico(user, consulta: dict) -> ConsultaModelo:
     """M18: a IA montou a consulta; o sistema confere, cria e já aprova (sem revisão humana).
@@ -223,7 +238,7 @@ def criar_automatico(user, consulta: dict) -> ConsultaModelo:
     colunas = [c for c in dict.fromkeys(consulta["colunas"]) if c in por_nome][:MAX_COLUNAS]
     if not colunas:
         raise ValidationError("Nenhuma coluna válida para a consulta.")
-    busca = consulta.get("campo_busca", "")
+    busca = _busca_por_pessoa(consulta.get("campo_busca", ""), colunas, por_nome)
     filtraveis = [c for c in consulta.get("filtraveis", []) if c in por_nome and por_nome[c].tipo == "C"]
     dados = {
         "nome": consulta["nome"] or info["nome"], "descricao": consulta.get("descricao", ""),
