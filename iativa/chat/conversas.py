@@ -195,6 +195,11 @@ def interromper(user, pedido) -> None:
 
     PedidoInterrompido.objects.filter(criado_em__lt=timezone.now() - timedelta(days=1)).delete()
     PedidoInterrompido.objects.get_or_create(pedido=pedido, usuario=user)
+    # M94: parar vale na hora para a pessoa: a mensagem ainda sem resposta sai e o chat destrava, mesmo que a IA
+    # esteja presa esperando o ERP (o que chegar depois é descartado em `enviar`).
+    for m in Mensagem.objects.filter(pedido=pedido, autor=user, papel=Papel.USUARIO):
+        if not m.conversa.mensagens.filter(papel=Papel.IA, pk__gt=m.pk).exists():
+            m.delete()
 
 
 def limpar_interrupcao(user, pedido) -> None:
@@ -235,6 +240,9 @@ def enviar(user, c: ConversationContext, texto: str, provedor=None, pedido=None)
             with andamento.acompanhar(user.pk, pedido):
                 saida = agente.conversar(user, c, texto, provedor=provedor, mensagem_usuario_id=m.pk,
                                          interrompido=_verificador(user, pedido))
+                parado = _verificador(user, pedido)
+                if parado is not None and parado():
+                    raise agente.Interrompido  # M94: parou enquanto esperava o ERP: a resposta é descartada
                 andamento.avisar("Escrevendo a resposta")
             msg = Mensagem.objects.create(conversa=c, papel=Papel.IA, texto=saida.texto[:MAX_TEXTO],
                                           ficha=saida.ficha, solicitacao=saida.solicitacao)

@@ -274,3 +274,13 @@ def test_busca_por_nome_prefere_campo_de_pessoa():
     assert _busca_por_pessoa("C1_DESCRI", ["C1_PRODUTO", "C1_DESCRI", "C1_SOLICIT"], por_nome) == "C1_SOLICIT"
     assert _busca_por_pessoa("C1_DESCRI", ["C1_PRODUTO", "C1_DESCRI"], por_nome) == "C1_DESCRI"
     assert _busca_por_pessoa("A1_NOME", ["A1_COD", "A1_NOME"], {"A1_NOME": SimpleNamespace(tipo="C")}) == "A1_NOME"
+
+
+def test_parar_tira_a_mensagem_sem_resposta(admin):
+    import uuid
+    from iativa.chat.models import Mensagem
+    c = conversas.nova_individual(admin)
+    pedido = uuid.uuid4()
+    Mensagem.objects.create(conversa=c, papel="usuario", autor=admin, texto="oi", pedido=pedido)
+    conversas.interromper(admin, pedido)
+    assert not Mensagem.objects.filter(conversa=c).exists() and conversas.envio_pendente(c) is None

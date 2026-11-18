@@ -622,6 +622,15 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
             d=replace(d,atende=tuple(i for i,e in enumerate(ac.contrato) if e.get('comparacao')))
         saida = reduz or comparada or _agir(user, c, d, atual, defs, texto, provedor, entrada_passo, objetivos, administrador,
                                interrompido=interrompido, resultado_base=resultado_base)
+        outra = None if (reduz or comparada) else _busca_na_descricao(d)
+        if outra is not None and getattr(saida.resultado, 'ok', False) and not getattr(saida.resultado, 'linhas', None):
+            # M94: a busca por nome (campo de pessoa) não achou; o texto pode ser de produto/descrição
+            # ("CARREGADOR APPLE USB-C 20W"). Tenta uma vez com "contém" na coluna de descrição (uma coluna só).
+            andamento.avisar("Nada no nome; procurando o texto na descrição")
+            saida2 = _agir(user, c, outra, atual, defs, texto, provedor, entrada_passo, objetivos, administrador,
+                           interrompido=interrompido, resultado_base=resultado_base)
+            if getattr(saida2.resultado, 'ok', False) and getattr(saida2.resultado, 'linhas', None):
+                d, saida = outra, saida2
         if saida.resultado is not None and getattr(saida.resultado, 'ok', False):
             entregas.completar(texto,saida.resultado)
             if admissoes.completar(texto, saida, user):
@@ -1389,6 +1398,25 @@ def _campos_para_modelo(user, alias):
     except Exception:
         juncoes = []
     return {"tabela": info["alias"], "nome": info["nome"], "campos": campos[:150], "juncoes_possiveis": juncoes}
+
+
+def _busca_na_descricao(d):
+    """M94: decisão alternativa com o texto da busca por nome como "contém" na coluna de descrição da consulta."""
+    pares = dict(d.parametros)
+    busca = (pares.get(BUSCA) or "").strip()
+    if d.acao != "preparar_consulta" or not busca or d.objetivo not in OBJETIVOS or not OBJETIVOS[d.objetivo].modelo_id:
+        return None
+    cm = ConsultaModelo.objects.filter(pk=OBJETIVOS[d.objetivo].modelo_id).first()
+    if cm is None:
+        return None
+    from .contratos import campo_busca, campos_filtraveis
+    nome = campo_busca(cm.spec)
+    col = next((c for c, _ in campos_filtraveis(cm.spec) if c != nome and re.search(r"DESC", c)), None)
+    if col is None or not re.fullmatch(r"[0-9A-Za-zÀ-ÿ][0-9A-Za-zÀ-ÿ .,/-]{0,59}", busca):
+        return None
+    filtro = "; ".join(x for x in (pares.get("filtro-campo", ""), f"{col}~{busca}") if x)
+    novos = tuple((k, v) for k, v in d.parametros if k not in (BUSCA, "filtro-campo")) + (("filtro-campo", filtro),)
+    return replace(d, parametros=novos)
 
 
 def _lembrar_fonte(user, cm):

@@ -493,8 +493,18 @@
       dados.append("pedido", barra.dataset.pedido);
       const agora = barra.querySelector("[data-pensando-atual]");
       if (agora) agora.textContent = "Parando…";
-      fetch(barra.dataset.pararUrl, { method: "POST", body: dados, credentials: "same-origin" }).catch(() => {});
-      return;  // a mensagem sai quando o servidor desiste; a sincronização atualiza a conversa
+      fetch(barra.dataset.pararUrl, { method: "POST", body: dados, credentials: "same-origin" })
+        .then((r) => {
+          if (!r.ok) return;
+          // M94: parou: a mensagem sem resposta sai na hora e o chat destrava.
+          const anterior = barra.previousElementSibling;
+          if (anterior && anterior.classList.contains("usuario")) anterior.remove();
+          barra.remove();
+          pararAcompanhamento();
+          atualizarBotaoTarefa();
+        })
+        .catch(() => {});
+      return;
     }
     if (barra.hasAttribute("data-objetivo-pendente")) {
       const texto = barra.querySelector(".atividade-texto");
