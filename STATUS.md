@@ -4,6 +4,10 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **Etapa 7 aprovada em 2026-11-16 por Diego; em andamento.** Feito: roteiro do piloto (`docs/piloto/ROTEIRO.md`) e auditoria de não armazenamento (`manage.py auditar_armazenamento`). Falta: usuários do Financeiro, conferência dos números com relatórios do Protheus, avaliação da interpretação e latência. Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M106 — legenda aprendida para campo de legenda dinâmica (2026-11-18)
+
+- A SX3010 não grava os nomes do FP0_STATUS (X3_CBOX chama LOCA001CI). Diego informou a legenda. Ela fica como nota aprovada da empresa (`iativa/agent/legendas.py`). O catálogo a usa no lugar da rotina dinâmica, e a contagem por status sai como "código - nome".
+
 ## Mudança M105 — contagem por campo de legenda dinâmica não repete a consulta (2026-11-18)
 
 - "contratos de outubro por status" (FP0_STATUS, legenda montada pela rotina LOCA001CI) entregava os códigos, marcava "não concluído" e repetia a mesma consulta em segundo plano. Agora a contagem agrupada reconhece a legenda dinâmica: entrega por código, explica que o nome não fica no banco e pede a legenda uma vez para guardar.
