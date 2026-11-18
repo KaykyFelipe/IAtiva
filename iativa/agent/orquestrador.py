@@ -229,10 +229,15 @@ def _verificar_tabela_aprendida(user, objetivo) -> str | None:
 
     if set(objetivo.tabelas) & _restritas(user):
         return "sem_acesso_entidade"
-    try:
-        with abrir_catalogo() as cat:
-            existentes = cat.tabelas(list(objetivo.tabelas))
-    except Exception:
+    existentes = None
+    for _ in range(2):  # M93: a conexão ao dicionário do ERP às vezes cai na 1ª tentativa
+        try:
+            with abrir_catalogo() as cat:
+                existentes = cat.tabelas(list(objetivo.tabelas))
+            break
+        except Exception:
+            continue
+    if existentes is None:
         return "metadados_indisponiveis"
     return None if set(objetivo.tabelas) <= set(existentes) else "metadados_indisponiveis"
 

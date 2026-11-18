@@ -4,6 +4,10 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **Etapa 7 aprovada em 2026-11-16 por Diego; em andamento.** Feito: roteiro do piloto (`docs/piloto/ROTEIRO.md`) e auditoria de não armazenamento (`manage.py auditar_armazenamento`). Falta: usuários do Financeiro, conferência dos números com relatórios do Protheus, avaliação da interpretação e latência. Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M93 — dicionário do ERP: nova tentativa na hora (2026-11-18)
+
+- A checagem da tabela de consulta aprendida tenta de novo uma vez antes de dizer que o ERP não respondeu (falha intermitente da conexão ao dicionário).
+
 ## Mudança M92 — busca por nome vai para o campo de pessoa (2026-11-18)
 
 - A consulta "Solicitações de compra com observação" buscava o nome na descrição do produto. Criação automática passa a preferir campo de pessoa (solicitante, cliente, fornecedor) para a busca por nome; a consulta existente foi corrigida no servidor.
