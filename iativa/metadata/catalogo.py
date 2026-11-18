@@ -36,6 +36,23 @@ class Catalogo:
         self.conn = conn  # mesma conexão somente leitura, usada pela execução (Etapa 5)
         self.dialeto = dialeto
 
+    def vazia(self, fisica: str) -> bool | None:
+        """M104: a tabela física não tem nenhum registro nesta instalação? (None = não deu para saber).
+        SQL Server: estatística de linhas (sys.partitions), instantânea; sem ler dados."""
+        if self.conn is None or not fisica.replace("_", "").isalnum():
+            return None
+        try:
+            cur = self.conn.cursor()
+            if self.dialeto == "tsql":
+                cur.execute("SELECT SUM(p.rows) FROM sys.partitions p WHERE p.object_id = OBJECT_ID(?) "
+                            "AND p.index_id IN (0, 1)", (fisica,))
+            else:
+                cur.execute(f"SELECT COUNT(*) FROM (SELECT 1 FROM {fisica} LIMIT 1)")
+            n = cur.fetchone()[0]
+            return None if n is None else int(n) == 0
+        except Exception:
+            return None
+
     def tabelas(self, aliases: list[str], com_campos: bool = False) -> dict[str, Tabela]:
         out = {}
         for alias, td in self.dicionario.tabelas([validar_alias(a) for a in aliases]).items():

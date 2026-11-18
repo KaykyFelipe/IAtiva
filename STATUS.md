@@ -4,6 +4,10 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **Etapa 7 aprovada em 2026-11-16 por Diego; em andamento.** Feito: roteiro do piloto (`docs/piloto/ROTEIRO.md`) e auditoria de não armazenamento (`manage.py auditar_armazenamento`). Falta: usuários do Financeiro, conferência dos números com relatórios do Protheus, avaliação da interpretação e latência. Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M104 — tabela vazia na instalação é fonte errada (2026-11-18)
+
+- Contratos: a CN9 (contratos padrão) está vazia nesta instalação; o pedido dava "0 linhas". Agora zero linhas de consulta aprendida cuja tabela está vazia (estatística do SQL Server, sem ler dados) volta à descoberta sem repetir a tabela. Teste: `tests/test_m104_fonte_vazia.py`.
+
 ## Mudança M103 — pedido abre no setor da receita (2026-11-18)
 
 - Receita aprendida liberada só para outro setor (ex.: contratos no Comercial) era recusada quando quem pedia é de outro setor com acesso a ele; o pedido agora abre no setor da receita em que a pessoa tem acesso.

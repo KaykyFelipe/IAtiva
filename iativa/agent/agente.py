@@ -708,6 +708,19 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
             anteriores = entrada.planejamento.get("fontes_inconclusivas", [])
             entrada = replace(entrada, planejamento={**entrada.planejamento,
                               "fontes_inconclusivas": list(dict.fromkeys([*anteriores, alias_inconclusivo]))})
+        vazia = _fonte_vazia(d, saida)
+        if vazia:
+            # M104: zero linhas porque a TABELA está vazia nesta instalação (ex.: CN9 contratos padrão, quando a
+            # empresa usa outra rotina). Não é resposta: é fonte errada. Volta à descoberta, sem repetir essa tabela.
+            andamento.avisar(f"A tabela {vazia} está vazia nesta instalação; procurando a fonte certa")
+            anteriores = entrada.planejamento.get("fontes_vazias", [])
+            entrada = replace(entrada, planejamento={**entrada.planejamento,
+                              "fontes_vazias": list(dict.fromkeys([*anteriores, vazia]))})
+            saida = Saida("", saida.ficha,
+                          observacao=Observacao(d.acao, ERRO_METADADOS,
+                                                f"A tabela {vazia} não tem nenhum registro nesta instalação: não é a fonte "
+                                                "do assunto. Use aprender_tabela para achar outra tabela (rotina própria "
+                                                "da empresa, tabela personalizada) e não use mais " + vazia + "."))
         if saida.resultado is not None and getattr(saida.resultado, 'ok', False):
             entregas.completar(texto,saida.resultado)
             if admissoes.completar(texto, saida, user):
@@ -1513,6 +1526,22 @@ def _campos_para_modelo(user, alias, pedido=""):
             "referencia_publica": referencia, "memoria_tecnica": memoria}
 
 
+def _fonte_vazia(d, saida) -> str:
+    """M104: alias da tabela de uma consulta aprendida que voltou sem linhas porque está VAZIA na instalação."""
+    r = saida.resultado
+    if (d.acao != "preparar_consulta" or not getattr(r, "ok", False) or getattr(r, "linhas", None)
+            or d.objetivo not in OBJETIVOS or not OBJETIVOS[d.objetivo].modelo_id):
+        return ""
+    alias = OBJETIVOS[d.objetivo].tabelas[0]
+    try:
+        from iativa.metadata.catalogo import abrir_catalogo
+        with abrir_catalogo() as cat:
+            t = cat.tabelas([alias]).get(alias)
+            return alias if t is not None and cat.vazia(t.fisica) else ""
+    except Exception:
+        return ""
+
+
 def _busca_na_descricao(d):
     """M94: decisão alternativa com o texto da busca por nome como "contém" na coluna de descrição da consulta."""
     pares = dict(d.parametros)
@@ -1563,6 +1592,8 @@ def _aprender_sozinho(user, c, d, texto, ficha, provedor, entrada, atual, motivo
             motivo.append("não foi possível ler o dicionário do ERP")
             return None
         tabelas = []
+        vazias = set(entrada.planejamento.get("fontes_vazias", []))
+        lista = [i for i in lista if i["alias"] not in vazias]  # M104: tabela vazia na instalação não é candidata
         for item in lista:
             if indicadas and d.alvo == " ".join(indicadas):
                 from .planejamento import FonteInconclusiva, autorizar_fonte
