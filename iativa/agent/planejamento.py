@@ -12,6 +12,23 @@ from .models import ContextoPersistente, NotaAgente
 from .provedores import FalhaModelo
 
 
+def _setores_por_relacao(alias) -> list:
+    """Setores das tabelas já classificadas que se ligam a `alias` (memória técnica)."""
+    from .models import FonteSetorial
+    ligadas = set()
+    try:
+        from iativa.knowledge.memoria_tecnica import relacoes
+        for r in relacoes(alias):
+            ligadas |= {r.get('origem', ''), r.get('destino', '')}
+    except Exception:
+        pass
+    ligadas.discard(alias)
+    setores = set()
+    for f in FonteSetorial.objects.filter(tabela__in=ligadas).exclude(confianca=0):
+        setores |= set(f.setores)
+    return sorted(setores)
+
+
 def autorizar_fonte(user, provedor, alias):
     """Inferência por metadados do dicionário, sem linhas nem mapeamento manual de tabelas."""
     import hashlib
@@ -50,9 +67,14 @@ def autorizar_fonte(user, provedor, alias):
                 or not .85 <= a['confianca'] <= 1 or not isinstance(a.get('setores'), list) or not a['setores']
                 or any(not isinstance(s, str) for s in a['setores'])
                 or not set(a['setores']) <= {s['codigo'] for s in setores}):
-            raise PermissaoNegada('A fonte ainda não tem um domínio confirmado. Não executei a consulta.')
-        fonte, _ = FonteSetorial.objects.update_or_create(tabela=alias, defaults={
-            'assinatura': assinatura, 'setores': sorted(set(a['setores'])), 'confianca': a['confianca']})
+            # M99: nenhum setor cadastrado cobre a fonte com segurança. Não trava: herda o setor das tabelas ligadas
+            # a ela (relacionamentos do dicionário) já classificadas; sem nenhuma, fica com a TI (só a TI vê) até
+            # alguém definir o setor. Confiança 0 marca a classificação como provisória.
+            fonte, _ = FonteSetorial.objects.update_or_create(tabela=alias, defaults={
+                'assinatura': assinatura, 'setores': _setores_por_relacao(alias) or ['ti'], 'confianca': 0})
+        else:
+            fonte, _ = FonteSetorial.objects.update_or_create(tabela=alias, defaults={
+                'assinatura': assinatura, 'setores': sorted(set(a['setores'])), 'confianca': a['confianca']})
     permitidos = set(Department.objects.filter(pk__in=setores_autorizados(user, Permissao.CONSULTAR)).values_list('codigo', flat=True))
     if not permitidos & set(fonte.setores):
         raise PermissaoNegada('Essa fonte pertence a outro setor. Não executei a consulta; solicite acesso à Diretoria ou TI.')

@@ -139,7 +139,7 @@ def test_fluxo_pelo_chat(client, admin_ti, aprovador, ti):
     client.post(reverse("chat:nova"), {"mensagem": "quais títulos foram emitidos ontem?"})
     c = ConversationContext.objects.get()
     html = client.get(reverse("chat:conversa", args=[c.pk])).content.decode()
-    assert "Aprender com SE1" in html
+    # M99: a IA não oferece mais "escolha uma tabela" a quem ela pode ensinar sozinha; o formulário manual segue.
     html = client.post(reverse("chat:aprender", args=[c.pk]), {"tabela": "SE1"}, HTTP_HX_REQUEST="true").content.decode()
     assert 'name="colunas" value="E1_EMISSAO"' in html and "E1_XNOMCLI" not in html
     dados = _dados(ti)

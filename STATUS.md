@@ -4,6 +4,10 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **Etapa 7 aprovada em 2026-11-16 por Diego; em andamento.** Feito: roteiro do piloto (`docs/piloto/ROTEIRO.md`) e auditoria de não armazenamento (`manage.py auditar_armazenamento`). Falta: usuários do Financeiro, conferência dos números com relatórios do Protheus, avaliação da interpretação e latência. Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M99 — não travar por fonte sem setor nem por termo desconhecido (2026-11-18)
+
+- Fonte sem setor herda o setor da tabela ligada ou fica com a TI (provisória); sem "escolha uma tabela" para quem a IA ensina sozinha; termo que não é campo vira o campo mais provável da tabela em uso, com a premissa dita. Teste: `tests/test_m99_sem_travar.py`.
+
 ## Mudança M98 — participação de cada grupo no total (2026-11-18)
 
 - "Taxa de ocupação" calculava sobre a lista crua cortada (3626 de 63922) e desistia. Novo cálculo de participação: contagem/soma agrupada no banco + % de cada grupo no total; orientação ao modelo para agrupar antes e, sem definição de qual grupo conta, entregar a distribuição completa.

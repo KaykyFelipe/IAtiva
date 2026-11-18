@@ -1390,6 +1390,12 @@ def _aprender(user, c, d, texto, ficha, provedor=None, entrada=None, atual=None)
     if not lista:
         return Saida("Não achei tabelas relacionadas no dicionário. Pode me dizer outras palavras ou o código da "
                      "tabela (ex.: SRA)?", ficha, observacao=obs)
+    if pode_aprender_sozinho(user):
+        # M99: quem a IA pode ensinar sozinha nunca recebe "escolha uma tabela": a IA recebe o motivo e as tabelas
+        # candidatas e tenta de novo (outra tabela, outros campos ou o campo mais provável da tabela em uso).
+        obs = Observacao(d.acao, ERRO_METADADOS, (obs.detalhe + ". Candidatas: "
+                                                  + ", ".join(f"{i['alias']} ({i['nome']})" for i in lista[:5]))[:600])
+        return Saida("", ficha, observacao=obs)
     texto = (d.resposta + "\n\n" if d.resposta else "") + "Encontrei estas tabelas no dicionário. Escolha uma para eu aprender:"
     return Saida(texto, {**ficha, "tipo": "aprendizado", "candidatos": lista}, observacao=obs)
 
