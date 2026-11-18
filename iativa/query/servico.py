@@ -443,6 +443,14 @@ def _executar_solicitacao(user, s: RequestContext) -> Resultado:
                     if any(not visibilidade.campo(a, c) for a, nomes in campos.items() for c in nomes):
                         return _encerrar(user, s, E.NAO_VALIDADA, inicio, 0,
                                          "O setor não tem acesso a todos os campos solicitados.", SEM_PERMISSAO)
+                if (not plano.categorias and plano.agrupar and not legenda_pendente and plano.colunas
+                        and not plano.colunas[0].agregacao and not plano.colunas[0].transformacao):
+                    # M105: contagem agrupada por um campo cuja legenda o Protheus monta por função (ex.: FP0_STATUS
+                    # por LOCA001CI): entrega por código e diz que a legenda falta; não repete a consulta em segundo plano.
+                    campo = plano.colunas[0].campo
+                    alias = {"e1": plano.base, **{j.alias: j.tabela for j in plano.juncoes}}.get(campo.alias)
+                    if alias:
+                        legenda_pendente = cat.dominios_campos(alias)[1].get(campo.nome, "")
                 if plano.categorias and not (categorias or legenda_pendente):
                     campo = plano.colunas[0].campo
                     alias = {"e1": plano.base, **{j.alias: j.tabela for j in plano.juncoes}}[campo.alias]
@@ -587,6 +595,9 @@ def _executar_solicitacao(user, s: RequestContext) -> Resultado:
     destaque = _destaque(plano, comp, colunas, formatadas, linhas, tipos)
     if destaque and not categorias:
         mensagem = destaque + " " + mensagem
+    if legenda_pendente and not plano.categorias:
+        mensagem += (f" Os nomes de {plano.colunas[0].rotulo} não ficam gravados no banco (o Protheus os monta pela "
+                     f"rotina {legenda_pendente}); a tabela mostra os códigos.")
     if plano.categorias:
         periodo = valores.get("periodo-analise")
         mensagem = "Contagem por " + comp.rotulos[0]

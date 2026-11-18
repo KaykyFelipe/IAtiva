@@ -235,3 +235,11 @@ def test_provedor_aceita_periodo_e_agregacao_na_primeira_receita():
     permitidos = esquema(objetivos, parametros)["properties"]["parametros"]["items"]["properties"]["codigo"]["enum"]
     assert {"agregacao", "filial-analise", "periodo-analise"} <= set(permitidos)
     assert validar(criar("ZZC"), objetivos, parametros).consulta["tabela"] == "ZZC"
+
+
+def test_agrupado_por_campo_de_legenda_dinamica_marca_a_legenda_pendente():
+    """M105: "contagem:* por STATUS" sem códigos pedidos também reconhece a legenda dinâmica (não repete a consulta)."""
+    import inspect
+    from iativa.query import servico
+    fonte = inspect.getsource(servico._executar_solicitacao)
+    assert "not plano.categorias and plano.agrupar and not legenda_pendente" in fonte

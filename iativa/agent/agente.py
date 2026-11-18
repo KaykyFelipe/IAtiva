@@ -1434,7 +1434,11 @@ def _avaliar_e_executar(user, s, resposta_modelo, erros, ficha) -> Saida:
     if resposta_modelo and re.search(r"\?\s*$|posso execut|deseja que eu execut|quer que eu execut", resposta_modelo, re.I):
         resposta_modelo = ""
     if res.ok and getattr(res, "legenda_pendente", ""):
-        return Saida("Qual é a legenda oficial dos códigos para as situações solicitadas?",
+        idx = next((i for i, c in enumerate(res.colunas) if c != "Filial"), 0)
+        codigos = list(dict.fromkeys(str(l[idx]).strip() for l in res.linhas if str(l[idx]).strip()))[:12]
+        return Saida("Entreguei a contagem separada por código" + (f" ({', '.join(codigos)})" if codigos else "")
+                     + f". O Protheus não grava o nome de cada código no banco (monta pela rotina {res.legenda_pendente}). Me diga a legenda, o que cada código significa "
+                     "(ex.: 1 = aprovado, 2 = cancelado) e eu guardo para as próximas respostas.",
                      {**ficha, "tipo": "legenda_pendente"}, s, res)
     if res.ok:
         # M8: o histórico guarda só que rodou; os números ficam na tabela, em memória.

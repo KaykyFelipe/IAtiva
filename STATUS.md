@@ -4,6 +4,10 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **Etapa 7 aprovada em 2026-11-16 por Diego; em andamento.** Feito: roteiro do piloto (`docs/piloto/ROTEIRO.md`) e auditoria de não armazenamento (`manage.py auditar_armazenamento`). Falta: usuários do Financeiro, conferência dos números com relatórios do Protheus, avaliação da interpretação e latência. Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M105 — contagem por campo de legenda dinâmica não repete a consulta (2026-11-18)
+
+- "contratos de outubro por status" (FP0_STATUS, legenda montada pela rotina LOCA001CI) entregava os códigos, marcava "não concluído" e repetia a mesma consulta em segundo plano. Agora a contagem agrupada reconhece a legenda dinâmica: entrega por código, explica que o nome não fica no banco e pede a legenda uma vez para guardar.
+
 ## Mudança M104 — tabela vazia na instalação é fonte errada (2026-11-18)
 
 - Contratos: a CN9 (contratos padrão) está vazia nesta instalação; o pedido dava "0 linhas". Agora zero linhas de consulta aprendida cuja tabela está vazia (estatística do SQL Server, sem ler dados) volta à descoberta sem repetir a tabela. Teste: `tests/test_m104_fonte_vazia.py`.
