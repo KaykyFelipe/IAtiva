@@ -433,6 +433,7 @@ def _executar_solicitacao(user, s: RequestContext) -> Resultado:
 
             categorias = {}
             legenda_pendente = ""
+            legenda_grupo = {}
             for filial in filiais:  # "todas as filiais": uma consulta por filial autorizada, mesmo validador
                 andamento.avisar(f"Consultando o ERP — {rotulo(filial)}")
                 plano = montar(s.objetivo, {**valores, "filial-analise": filial})
@@ -451,6 +452,8 @@ def _executar_solicitacao(user, s: RequestContext) -> Resultado:
                     alias = {"e1": plano.base, **{j.alias: j.tabela for j in plano.juncoes}}.get(campo.alias)
                     if alias:
                         legenda_pendente = cat.dominios_campos(alias)[1].get(campo.nome, "")
+                        from iativa.agent.legendas import legendas_aprendidas
+                        legenda_grupo = legendas_aprendidas(alias).get(campo.nome, {})  # M106
                 if plano.categorias and not (categorias or legenda_pendente):
                     campo = plano.colunas[0].campo
                     alias = {"e1": plano.base, **{j.alias: j.tabela for j in plano.juncoes}}[campo.alias]
@@ -552,6 +555,10 @@ def _executar_solicitacao(user, s: RequestContext) -> Resultado:
                 return _encerrar(user, s, E.NAO_VALIDADA, inicio, 0,
                                  "Não foi possível confirmar uma situação única por entidade no período. "
                                  "Procure a fonte do status atual ou o histórico na data de referência.", ERRO_METADADOS)
+    if legenda_grupo and not categorias:
+        # M106: código do grupo com o nome da legenda aprendida (ex.: "3 - Aprovado").
+        linhas = [(f"{str(l[0]).strip()} - {legenda_grupo[str(l[0]).strip()]}" if str(l[0]).strip() in legenda_grupo
+                   else l[0], *l[1:]) for l in linhas]
     if categorias:
         encontrados = {str(codigo).strip(): n for codigo, n in linhas}
         desconhecidos = set(encontrados) - set(opcoes)

@@ -100,8 +100,19 @@ class Catalogo:
 
     def dominios_campos(self, alias):
         if "X3_CBOX" not in self.fisico.colunas(self.dicionario.sx3):
-            return {}, {}
-        return self.dicionario.dominios_campos(alias)
+            opcoes, dinamicos = {}, {}
+        else:
+            opcoes, dinamicos = self.dicionario.dominios_campos(alias)
+        # M106: legenda ensinada pela empresa vale no lugar da rotina dinâmica do Protheus.
+        from iativa.agent.legendas import legendas_aprendidas
+        try:
+            aprendidas = legendas_aprendidas(alias)
+        except Exception:  # sem banco da aplicação (ex.: ferramenta isolada): só o dicionário
+            aprendidas = {}
+        for campo, legenda in aprendidas.items():
+            opcoes = {**opcoes, campo: legenda}
+            dinamicos = {k: v for k, v in dinamicos.items() if k != campo}
+        return opcoes, dinamicos
 
     def relacionamentos(self, aliases: list[str]) -> list[Relacionamento]:
         return self.dicionario.relacionamentos(aliases)

@@ -243,3 +243,24 @@ def test_agrupado_por_campo_de_legenda_dinamica_marca_a_legenda_pendente():
     from iativa.query import servico
     fonte = inspect.getsource(servico._executar_solicitacao)
     assert "not plano.categorias and plano.agrupar and not legenda_pendente" in fonte
+
+
+def test_legenda_aprendida_nomeia_os_codigos_da_contagem(contratos, novo_usuario, politica):
+    """M106: legenda ensinada pela empresa substitui a rotina dinâmica e nomeia cada código."""
+    from iativa.agent.legendas import gravar_legenda
+    from iativa.metadata.catalogo import abrir_catalogo
+    with sqlite3.connect(contratos) as db:
+        db.execute("UPDATE SX3010 SET X3_CBOX='#LOCSTATUS()' WHERE X3_CAMPO='ZZC_STATUS'")
+    gravar_legenda("ZZC", "ZZC_STATUS", {"A": "Ativo", "E": "Encerrado"})
+    gravar_legenda("ZZC", "ZZC_STATUS", {"A": "Aprovado", "E": "Encerrado", "F": "Fechado", "C": "Cancelado"})
+    with abrir_catalogo() as cat:
+        literais, dinamicos = cat.dominios_campos("ZZC")
+    assert "ZZC_STATUS" not in dinamicos and literais["ZZC_STATUS"]["A"] == "Aprovado"
+    user = _usuario(novo_usuario, politica, "comercial")
+    decisao = criar("ZZC")
+    decisao["parametros"][-1]["valor"] = "contagem_distinta:ZZC_ID por ZZC_STATUS"
+    msg, res = conversas.enviar(user, conversas.nova_individual(user), "Quantos contratos por status em outubro?",
+                                Espiao([decisao]))
+    assert res and res.ok, msg.texto
+    assert dict(res.linhas) == {"A - Aprovado": "1", "E - Encerrado": "1", "F - Fechado": "1"}
+    assert "Me diga a legenda" not in msg.texto
