@@ -227,3 +227,19 @@ def test_campos_opcionais_nulos_do_schema_estrito_sao_aceitos():
 def test_schema_recusa_calculo_invalido(calculo):
     with pytest.raises(DecisaoInvalida):
         validar(_d(acao='calcular_resultado', calculo=calculo), [], [])
+
+
+def test_participacao_de_cada_grupo_no_total():
+    """M98: "taxa por status": contagem agrupada no banco -> participação de cada grupo no total."""
+    from iativa.agent.calculos import _participacao
+    from iativa.query.servico import Resultado
+    res = Resultado(True, '', colunas=['Status Bem', 'Quantidade'], tipos=['texto', 'inteiro'],
+                    linhas=[['01', '30'], ['03', '60'], ['05', '10']], escopo={})
+    r = _participacao(res, {'campo': 'Quantidade'}, [])
+    assert r.medida_calculada == 'percentual'
+    assert r.linhas[0] == ['03', '60', '60,00%'] and r.linhas[-1] == ['Total', '100', '100,00%']
+    lista = Resultado(True, '', colunas=['Bem', 'Quantidade'], tipos=['texto', 'inteiro'], linhas=[['x', '1']], escopo={})
+    import pytest
+    from django.core.exceptions import ValidationError
+    with pytest.raises(ValidationError, match='Agrupe primeiro'):
+        _participacao(lista, {'campo': 'Quantidade'}, [])

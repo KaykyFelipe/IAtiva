@@ -352,6 +352,13 @@ class Acompanhamento:
         txt = (f"{FALTA[self.exig]}. A etapa anterior deu certo, mas é só parte do pedido: {COMO[self.exig]}. Só pare "
                "para perguntar à pessoa (conversar terminando em pergunta) se faltar uma decisão que só ela pode dar.")
         metrica = metrica_exigida(self.texto)
+        if any(e.get('metrica') == 'percentual' for i, e in enumerate(self.contrato) if i not in self.cumpridas):
+            # M98: taxa/participação por grupo nunca se calcula sobre lista cortada.
+            txt += (' Para taxa ou percentual por grupo (ex.: bens por status, títulos por filial): primeiro agrupe no '
+                    'banco com preparar_consulta e agregacao "contagem:* por CAMPO" (ou "soma:CAMPO por CAMPO"), depois '
+                    'calcular_resultado com operacao percentual, campo = coluna da medida e SEM campo_final: isso dá a '
+                    'participação de cada grupo no total. Se a pessoa não definiu qual grupo conta (ex.: o que é '
+                    '"ocupado"), entregue a distribuição completa por grupo; não pergunte de novo.')
         if metrica == 'projecao':
             return txt + (' A pessoa pediu uma PROJEÇÃO: a soma do que já aconteceu no período não basta. Use '
                           'calcular_resultado com a operação projecao sobre o resultado do período em andamento.')

@@ -225,6 +225,8 @@ def executar(user, conversa, plano, resultado_atual=None):
         tipos = ['texto', 'data', 'data', 'texto' if op == 'meses' else 'inteiro', 'texto']
     elif op == 'projecao':
         return _projecao(res, m, plano, premissas)
+    elif op == 'percentual' and not plano.get('campo_final'):
+        return _participacao(res, plano, premissas)
     else:
         if 'truncado' not in m.resultado:
             raise ValidationError('Este resultado antigo não tem informação de cobertura. Reexecute a consulta antes de somar.')
@@ -260,6 +262,38 @@ def executar(user, conversa, plano, resultado_atual=None):
     return Resultado(True, texto or 'Nenhum registro para calcular.', colunas=colunas, tipos=tipos, linhas=linhas,
                      premissas=premissas, escopo=res.escopo, medida_calculada=op, periodos=res.periodos,
                      curta_salva=curta)
+
+
+def _participacao(res, plano, premissas):
+    """M98: participação de cada grupo no total ("taxa por status", "% por filial"): só sobre resultado AGRUPADO e
+    completo (a contagem/soma vem do banco); a medida é a coluna `campo`. Sem definição de negócio do que é
+    "ocupado", mostra a distribuição inteira e deixa a escolha explícita."""
+    try:
+        a = res.colunas.index(plano.get('campo'))
+    except ValueError:
+        raise ValidationError('Escolha a medida (ex.: Quantidade) dentre as colunas do resultado agrupado.') from None
+    if res.tipos[a] not in ('dinheiro', 'inteiro', 'valor', 'numero'):
+        raise ValidationError('A participação precisa de uma medida numérica (contagem ou soma por grupo).')
+    grupos = [i for i, t in enumerate(res.tipos) if i != a and t not in ('dinheiro', 'inteiro', 'valor', 'numero')]
+    if not grupos or len(res.linhas) < 2:
+        raise ValidationError('Agrupe primeiro no banco (agregacao contagem:* por CAMPO ou soma:CAMPO por CAMPO) '
+                              'e depois calcule a participação de cada grupo.')
+    valores = [_numero(l[a]) or Decimal(0) for l in res.linhas]
+    total = sum(valores, Decimal(0))
+    from iativa.query.servico import _fmt
+    linhas = []
+    for l, v in sorted(zip(res.linhas, valores), key=lambda x: -x[1]):
+        pct = (v / total * 100) if total else None
+        linhas.append([' · '.join(str(l[i]) for i in grupos), _fmt(v, res.tipos[a]),
+                       _fmt(pct, 'valor') + '%' if pct is not None else 'Indefinido (total zero)'])
+    linhas.append(['Total', _fmt(total, res.tipos[a]), '100,00%' if total else 'Indefinido (total zero)'])
+    rotulo_grupo = ' · '.join(res.colunas[i] for i in grupos)
+    premissas = premissas + [f'Participação de cada {rotulo_grupo} no total de {res.colunas[a]}.']
+    maior = linhas[0]
+    return Resultado(True, f'Participação por {rotulo_grupo}: maior {maior[0]} ({maior[2]}).',
+                     colunas=[rotulo_grupo, res.colunas[a], 'Participação'], tipos=['texto', res.tipos[a], 'texto'],
+                     linhas=linhas, premissas=premissas, escopo=res.escopo, medida_calculada='percentual',
+                     curta_salva=f'{maior[0]}: {maior[2]}')
 
 
 def _projecao(res, m, plano, premissas, hoje=None):
