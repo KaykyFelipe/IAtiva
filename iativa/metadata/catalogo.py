@@ -79,9 +79,12 @@ class Catalogo:
         return tuple(campos)
 
     def opcoes(self, alias):
+        return self.dominios_campos(alias)[0]
+
+    def dominios_campos(self, alias):
         if "X3_CBOX" not in self.fisico.colunas(self.dicionario.sx3):
-            return {}
-        return self.dicionario.opcoes(alias)
+            return {}, {}
+        return self.dicionario.dominios_campos(alias)
 
     def relacionamentos(self, aliases: list[str]) -> list[Relacionamento]:
         return self.dicionario.relacionamentos(aliases)

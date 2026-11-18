@@ -133,14 +133,22 @@ class DicionarioProtheus:
         return {r[0]: TabelaDicionario(*r) for r in rows}
 
     def opcoes(self, alias: str) -> dict:
+        return self.dominios_campos(alias)[0]
+
+    def dominios_campos(self, alias: str) -> tuple[dict, dict]:
         """Domínios literais do SX3. Expressões dinâmicas e opções ambíguas ficam sem tradução."""
         rows = self._consultar(
             f"SELECT X3_CAMPO, X3_CBOX FROM {self.sx3} WHERE D_E_L_E_T_ = ' ' AND X3_ARQUIVO = ?",
             (validar_alias(alias),),
         )
-        opcoes = {}
+        opcoes, dinamicos = {}, {}
         for campo, caixa in rows:
             if not caixa:
+                continue
+            if str(caixa).lstrip().startswith("#"):
+                funcoes = re.findall(r"\b([A-Za-z][A-Za-z0-9_]{0,40})\s*\(", str(caixa))
+                nomes = dict.fromkeys(f.upper() for f in funcoes if f.upper() not in {"IIF", "IF", "FINDFUNCTION"})
+                dinamicos[campo] = ", ".join(list(nomes)[:3]) or "expressão do Protheus"
                 continue
             pares = {}
             for item in str(caixa).strip("; ").split(";"):
@@ -151,7 +159,7 @@ class DicionarioProtheus:
             else:
                 if len(pares) <= 100:
                     opcoes[campo] = pares
-        return opcoes
+        return opcoes, dinamicos
 
     def campos(self, alias: str) -> list[CampoDicionario]:
         validar_alias(alias)

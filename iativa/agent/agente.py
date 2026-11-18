@@ -41,7 +41,7 @@ from . import aprendizado
 from .aprendizado import candidatos, pode_aprender, pode_aprender_sozinho
 from .contratos import BUSCA, OBJETIVOS, objetivos_para
 from .conversao import exibir
-from .decisao import DecisaoInvalida, EntradaAgente, validar
+from .decisao import Decisao, DecisaoInvalida, EntradaAgente, validar
 from .models import ConsultaModelo, SituacaoModelo
 from .provedores import FalhaModelo, obter_provedor
 
@@ -217,6 +217,44 @@ def _interpretar(provedor, entrada, codigos_obj, codigos_par):
     raise FalhaModelo("sem decisão válida")
 
 
+def _aliases_da_resposta(texto):
+    termos = re.split(r"\s*(?:,|/|\+|;|\be\b)\s*|\s+", texto.strip().rstrip("."), flags=re.I)
+    if not 1 <= len(termos) <= 4 or not all(re.fullmatch(r"[A-Za-z][A-Za-z0-9]{2}", t) for t in termos):
+        return []
+    aliases = list(dict.fromkeys(t.upper() for t in termos))
+    if len(aliases) == 1 and aliases[0] in {"SIM", "NAO", "OK"}:
+        return []
+    if len(aliases) == 1 and not (termos[0].isupper() or any(c.isdigit() for c in termos[0])):
+        return []
+    return aliases
+
+
+def _pedido_com_fontes(user, conversa, texto, mensagem_id):
+    """Uma indicação curta de tabelas complementa o pedido anterior da mesma pessoa."""
+    aliases = _aliases_da_resposta(texto)
+    if not aliases:
+        return texto, []
+    anteriores = conversa.mensagens.filter(papel="usuario")
+    if mensagem_id is not None:
+        anteriores = anteriores.filter(pk__lt=mensagem_id)
+    for anterior in anteriores.order_by("-pk")[:5]:
+        if anterior.autor_id != user.pk:
+            return texto, []
+        if not _aliases_da_resposta(anterior.texto):
+            break
+    else:
+        return texto, []
+    from iativa.metadata.catalogo import abrir_catalogo
+    try:
+        with abrir_catalogo() as cat:
+            existentes = cat.dicionario.tabelas(aliases)
+    except Exception:
+        return texto, []
+    if not existentes:
+        return texto, []
+    return anterior.texto + "\nFontes indicadas para este pedido: " + ", ".join(aliases), aliases
+
+
 def conversar(user, c, texto: str, provedor=None, mensagem_usuario_id=None, interrompido=None, acomp=None,
               observacoes=None) -> Saida:
     from .escopo import pedido_codigo, RECUSA
@@ -233,7 +271,9 @@ def conversar(user, c, texto: str, provedor=None, mensagem_usuario_id=None, inte
 
     from . import planejamento
     from .contagem import contextualizar
-    texto = contextualizar(user, c, texto)
+    texto, fontes = _pedido_com_fontes(user, c, texto, mensagem_usuario_id)
+    if not fontes:
+        texto = contextualizar(user, c, texto)
     try:
         provedor = provedor or obter_provedor(usuario=user)
         analise = planejamento.preparar(user, c, texto, provedor, _historico(c, mensagem_usuario_id))
@@ -252,6 +292,8 @@ def conversar(user, c, texto: str, provedor=None, mensagem_usuario_id=None, inte
     except ImproperlyConfigured:
         return Saida('Não consegui confirmar o assunto e o acesso deste pedido agora. Tente novamente.',
                      ficha={'tipo': 'falha_modelo'})
+    if fontes:
+        analise["fontes_indicadas"] = fontes
     if analise['natureza'] == 'fora':
         return Saida(RECUSA, ficha={'tipo': 'fora_escopo'})
 
@@ -500,10 +542,15 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
             break
         entrada_passo = entrada if not observacoes else replace(
             entrada, solicitacao_atual=_estado(user, atual, defs), observacoes=[o.para_modelo() for o in observacoes])
+        fontes = entrada.planejamento.get("analise", {}).get("fontes_indicadas", [])
         andamento.avisar("Decidindo o que fazer" if not observacoes else
                          "Ajustando o caminho: " + observacoes[-1].detalhe[:110])
         try:
-            d = _interpretar(provedor, entrada_passo, [o.codigo for o in objetivos], codigos_par)
+            if fontes and not feitas and entrada.planejamento["analise"]["natureza"] == "dados":
+                d = Decisao("Vou conferir as fontes indicadas para concluir o pedido.", "aprender_tabela", "",
+                            (), " ".join(fontes), "", False, ())
+            else:
+                d = _interpretar(provedor, entrada_passo, [o.codigo for o in objetivos], codigos_par)
         except prazo.PrazoEsgotado:
             causa = "prazo"
             break
@@ -562,6 +609,10 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
             if metrica in ("dias_uteis", "dias_corridos") and calculos.intervalo_do_texto(texto):
                 d = replace(d, acao="calcular_resultado", calculo={"operacao": metrica, "mensagem": 0,
                                                                    "campo": "", "campo_final": ""})
+        if (entrada.planejamento.get("fontes_inconclusivas") and d.acao in ("conversar", "falta_capacidade")
+                and not any(o.acao == "aprender_tabela" for o in observacoes)
+                and pode_aprender_sozinho(user)):
+            d = replace(d, acao="aprender_tabela", alvo=texto, consulta=None, opcoes=(), resposta="")
         d = _calculo_implicito(d, texto)
         d = _respeitar_preferencias(user, d, texto)
         d = _atributo_da_lista(user, c, d, texto)
@@ -654,6 +705,10 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
                            interrompido=interrompido, resultado_base=resultado_base)
             if getattr(saida2.resultado, 'ok', False) and getattr(saida2.resultado, 'linhas', None):
                 d, saida = outra, saida2
+        if alias_inconclusivo := getattr(saida.resultado, "fonte_inconclusiva", ""):
+            anteriores = entrada.planejamento.get("fontes_inconclusivas", [])
+            entrada = replace(entrada, planejamento={**entrada.planejamento,
+                              "fontes_inconclusivas": list(dict.fromkeys([*anteriores, alias_inconclusivo]))})
         if saida.resultado is not None and getattr(saida.resultado, 'ok', False):
             entregas.completar(texto,saida.resultado)
             if admissoes.completar(texto, saida, user):
@@ -710,7 +765,8 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
                 observacoes.append(saida.observacao)
             if ac.pendentes() and ev not in (coord.PERGUNTA, coord.BLOQUEIO, coord.DELEGADA):
                 # Sem entrega comprovada, são revisões da mesma tentativa, não novas respostas.
-                previa = _juntar(previa, saida) if previa is not None and ac.cumpridas else saida
+                if saida.observacao is None or not saida.observacao.recuperavel:
+                    previa = _juntar(previa, saida) if previa is not None and ac.cumpridas else saida
                 # M67: guarda a causa real (parâmetro inválido, metadado, permissão...), não só "pendente".
                 ac.anotar(d.acao, saida.observacao.situacao if saida.observacao is not None
                           and saida.observacao.situacao != SUCESSO else 'entrega_pendente', ev)
@@ -1365,6 +1421,9 @@ def _avaliar_e_executar(user, s, resposta_modelo, erros, ficha) -> Saida:
     ficha["opcoes"] = []
     if resposta_modelo and re.search(r"\?\s*$|posso execut|deseja que eu execut|quer que eu execut", resposta_modelo, re.I):
         resposta_modelo = ""
+    if res.ok and getattr(res, "legenda_pendente", ""):
+        return Saida("Qual é a legenda oficial dos códigos para as situações solicitadas?",
+                     {**ficha, "tipo": "legenda_pendente"}, s, res)
     if res.ok:
         # M8: o histórico guarda só que rodou; os números ficam na tabela, em memória.
         base = resposta_modelo or f"Consultei {r.objetivo.lower()}."
@@ -1426,7 +1485,8 @@ def _aprender(user, c, d, texto, ficha, provedor=None, entrada=None, atual=None)
 def _campos_para_modelo(user, alias, pedido=""):
     info = aprendizado.campos_da_tabela(user, alias, automatico=True)
     campos = [{"campo": f.nome, "tipo": {"D": "data", "N": "numero"}.get(f.tipo, "texto"), "titulo": f.titulo, "descricao": f.descricao,
-               "opcoes": info["opcoes"].get(f.nome, {})}
+               "opcoes": info["opcoes"].get(f.nome, {}),
+               **({"origem_dominio_dinamico": info["dinamicos"][f.nome]} if f.nome in info["dinamicos"] else {})}
               for f in info["campos"] if not aprendizado.sensivel(f)]
     try:
         juncoes = [{"tabela": j["tabela"], "nome": j["nome"],
@@ -1493,12 +1553,31 @@ def _aprender_sozinho(user, c, d, texto, ficha, provedor, entrada, atual, motivo
     consulta = d.consulta
     if consulta is None:
         try:
-            lista = candidatos(user, d.alvo or texto, limite=3, automatico=True)
+            indicadas = entrada.planejamento.get("analise", {}).get("fontes_indicadas", [])
+            if indicadas and d.alvo == " ".join(indicadas):
+                lista = [{"alias": a} for a in indicadas]
+            else:
+                tentadas = set(entrada.planejamento.get("fontes_inconclusivas", []))
+                lista = candidatos(user, d.alvo or texto, limite=3 + len(tentadas), automatico=True)
+                lista = [item for item in lista if item["alias"] not in tentadas][:3]
         except Exception:
             motivo.append("não foi possível ler o dicionário do ERP")
             return None
         tabelas = []
         for item in lista:
+            if indicadas and d.alvo == " ".join(indicadas):
+                from .planejamento import FonteInconclusiva, autorizar_fonte
+                try:
+                    autorizar_fonte(user, provedor, item["alias"])
+                except FonteInconclusiva as exc:
+                    motivo.append(str(exc))
+                    continue
+                except PermissaoNegada as exc:
+                    return Saida(str(exc), {**ficha, "tipo": "bloqueada"},
+                                 observacao=Observacao(d.acao, SEM_PERMISSAO, str(exc)))
+                except ImproperlyConfigured:
+                    motivo.append("classificador indisponível")
+                    continue
             try:
                 tabelas.append(_campos_para_modelo(user, item["alias"], d.alvo or texto))
             except Exception:
@@ -1511,6 +1590,8 @@ def _aprender_sozinho(user, c, d, texto, ficha, provedor, entrada, atual, motivo
         codigos_par = sorted({p["codigo"] for o in entrada.objetivos for p in o.get("parametros", [])}
                              | set(PARAMETROS_APRENDIDOS))
         d2 = _interpretar(provedor, entrada2, [o["codigo"] for o in entrada.objetivos], codigos_par)
+        if d2.acao == "conversar" and d2.resposta.strip().endswith("?") and not d2.opcoes:
+            return Saida(d2.resposta, ficha)
         if d2.acao != "criar_consulta" or d2.consulta is None:
             motivo.append("as tabelas encontradas (" + ", ".join(t["tabela"] for t in tabelas) + ") não serviram")
             return None
@@ -1548,7 +1629,7 @@ def _aprender_sozinho(user, c, d, texto, ficha, provedor, entrada, atual, motivo
                  parametros=tuple((k, v) for k, v in d.parametros if k in codigos),
                  resposta=(f"Aprendi a consultar “{cm.nome}” ({cm.tabela}). " + (d.resposta or "")).strip())
     saida = _preparar(user, c, d3, atual, defs, ficha, texto)
-    if getattr(saida.resultado, "ok", False):
+    if getattr(saida.resultado, "ok", False) and not getattr(saida.resultado, "legenda_pendente", ""):
         _lembrar_fonte(user, cm, saida.solicitacao.setor)
     return saida
 

@@ -159,7 +159,7 @@ def test_classificador_inconclusivo_em_receita_existente_continua_no_mesmo_chat(
 
     p = FonteIncerta([_d(acao="preparar_consulta", objetivo=antiga.codigo, parametros=[
         {"codigo": "filial-analise", "valor": "01"}]),
-        _d(acao="aprender_tabela", alvo="contratos efetuados"), criar("ZZC")])
+        _d(acao="conversar", resposta="Não encontrei a fonte."), criar("ZZC")])
     msg, res = conversas.enviar(user, conversas.nova_individual(user), "Conte os contratos por situação de outubro", p)
     assert res and res.ok and "Encerrado" in dict(res.linhas), msg.texto
     assert any(o["situacao"] == "erro_metadados" and "inconclusivo" in o["motivo"]
@@ -185,3 +185,42 @@ def test_rh_nao_pode_aprender_nem_consultar_fonte_comercial(contratos, novo_usua
                                 SetoresDistintos([criar("ZZC")]))
     assert res is None and "outro setor" in msg.texto
     assert not ConsultaModelo.objects.exists()
+
+
+def test_indicacao_de_tabelas_retoma_pergunta_e_executa(contratos, novo_usuario, politica):
+    from iativa.chat.models import Mensagem
+    user = _usuario(novo_usuario, politica, "comercial")
+    conversa = conversas.nova_individual(user)
+    pedido = "Quantos contratos de outubro por status, incluindo cancelados?"
+    Mensagem.objects.create(conversa=conversa, autor=user, papel="usuario", texto=pedido)
+    Mensagem.objects.create(conversa=conversa, papel="assistente", texto="O setor da primeira fonte ficou inconclusivo.")
+    p = Espiao([criar("ZZC")])
+    msg, res = conversas.enviar(user, conversa, "ZZC e SE1", p)
+    assert res and res.ok and dict(res.linhas)["Cancelado"] == "0", msg.texto
+    entrada = next(e for e in p.entradas if e.tabelas_para_aprender)
+    assert pedido in entrada.mensagem
+    assert {t["tabela"] for t in entrada.tabelas_para_aprender} == {"ZZC", "SE1"}
+
+
+def test_dominio_dinamico_informa_origem_sem_inventar_codigos(contratos):
+    from iativa.metadata.catalogo import abrir_catalogo
+    with sqlite3.connect(contratos) as db:
+        db.execute("UPDATE SX3010 SET X3_CBOX=? WHERE X3_CAMPO='ZZC_STATUS'",
+                   ('#IIF(findfunction("LOCSTATUS()"),LOCSTATUS(),"")',))
+    with abrir_catalogo() as cat:
+        literais, dinamicos = cat.dominios_campos("ZZC")
+    assert "ZZC_STATUS" not in literais and dinamicos["ZZC_STATUS"] == "LOCSTATUS"
+
+
+def test_contagem_dinamica_entrega_codigos_e_mantem_a_legenda_pendente(contratos, novo_usuario, politica):
+    with sqlite3.connect(contratos) as db:
+        db.execute("UPDATE SX3010 SET X3_CBOX='#LOCSTATUS()' WHERE X3_CAMPO='ZZC_STATUS'")
+    user = _usuario(novo_usuario, politica, "comercial")
+    decisao = criar("ZZC")
+    decisao["parametros"][-1]["valor"] = "contagem_distinta:ZZC_ID por ZZC_STATUS categorias dinamicas"
+    msg, res = conversas.enviar(user, conversas.nova_individual(user), "Quantos contratos por status em outubro?",
+                                Espiao([decisao]))
+    assert res and res.ok and res.situacao == "parcial", msg.texto
+    assert dict(res.linhas) == {"A": "1", "E": "1", "F": "1"}
+    assert "LOCSTATUS" in res.mensagem and "legenda" in msg.texto
+    assert "operacao_validada" not in ConsultaModelo.objects.get().spec

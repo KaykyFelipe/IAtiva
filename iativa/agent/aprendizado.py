@@ -160,7 +160,7 @@ def campos_da_tabela(user, alias: str, automatico: bool = False) -> dict:
         raise PermissaoNegada("Tabela indisponível.")
     with abrir_catalogo() as cat:
         t = cat.tabelas([alias], com_campos=True).get(alias)
-        opcoes = cat.opcoes(alias) if t else {}
+        opcoes, dinamicos = cat.dominios_campos(alias) if t else ({}, {})
     if t is None:
         raise ValidationError("Tabela não encontrada no dicionário.")
     if not t.campo_filial:
@@ -171,7 +171,7 @@ def campos_da_tabela(user, alias: str, automatico: bool = False) -> dict:
     campos = [c for c in t.campos if c.consultavel and c.nome != t.campo_filial and vis.campo(alias, c.nome)]
     return {
         "alias": t.alias, "nome": t.nome, "fisica": t.fisica, "campo_filial": t.campo_filial,
-        "chave": t.chave, "opcoes": opcoes, "campos": campos, "datas": [c for c in campos if c.tipo == "D"],
+        "chave": t.chave, "opcoes": opcoes, "dinamicos": dinamicos, "campos": campos, "datas": [c for c in campos if c.tipo == "D"],
         "textos": [c for c in campos if c.tipo == "C"],
         "setores": Department.objects.filter(ativo=True).order_by("nome"),
     }

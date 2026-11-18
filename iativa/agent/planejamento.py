@@ -30,13 +30,17 @@ def autorizar_fonte(user, provedor, alias):
         t = cat.tabelas([alias], com_campos=True).get(alias)
     if t is None:
         raise FonteInconclusiva(f'A tabela {alias} não foi confirmada no catálogo físico local.')
-    descricao = {'tabela': alias, 'descricao': t.nome,
+    campos = [c for c in t.campos if c.consultavel]
+    relevantes = [c for c in campos if c.nome in t.chave or c.tipo == "D" or c.personalizado]
+    selecionados = list(dict.fromkeys([*campos[:25], *relevantes[:50], *campos[:40]]))
+    descricao = {'tabela': alias, 'descricao': t.nome, 'chave_local': list(t.chave),
                  'campos': [{'nome': c.nome, 'titulo': c.titulo, 'descricao': c.descricao}
-                            for c in t.campos[:40]]}
+                            for c in selecionados]}
     usos = []
     for cm in ConsultaModelo.objects.filter(situacao='aprovada').order_by('pk').iterator():
         if alias == cm.tabela or alias in {j['tabela'] for j in cm.spec.get('juncoes', [])}:
             usos.append({'nome': cm.nome, 'descricao': cm.descricao, 'fonte_principal': cm.tabela,
+                         'setores_da_receita': sorted(cm.setores.values_list('codigo', flat=True)),
                          'colunas': [c['rotulo'] for c in cm.spec.get('colunas', [])][:20]})
             if len(usos) == 12:
                 break

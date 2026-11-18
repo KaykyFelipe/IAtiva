@@ -184,6 +184,8 @@ def evidencia(decisao, saida, texto='') -> str:
     obs = saida.observacao
     if obs is not None and obs.situacao == "sem_permissao":
         return BLOQUEIO
+    if tipo == "legenda_pendente":
+        return PERGUNTA
     if tipo == "tarefa":
         return DELEGADA
     if tipo == 'impedimento_dados':

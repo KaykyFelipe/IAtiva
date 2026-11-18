@@ -99,6 +99,9 @@ class Resultado:
     memoria_tecnica: dict = field(default_factory=dict)  # M95: {estado, versao, trechos} da busca obrigatória
     curta_salva: str = ''  # M48: resposta curta gravada no snapshot (os totais não são gravados)
 
+    fonte_inconclusiva: str = ""
+    legenda_pendente: str = ""
+
     @property
     def cabecalho(self):
         return [(c, "num" if t in ("dinheiro", "inteiro", "valor", "numero") else "") for c, t in zip(self.colunas, self.tipos)]
@@ -375,7 +378,7 @@ def _executar_solicitacao(user, s: RequestContext) -> Resultado:
                 if s.setor.codigo not in setores:
                     raise PermissaoNegada("A fonte não é autorizada para o setor desta solicitação.")
         except FonteInconclusiva as exc:
-            return Resultado(False, str(exc) + ' Busque outra fonte equivalente no catálogo autorizado.',
+            return Resultado(False, str(exc), fonte_inconclusiva=alias,
                              estado=s.estado, solicitacao=s, situacao=ERRO_METADADOS)
         except (FalhaModelo, ImproperlyConfigured):
             return Resultado(False, 'O classificador de fontes está indisponível. Verifique as outras fontes autorizadas.',
@@ -421,6 +424,7 @@ def _executar_solicitacao(user, s: RequestContext) -> Resultado:
             from iativa.agent import andamento
 
             categorias = {}
+            legenda_pendente = ""
             for filial in filiais:  # "todas as filiais": uma consulta por filial autorizada, mesmo validador
                 andamento.avisar(f"Consultando o ERP — {rotulo(filial)}")
                 plano = montar(s.objetivo, {**valores, "filial-analise": filial})
@@ -431,13 +435,15 @@ def _executar_solicitacao(user, s: RequestContext) -> Resultado:
                     if any(not visibilidade.campo(a, c) for a, nomes in campos.items() for c in nomes):
                         return _encerrar(user, s, E.NAO_VALIDADA, inicio, 0,
                                          "O setor não tem acesso a todos os campos solicitados.", SEM_PERMISSAO)
-                if plano.categorias and not categorias:
+                if plano.categorias and not (categorias or legenda_pendente):
                     campo = plano.colunas[0].campo
                     alias = {"e1": plano.base, **{j.alias: j.tabela for j in plano.juncoes}}[campo.alias]
-                    opcoes = cat.opcoes(alias).get(campo.nome, {})
-                    if any(k not in opcoes for k in plano.categorias):
+                    dominios, dinamicos = cat.dominios_campos(alias)
+                    opcoes = dominios.get(campo.nome, {})
+                    legenda_pendente = dinamicos.get(campo.nome, "")
+                    if not legenda_pendente and any(k not in opcoes for k in plano.categorias):
                         raise PlanoInvalido(f"O dicionário local não confirma os códigos pedidos em {campo.nome}.")
-                    categorias = {k: opcoes[k] for k in plano.categorias}
+                    categorias = {k: opcoes[k] for k in plano.categorias if k in opcoes}
                     if len(set(categorias.values())) != len(categorias):
                         raise PlanoInvalido("Mais de um código corresponde à mesma descrição no dicionário local.")
                 if len(filiais) > 1 and any(c.agregacao == "COUNT_DISTINCT" for c in plano.colunas):
@@ -520,7 +526,7 @@ def _executar_solicitacao(user, s: RequestContext) -> Resultado:
         if mesclou:
             origem = [None] * len(linhas)
     sem_grupos = not linhas
-    if categorias:
+    if plano.categorias:
         if truncado:
             return _encerrar(user, s, E.NAO_VALIDADA, inicio, 0,
                              "O limite de grupos impediu conferir todas as categorias.", ERRO_PARAMETROS)
@@ -530,6 +536,7 @@ def _executar_solicitacao(user, s: RequestContext) -> Resultado:
                 return _encerrar(user, s, E.NAO_VALIDADA, inicio, 0,
                                  "Não foi possível confirmar uma situação única por entidade no período. "
                                  "Procure a fonte do status atual ou o histórico na data de referência.", ERRO_METADADOS)
+    if categorias:
         encontrados = {str(codigo).strip(): n for codigo, n in linhas}
         desconhecidos = set(encontrados) - set(opcoes)
         linhas = [(nome, encontrados.get(codigo, 0)) for codigo, nome in categorias.items()]
@@ -572,7 +579,7 @@ def _executar_solicitacao(user, s: RequestContext) -> Resultado:
     destaque = _destaque(plano, comp, colunas, formatadas, linhas, tipos)
     if destaque and not categorias:
         mensagem = destaque + " " + mensagem
-    if categorias:
+    if plano.categorias:
         periodo = valores.get("periodo-analise")
         mensagem = "Contagem por " + comp.rotulos[0]
         if periodo:
@@ -580,15 +587,21 @@ def _executar_solicitacao(user, s: RequestContext) -> Resultado:
         mensagem += "."
         if sem_grupos:
             mensagem += " A consulta completa não encontrou registros no período."
+        if legenda_pendente:
+            mensagem += (f" O Protheus fornece a legenda de {campo.nome} por {legenda_pendente}. "
+                         "A tabela mostra os códigos encontrados. Falta confirmar quais correspondem às situações solicitadas.")
         totais = None
     situacao = VAZIO if sem_grupos else (PARCIAL if truncado else SUCESSO)
     res = _encerrar(user, s, E.CONCLUIDA, inicio, len(linhas), mensagem, situacao)
+    res.legenda_pendente = legenda_pendente
+    if legenda_pendente:
+        res.situacao = PARCIAL
     res.ok, res.colunas, res.tipos, res.linhas = True, colunas, tipos, formatadas
     res.premissas, res.truncado, res.total, res.total_valor = plano.premissas, truncado, total, total_valor
     res.totais, res.subtotal = totais, subtotal
     if categorias:
         res.medida_calculada = "contagem"
-    if s.objetivo.startswith(PREFIXO_APRENDIDO) and not truncado and totais_ok and not cm.spec.get("operacao_validada"):
+    if s.objetivo.startswith(PREFIXO_APRENDIDO) and not truncado and totais_ok and not legenda_pendente and not cm.spec.get("operacao_validada"):
         import hashlib
         import json
         estrutura = [(c.nome, c.tipo, c.tamanho, c.titulo, c.descricao) for c in base.campos if c.consultavel]
