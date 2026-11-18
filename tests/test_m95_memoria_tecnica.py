@@ -53,3 +53,8 @@ def test_sem_arquivo_ou_indice_quebrado_e_contingencia_explicita(isolado, settin
 def test_escopo_filtra_trechos(isolado):
     r = mt.recuperar("cliente nome titulo", permitidos={"SE1"})
     assert r.trechos and all(t["alias"] == "SE1" for t in r.trechos)
+
+
+def test_candidatas_priorizam_tabela_que_cobre_mais_termos(isolado):
+    assert mt.tabelas_candidatas("funcionários desligados demissão")[0][0] == "SRA"
+    assert mt.tabelas_candidatas("clientes bloqueados")[0][0] == "SA1"

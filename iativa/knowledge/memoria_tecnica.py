@@ -278,11 +278,27 @@ def recuperar(texto: str = "", aliases=(), limite: int = MAX_TRECHOS, permitidos
 
 def tabelas_candidatas(texto: str, limite: int = 8) -> list[tuple[str, int]]:
     """Aliases citados pelos termos do pedido, por relevância (para a descoberta; confirmar no catálogo local)."""
-    r = recuperar(texto, limite=limite * 3)
-    pontos: dict[str, int] = {}
-    for i, t in enumerate(r.trechos):
-        pontos[t["alias"]] = pontos.get(t["alias"], 0) + max(1, 10 - i)
-    return sorted(pontos.items(), key=lambda x: -x[1])[:limite]
+    estado, caminho, _ = indice()
+    termos = _termos(texto)
+    if estado != OK or not termos:
+        return []
+    consulta = " OR ".join(f'"{t}"*' for t in termos)
+    cobertura: dict[str, set] = {}
+    titulo: dict[str, int] = {}
+    try:
+        with sqlite3.connect(f"file:{caminho}?mode=ro", uri=True) as con:
+            for alias, secao, txt in con.execute(
+                    "SELECT alias, secao, texto FROM busca WHERE busca MATCH ? ORDER BY rank LIMIT 400", (consulta,)):
+                n = _norm(txt)
+                achados = {t for t in termos if t in n}
+                cobertura.setdefault(alias, set()).update(achados)
+                if secao == "tabela":
+                    titulo[alias] = titulo.get(alias, 0) + len(achados)
+    except sqlite3.Error:
+        return []
+    # Mais termos do pedido cobertos pela tabela (título + campos) e termos no título da tabela pesam mais.
+    pontos = {a: 10 * len(c) + 6 * titulo.get(a, 0) for a, c in cobertura.items()}
+    return sorted(pontos.items(), key=lambda x: (-x[1], x[0]))[:limite]
 
 
 def relacoes(alias: str) -> list[dict]:

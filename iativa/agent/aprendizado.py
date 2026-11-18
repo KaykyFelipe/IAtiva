@@ -132,7 +132,7 @@ def candidatos(user, texto: str, limite: int = 5, automatico: bool = False) -> l
             for alias, p in tabelas_candidatas(texto):
                 if alias in locais:
                     i = item(alias)
-                    i["pontos"] += 15 * p
+                    i["pontos"] += p  # reforço (desempate), não decisão: a referência pública tem ruído
                     i["referencia"] = True
         except Exception:
             pass  # contingência: índice indisponível, descoberta só pelo dicionário local
