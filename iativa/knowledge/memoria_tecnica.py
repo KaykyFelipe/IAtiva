@@ -125,7 +125,7 @@ def ler(caminho: Path):
 # --- índice --------------------------------------------------------------------------------------------------
 
 def _pasta() -> Path:
-    return Path(getattr(settings, "IATIVA_MEMORIA_TECNICA_INDICE", None) or arquivo().parent / "indice")
+    return Path(getattr(settings, "IATIVA_MEMORIA_TECNICA_INDICE", None) or arquivo().parent / "indice") / "v2"
 
 
 def construir(caminho: Path, sha: str) -> Path:
@@ -165,10 +165,13 @@ def construir(caminho: Path, sha: str) -> Path:
                                                                     f"{d['campo']} {d['titulo']} {d['termos']}"))
             elif tipo == "relacao":
                 n["relacao"] += 1
+                termos = " ".join(d[k] for k in ("origem", "destino", "expr_origem", "expr_destino", "cardinalidade"))
+                con.execute("INSERT INTO busca VALUES (?,?,?,?)", (d["alias"], "", "relacao", termos))
                 con.execute("INSERT INTO relacoes VALUES (?,?,?,?,?,?)", tuple(d[k] for k in (
                     "alias", "origem", "destino", "expr_origem", "expr_destino", "cardinalidade")))
             elif tipo == "indice":
                 n["indice"] += 1
+                con.execute("INSERT INTO busca VALUES (?,?,?,?)", (d["alias"], "", "indice", d["texto"]))
         con.executemany("INSERT INTO tabelas VALUES (?,?,?,?,?)", [
             (t["alias"], t["nome"], t.get("chave", ""), t.get("modo", ""), t.get("fonte", "")) for t in tabelas.values()])
         con.execute("CREATE INDEX campos_alias ON campos(alias, campo)")

@@ -1,8 +1,15 @@
 # STATUS — IAtiva
 
-**Atualizado em:** 2026-11-17
+**Atualizado em:** 2026-11-18
 **Etapa atual:** 7 — Piloto local
 **Situação:** **Etapa 7 aprovada em 2026-11-16 por Diego; em andamento.** Feito: roteiro do piloto (`docs/piloto/ROTEIRO.md`) e auditoria de não armazenamento (`manage.py auditar_armazenamento`). Falta: usuários do Financeiro, conferência dos números com relatórios do Protheus, avaliação da interpretação e latência. Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
+
+## Mudança M101 — descoberta e contagem de entidades por situação (2026-11-18)
+
+- O executor diferencia ausência no catálogo, classificação inconclusiva e acesso negado. Os dois primeiros motivos voltam ao ciclo de descoberta. O setor e as restrições de campos são reconferidos na execução.
+- O índice público inclui índices e relacionamentos. O catálogo local fornece a chave e os códigos literais do SX3. A contagem distinta por filial verifica identificadores ausentes e estados conflitantes antes de concluir a distribuição.
+- A primeira execução completa registra no catálogo a operação reutilizável e a assinatura dos metadados locais. O Markdown é gerado em `var/receitas/<codigo>/`. A referência pública e a receita aprendida têm versões independentes.
+- Validação sintética em `tests/test_descoberta_contratos.py`, inclusive reutilização em outro processo Django. A correspondência dos códigos reais da Ativa continua dependente do dicionário e das regras da instalação.
 
 ## Mudança M100 — agrupar por campo e por filial (2026-11-18)
 

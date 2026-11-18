@@ -259,7 +259,11 @@ def conversar(user, c, texto: str, provedor=None, mensagem_usuario_id=None, inte
     from iativa.accounts.models import Department
     ids = Department.objects.filter(codigo__in=analise['setores']).values_list('pk', flat=True)
     with limitar_consulta(user, ids):
-        return _conversar_autorizado(user, c, texto, provedor, mensagem_usuario_id, interrompido, acomp, observacoes, analise)
+        token = planejamento.provedor_do_pedido.set(provedor)
+        try:
+            return _conversar_autorizado(user, c, texto, provedor, mensagem_usuario_id, interrompido, acomp, observacoes, analise)
+        finally:
+            planejamento.provedor_do_pedido.reset(token)
 
 
 def _conversar_autorizado(user, c, texto, provedor, mensagem_usuario_id, interrompido, acomp, observacoes, analise):
@@ -313,8 +317,14 @@ def _conversar_autorizado(user, c, texto, provedor, mensagem_usuario_id, interro
         consultas_conversa = _consultas_conversa(user, c, defs)
     except Exception:
         consultas_conversa = []  # contexto auxiliar: nunca impede a resposta
+    planejamento_pedido = {"modo": "executar", "analise": analise}
+    if analise.get("natureza") == "dados":
+        from iativa.knowledge.memoria_tecnica import tabelas_candidatas
+        referencias = {alias for alias, _ in tabelas_candidatas(texto)}
+        planejamento_pedido["receitas_relacionadas"] = [
+            o.codigo for o in objetivos if referencias.intersection(o.tabelas)][:8]
     entrada = EntradaAgente(
-        planejamento={'modo': 'executar', 'analise': analise},
+        planejamento=planejamento_pedido,
         consultas_conversa=consultas_conversa,
         resultado_anterior=calculos.contexto(user, c),
         lista_anterior=lista,
@@ -571,6 +581,10 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
         d = admissoes.orientar(user, texto, d, objetivos)
         if d.acao not in ("conversar", "falta_capacidade") and d.resposta.strip():
             andamento.avisar(d.resposta.strip().split("\n")[0])  # M53: o que a IA vai fazer aparece na hora
+        if (d.acao == "falta_capacidade" and pode_aprender_sozinho(user)
+                and any(o.situacao == ERRO_METADADOS for o in observacoes)
+                and not any(o.acao == "aprender_tabela" for o in observacoes)):
+            d = replace(d, acao="aprender_tabela", alvo=texto, consulta=None)
         if d.acao == "falta_capacidade":
             # M53: o modelo verificou que nenhum caminho existente resolve: a manutenção implementa já.
             ac.capacidade = d.capacidade
@@ -605,14 +619,16 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
             causa = "acao_repetida"
             break  # a mesma ação com os mesmos dados já foi feita: não repete
         feitas.add(assinatura)
-        if d.acao in ('criar_consulta', 'historico_cargo'):
-            from .planejamento import autorizar_fonte
-            alias = d.consulta['tabela'] if d.acao == 'criar_consulta' and d.consulta else 'SRA'
+        if d.acao == 'historico_cargo':
+            from .planejamento import FonteInconclusiva, autorizar_fonte
             try:
-                autorizar_fonte(user, provedor, alias)
-            except (PermissaoNegada, FalhaModelo):
-                return Saida('Não consegui confirmar que a fonte pertence a um setor autorizado para este pedido. '
-                             'Não executei a consulta.', {'tipo': 'bloqueada'})
+                autorizar_fonte(user, provedor, 'SRA')
+            except PermissaoNegada as exc:
+                return Saida(str(exc), {'tipo': 'bloqueada'})
+            except (FonteInconclusiva, FalhaModelo, ImproperlyConfigured):
+                observacoes.append(Observacao(d.acao, ERRO_METADADOS,
+                    'A fonte do histórico ficou inconclusiva. Busque outra fonte no dicionário autorizado.'))
+                continue
         registrar("interpretacao", "agente", usuario=user, estado_novo=d.acao, entidade_id=atual.pk if atual else None,
                   linhas=len(d.parametros))
         reduz = _reduz_escopo(d, cobertura)
@@ -690,6 +706,8 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
         if ac.contrato:
             from .planejamento import registrar_entregas
             registrar_entregas(ac, d, saida)
+            if saida.observacao and saida.observacao.recuperavel:
+                observacoes.append(saida.observacao)
             if ac.pendentes() and ev not in (coord.PERGUNTA, coord.BLOQUEIO, coord.DELEGADA):
                 # Sem entrega comprovada, são revisões da mesma tentativa, não novas respostas.
                 previa = _juntar(previa, saida) if previa is not None and ac.cumpridas else saida
@@ -864,6 +882,8 @@ def _encerrar_sem_cumprir(ac, user, c, mensagem_id, saida, previa, causa, observ
                   TEMPO_ESGOTADO: "o ERP não respondeu a tempo",
                   FALHA_TRANSITORIA: "o ERP ou a IA tiveram uma falha passageira",
                   SEM_PERMISSAO: "parte do pedido está fora das suas permissões"}[classe]
+        if classe == ERRO_METADADOS and tentativas:
+            motivo = next((o.detalhe for o in reversed(tentativas) if o.situacao == classe and o.detalhe), motivo)
         final = Saida(f"{texto}\n\n{falta}. Parei porque {motivo}; isso não é falta de função no sistema, então não "
                       "abri correção de código. Tente de novo ou reformule o pedido.".strip(), ficha)
     elif causa in PASSAGEIRAS:
@@ -1317,7 +1337,10 @@ def _avaliar_e_executar(user, s, resposta_modelo, erros, ficha) -> Saida:
         return Saida(" ".join(x for x in (texto_erros, texto) if x), ficha, s, observacao=obs)
     if r.tipo != "pronta":
         situacao = ERRO_METADADOS if r.mensagem == orq.MOTIVOS["metadados_indisponiveis"] else SEM_PERMISSAO
-        obs = Observacao("preparar_consulta", TEMPO_ESGOTADO if situacao == ERRO_METADADOS else situacao, r.mensagem)
+        if r.mensagem == orq.MOTIVOS["fonte_ausente"]:
+            obs = Observacao("preparar_consulta", ERRO_METADADOS, r.mensagem)
+        else:
+            obs = Observacao("preparar_consulta", TEMPO_ESGOTADO if situacao == ERRO_METADADOS else situacao, r.mensagem)
         return Saida(" ".join(x for x in (texto_erros, r.mensagem) if x), ficha, s, observacao=obs)
     if texto_erros:
         # Um critério pedido não foi aceito: executar sem ele traria outro resultado (ex.: sem filtro).
@@ -1378,12 +1401,12 @@ def _aprender(user, c, d, texto, ficha, provedor=None, entrada=None, atual=None)
                      observacao=Observacao(d.acao, SEM_PERMISSAO, "usuário sem permissão para criar consultas"))
     # Falha recuperável: o modelo recebe o motivo e pode tentar outra tabela ou outros campos.
     obs = Observacao(d.acao, ERRO_METADADOS, "; ".join(motivo) or "nenhuma tabela adequada encontrada com esses termos")
-    if not pode_aprender(user):
+    if not pode_aprender_sozinho(user) and not pode_aprender(user):
         return Saida("Procurei no dicionário do Protheus e não consegui montar essa consulta ("
                      + obs.detalhe + "). Diga outras palavras para o assunto ou o código da tabela (ex.: SRA).",
                      ficha, observacao=obs)
     try:
-        lista = candidatos(user, d.alvo or texto)
+        lista = candidatos(user, d.alvo or texto, automatico=pode_aprender_sozinho(user))
     except Exception:
         return Saida("Não consegui ler o dicionário do Protheus agora. Tente de novo em instantes.", ficha,
                      observacao=Observacao(d.acao, TEMPO_ESGOTADO, "dicionário do ERP indisponível"))
@@ -1402,7 +1425,8 @@ def _aprender(user, c, d, texto, ficha, provedor=None, entrada=None, atual=None)
 
 def _campos_para_modelo(user, alias, pedido=""):
     info = aprendizado.campos_da_tabela(user, alias, automatico=True)
-    campos = [{"campo": f.nome, "tipo": {"D": "data", "N": "numero"}.get(f.tipo, "texto"), "titulo": f.titulo}
+    campos = [{"campo": f.nome, "tipo": {"D": "data", "N": "numero"}.get(f.tipo, "texto"), "titulo": f.titulo, "descricao": f.descricao,
+               "opcoes": info["opcoes"].get(f.nome, {})}
               for f in info["campos"] if not aprendizado.sensivel(f)]
     try:
         juncoes = [{"tabela": j["tabela"], "nome": j["nome"],
@@ -1421,7 +1445,12 @@ def _campos_para_modelo(user, alias, pedido=""):
         memoria = ref.resumo()
     except Exception:
         referencia, memoria = [], {"estado": "indisponivel"}
-    return {"tabela": info["alias"], "nome": info["nome"], "campos": campos[:150], "juncoes_possiveis": juncoes,
+    if len(campos) > 150:
+        termos = aprendizado._radicais(pedido)
+        campos.sort(key=lambda c: (c["campo"] in info["chave"],
+                                   len(termos & aprendizado._radicais(c["titulo"] + " " + c["descricao"]))),
+                    reverse=True)
+    return {"tabela": info["alias"], "nome": info["nome"], "chave_local": info["chave"], "campos": campos[:150], "juncoes_possiveis": juncoes,
             "referencia_publica": referencia, "memoria_tecnica": memoria}
 
 
@@ -1444,15 +1473,16 @@ def _busca_na_descricao(d):
     return replace(d, parametros=novos)
 
 
-def _lembrar_fonte(user, cm):
+def _lembrar_fonte(user, cm, setor):
     """M82: o que a IA aprendeu sozinha fica na memória (visível em Memória e aprovações): o assunto, a consulta
     e a tabela do Protheus. Só estrutura; nunca nomes, valores ou linhas do ERP."""
     from .models import EscopoNota, NotaAgente, TipoNota
     texto = (f"Para perguntas sobre {cm.descricao or cm.nome}, use a consulta “{cm.nome}” (tabela {cm.tabela} do "
              f"Protheus), aprendida pela IA.")[:300]
     try:
-        if not NotaAgente.objects.filter(texto=texto, ativo=True).exists():
-            NotaAgente.objects.create(texto=texto, tipo=TipoNota.TERMO, escopo=EscopoNota.EMPRESA, criado_por=user,
+        if not NotaAgente.objects.filter(texto=texto, ativo=True, setor=setor).exists():
+            NotaAgente.objects.create(texto=texto, tipo=TipoNota.TERMO, escopo=EscopoNota.SETOR, setor=setor,
+                                      setor_origem=setor, setores_origem=[setor.codigo], criado_por=user,
                                       aprovado_por=user, aprovado_em=timezone.now(), evidencia=f"consulta {cm.codigo}"[:300])
     except Exception:
         pass  # a memória é auxiliar: nunca impede a resposta
@@ -1489,8 +1519,19 @@ def _aprender_sozinho(user, c, d, texto, ficha, provedor, entrada, atual, motivo
                 "campo_busca": consulta.get("campo_busca", "").upper()}
     andamento.avisar(f"Criando a consulta “{consulta.get('nome', '')}” ({consulta.get('tabela', '')})")
     try:
-        cm = aprendizado.criar_automatico(user, consulta)
-    except (ValidationError, PermissaoNegada) as exc:
+        from .planejamento import FonteInconclusiva, autorizar_fonte
+        setores = None
+        for alias in dict.fromkeys([consulta['tabela']] + [j['tabela'] for j in consulta.get('juncoes', [])]):
+            autorizados = autorizar_fonte(user, provedor, alias)
+            setores = autorizados if setores is None else setores & autorizados
+        cm = aprendizado.criar_automatico(user, consulta, setores_confirmados=setores)
+    except PermissaoNegada as exc:
+        return Saida(str(exc), {**ficha, 'tipo': 'bloqueada'},
+                     observacao=Observacao(d.acao, SEM_PERMISSAO, str(exc)))
+    except (FonteInconclusiva, ImproperlyConfigured) as exc:
+        motivo.append(str(exc) if isinstance(exc, FonteInconclusiva) else 'classificador indisponível')
+        return None
+    except ValidationError as exc:
         registrar("modelo_falhou", "agente", usuario=user, estado_novo="aprendizado_automatico", resultado="erro")
         detalhe = "; ".join(getattr(exc, "messages", None) or [str(exc)])
         motivo.append(f"consulta sobre {consulta.get('tabela', '')} recusada: {detalhe}"[:300])
@@ -1501,13 +1542,15 @@ def _aprender_sozinho(user, c, d, texto, ficha, provedor, entrada, atual, motivo
                      "a TI autorizar; assim que for autorizada, é só perguntar de novo.",
                      {**ficha, "tipo": "bloqueada", "fonte_proposta": cm.pk})
     registrar("interpretacao", "agente", usuario=user, estado_novo="aprendeu_sozinho", entidade_id=cm.pk)
-    _lembrar_fonte(user, cm)
     codigos = set(OBJETIVOS[cm.codigo].parametros)
     defs = orq._definicoes(sorted(codigos))
     d3 = replace(d, acao="preparar_consulta", objetivo=cm.codigo,
                  parametros=tuple((k, v) for k, v in d.parametros if k in codigos),
                  resposta=(f"Aprendi a consultar “{cm.nome}” ({cm.tabela}). " + (d.resposta or "")).strip())
-    return _preparar(user, c, d3, atual, defs, ficha, texto)
+    saida = _preparar(user, c, d3, atual, defs, ficha, texto)
+    if getattr(saida.resultado, "ok", False):
+        _lembrar_fonte(user, cm, saida.solicitacao.setor)
+    return saida
 
 
 def _listar(administrador, objetivos, d, ficha) -> Saida:

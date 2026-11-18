@@ -132,6 +132,27 @@ class DicionarioProtheus:
         )
         return {r[0]: TabelaDicionario(*r) for r in rows}
 
+    def opcoes(self, alias: str) -> dict:
+        """Domínios literais do SX3. Expressões dinâmicas e opções ambíguas ficam sem tradução."""
+        rows = self._consultar(
+            f"SELECT X3_CAMPO, X3_CBOX FROM {self.sx3} WHERE D_E_L_E_T_ = ' ' AND X3_ARQUIVO = ?",
+            (validar_alias(alias),),
+        )
+        opcoes = {}
+        for campo, caixa in rows:
+            if not caixa:
+                continue
+            pares = {}
+            for item in str(caixa).strip("; ").split(";"):
+                codigo, _, titulo = (v.strip() for v in item.partition("="))
+                if not re.fullmatch(r"[A-Za-z0-9_-]{1,12}", codigo) or not titulo or codigo in pares:
+                    break
+                pares[codigo] = titulo
+            else:
+                if len(pares) <= 100:
+                    opcoes[campo] = pares
+        return opcoes
+
     def campos(self, alias: str) -> list[CampoDicionario]:
         validar_alias(alias)
         rows = self._consultar(

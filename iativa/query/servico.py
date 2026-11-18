@@ -218,7 +218,7 @@ class _Acumulador:
                 m["cont"] += int(cont or 0)
                 if soma is not None:
                     m["soma"] = _dec(soma) if m["soma"] is None else m["soma"] + _dec(soma)
-            elif func == "COUNT":
+            elif func in ("COUNT", "COUNT_DISTINCT"):
                 m["v"] = int(v[0] or 0) + (m["v"] or 0)
             else:
                 novo = v[0]
@@ -268,6 +268,8 @@ def _total_no_banco(cat, plano, specs, acumulador, cfg, permitidas) -> int:
         valores = []
         for _, func, _, _ in specs:
             valores.append((l.pop(0), l.pop(0)) if func in ("SUM", "AVG") else (l.pop(0),))
+        if plano.categorias and specs[0][1] == "COUNT_DISTINCT" and int(l.pop(0)) != n:
+            raise PlanoInvalido("Existem registros sem a chave da entidade; confirme outra fonte ou chave.")
         acumulador.juntar(chave, n, valores)
     return registros
 
@@ -353,18 +355,33 @@ def _executar_solicitacao(user, s: RequestContext) -> Resultado:
     s.refresh_from_db()
     if conferencia.tipo != "pronta":
         situacao = ERRO_PARAMETROS if conferencia.tipo == "pergunta" else (
-            ERRO_METADADOS if conferencia.mensagem == orquestrador.MOTIVOS["metadados_indisponiveis"] else SEM_PERMISSAO)
+            ERRO_METADADOS if conferencia.mensagem in (orquestrador.MOTIVOS["metadados_indisponiveis"],
+                                                       orquestrador.MOTIVOS["fonte_ausente"]) else SEM_PERMISSAO)
         return Resultado(False, conferencia.mensagem, estado=s.estado, solicitacao=s, situacao=situacao)
     if s.objetivo.startswith(PREFIXO_APRENDIDO):
-        from iativa.agent.planejamento import autorizar_fonte
+        from iativa.agent.planejamento import FonteInconclusiva, autorizar_fonte
         from iativa.agent.provedores import FalhaModelo
         from iativa.agent.models import ConsultaModelo
         cm = ConsultaModelo.objects.get(pk=OBJETIVOS[s.objetivo].modelo_id)
+        if not cm.setores.filter(pk=s.setor_id).exists():
+            return Resultado(False, "Esta receita não está liberada para o setor da solicitação.",
+                             estado=s.estado, solicitacao=s, situacao=SEM_PERMISSAO)
+        from iativa.agent.aprendizado import camada_por_codigo
+        camada = camada_por_codigo(user, s.objetivo)
+        juncoes = cm.spec.get('juncoes', []) + camada.get('juncoes', [])
         try:
-            for alias in {cm.tabela} | {j['tabela'] for j in cm.spec.get('juncoes', [])}:
-                autorizar_fonte(user, None, alias)
-        except (PermissaoNegada, FalhaModelo, ImproperlyConfigured):
-            return Resultado(False, 'Não consegui confirmar acesso ao domínio desta fonte. A consulta não foi executada.',
+            for alias in dict.fromkeys([cm.tabela] + [j['tabela'] for j in juncoes]):
+                setores = autorizar_fonte(user, None, alias)
+                if s.setor.codigo not in setores:
+                    raise PermissaoNegada("A fonte não é autorizada para o setor desta solicitação.")
+        except FonteInconclusiva as exc:
+            return Resultado(False, str(exc) + ' Busque outra fonte equivalente no catálogo autorizado.',
+                             estado=s.estado, solicitacao=s, situacao=ERRO_METADADOS)
+        except (FalhaModelo, ImproperlyConfigured):
+            return Resultado(False, 'O classificador de fontes está indisponível. Verifique as outras fontes autorizadas.',
+                             estado=s.estado, solicitacao=s, situacao=ERRO_METADADOS)
+        except PermissaoNegada as exc:
+            return Resultado(False, str(exc),
                              estado=s.estado, solicitacao=s, situacao=SEM_PERMISSAO)
     valores = _valores(user, s)
     autorizadas = filiais_autorizadas(user, s.setor)
@@ -384,11 +401,9 @@ def _executar_solicitacao(user, s: RequestContext) -> Resultado:
         from iativa.agent import memoria as memoria_agente
 
         valores[REGRAS] = memoria_agente.regras_aplicaveis(user, s.setor, OBJETIVOS[s.objetivo].tabelas[0])
-        from iativa.agent.aprendizado import camada_por_codigo
-
         from .plano import FILTROS_USUARIO
 
-        valores[FILTROS_USUARIO] = camada_por_codigo(user, s.objetivo)  # M42: filtros só desta pessoa
+        valores[FILTROS_USUARIO] = camada  # M42: filtros só desta pessoa
 
     from iativa.agent import prazo
 
@@ -405,9 +420,29 @@ def _executar_solicitacao(user, s: RequestContext) -> Resultado:
         with abrir_catalogo() as cat:
             from iativa.agent import andamento
 
+            categorias = {}
             for filial in filiais:  # "todas as filiais": uma consulta por filial autorizada, mesmo validador
                 andamento.avisar(f"Consultando o ERP — {rotulo(filial)}")
                 plano = montar(s.objetivo, {**valores, "filial-analise": filial})
+                if s.objetivo.startswith(PREFIXO_APRENDIDO):
+                    from iativa.metadata.descoberta import _Visibilidade
+                    campos = escopo_do_plano(plano, s.setor_id, filiais)["campos"]
+                    visibilidade = _Visibilidade({s.setor_id}, campos)
+                    if any(not visibilidade.campo(a, c) for a, nomes in campos.items() for c in nomes):
+                        return _encerrar(user, s, E.NAO_VALIDADA, inicio, 0,
+                                         "O setor não tem acesso a todos os campos solicitados.", SEM_PERMISSAO)
+                if plano.categorias and not categorias:
+                    campo = plano.colunas[0].campo
+                    alias = {"e1": plano.base, **{j.alias: j.tabela for j in plano.juncoes}}[campo.alias]
+                    opcoes = cat.opcoes(alias).get(campo.nome, {})
+                    if any(k not in opcoes for k in plano.categorias):
+                        raise PlanoInvalido(f"O dicionário local não confirma os códigos pedidos em {campo.nome}.")
+                    categorias = {k: opcoes[k] for k in plano.categorias}
+                    if len(set(categorias.values())) != len(categorias):
+                        raise PlanoInvalido("Mais de um código corresponde à mesma descrição no dicionário local.")
+                if len(filiais) > 1 and any(c.agregacao == "COUNT_DISTINCT" for c in plano.colunas):
+                    if cat.tabelas([plano.base])[plano.base].compartilhamento != "filial":
+                        raise PlanoInvalido("O identificador precisa ser contado no escopo de uma única filial física.")
                 mesclar = todas and len(filiais) > 1 and _pode_mesclar(plano)
                 # O líder geral pode não ser top N em nenhuma filial. Somar todos os grupos
                 # autorizados antes do ranking, mantendo o teto de leitura de cada consulta.
@@ -484,6 +519,23 @@ def _executar_solicitacao(user, s: RequestContext) -> Resultado:
         linhas, mesclou = _mesclar_filiais(plano, comp, linhas)
         if mesclou:
             origem = [None] * len(linhas)
+    sem_grupos = not linhas
+    if categorias:
+        if truncado:
+            return _encerrar(user, s, E.NAO_VALIDADA, inicio, 0,
+                             "O limite de grupos impediu conferir todas as categorias.", ERRO_PARAMETROS)
+        if plano.colunas[1].agregacao == "COUNT_DISTINCT":
+            medida = acumulador.totais().medidas if totais_ok else []
+            if not medida or sum(int(n) for _, n in linhas) != medida[0].valor:
+                return _encerrar(user, s, E.NAO_VALIDADA, inicio, 0,
+                                 "Não foi possível confirmar uma situação única por entidade no período. "
+                                 "Procure a fonte do status atual ou o histórico na data de referência.", ERRO_METADADOS)
+        encontrados = {str(codigo).strip(): n for codigo, n in linhas}
+        desconhecidos = set(encontrados) - set(opcoes)
+        linhas = [(nome, encontrados.get(codigo, 0)) for codigo, nome in categorias.items()]
+        origem = [filiais[0]] * len(linhas)
+        if desconhecidos:
+            plano.premissas.append("Há códigos sem correspondência no dicionário, fora das categorias apresentadas.")
     tipos = list(comp.tipos)
     formatadas = [[_fmt(v, t) for v, t in zip(l, tipos)] for l in linhas]
     totais = acumulador.totais() if (acumulador is not None and totais_ok) else None
@@ -507,22 +559,48 @@ def _executar_solicitacao(user, s: RequestContext) -> Resultado:
         plano.premissas = [p for p in plano.premissas if "filial" not in p.lower()] + [
             "Filiais: " + ", ".join(rotulo(f) for f in filiais) + ".",
             "Grupos iguais somados entre as filiais" + (f"; ranking geral dos {plano.top} maiores." if plano.top else ".")]
-    elif todas:
+    elif todas and not categorias:
         colunas, tipos = ["Filial"] + colunas, ["texto"] + tipos
         formatadas = [[rotulo(o)] + linha for o, linha in zip(origem, formatadas)]
         plano.premissas = [p for p in plano.premissas if "filial" not in p.lower()] + [
             "Filiais: " + ", ".join(rotulo(f) for f in filiais) + "."]
 
+    if categorias and todas and not mesclou:
+        plano.premissas.append("Filiais consultadas: " + ", ".join(rotulo(f) for f in filiais) + ".")
     mensagem = _resposta_final(s.objetivo, plano, len(linhas), truncado, totais, total, subtotal,
                                bool(valores.get(AGREGACAO)), len(filiais))
     destaque = _destaque(plano, comp, colunas, formatadas, linhas, tipos)
-    if destaque:
+    if destaque and not categorias:
         mensagem = destaque + " " + mensagem
-    situacao = VAZIO if not linhas else (PARCIAL if truncado else SUCESSO)
+    if categorias:
+        periodo = valores.get("periodo-analise")
+        mensagem = "Contagem por " + comp.rotulos[0]
+        if periodo:
+            mensagem += f" no período de {_fmt(periodo['inicio'].replace('-', ''), 'data')} a {_fmt(periodo['fim'].replace('-', ''), 'data')}"
+        mensagem += "."
+        if sem_grupos:
+            mensagem += " A consulta completa não encontrou registros no período."
+        totais = None
+    situacao = VAZIO if sem_grupos else (PARCIAL if truncado else SUCESSO)
     res = _encerrar(user, s, E.CONCLUIDA, inicio, len(linhas), mensagem, situacao)
     res.ok, res.colunas, res.tipos, res.linhas = True, colunas, tipos, formatadas
     res.premissas, res.truncado, res.total, res.total_valor = plano.premissas, truncado, total, total_valor
     res.totais, res.subtotal = totais, subtotal
+    if categorias:
+        res.medida_calculada = "contagem"
+    if s.objetivo.startswith(PREFIXO_APRENDIDO) and not truncado and totais_ok and not cm.spec.get("operacao_validada"):
+        import hashlib
+        import json
+        estrutura = [(c.nome, c.tipo, c.tamanho, c.titulo, c.descricao) for c in base.campos if c.consultavel]
+        assinatura_local = hashlib.sha256(json.dumps([estrutura, base.chave, categorias],
+                                                     sort_keys=True).encode()).hexdigest()[:16]
+        from iativa.agent import receitas
+        from .plano import expressao_validada
+        # O plano validado contém apenas campos do catálogo e operadores, sem os valores dos filtros.
+        prova = {"dicionario_local": assinatura_local, "dominio": categorias,
+                 "chave_local": list(base.chave), "campo_data": cm.spec.get("campo_data", ""),
+                 "agregacao": expressao_validada(valores.get(AGREGACAO, ""), cm.spec)}
+        receitas.registrar_validacao(cm, prova)
     res.escopo = escopo_do_plano(plano, s.setor_id, filiais)
     return res
 
@@ -531,6 +609,7 @@ def escopo_do_plano(plano, setor_id, filiais):
     campos = {}
     aliases = {"e1": plano.base, **{j.alias: j.tabela for j in plano.juncoes}}
     usados = [c.campo for c in plano.colunas] + [f.campo for f in plano.filtros]
+    usados.extend(f.valor for f in plano.filtros if isinstance(f.valor, Campo))
     for j in plano.juncoes:
         for a, b in j.pares:
             usados.extend([Campo(j.alias, a), Campo("e1", b)])
@@ -542,7 +621,7 @@ def escopo_do_plano(plano, setor_id, filiais):
 def _pode_mesclar(plano):
     aggs = [c.agregacao for c in plano.colunas]
     return (plano.agrupar and any(aggs) and (not all(aggs) or plano.somar_filiais) and not plano.por_filial
-            and all(a in ("SUM", "COUNT", "MIN", "MAX") for a in aggs if a))
+            and all(a in ("SUM", "COUNT", "COUNT_DISTINCT", "MIN", "MAX") for a in aggs if a))
 
 
 def _mesclar_filiais(plano, comp, linhas):

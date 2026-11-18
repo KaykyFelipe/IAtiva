@@ -101,6 +101,8 @@ def _catalogo(objetivos, defs: dict) -> list[dict]:
                     descricao += " Campos desta consulta: " + ", ".join(
                         f"{c['campo']} ({c['rotulo']}, {c['tipo']})" for c in spec["colunas"]) + (
                         ". Pode agrupar por mes/ano." if spec.get("campo_data") else ".")
+                    if (prova := spec.get("operacao_validada")) and prova.get("agregacao"):
+                        descricao += f" Operação já validada: {prova['agregacao']}. Domínio local: {prova['dominio']}."
                 if codigo == "filtro-campo" and o.filtraveis:
                     descricao += " Campos desta consulta: " + ", ".join(f"{c} ({r})" for c, r in o.filtraveis) + "."
                 params.append({"codigo": codigo, "nome": d.nome, "descricao": descricao, "tipo": d.tipo,
@@ -182,8 +184,11 @@ def _aplicar_parametros(user, s, pares, defs) -> list[str]:
     aceitos = OBJETIVOS[s.objetivo].parametros
     for codigo, texto in pares:
         d = defs.get(codigo)
-        if codigo not in aceitos or d is None:
+        if codigo not in aceitos:
             continue  # parâmetro que o objetivo não usa é ignorado
+        if d is None:
+            erros.append(f"O parâmetro {codigo} está sem definição no catálogo.")
+            continue
         try:
             _registrar_parametro(user, s, d, texto)
         except ValidationError as exc:
@@ -239,7 +244,7 @@ def _verificar_tabela_aprendida(user, objetivo) -> str | None:
             continue
     if existentes is None:
         return "metadados_indisponiveis"
-    return None if set(objetivo.tabelas) <= set(existentes) else "metadados_indisponiveis"
+    return None if set(objetivo.tabelas) <= set(existentes) else "fonte_ausente"
 
 
 def _oferecer_aprendizado(user, texto, atual, extra) -> "Resposta":
@@ -259,6 +264,7 @@ def _oferecer_aprendizado(user, texto, atual, extra) -> "Resposta":
 
 
 MOTIVOS = {
+    "fonte_ausente": "A fonte desta receita não existe no catálogo local. Procure outra fonte autorizada.",
     "sem_acesso_entidade": "Você não tem acesso a todas as tabelas necessárias para esta consulta.",
     "metadados_indisponiveis": "Não foi possível consultar a estrutura do ERP agora. Tente de novo em instantes.",
     "regra_desconhecida": "Esta consulta depende de uma definição que ainda não foi cadastrada.",

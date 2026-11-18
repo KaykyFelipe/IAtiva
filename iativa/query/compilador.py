@@ -117,6 +117,15 @@ class _Montador:
                     raise PlanoInvalido("Transformação inválida.")
                 r = f"SUBSTRING({r}, 1, {6 if c.transformacao == 'MES' else 4})"
             if c.agregacao:
+                if c.agregacao == "COUNT_PRESENT":
+                    _, info = self._info(c.campo)
+                    if info.tipo == "C":
+                        r = f"NULLIF(RTRIM({r}), '')"
+                    selecao.append(f"COUNT({r}) AS c{i}")
+                    continue
+                if c.agregacao == "COUNT_DISTINCT":
+                    selecao.append(f"COUNT(DISTINCT {r}) AS c{i}")
+                    continue
                 if c.agregacao not in ("SUM", "COUNT", "MIN", "MAX", "AVG"):
                     raise PlanoInvalido("Agregação inválida.")
                 selecao.append(f"{c.agregacao}({r}) AS c{i}")

@@ -18,7 +18,7 @@ from .periodo import MESES, _norm, periodo_da_mensagem
 _CONTA = re.compile(r'\b(quantos|quantas|quantidade|contagem|numero de)\b')
 _SO_NUMERO = re.compile(r'\b(so|somente|apenas)\s+(?:o |a )?(numero|quantidade|total)\b')
 # "Quantos por filial?" é um agregado por grupo, não uma lista de registros.
-_AGRUPADO = re.compile(r'\bpor\s+(filia\w*|mes|ano|cliente|fornecedor|setor|tipo|cargo|funcao|natureza|cfop)\b'
+_AGRUPADO = re.compile(r'\bpor\s+(filia\w*|mes|ano|cliente|fornecedor|setor|tipo|cargo|funcao|natureza|cfop|status|situacao|estado|categoria)\b'
                        r'|\bcada\s+(filial|mes|cliente)\b')
 _VAZIAS = {'quantos', 'quantas', 'quantidade', 'contagem', 'numero', 'foram', 'tiveram', 'temos', 'tivemos',
            'houve', 'esse', 'este', 'nesse', 'neste', 'passado', 'ultimo', 'mostre', 'liste', 'quais', 'filial',

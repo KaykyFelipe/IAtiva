@@ -13,6 +13,7 @@ import hashlib
 import json
 import logging
 import os
+import tempfile
 from pathlib import Path
 
 from django.conf import settings
@@ -32,6 +33,8 @@ def assinatura(cm) -> str:
     """Hash da parte executável (o que muda a receita); muda junto com filtros, colunas e junções."""
     nucleo = {k: cm.spec.get(k) for k in ("colunas", "juncoes", "filtros_fixos", "campo_data", "campo_busca",
                                           "data_aniversario")}
+    if "operacao_validada" in cm.spec:
+        nucleo["operacao_validada"] = cm.spec["operacao_validada"]
     return hashlib.sha256(json.dumps([cm.tabela, nucleo], sort_keys=True, default=str).encode()).hexdigest()[:10]
 
 
@@ -89,7 +92,27 @@ def conteudo(cm) -> str:
         f"- \"{cm.nome} deste ano em todas as filiais\"",
         "",
     ]
+    if calculo := spec.get("operacao_validada"):
+        linhas += ["## Operação validada", "", f"- Operação: `{calculo['agregacao'] or 'listagem'}`",
+                   f"- Chave local: {', '.join(calculo['chave_local'])}",
+                   f"- Campo de período: {calculo['campo_data']}",
+                   f"- Dicionário local: {calculo['dicionario_local']}.",
+                   "- Evidência: execução completa no escopo autorizado.",
+                   *(f"- `{cod}` — {nome}" for cod, nome in calculo["dominio"].items()), ""]
     return "\n".join(linhas)
+
+
+def registrar_validacao(cm, prova):
+    """A primeira execução completa documenta o plano. Reexecutar com outro período mantém a versão."""
+    from django.db import transaction
+    from .models import ConsultaModelo
+    if cm.spec.get("operacao_validada"):
+        return
+    with transaction.atomic():
+        atual = ConsultaModelo.objects.select_for_update().get(pk=cm.pk)
+        if atual.situacao == "aprovada" and atual.spec == cm.spec:
+            atual.spec = {**atual.spec, "operacao_validada": prova}
+            atual.save(update_fields=["spec"])
 
 
 def gerar(cm) -> Path | None:
@@ -100,9 +123,13 @@ def gerar(cm) -> Path | None:
         texto = conteudo(cm)
         arquivo = destino / f"v{versao(cm)}-{assinatura(cm)}.md"
         for alvo in (arquivo, destino / "atual.md"):
-            tmp = alvo.with_suffix(f".{os.getpid()}.tmp")
-            tmp.write_text(texto, encoding="utf-8")
-            os.replace(tmp, alvo)
+            with tempfile.NamedTemporaryFile(dir=destino, suffix=".tmp", delete=False) as f:
+                tmp = Path(f.name)
+            try:
+                tmp.write_text(texto, encoding="utf-8")
+                os.replace(tmp, alvo)
+            finally:
+                tmp.unlink(missing_ok=True)
         return arquivo
     except Exception as exc:
         logger.warning("receita %s não gerada: %s", getattr(cm, "codigo", "?"), type(exc).__name__)

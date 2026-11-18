@@ -160,14 +160,18 @@ def campos_da_tabela(user, alias: str, automatico: bool = False) -> dict:
         raise PermissaoNegada("Tabela indisponível.")
     with abrir_catalogo() as cat:
         t = cat.tabelas([alias], com_campos=True).get(alias)
+        opcoes = cat.opcoes(alias) if t else {}
     if t is None:
         raise ValidationError("Tabela não encontrada no dicionário.")
     if not t.campo_filial:
         raise ValidationError("A tabela não tem campo de filial; por segurança, não pode ser aprendida.")
-    campos = [c for c in t.campos if c.consultavel and c.nome != t.campo_filial]
+    from iativa.accounts.authz import setores_autorizados
+    from iativa.metadata.descoberta import _Visibilidade
+    vis = _Visibilidade(setores_autorizados(user, Permissao.CONSULTAR), [alias])
+    campos = [c for c in t.campos if c.consultavel and c.nome != t.campo_filial and vis.campo(alias, c.nome)]
     return {
         "alias": t.alias, "nome": t.nome, "fisica": t.fisica, "campo_filial": t.campo_filial,
-        "campos": campos, "datas": [c for c in campos if c.tipo == "D"],
+        "chave": t.chave, "opcoes": opcoes, "campos": campos, "datas": [c for c in campos if c.tipo == "D"],
         "textos": [c for c in campos if c.tipo == "C"],
         "setores": Department.objects.filter(ativo=True).order_by("nome"),
     }
@@ -240,7 +244,7 @@ def _busca_por_pessoa(busca, colunas, por_nome):
 
 
 @transaction.atomic
-def criar_automatico(user, consulta: dict) -> ConsultaModelo:
+def criar_automatico(user, consulta: dict, setores_confirmados=None) -> ConsultaModelo:
     """M18: a IA montou a consulta; o sistema confere, cria e já aprova (sem revisão humana).
     Colunas sensíveis são descartadas; setores = os que a pessoa consulta."""
     from iativa.accounts.authz import Permissao, setores_autorizados
@@ -251,20 +255,29 @@ def criar_automatico(user, consulta: dict) -> ConsultaModelo:
     colunas = [c for c in dict.fromkeys(consulta["colunas"]) if c in por_nome][:MAX_COLUNAS]
     if not colunas:
         raise ValidationError("Nenhuma coluna válida para a consulta.")
+    if consulta.get("campo_data") and consulta["campo_data"] not in por_nome:
+        raise ValidationError("O campo de período indicado não foi confirmado no dicionário local.")
     busca = _busca_por_pessoa(consulta.get("campo_busca", ""), colunas, por_nome)
     filtraveis = [c for c in consulta.get("filtraveis", []) if c in por_nome and por_nome[c].tipo == "C"]
+    setores = Department.objects.filter(pk__in=setores_autorizados(user, Permissao.CONSULTAR))
+    if setores_confirmados is not None:
+        setores = setores.filter(codigo__in=setores_confirmados)
     dados = {
         "nome": consulta["nome"] or info["nome"], "descricao": consulta.get("descricao", ""),
         "colunas": colunas,
         "campo_data": consulta.get("campo_data", "") if por_nome.get(consulta.get("campo_data", "")) else "",
         "campo_busca": busca if busca in por_nome and por_nome[busca].tipo == "C" else "",
         "filtraveis": [c for c in filtraveis if c in colunas or len(colunas) < MAX_COLUNAS][:MAX_FILTRAVEIS],
-        "setores": [str(s) for s in setores_autorizados(user, Permissao.CONSULTAR)],
+        "setores": list(setores.values_list("pk", flat=True)),
     }
     if not dados["setores"]:
         raise PermissaoNegada("Sem setor para usar a consulta.")
     igual = ConsultaModelo.objects.filter(tabela=alias, nome=dados["nome"], situacao=SituacaoModelo.APROVADA).first()
     if igual is not None:
+        if (dados["campo_data"] and igual.spec.get("campo_data") != dados["campo_data"]
+                or not set(colunas) <= {c["campo"] for c in igual.spec.get("colunas", [])}):
+            raise ValidationError("Há uma receita com esse nome, mas a data ou as colunas são diferentes. "
+                                  "Use outro nome que identifique a nova consulta.")
         if consulta.get("filtros"):
             pedidos = {(f["campo"], OPERADORES_AJUSTE[f["operador"]], f["valor"].strip())
                        for f in consulta["filtros"]}

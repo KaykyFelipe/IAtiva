@@ -58,6 +58,7 @@ class Plano:
     filial: str = ""
     top: int = 0  # "top N": limita as linhas (ranking)
     por_filial: bool = False  # M54: total de cada filial (não soma as filiais)
+    categorias: tuple[str, ...] = ()
     somar_filiais: bool = False  # M54: "total": soma as filiais numa linha só
 
 
@@ -126,7 +127,7 @@ def ler_filtros(texto: str, permitidos) -> list[tuple[str, str, str]]:
 
 
 AGREGACAO = "agregacao"
-FUNCOES = {"soma": "SUM", "media": "AVG", "contagem": "COUNT", "maximo": "MAX", "minimo": "MIN"}
+FUNCOES = {"soma": "SUM", "media": "AVG", "contagem": "COUNT", "contagem_distinta": "COUNT_DISTINCT", "maximo": "MAX", "minimo": "MIN"}
 NOME_FUNCAO = {"SUM": "Soma", "AVG": "Média", "COUNT": "Quantidade", "MAX": "Maior", "MIN": "Menor"}
 
 
@@ -134,10 +135,22 @@ def _sem_acento(t: str) -> str:
     return unicodedata.normalize("NFKD", t or "").encode("ascii", "ignore").decode().lower()
 
 
+def separar_categorias(texto: str):
+    medida, separador, lista = texto.strip().partition(" categorias ")
+    if not separador:
+        return medida, ()
+    codigos = tuple(i.strip() for i in lista.split(","))
+    if not 1 <= len(codigos) <= 20 or len(set(codigos)) != len(codigos) or not all(
+            re.fullmatch(r"[A-Za-z0-9_-]{1,12}", i) for i in codigos):
+        raise ValueError("Lista de códigos de categoria inválida.")
+    return medida, codigos
+
+
 def ler_agregacao(texto: str, spec: dict):
     """"soma:F2_VALBRUT, media:F2_VALBRUT por F2_CLIENTE top 10" -> ([(SUM, campo)...], grupo, top).
     Grupo: campo da consulta, "MES"/"ANO" (do campo de data) ou vazio. Fora disso: ValueError."""
-    t = _sem_acento(texto).strip()
+    medida, categorias = separar_categorias(texto)
+    t = _sem_acento(medida).strip()
     top = 0
     if m := re.search(r"\btop\s*(\d{1,3})\b", t):
         top = max(1, min(100, int(m.group(1))))
@@ -179,7 +192,27 @@ def ler_agregacao(texto: str, spec: dict):
             raise ValueError("a consulta não tem campo de data para agrupar por mês/ano")
     elif grupo and grupo not in tipos:
         raise ValueError(f"agrupamento por campo fora da consulta: {grupo}")
+    if categorias and (grupo not in tipos or len(metricas) != 1 or metricas[0][0] not in ("COUNT", "COUNT_DISTINCT")
+                       or top or len(partes) != 1):
+        raise ValueError("Categorias requerem contagem completa agrupada por um único campo.")
     return metricas, grupo, top
+
+
+def expressao_validada(texto, spec):
+    """Serializa apenas operadores, campos e códigos validados, sem guardar a entrada livre do modelo."""
+    if not texto:
+        return ""
+    medidas, grupo, top = ler_agregacao(texto, spec)
+    nomes = {v: k for k, v in FUNCOES.items()}
+    valor = ",".join(f"{nomes[func]}:{campo}" for func, campo in medidas)
+    if grupo:
+        valor += f" por {grupo}"
+    if ler_por_filial(texto):
+        valor += " por filial"
+    if top:
+        valor += f" top {top}"
+    codigos = separar_categorias(texto)[1]
+    return valor + (" categorias " + ",".join(codigos) if codigos else "")
 
 
 def ler_por_filial(texto: str) -> bool:
@@ -249,14 +282,16 @@ def _aplicar_agregacao(plano, spec: dict, texto: str):
     for func, campo in metricas:
         if campo == "*":
             colunas.append(Coluna("Quantidade", filial, agregacao="COUNT", tipo="inteiro"))
-        elif func == "COUNT":
-            colunas.append(Coluna(f"Quantidade de {rotulos[campo]}", Campo(apelido(spec, campo), campo), agregacao=func,
+        elif func in ("COUNT", "COUNT_DISTINCT"):
+            prefixo = "Quantidade distinta" if func == "COUNT_DISTINCT" else "Quantidade"
+            colunas.append(Coluna(f"{prefixo} de {rotulos[campo]}", Campo(apelido(spec, campo), campo), agregacao=func,
                                   tipo="inteiro"))
         else:
             tipo = "valor" if tipos[campo] == "numero" else tipos[campo]
             colunas.append(Coluna(f"{NOME_FUNCAO[func]} de {rotulos[campo]}", Campo(apelido(spec, campo), campo), agregacao=func,
                                   tipo=tipo))
     plano.colunas, plano.agrupar, plano.top = colunas, bool(grupo), top
+    plano.categorias = separar_categorias(texto)[1]
     if grupo and ler_por_filial(texto):
         plano.por_filial = True  # cada filial com os seus grupos; o serviço não soma as filiais
     primeira_metrica = colunas[1 if grupo else 0].rotulo
@@ -303,6 +338,8 @@ def plano_total(plano, medidas, campo_filial: str, moeda=None) -> "Plano":
             colunas += [Coluna(f"s{i}", campo, "SUM", tipo), Coluna(f"n{i}", campo, "COUNT", "inteiro")]
         else:
             colunas.append(Coluna(f"v{i}", campo, func, tipo))
+    if plano.categorias and medidas[0][1] == "COUNT_DISTINCT":
+        colunas.append(Coluna("identificados", medidas[0][3], "COUNT_PRESENT", "inteiro"))
     total.colunas, total.agrupar = colunas, bool(moeda)
     return total
 

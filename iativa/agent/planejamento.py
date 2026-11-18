@@ -1,4 +1,5 @@
 """Planejamento sem dados do ERP: o modelo classifica; o backend autoriza e verifica."""
+from contextvars import ContextVar
 import re
 
 from django.core.exceptions import ValidationError
@@ -12,21 +13,11 @@ from .models import ContextoPersistente, NotaAgente
 from .provedores import FalhaModelo
 
 
-def _setores_por_relacao(alias) -> list:
-    """Setores das tabelas já classificadas que se ligam a `alias` (memória técnica)."""
-    from .models import FonteSetorial
-    ligadas = set()
-    try:
-        from iativa.knowledge.memoria_tecnica import relacoes
-        for r in relacoes(alias):
-            ligadas |= {r.get('origem', ''), r.get('destino', '')}
-    except Exception:
-        pass
-    ligadas.discard(alias)
-    setores = set()
-    for f in FonteSetorial.objects.filter(tabela__in=ligadas).exclude(confianca=0):
-        setores |= set(f.setores)
-    return sorted(setores)
+provedor_do_pedido = ContextVar("provedor_do_pedido", default=None)
+
+
+class FonteInconclusiva(ValueError):
+    """A descoberta pode continuar, mas esta fonte ainda não pode ser executada."""
 
 
 def autorizar_fonte(user, provedor, alias):
@@ -38,7 +29,7 @@ def autorizar_fonte(user, provedor, alias):
     with abrir_catalogo() as cat:
         t = cat.tabelas([alias], com_campos=True).get(alias)
     if t is None:
-        raise PermissaoNegada('Não consegui confirmar o domínio da fonte de dados.')
+        raise FonteInconclusiva(f'A tabela {alias} não foi confirmada no catálogo físico local.')
     descricao = {'tabela': alias, 'descricao': t.nome,
                  'campos': [{'nome': c.nome, 'titulo': c.titulo, 'descricao': c.descricao}
                             for c in t.campos[:40]]}
@@ -53,10 +44,10 @@ def autorizar_fonte(user, provedor, alias):
     setores = list(Department.objects.filter(ativo=True).order_by('codigo').values('codigo', 'nome'))
     assinatura = hashlib.sha256(json.dumps([descricao, setores], sort_keys=True, default=str).encode()).hexdigest()
     fonte = FonteSetorial.objects.filter(tabela=alias, assinatura=assinatura).first()
-    if fonte is None:
+    if fonte is None or fonte.confianca == 0:
         if provedor is None:
             from .provedores import obter_provedor
-            provedor = obter_provedor(usuario=user)
+            provedor = provedor_do_pedido.get() or obter_provedor(usuario=user)
         permitidos = list(Department.objects.filter(pk__in=setores_autorizados(user, Permissao.CONSULTAR)).values_list('codigo', flat=True))
         e = EntradaAgente('Classifique o assunto da fonte descrita no dicionário, sem executar consultas.',
             timezone.localdate().isoformat(), [], [], None,
@@ -67,20 +58,14 @@ def autorizar_fonte(user, provedor, alias):
                 or not .85 <= a['confianca'] <= 1 or not isinstance(a.get('setores'), list) or not a['setores']
                 or any(not isinstance(s, str) for s in a['setores'])
                 or not set(a['setores']) <= {s['codigo'] for s in setores}):
-            # M99: nenhum setor cadastrado cobre a fonte com segurança. Não trava: herda o setor das tabelas ligadas
-            # a ela (relacionamentos do dicionário) já classificadas; sem nenhuma, fica com a TI (só a TI vê) até
-            # alguém definir o setor. Confiança 0 marca a classificação como provisória.
-            fonte, _ = FonteSetorial.objects.update_or_create(tabela=alias, defaults={
-                'assinatura': assinatura, 'setores': _setores_por_relacao(alias) or ['ti'], 'confianca': 0})
-        else:
-            fonte, _ = FonteSetorial.objects.update_or_create(tabela=alias, defaults={
-                'assinatura': assinatura, 'setores': sorted(set(a['setores'])), 'confianca': a['confianca']})
+            raise FonteInconclusiva(f'O dicionário confirma {alias}, mas o setor da fonte ainda é inconclusivo.')
+        fonte, _ = FonteSetorial.objects.update_or_create(tabela=alias, defaults={
+            'assinatura': assinatura, 'setores': sorted(set(a['setores'])), 'confianca': a['confianca']})
     permitidos = set(Department.objects.filter(pk__in=setores_autorizados(user, Permissao.CONSULTAR)).values_list('codigo', flat=True))
     if not permitidos & set(fonte.setores):
         raise PermissaoNegada('Essa fonte pertence a outro setor. Não executei a consulta; solicite acesso à Diretoria ou TI.')
-    dominios = list(Department.objects.filter(codigo__in=permitidos & set(fonte.setores), ativo=True))
-    for cm in ConsultaModelo.objects.filter(tabela=alias, situacao='aprovada'):
-        cm.setores.add(*dominios)
+
+    return permitidos & set(fonte.setores)
 
 
 def contextos(user, conversa, texto):
