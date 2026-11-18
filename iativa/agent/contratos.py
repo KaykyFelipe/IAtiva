@@ -86,9 +86,11 @@ def campos_filtraveis(spec: dict) -> list[tuple[str, str]]:
     """Campos que aceitam filtro exato: os escolhidos no formulário ou, se nenhum, as colunas de texto."""
     colunas = {c["campo"]: c.get("rotulo") or c["campo"] for c in spec.get("colunas", [])}
     escolhidos = [c for c in spec.get("filtraveis", []) if c in colunas]
-    if not escolhidos:
-        escolhidos = [c["campo"] for c in spec.get("colunas", []) if c.get("tipo") == "texto"]
-    return [(c, colunas[c]) for c in escolhidos[:MAX_FILTRAVEIS]]
+    # M91: além dos escolhidos, as demais colunas de texto (ex.: descrição do produto) também filtram;
+    # cada filtro é uma coluna só (rápido no ERP), ao contrário de buscar em todas de uma vez.
+    textos = [c["campo"] for c in spec.get("colunas", []) if c.get("tipo", "texto") == "texto"
+              and not c["campo"].endswith("_FILIAL") and c["campo"] not in escolhidos]
+    return [(c, colunas[c]) for c in (escolhidos + textos)[:MAX_FILTRAVEIS + 6]]
 
 
 def de_modelo(cm) -> Objetivo:

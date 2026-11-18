@@ -103,20 +103,25 @@ FILTRO = "filtro-campo"
 VALOR_FILTRO_RE = re.compile(r"^[0-9A-Za-z][0-9A-Za-z -]{0,29}$")
 
 
-def ler_filtros(texto: str, permitidos) -> list[tuple[str, str]]:
-    """"R7_MAT=000123; RA_CODFUNC = 0042" → [(campo, valor)]. Campo fora da lista ou valor fora do
-    formato seguro é recusado (ValueError), nunca ignorado em silêncio."""
+VALOR_CONTEM_RE = re.compile(r"^[0-9A-Za-zÀ-ÿ][0-9A-Za-zÀ-ÿ .,/-]{0,59}$")
+
+
+def ler_filtros(texto: str, permitidos) -> list[tuple[str, str, str]]:
+    """"R7_MAT=000123; C1_DESCRI~carregador apple" → [(campo, valor, op)]. "=" é valor exato; "~" (M91) é
+    "contém" em texto, sem diferenciar maiúsculas/acentos. Campo fora da lista ou valor fora do formato seguro é
+    recusado (ValueError), nunca ignorado em silêncio."""
     out = []
     for parte in (texto or "").split(";"):
         if not parte.strip():
             continue
-        campo, sep, valor = parte.partition("=")
+        contem = "~" in parte and ("=" not in parte or parte.index("~") < parte.index("="))
+        campo, sep, valor = parte.partition("~" if contem else "=")
         campo, valor = campo.strip().upper(), valor.strip()
         if not sep or campo not in permitidos:
             raise ValueError(f"campo não filtrável: {campo or parte.strip()}")
-        if not VALOR_FILTRO_RE.match(valor):
+        if not (VALOR_CONTEM_RE if contem else VALOR_FILTRO_RE).match(valor):
             raise ValueError(f"valor inválido para {campo}")
-        out.append((campo, valor))
+        out.append((campo, valor, "~" if contem else "="))
     return out[:6]
 
 
@@ -375,9 +380,13 @@ def montar_modelo(tabela: str, spec: dict, valores: dict, codigo: str) -> Plano:
             from .compilador import PlanoInvalido
 
             raise PlanoInvalido(str(exc)) from None
-        for campo, valor in filtros:
-            plano.filtros.append(Filtro(Campo(apelido(spec, campo), campo), "=", valor))
-            plano.premissas.append(f"Filtro: {campo} = {valor}.")
+        for campo, valor, op in filtros:
+            if op == "~":
+                plano.filtros.append(Filtro(Campo(apelido(spec, campo), campo), "LIKE", padrao_busca(valor)))
+                plano.premissas.append(f"Filtro: {campo} contém “{valor}”.")
+            else:
+                plano.filtros.append(Filtro(Campo(apelido(spec, campo), campo), "=", valor))
+                plano.premissas.append(f"Filtro: {campo} = {valor}.")
     tipos = {t: t for t in ('data', 'numero', 'texto', 'dinheiro', 'inteiro', 'valor')}
     plano.colunas = [Coluna(c["rotulo"], Campo(c.get("alias", "e1"), c["campo"]), tipo=tipos.get(c["tipo"], "texto"))
                      for c in spec["colunas"]]

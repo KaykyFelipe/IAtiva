@@ -142,7 +142,7 @@ def test_filtro_por_campo_em_consulta_aprendida(admin):
     from iativa.agent.provedores import FakeProvider
 
     cm = _modelo_sa1(admin, filtraveis="A1_COD")
-    assert OBJETIVOS[cm.codigo].filtraveis == (("A1_COD", OBJETIVOS[cm.codigo].filtraveis[0][1]),)
+    assert OBJETIVOS[cm.codigo].filtraveis[0][0] == "A1_COD"  # M91: o escolhido primeiro; demais textos também
     c = conversas.nova_individual(admin)
     p = FakeProvider([_decisao(acao="preparar_consulta", objetivo=cm.codigo,
                                parametros=[{"codigo": "filial-analise", "valor": "01"},
@@ -159,9 +159,9 @@ def test_filtro_em_campo_nao_permitido_e_recusado(admin):
     c = conversas.nova_individual(admin)
     p = FakeProvider([_decisao(acao="preparar_consulta", objetivo=cm.codigo,
                                parametros=[{"codigo": "filial-analise", "valor": "01"},
-                                           {"codigo": "filtro-campo", "valor": "A1_NOME=X"}])])
+                                           {"codigo": "filtro-campo", "valor": "A1_EST=X"}])])
     msg, res = conversas.enviar(admin, c, "x", p)
-    assert "não filtrável" in msg.texto and "A1_COD" in msg.texto
+    assert "não filtrável" in msg.texto and "A1_COD" in msg.texto  # M91: campo fora da consulta continua recusado
 
 
 def test_sem_escolha_todas_as_colunas_de_texto_filtram(admin):
@@ -247,3 +247,20 @@ def test_busca_acha_nome_gravado_em_minusculas(admin, erp_sintetico):
     c = conversas.nova_individual(admin)
     _, res = conversas.enviar(admin, c, ATRASO + ", cliente sintetico 001")
     assert res.ok and len(res.linhas) > 0
+
+
+def test_filtro_contem_em_coluna_de_texto(admin):
+    """M91: "CAMPO~texto" filtra por "contém" numa coluna (ex.: descrição do produto), ignorando maiúsculas."""
+    from iativa.query.plano import ler_filtros
+    assert ler_filtros("C1_DESCRI~Carregador Apple USB-C 20W", {"C1_DESCRI"}) == [("C1_DESCRI", "Carregador Apple USB-C 20W", "~")]
+    assert ler_filtros("R7_MAT=000123", {"R7_MAT"}) == [("R7_MAT", "000123", "=")]
+    with pytest.raises(ValueError):
+        ler_filtros("C1_DESCRI~x'; drop", {"C1_DESCRI"})
+    from iativa.agent.provedores import FakeProvider
+    cm = _modelo_sa1(admin)
+    c = conversas.nova_individual(admin)
+    p = {"resposta": "", "acao": "preparar_consulta", "objetivo": cm.codigo, "alvo": "", "nota": "",
+         "confirmado": False, "opcoes": [],
+         "parametros": [{"codigo": "filial-analise", "valor": "01"}, {"codigo": "filtro-campo", "valor": "A1_NOME~sintetico 002"}]}
+    _, res = conversas.enviar(admin, c, "o cliente sintético 002 existe?", FakeProvider([p]))
+    assert res.ok and res.linhas and all("SINTETICO 002" in " ".join(map(str, linha)) for linha in res.linhas)

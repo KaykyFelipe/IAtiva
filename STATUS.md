@@ -4,6 +4,11 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **Etapa 7 aprovada em 2026-11-16 por Diego; em andamento.** Feito: roteiro do piloto (`docs/piloto/ROTEIRO.md`) e auditoria de não armazenamento (`manage.py auditar_armazenamento`). Falta: usuários do Financeiro, conferência dos números com relatórios do Protheus, avaliação da interpretação e latência. Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M90–M91 — filtro "contém" por coluna (2026-11-18)
+
+- M90 (busca em todas as colunas de texto com OU) foi revertida: no SQL Server, 8 colunas em OU estouraram 180 s (1–2 colunas respondem na hora).
+- M91: o filtro por campo aceita "contém" (`CAMPO~texto`, sem diferenciar maiúsculas) e todas as colunas de texto da consulta podem ser filtradas; a IA filtra a coluna onde o texto aparece (ex.: descrição do produto), uma coluna só.
+
 ## Mudança M89 — conversa abre na última mensagem (2026-11-18)
 
 - Ao trocar de conversa ou abrir a página, a rolagem vai para o fim de novo depois que tabelas e mascote terminam de montar.

@@ -140,7 +140,7 @@ def _registrar_parametro(user, s: RequestContext, definicao, texto: str):
 
         permitidos = {c for c, _ in OBJETIVOS[s.objetivo].filtraveis}
         try:
-            valor = "; ".join(f"{c}={v}" for c, v in ler_filtros(valor, permitidos))
+            valor = "; ".join(f"{c}{op}{v}" for c, v, op in ler_filtros(valor, permitidos))
         except ValueError as exc:
             raise ValidationError(f"{exc}. Campos aceitos: {', '.join(sorted(permitidos)) or 'nenhum'}.") from None
     if definicao.codigo == "agregacao":
