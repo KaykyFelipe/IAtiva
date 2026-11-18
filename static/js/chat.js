@@ -230,6 +230,10 @@
     const nav = document.querySelector("#lateral nav");
     const rolagem = nav ? nav.scrollTop : 0;
     htmx.ajax("GET", url, { target: "#conversa", swap: "outerHTML" }).then(() => {
+      // M89: abre sempre na última mensagem; tabelas e o mascote mudam a altura depois da troca.
+      rolarParaFim();
+      requestAnimationFrame(rolarParaFim);
+      [150, 400, 900].forEach((ms) => setTimeout(rolarParaFim, ms));
       const nova = document.querySelector("#lateral nav");
       if (nova) { nova.scrollTop = rolagem; requestAnimationFrame(() => { nova.scrollTop = rolagem; }); }
       if (empilhar) history.pushState({ conversa: true }, "", url);
@@ -600,6 +604,7 @@
     atualizarSaudacao();
     prepararLateral();
     rolarParaFim();
+    window.addEventListener("load", rolarParaFim, { once: true });  // M89: depois das tabelas e imagens
     prepararCampo();
     atualizarBotaoTarefa();
     retomarEnvio();

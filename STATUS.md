@@ -4,6 +4,10 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **Etapa 7 aprovada em 2026-11-16 por Diego; em andamento.** Feito: roteiro do piloto (`docs/piloto/ROTEIRO.md`) e auditoria de não armazenamento (`manage.py auditar_armazenamento`). Falta: usuários do Financeiro, conferência dos números com relatórios do Protheus, avaliação da interpretação e latência. Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M89 — conversa abre na última mensagem (2026-11-18)
+
+- Ao trocar de conversa ou abrir a página, a rolagem vai para o fim de novo depois que tabelas e mascote terminam de montar.
+
 ## Mudança M88 — login sempre na página principal (2026-11-18)
 
 - Ao entrar, o sistema ignora o endereço guardado e abre a página principal sem conversa. Conversa excluída ou sem acesso leva à página principal em vez de erro.
