@@ -124,6 +124,18 @@ def candidatos(user, texto: str, limite: int = 5, automatico: bool = False) -> l
             item(alias)["pontos"] += 100
         for i in pontos.values():
             i["pontos"] += 20 * len(i["termos"])  # cobrir mais termos da pergunta vale mais
+        # M95: a memória técnica (referência pública) sugere tabelas pelos termos do negócio; só conta o que existe
+        # no dicionário local da instalação (confirmação abaixo). Tabela local fora da referência segue pelo local.
+        locais = {a for a, _ in tabelas}
+        try:
+            from iativa.knowledge.memoria_tecnica import tabelas_candidatas
+            for alias, p in tabelas_candidatas(texto):
+                if alias in locais:
+                    i = item(alias)
+                    i["pontos"] += 15 * p
+                    i["referencia"] = True
+        except Exception:
+            pass  # contingência: índice indisponível, descoberta só pelo dicionário local
         restritas = _restritas(user)
         validos = [i for i in pontos.values()
                    if ALIAS_RE.match(i["alias"]) and not i["alias"].startswith(SISTEMA) and i["alias"] not in restritas]
@@ -135,7 +147,8 @@ def candidatos(user, texto: str, limite: int = 5, automatico: bool = False) -> l
         td = existentes.get(i["alias"])
         if td is None:
             continue
-        out.append({"alias": i["alias"], "nome": td.nome, "campos": i["campos"]})
+        out.append({"alias": i["alias"], "nome": td.nome, "campos": i["campos"],
+                    "referencia_publica": bool(i.get("referencia"))})
     registrar("metadado_consultado", "metadado", usuario=user, estado_novo="aprendizado", linhas=len(out))
     return out
 

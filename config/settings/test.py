@@ -15,3 +15,8 @@ PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]
 
 # Testes antigos cobrem a manutenção automática ligada; os de M73 desligam explicitamente.
 IATIVA_MANUTENCAO_AUTOMATICA = True
+
+# M95: memória técnica sintética e índice/receitas em pasta temporária (nunca no repositório).
+IATIVA_MEMORIA_TECNICA = Path(__file__).resolve().parents[2] / "tests" / "fixtures" / "memoria_protheus_sintetica.md"
+IATIVA_MEMORIA_TECNICA_INDICE = Path(tempfile.gettempdir()) / "iativa-testes-memoria-indice"
+IATIVA_RECEITAS_DIR = Path(tempfile.gettempdir()) / "iativa-testes-receitas"

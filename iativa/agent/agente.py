@@ -1387,7 +1387,7 @@ def _aprender(user, c, d, texto, ficha, provedor=None, entrada=None, atual=None)
     return Saida(texto, {**ficha, "tipo": "aprendizado", "candidatos": lista}, observacao=obs)
 
 
-def _campos_para_modelo(user, alias):
+def _campos_para_modelo(user, alias, pedido=""):
     info = aprendizado.campos_da_tabela(user, alias, automatico=True)
     campos = [{"campo": f.nome, "tipo": {"D": "data", "N": "numero"}.get(f.tipo, "texto"), "titulo": f.titulo}
               for f in info["campos"] if not aprendizado.sensivel(f)]
@@ -1397,7 +1397,19 @@ def _campos_para_modelo(user, alias):
                    for j in aprendizado.juncoes_possiveis(user, alias)][:6]
     except Exception:
         juncoes = []
-    return {"tabela": info["alias"], "nome": info["nome"], "campos": campos[:150], "juncoes_possiveis": juncoes}
+    # M95: poucos trechos técnicos da memória (só desta tabela autorizada; nunca dados do ERP). Campo da referência
+    # que não existe na instalação não é oferecido: a estrutura válida é a do dicionário local acima.
+    locais = {c["campo"] for c in campos}
+    try:
+        from iativa.knowledge.memoria_tecnica import recuperar
+        ref = recuperar(pedido, aliases=[alias], permitidos={alias}, limite=4)
+        referencia = [{"campo": t["campo"], "secao": t["secao"], "texto": t["texto"]} for t in ref.trechos
+                      if not t["campo"] or t["campo"] in locais]
+        memoria = ref.resumo()
+    except Exception:
+        referencia, memoria = [], {"estado": "indisponivel"}
+    return {"tabela": info["alias"], "nome": info["nome"], "campos": campos[:150], "juncoes_possiveis": juncoes,
+            "referencia_publica": referencia, "memoria_tecnica": memoria}
 
 
 def _busca_na_descricao(d):
@@ -1445,7 +1457,7 @@ def _aprender_sozinho(user, c, d, texto, ficha, provedor, entrada, atual, motivo
         tabelas = []
         for item in lista:
             try:
-                tabelas.append(_campos_para_modelo(user, item["alias"]))
+                tabelas.append(_campos_para_modelo(user, item["alias"], d.alvo or texto))
             except Exception:
                 continue  # sem campo filial, restrita etc.
         if not tabelas:

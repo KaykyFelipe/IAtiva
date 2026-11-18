@@ -221,3 +221,8 @@ IATIVA_WORKER_AGENTES = 6  # local.py lê IATIVA_WORKER_AGENTES do .env
 
 # M77 — fila justa: no máximo N pedidos da mesma pessoa rodando ao mesmo tempo no worker.
 IATIVA_AGENTES_POR_USUARIO = 2
+
+# M95 — memória técnica do Protheus (referência pública) e receitas aprendidas, no volume persistente /app/var.
+IATIVA_MEMORIA_TECNICA = BASE_DIR / "var" / "conhecimento-externo" / "MEMORIA-PROTHEUS-IATIVA.md"
+IATIVA_MEMORIA_TECNICA_INDICE = None  # padrão: <pasta do arquivo>/indice
+IATIVA_RECEITAS_DIR = BASE_DIR / "var" / "receitas"

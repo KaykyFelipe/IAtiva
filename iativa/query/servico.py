@@ -96,6 +96,7 @@ class Resultado:
     escopo: dict = field(default_factory=dict)
     periodos: list = field(default_factory=list)  # intervalos derivados, só no backend/snapshot autorizado
     medida_calculada: str = ''
+    memoria_tecnica: dict = field(default_factory=dict)  # M95: {estado, versao, trechos} da busca obrigatória
     curta_salva: str = ''  # M48: resposta curta gravada no snapshot (os totais não são gravados)
 
     @property
@@ -311,6 +312,37 @@ def _situacao_da_falha(exc) -> str:
 
 
 def executar_solicitacao(user, s: RequestContext) -> Resultado:
+    """M95: antes de preparar a consulta do ERP, a memória técnica é consultada (etapa obrigatória, em todos os
+    caminhos: chat, reexecução, continuação e worker). O estado real vai no resultado e nas premissas; se o índice
+    estiver indisponível, a consulta segue só com o dicionário local e diz isso."""
+    memoria = memoria_tecnica_da_solicitacao(s)
+    r = _executar_solicitacao(user, s)
+    r.memoria_tecnica = memoria
+    if memoria.get("estado") == "ok":
+        r.premissas = list(r.premissas) + [f"Memória técnica {memoria['versao']} consultada ({memoria['trechos']} trecho(s)); "
+                                           "estrutura confirmada no dicionário local."]
+    else:
+        r.premissas = list(r.premissas) + ["Memória técnica indisponível: usei só o dicionário local da instalação."]
+    return r
+
+
+def memoria_tecnica_da_solicitacao(s) -> dict:
+    from iativa.knowledge import memoria_tecnica as mt
+    obj = OBJETIVOS[s.objetivo] if s.objetivo in OBJETIVOS else None
+    aliases = list(obj.tabelas) if obj is not None else []
+    if obj is not None and obj.modelo_id:
+        from iativa.agent.models import ConsultaModelo
+        cm = ConsultaModelo.objects.filter(pk=obj.modelo_id).first()
+        if cm is not None:
+            aliases += [j["tabela"] for j in cm.spec.get("juncoes", [])]
+    try:
+        r = mt.recuperar(aliases=aliases, permitidos=set(aliases))
+    except Exception:
+        r = mt.Recuperacao(mt.INDISPONIVEL)
+    return {**r.resumo(), "aliases": aliases}
+
+
+def _executar_solicitacao(user, s: RequestContext) -> Resultado:
     if s.usuario_id != user.pk:
         raise PermissaoNegada("Somente o dono executa a solicitação.")
     if s.estado != E.PRONTA:
