@@ -137,6 +137,32 @@ def consulta_do_primeiro_evento(texto, modelos):
     return None
 
 
+def recuperar_filtro_do_ano(texto, decisao, objetivos):
+    """Recompõe os intervalos do pedido quando o modelo insiste em comparações de data inválidas."""
+    from .contratos import campos_periodo
+    from .models import ConsultaModelo, SituacaoModelo
+    from .objetivos import ano_admissoes_e_desligamentos
+
+    ano = ano_admissoes_e_desligamentos(texto)
+    if not ano or decisao.acao != 'preparar_consulta':
+        return None
+    filtro = next((v for k, v in decisao.parametros if k == 'filtro-campo'), '')
+    campos = ('RA_ADMISSA', 'RA_DEMISSA')
+    partes = [parte.strip().upper() for parte in filtro.split(';') if parte.strip()]
+    if not partes or not all(re.fullmatch(r'(RA_ADMISSA|RA_DEMISSA)\s*[<>]=?\s*\d{8}', p)
+                             for p in partes):
+        return None
+    objetivo = next((o for o in objetivos if o.codigo == decisao.objetivo and o.tabelas == ('SRA',)), None)
+    if objetivo is None or not objetivo.modelo_id:
+        return None
+    modelo = ConsultaModelo.objects.filter(pk=objetivo.modelo_id, situacao=SituacaoModelo.APROVADA).first()
+    if modelo is None or not set(campos) <= set(campos_periodo(modelo.spec)):
+        return None
+    intervalos = '; '.join(f'{campo}@{ano}0101..{ano}1231' for campo in campos)
+    return replace(decisao, parametros=tuple((k, intervalos if k == 'filtro-campo' else v)
+                                             for k, v in decisao.parametros))
+
+
 def orientar(user, texto, decisao, objetivos):
     """Mantém a consulta do evento pedido, sem agregação, com o período da mensagem."""
     if decisao.acao not in ('preparar_consulta', 'criar_consulta'):

@@ -566,6 +566,7 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
 
     ac = acomp or coord.Acompanhamento(texto)
     feitas, observacoes, saida = set(), list(observacoes or []), None
+    parametros_recusados = set()
     previa = None  # etapa intermediária concluída (ex.: a lista) que a próxima etapa completa
     previa_parte = None  # M41: resposta já conferida da 1ª pergunta de uma mensagem com várias
     resultado_base = None  # M45: última consulta desta mensagem; só em memória, autorizada pelo backend
@@ -694,6 +695,10 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
             causa = sem_acao
             break
         assinatura = _assinatura(d)
+        if assinatura in parametros_recusados and cobertura is None and ac.exig == coord.VERIFICACAO:
+            alternativa = admissoes.recuperar_filtro_do_ano(texto, d, objetivos)
+            if alternativa is not None and (candidata := _assinatura(alternativa)) not in feitas:
+                d, assinatura = alternativa, candidata
         if assinatura in feitas and cobertura is None and ac.contrato:
             for alternativa in comparacao.alternativas_mensais(ac, d, objetivos):
                 candidata = _assinatura(alternativa)
@@ -733,6 +738,7 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
             saida = reduz or comparada or _agir(user, c, d, atual, defs, texto, provedor, entrada_passo, objetivos,
                                                 administrador, interrompido=interrompido, resultado_base=resultado_base)
         except ValidationError as exc:
+            parametros_recusados.add(assinatura)
             observacoes.append(Observacao(d.acao, ERRO_PARAMETROS, ' '.join(exc.messages)))
             ac.anotar(d.acao, ERRO_PARAMETROS)
             continue
@@ -834,6 +840,8 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
                     continue
             return _fechar(ac, user, c, mensagem_id, saida, ev or coord.INVESTIGACAO, parcial=not ev)
         ev = coord.evidencia(d, saida, texto)  # o que ESTA ação entregou (antes de juntar com a etapa anterior)
+        if saida.observacao is not None and saida.observacao.situacao == ERRO_PARAMETROS:
+            parametros_recusados.add(assinatura)
         if ac.contrato:
             from .planejamento import registrar_entregas
             registrar_entregas(ac, d, saida)
