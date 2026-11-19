@@ -39,3 +39,12 @@ def test_etapa_longa_nao_e_cortada_no_meio():
     finally:
         andamento._PASSOS.pop(("u", "p"), None)
         andamento._ATUAL.reset(token)
+
+
+@pytest.mark.django_db
+def test_intervalo_sobre_admissoes_vai_para_a_manutencao(settings):
+    settings.IATIVA_MANUTENCAO_AUTOMATICA = True
+    ac = SimpleNamespace(texto="Quantos admitidos em 2026 saíram antes de completar 90 dias?", exig=coord.CALCULO,
+                         trilha=["preparar_consulta:parcial:consulta"], capacidade="")
+    inc = coord.encaminhar_manutencao(ac, "falta_capacidade")
+    assert inc is not None and inc.condicoes["pergunta"]
