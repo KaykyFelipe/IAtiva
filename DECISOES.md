@@ -234,3 +234,4 @@ M60 (Diego, 2026-11-16, aprovada no chat): implementar os seis ajustes da revis�
 | M110 | 2026-11-19 | Pedido de Diego (não focar na pergunta, corrigir para qualquer pedido): critério recusado persistente vai para a correção automática (substitui a M67 nesse ponto); cálculo usa o bloco certo de resposta com vários blocos; aprovação depois de reprovação vira aprendizado na memória. |
 | M111 | 2026-11-19 | Autorizado por Diego: limite da manutenção automática de 3 para 30 correções por dia (MANUTENCAO_MAX_POR_DIA em /etc/iativa/manutencao.env no servidor). |
 | M112 | 2026-11-19 | Pedido de Diego (corrigir para futuras correções): manutenção trata revisão reprovada como defeito a corrigir de forma geral; capacidade até 600 caracteres. |
+| M113 | 2026-11-19 | Pedido de Diego: revisor não pode reprovar resposta certa; vê total e resumo (sem nomes), critério pragmático; reprovação após correção volta à manutenção até a resposta certa. |

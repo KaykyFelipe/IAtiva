@@ -1024,7 +1024,10 @@ def _encerrar_sem_cumprir(ac, user, c, mensagem_id, saida, previa, causa, observ
         # M61: só espera a manutenção se ela vai mesmo atuar agora; incidente bloqueado ou esgotado não deixa o
         # pedido parado "na fila" para sempre.
         from iativa.manutencao.incidentes import elegivel as _vai_corrigir
-        situacao = (SO.MANUTENCAO if (inc is not None and mensagem_id is not None and not retomado
+        # M113: revisão reprovada depois de uma correção volta à manutenção (o ciclo segue até a resposta certa);
+        # os limites de tentativas/reaberturas do incidente e o diário da manutenção evitam laço sem fim.
+        situacao = (SO.MANUTENCAO if (inc is not None and mensagem_id is not None
+                                      and (not retomado or causa == "revisao_reprovada")
                                       and (_vai_corrigir(inc) or inc.situacao == 'em_correcao'))
                     else SO.IMPEDIDO)
         if mensagem_id is not None:

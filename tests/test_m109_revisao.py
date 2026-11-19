@@ -81,3 +81,11 @@ def test_m110_aprovada_depois_de_reprovar_guarda_o_aprendizado(datas):  # noqa: 
     conversas.enviar(b['u'], c, PERGUNTA, p)
     nota = NotaAgente.objects.get(tipo='correcao')
     assert 'liste só quem atende' in nota.texto and 'Quantos admitidos' in nota.texto
+
+
+def test_m113_revisor_ve_o_total_geral_sem_nomes():
+    r = Resultado(True, 'Maior Quantidade: JOAO DA SILVA (12). Total geral (40 registro(s), nas 8 filiais, calculado no '
+                  'banco): Quantidade: 40.', colunas=['Filial', 'Quantidade'], tipos=['texto', 'inteiro'],
+                  linhas=[['001001', '12']])
+    b = revisao.descrever(type('S', (), {'resultado': r})())[0]
+    assert 'Total geral' in b['resumo'] and 'Quantidade: 40' in b['resumo'] and 'JOAO' not in b['resumo']

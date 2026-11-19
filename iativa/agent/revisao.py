@@ -4,8 +4,12 @@ manutenção automática (M107), que corrige e refaz o pedido, que passa pelo re
 
 O modelo recebe SÓ metadados do que foi montado (títulos, colunas, quantidade de registros, medida calculada,
 critérios e a frase-resumo do cálculo); nunca as linhas do ERP."""
+import re
+
 from django.conf import settings
 from django.utils import timezone
+
+from iativa.manutencao.incidentes import mascarar_pergunta
 
 MODO = "revisar_entrega"
 
@@ -38,11 +42,22 @@ def descrever(saida) -> list[dict]:
             "colunas": list(getattr(r, "colunas", []) or [])[:30],
             "registros": len(getattr(r, "linhas", []) or []),
             "medida_calculada": medida,
-            # Frase do sistema sobre o cálculo (ex.: "41 de 72 com Dt. Demissão"); listas não mandam a mensagem.
-            "resumo_calculo": str(getattr(r, "mensagem", "") or "")[:300] if medida else "",
+            # Frase do sistema sobre o resultado: total geral calculado no banco, maior/menor grupo, resumo do
+            # cálculo (ex.: "41 de 72 com Dt. Demissão"). M113: antes só ia para cálculos e o revisor achava que
+            # faltava o total que estava na resposta. São agregados do sistema, não linhas do ERP.
+            "resumo": _resumo(getattr(r, "mensagem", ""), 400),
+            "resumo_calculo": _resumo(getattr(r, "mensagem", ""), 300) if medida else "",
             "criterios": [str(p)[:200] for p in (getattr(r, "premissas", []) or [])][:8],
         })
     return out
+
+
+def _resumo(texto, limite):
+    """Frase do sistema sem dado de pessoa: tira o destaque "Maior/Menor <grupo>" (o grupo pode ser um nome) e troca
+    sequências em maiúsculas (nomes do cadastro) por [nome]; depois o mascaramento da manutenção."""
+    frases = [f for f in re.split(r"(?<=\.)\s+", str(texto or "")) if not re.match(r"\s*(Maior|Menor)\b", f)]
+    t = re.sub(r"\b[A-ZÀ-Ú]{2,}(?:\s+(?:D[AEO]S?\s+)?[A-ZÀ-Ú]{2,})+\b", "[nome]", " ".join(frases))
+    return mascarar_pergunta(t, limite)
 
 
 def deterministico(blocos: list[dict]) -> str:

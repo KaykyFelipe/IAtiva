@@ -4,6 +4,13 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **Etapa 7 aprovada em 2026-11-16 por Diego; em andamento.** Feito: roteiro do piloto (`docs/piloto/ROTEIRO.md`) e auditoria de não armazenamento (`manage.py auditar_armazenamento`). Falta: usuários do Financeiro, conferência dos números com relatórios do Protheus, avaliação da interpretação e latência. Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M113 — revisor pragmático e com o total; reprovação após correção volta à manutenção (2026-11-19)
+
+- O revisor reprovava respostas certas. Exemplos: "admitidos que saíram antes de 90 dias" com 41 de 72 ("filtro não aparece") e "demitidos nos últimos 8 meses" com o total geral do banco ("falta o total"). Ele só via a frase de cálculos.
+- Agora o revisor recebe a frase-resumo de todo bloco (total geral do banco, resumo do cálculo), sem destaque de grupo e com nomes trocados por [nome]. A instrução pede para reprovar só quando a resposta claramente não responde, nunca por apresentação ou para pedir confirmação.
+- Revisão reprovada depois de uma correção publicada volta à manutenção (antes ia direto para a TI); limites de tentativas/reaberturas e o diário seguram laço.
+- Incidente #15 encerrado (falso negativo). Correções #13/#14 da manutenção seguem só no servidor, aguardando revisão da TI.
+
 ## Mudança M112 — manutenção entende "revisão reprovada" (2026-11-19)
 
 - Incidente #12 (revisão reprovada) terminou "não reproduzido" em 32 s. O agente de manutenção recebia a instrução de não mexer quando "o modelo escolheu mal", e a descrição do que faltava chegava cortada em 300 caracteres.
