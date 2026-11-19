@@ -436,16 +436,10 @@ def encaminhar_manutencao(ac: Acompanhamento, causa: str, tabela: str = ""):
     mascarada (sem nomes, documentos, e-mails ou valores), para a manutenção saber o que construir."""
     from iativa.manutencao import incidentes
     from iativa.manutencao.models import Categoria
-    from . import contagem as admissoes
 
-    # Contar/listar admissões já é uma capacidade existente. Uma falha de escolha
-    # de ferramenta ou contrato não é evidência de que precisa publicar código.
-    from . import entregas, comparacao
-    # M108: prazo entre dois eventos ("admitidos que saíram antes de 90 dias") não é a contagem de admissões
-    # existente: sem a capacidade, vai para a manutenção.
-    if causa not in ("revisao_reprovada", "calculo_pendente") and not pede_intervalo(_norm(ac.texto)) and not comparacao.ranking(ac.texto) and not comparacao.contagens_mensais(ac.texto) and (
-            admissoes.solicitado(ac.texto) or entregas.somente_lista(ac.texto) or comparacao.periodos(ac.texto)):
-        return None
+    # M116 (Diego: "sempre que não souber, passa pela correção automática"): não há mais pedido que fique fora da
+    # manutenção por parecer coberto por uma capacidade existente; se o ciclo não entregou, algo falta no sistema
+    # (inclusive conduzir o modelo), e a manutenção decide com teste.
 
     cond = {"exigencia": ac.exig or RESPOSTA, "causa": causa, "trilha": _trilha_segura(ac.trilha),
             "pergunta": ac.texto}

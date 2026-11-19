@@ -112,12 +112,14 @@ def test_mes_nao_muda_entre_tentativas(adm):
     assert dict(ajustada.parametros)['periodo-analise']=='01/10/2026..16/10/2026'
 
 
-def test_tentativa_repetida_nao_e_defeito_de_codigo_em_contagem():
+def test_m116_tentativa_repetida_em_contagem_vai_para_a_correcao():
+    """M116 (substitui a M61 neste ponto): pedido que o ciclo não entregou vai para a correção automática, mesmo
+    parecendo coberto por uma capacidade existente."""
     from iativa.agent.objetivos import Acompanhamento,encaminhar_manutencao
     a=Acompanhamento(PEDIDO,exig='calculo',capacidade='Contar admissões')
     a.anotar('preparar_consulta','acao_repetida')
-    assert encaminhar_manutencao(a,'acao_repetida','SRA') is None
-    assert not Incidente.objects.exists()
+    assert encaminhar_manutencao(a,'acao_repetida','SRA') is not None
+    assert Incidente.objects.exists()
 
 
 def test_juntar_nao_duplica_paragrafos_identicos():

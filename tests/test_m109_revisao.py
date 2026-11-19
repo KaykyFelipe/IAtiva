@@ -109,3 +109,18 @@ def test_revisor_indisponivel_mantem_resultado_em_segundo_plano(datas):
     _, res = conversas.enviar(b['u'], c, PERGUNTA, p)
     assert res is None
     assert Objetivo.objects.get().situacao == SituacaoObjetivo.CONTINUAR
+
+
+def test_m116_tabelas_que_nao_serviram_vao_para_a_correcao(base, settings):  # noqa: F811
+    """Metadado/tabelas que não serviram não encerram com "reformule": vão para a correção automática."""
+    from iativa.agent import agente
+    from iativa.agent.objetivos import Acompanhamento
+    ac = Acompanhamento("Quantos funcionários foram admitidos e desligados no mesmo ano, por filial, em 2026?",
+                        exig="calculo")
+    ac.anotar("aprender_tabela", agente.ERRO_METADADOS, "")
+    ac.anotar("aprender_tabela", agente.ERRO_METADADOS, "")
+    c = conversas.nova_individual(base["u"])
+    m = c.mensagens.create(papel="usuario", texto=ac.texto, autor=base["u"])
+    s = agente._encerrar_sem_cumprir(ac, base["u"], c, m.pk, None, None, "sem_resultado", [])
+    assert "reformule" not in s.texto.lower() and "não é falta de função" not in s.texto, s.texto
+    assert Incidente.objects.exists()

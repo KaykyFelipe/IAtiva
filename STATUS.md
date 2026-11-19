@@ -4,6 +4,13 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **Etapa 7 aprovada em 2026-11-16 por Diego; em andamento.** Feito: roteiro do piloto (`docs/piloto/ROTEIRO.md`) e auditoria de não armazenamento (`manage.py auditar_armazenamento`). Falta: usuários do Financeiro, conferência dos números com relatórios do Protheus, avaliação da interpretação e latência. Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M116 — tudo que a IA não entrega vai para a correção automática (2026-11-19)
+
+- "Quantos funcionários foram admitidos e desligados no mesmo ano, por filial, em 2026?" terminou com "as tabelas encontradas não serviram; não é falta de função; reformule". Duas causas:
+  - a causa "metadado/tabelas que não serviram" encerrava sem manutenção (M67);
+  - pedidos de admissões, listas e comparações de períodos eram excluídos da manutenção como "capacidade existente" (M61).
+- Agora só a falta de permissão (limite por função) encerra sem correção. Todo o resto que o ciclo não entrega vai para a correção automática; o "reformule o pedido" deixa de existir.
+
 ## Mudança M115 — manutenção com permissão para corrigir regras de pedido (2026-11-19)
 
 - Diagnóstico do incidente #20 ("compare setembro e outubro por filial: contratos assinados e locações iniciadas"):

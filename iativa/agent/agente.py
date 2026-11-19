@@ -1053,9 +1053,10 @@ def _encerrar_sem_cumprir(ac, user, c, mensagem_id, saida, previa, causa, observ
                       .strip(), {**ficha, "tipo": ficha.get("tipo") or "objetivo", "objetivo": o.pk})
         registrar("modelo_falhou", "agente", usuario=user, estado_novo="objetivo_continua", resultado="erro")
     elif (causa not in PASSAGEIRAS and causa != "revisao_reprovada" and (classe := _classe_sem_codigo(ac))
-          and classe != ERRO_PARAMETROS):
-        # M110: critério recusado que persistiu NÃO encerra com "reformule": a IA não conseguiu montar o pedido
-        # com o que existe, então vai para a correção automática (else abaixo).
+          and classe == SEM_PERMISSAO):
+        # M116: só a falta de permissão (limite real por função) encerra sem correção. Critério recusado (M110),
+        # tabelas que não serviram e metadado inesperado vão para a correção automática (else abaixo); nunca
+        # "reformule o pedido".
         # M67 (auditoria 17/11, item 11): a falha tem causa conhecida que não é falta de código — escolha ou
         # parâmetro do modelo, metadado/ERP indisponível ou permissão. Não abre manutenção.
         if mensagem_id is not None:
