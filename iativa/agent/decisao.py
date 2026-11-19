@@ -119,7 +119,9 @@ def esquema(codigos_objetivo, codigos_parametro) -> dict:
             "resposta": {"type": "string", "description": "Texto ao usuário, em português, tom de conversa."},
             "calculo": {"type": "object", "description": "Ação calcular_resultado: usa o resultado autorizado anterior. "
                 "Para estágio, deixe campos vazios: os intervalos são resolvidos pelo backend.", "properties": {
-                "operacao": {"type": "string", "enum": ['contagem', 'dias_uteis', 'dias_corridos', 'meses', 'soma', 'media', 'diferenca', 'percentual', 'projecao']},
+                "operacao": {"type": "string", "enum": ['contagem', 'dias_uteis', 'dias_corridos', 'meses', 'soma', 'media', 'diferenca', 'percentual', 'projecao', 'intervalo_entre_datas']},
+                "limite": {"type": "integer", "description": "intervalo_entre_datas: conta registros com menos que "
+                           "este número de dias corridos entre campo e campo_final (sem data final = ignorado)."},
                 "mensagem": {"type": "integer", "minimum": 0, "description": "Id de resultado_anterior.mensagem; 0 = último."},
                 "campo": {"type": "string"}, "campo_final": {"type": "string"}}, "required": ["operacao"]},
             "acao": {"type": "string", "enum": list(ACOES)},
@@ -282,16 +284,19 @@ def validar(saida, codigos_objetivo, codigos_parametro) -> Decisao:
     calculo = saida.get('calculo') or None
     if calculo is not None:
         from .calculos import OPERACOES
-        if not isinstance(calculo, dict) or set(calculo) - {'operacao', 'mensagem', 'campo', 'campo_final'}:
+        if not isinstance(calculo, dict) or set(calculo) - {'operacao', 'mensagem', 'campo', 'campo_final', 'limite'}:
             raise DecisaoInvalida('calculo')
         mid = calculo.get('mensagem', 0)
         if mid is None:
             mid = 0  # campos opcionais vêm como null no schema estrito do ChatGPT
-        if calculo.get('operacao') not in OPERACOES or type(mid) is not int or not 0 <= mid < 2**63:
+        limite = calculo.get('limite')
+        if calculo.get('operacao') not in OPERACOES or type(mid) is not int or not 0 <= mid < 2**63 or (
+                limite is not None and (type(limite) is not int or not 0 < limite < 100000)):
             raise DecisaoInvalida('calculo')
         calculo = {'operacao': calculo['operacao'], 'mensagem': mid,
                    'campo': _texto('' if calculo.get('campo') is None else calculo['campo'], 120, 'campo'),
-                   'campo_final': _texto('' if calculo.get('campo_final') is None else calculo['campo_final'], 120, 'campo_final')}
+                   'campo_final': _texto('' if calculo.get('campo_final') is None else calculo['campo_final'], 120, 'campo_final'),
+                   **({'limite': limite} if limite is not None else {})}
     if acao == 'calcular_resultado' and calculo is None:
         raise DecisaoInvalida('calculo')
     formato = saida.get("formato") or ""

@@ -10,7 +10,7 @@ from iativa.accounts.authz import PermissaoNegada
 from iativa.chat.resultados import ESCOPO_CALENDARIO, restaurar, empacotar
 from iativa.query.servico import Resultado
 
-OPERACOES = ('contagem', 'dias_uteis', 'dias_corridos', 'meses', 'soma', 'media', 'diferenca', 'percentual', 'projecao')
+OPERACOES = ('contagem', 'dias_uteis', 'dias_corridos', 'meses', 'soma', 'media', 'diferenca', 'percentual', 'projecao', 'intervalo_entre_datas')
 
 
 def _pascoa(ano):
@@ -200,6 +200,8 @@ def executar(user, conversa, plano, resultado_atual=None):
     curta = ''
     premissas = list(res.premissas) + ['Cálculo sobre a consulta executada nesta mensagem.' if not m.pk else
                                       'Cálculo sobre o resultado salvo da consulta anterior; os dados não foram atualizados.']
+    if op == 'intervalo_entre_datas':
+        return _contagem_intervalo(res, plano, premissas)
     if op in ('dias_uteis', 'dias_corridos', 'meses'):
         from .historico_funcional import _duracao
         if res.periodos and not plano.get('campo'):
@@ -262,6 +264,38 @@ def executar(user, conversa, plano, resultado_atual=None):
     return Resultado(True, texto or 'Nenhum registro para calcular.', colunas=colunas, tipos=tipos, linhas=linhas,
                      premissas=premissas, escopo=res.escopo, medida_calculada=op, periodos=res.periodos,
                      curta_salva=curta)
+
+
+def _contagem_intervalo(res, plano, premissas):
+    """Contagem condicional: registros cujo intervalo em dias corridos entre `campo` (início) e `campo_final`
+    (fim) é menor que `limite`. Registros sem data final (evento ainda não ocorrido) são ignorados."""
+    limite = plano.get('limite')
+    if type(limite) is not int or limite <= 0:
+        raise ValidationError('Informe o limite em dias (inteiro positivo) para a contagem por intervalo.')
+    try:
+        a, b = res.colunas.index(plano.get('campo')), res.colunas.index(plano.get('campo_final'))
+    except ValueError:
+        raise ValidationError('Escolha as colunas inicial e final dentre as colunas do resultado anterior.') from None
+    contados = ignorados = 0
+    for l in res.linhas:
+        if not str(l[b] or '').strip():
+            ignorados += 1
+            continue
+        inicio, fim = _data(l[a]), _data(l[b])
+        if fim < inicio:
+            raise ValidationError('Há uma data final anterior à inicial; confira os critérios.')
+        contados += (fim - inicio).days < limite
+    com_fim = len(res.linhas) - ignorados
+    ini, fin = res.colunas[a], res.colunas[b]
+    premissas = premissas + [f'Conta registros com menos de {limite} dias corridos entre {ini} e {fin}; '
+                             f'{ignorados} registro(s) sem {fin} ignorado(s).']
+    return Resultado(True, f'Registros com menos de {limite} dias corridos entre {ini} e {fin}: '
+                     f'{contados} de {com_fim} com {fin}.',
+                     colunas=['Cálculo', 'Resultado'], tipos=['texto', 'inteiro'],
+                     linhas=[[f'Menos de {limite} dias', str(contados)], [f'Com {fin}', str(com_fim)],
+                             [f'Sem {fin} (ignorados)', str(ignorados)]],
+                     premissas=premissas, escopo=res.escopo, medida_calculada='intervalo_entre_datas',
+                     curta_salva=str(contados))
 
 
 def _participacao(res, plano, premissas):
