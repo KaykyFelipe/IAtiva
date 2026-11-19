@@ -277,7 +277,7 @@ def divergencia(item, decisao, ano_civil=""):
 
 
 def registrar_entregas(acompanhamento, decisao, saida):
-    from .objetivos import ano_admissoes_e_desligamentos
+    from .objetivos import _comprova_admissoes_e_desligamentos, ano_admissoes_e_desligamentos
 
     contrato = acompanhamento.contrato
     ano_civil = ano_admissoes_e_desligamentos(acompanhamento.texto) if len(contrato) == 1 else ""
@@ -290,6 +290,9 @@ def registrar_entregas(acompanhamento, decisao, saida):
                 # Fica pendente e o modelo recebe o motivo para refazer com o critério certo.
                 acompanhamento.divergencias = {**getattr(acompanhamento, 'divergencias', {}),
                                                contrato[indice]['descricao']: motivo}
+                continue
+            if (ano_civil and contrato[indice]['tipo'] == 'calculo'
+                    and not _comprova_admissoes_e_desligamentos(saida.resultado, acompanhamento.texto)):
                 continue
         if (indice < len(contrato) and indice not in acompanhamento.cumpridas
                 and not conferir({'entregas': [contrato[indice]]}, decisao, saida, acompanhamento.texto)):

@@ -704,6 +704,12 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
             if alternativa is not None and (candidata := _assinatura(alternativa)) not in feitas:
                 d, assinatura = alternativa, candidata
         if assinatura in feitas and cobertura is None and ac.contrato:
+            if (len(ac.contrato) == 1 and ac.exig == coord.CALCULO and ac.pendentes()
+                    and previa is not None and not ac.cumpridas):
+                alternativa = admissoes.recuperar_filtro_do_ano(texto, d, objetivos, entrega_pendente=True)
+                if alternativa is not None and (candidata := _assinatura(alternativa)) not in feitas:
+                    d, assinatura, previa = alternativa, candidata, None
+        if assinatura in feitas and cobertura is None and ac.contrato:
             for alternativa in comparacao.alternativas_mensais(ac, d, objetivos):
                 candidata = _assinatura(alternativa)
                 if candidata not in feitas:

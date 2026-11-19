@@ -137,8 +137,8 @@ def consulta_do_primeiro_evento(texto, modelos):
     return None
 
 
-def recuperar_filtro_do_ano(texto, decisao, objetivos):
-    """Recompõe os intervalos do pedido quando o modelo insiste em comparações de data inválidas."""
+def recuperar_filtro_do_ano(texto, decisao, objetivos, *, entrega_pendente=False):
+    """Recompõe os intervalos do pedido após erro de parâmetro ou contagem anual incompleta."""
     from .contratos import campos_periodo
     from .models import ConsultaModelo, SituacaoModelo
     from .objetivos import ano_admissoes_e_desligamentos
@@ -146,11 +146,17 @@ def recuperar_filtro_do_ano(texto, decisao, objetivos):
     ano = ano_admissoes_e_desligamentos(texto)
     if not ano or decisao.acao != 'preparar_consulta':
         return None
-    filtro = next((v for k, v in decisao.parametros if k == 'filtro-campo'), '')
+    params = dict(decisao.parametros)
     campos = ('RA_ADMISSA', 'RA_DEMISSA')
-    partes = [parte.strip().upper() for parte in filtro.split(';') if parte.strip()]
-    if not partes or not all(re.fullmatch(r'(RA_ADMISSA|RA_DEMISSA)\s*[<>]=?\s*\d{8}', p)
-                             for p in partes):
+    partes = [parte.strip().upper() for parte in params.get('filtro-campo', '').split(';') if parte.strip()]
+    formato = r'\s*[<>]=?\s*\d{8}'
+    if entrega_pendente:
+        if (params.get('agregacao', '').lower() != 'contagem:* por filial'
+                or params.get('filial-analise') != 'TODAS'):
+            return None
+        formato = rf'(?:{formato}|@\d{{8}}\.\.\d{{8}})'
+    if (not partes and not entrega_pendente) or not all(
+            re.fullmatch(rf'(?:RA_ADMISSA|RA_DEMISSA){formato}', p) for p in partes):
         return None
     objetivo = next((o for o in objetivos if o.codigo == decisao.objetivo and o.tabelas == ('SRA',)), None)
     if objetivo is None or not objetivo.modelo_id:
@@ -159,8 +165,12 @@ def recuperar_filtro_do_ano(texto, decisao, objetivos):
     if modelo is None or not set(campos) <= set(campos_periodo(modelo.spec)):
         return None
     intervalos = '; '.join(f'{campo}@{ano}0101..{ano}1231' for campo in campos)
-    return replace(decisao, parametros=tuple((k, intervalos if k == 'filtro-campo' else v)
-                                             for k, v in decisao.parametros))
+    params['filtro-campo'] = intervalos
+    if entrega_pendente and 'periodo-analise' in objetivo.obrigatorios:
+        if modelo.spec.get('campo_data') not in campos:
+            return None
+        params['periodo-analise'] = f'01/01/{ano}..31/12/{ano}'
+    return replace(decisao, parametros=tuple(params.items()))
 
 
 def orientar(user, texto, decisao, objetivos):
