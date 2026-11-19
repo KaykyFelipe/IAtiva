@@ -695,7 +695,7 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
             causa = sem_acao
             break
         assinatura = _assinatura(d)
-        if assinatura in parametros_recusados and cobertura is None and ac.exig == coord.VERIFICACAO:
+        if assinatura in parametros_recusados and cobertura is None:  # M117: vale para qualquer exigência
             alternativa = admissoes.recuperar_filtro_do_ano(texto, d, objetivos)
             if alternativa is not None and (candidata := _assinatura(alternativa)) not in feitas:
                 d, assinatura = alternativa, candidata
@@ -858,7 +858,7 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
                 observacoes.append(Observacao(d.acao, coord.ETAPA, 'Ainda faltam entregas verificadas: ' + '; '.join(ac.pendentes())
                     + (('. Critério diferente do pedido, refaça com o período/filial da entrega: ' + '; '.join(diverg))
                        if diverg else '')))
-                if ac.exig == coord.VERIFICACAO and len(ac.contrato) == 1 and ev == coord.CONSULTA:
+                if ac.exig in (coord.VERIFICACAO, coord.CALCULO) and len(ac.contrato) == 1 and ev == coord.CONSULTA:
                     observacoes.append(Observacao(d.acao, coord.ETAPA, ac.falta_obs(_consulta_recente(user, c))))
                 if diverg:
                     andamento.avisar('O critério usado não é o pedido; refazendo com o período/filial certos')

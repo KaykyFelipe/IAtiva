@@ -10,6 +10,7 @@
   - "foram ... no mesmo ano" era lido como "a mesma pessoa" (detector de verificação). Agora "mesmo ano/mês/período" é recorte de tempo;
   - a busca em lote recusava o nome completo: 70 posições preenchidas com espaço passavam do limite de 40, e nomes acentuados também eram recusados. Agora o limite é 100 caracteres, com letras acentuadas e ainda sem aspas, ponto e vírgula ou comentário;
   - verificação que termina sem ninguém verificado agora falha, replaneja e, sem saída, vai para a correção automática; antes contava como concluída.
+- As correções #13, #14, #16, #20, #21, #22 e #23, feitas pela manutenção no servidor, foram integradas ao GitHub. As de #21/#22 tratavam a pergunta como verificação; foram ajustadas para a exigência de cálculo, e os testes delas seguem passando.
 
 ## Mudança M116 — tudo que a IA não entrega vai para a correção automática (2026-11-19)
 

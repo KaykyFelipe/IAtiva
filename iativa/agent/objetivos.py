@@ -234,7 +234,7 @@ def evidencia(decisao, saida, texto='') -> str:
     res = saida.resultado
     if res is not None and (getattr(res, "ok", False) or getattr(res, "consolidado", False)):
         if _comprova_admissoes_e_desligamentos(res, texto):
-            return VERIFICACAO
+            return CALCULO  # M117: contagem com os dois intervalos é cálculo (não verificação de vínculo)
         if getattr(res, 'medida_calculada', ''):
             return CALCULO
         calculo = any(k == "agregacao" for k, _ in getattr(decisao, "parametros", ())) or bool(

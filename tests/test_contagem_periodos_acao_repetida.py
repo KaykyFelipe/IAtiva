@@ -37,7 +37,7 @@ def test_contagem_por_filial_recupera_filtro_invalido_repetido(base, erp_sinteti
     provedor = FakeProvider([decisao, decisao], analises=[{
         "natureza": "dados", "setores": [base["cob"].codigo], "confianca": 1,
         "entregas": [{"descricao": "Contagem por filial de admissões e desligamentos no mesmo ano",
-                      "tipo": "verificacao"}],
+                      "tipo": "calculo"}],
     }])
     conversa = conversas.nova_individual(base["u"])
     msg, res = conversas.enviar(
@@ -47,9 +47,9 @@ def test_contagem_por_filial_recupera_filtro_invalido_repetido(base, erp_sinteti
 
     objetivo = conversa.objetivos.latest("pk")
     assert objetivo.trilha[0] == "preparar_consulta:erro_parametros:-"
-    assert objetivo.exigencia == "verificacao"
+    assert objetivo.exigencia != "verificacao"  # M117: "no mesmo ano" é recorte de tempo, não vínculo
     assert objetivo.situacao == SituacaoObjetivo.CUMPRIDO, (objetivo.trilha, msg.texto)
-    assert objetivo.melhor_evidencia == "verificacao"
+    assert objetivo.melhor_evidencia == "calculo"
     assert res.ok and res.colunas == ["Filial", "Quantidade"]
     assert {filial: int(qtd) for filial, qtd in res.linhas} == {rotulo("01"): 2, rotulo("02"): 1}
     assert res.totais.registros == 3

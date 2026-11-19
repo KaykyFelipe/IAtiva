@@ -40,10 +40,12 @@ def test_admitidos_e_desligados_no_mesmo_ano_por_filial(base, erp_sintetico, rec
 
     class Roteiro(FakeProvider):
         def decidir(self, entrada):
-            dica_de_recuperacao = recuperar and self.chamadas == 2 and any(
+            # M117: com a exigência certa (cálculo), a orientação dos dois intervalos chega pela regra do sistema
+            # nas notas desde a 1ª decisão, além das observações.
+            dica_de_recuperacao = recuperar and self.chamadas == 2 and (any(
                 "CAMPO@AAAAMMDD..AAAAMMDD" in obs["motivo"]
                 for obs in entrada.observacoes
-            )
+            ) or any("filtro-campo com intervalos" in n for n in entrada.notas))
             if (dica_de_recuperacao or (not recuperar and self.chamadas == 1)) and any(
                 "CAMPO@AAAAMMDD..AAAAMMDD" in p["descricao"]
                 for o in entrada.objetivos if o["codigo"] == base["cm"].codigo
@@ -60,20 +62,20 @@ def test_admitidos_e_desligados_no_mesmo_ano_por_filial(base, erp_sintetico, rec
         _d(acao="falta_capacidade", capacidade="Filtrar simultaneamente dois campos de data e contar por filial."),
     ], analises=[{
         "natureza": "dados", "setores": [base["cob"].codigo], "confianca": 1,
-        "entregas": [{"descricao": "Contagem por filial dos dois eventos em 2026", "tipo": "verificacao"}],
+        "entregas": [{"descricao": "Contagem por filial dos dois eventos em 2026", "tipo": "calculo"}],
     }])
     c = conversas.nova_individual(base["u"])
     msg, res = conversas.enviar(base["u"], c, "Quantos funcionários foram admitidos e desligados no mesmo ano, por filial, em 2026?", p)
 
     objetivo = c.objetivos.latest("pk")
-    assert objetivo.exigencia == "verificacao"
+    assert objetivo.exigencia != "verificacao"  # M117: "no mesmo ano" é recorte de tempo, não vínculo
     if recuperar:
         assert objetivo.trilha[:2] == [
             "preparar_consulta:entrega_pendente:consulta",
             "aprender_tabela:erro_metadados:-",
         ]
     assert objetivo.situacao == SituacaoObjetivo.CUMPRIDO, (objetivo.trilha, msg.texto)
-    assert objetivo.melhor_evidencia == "verificacao"
+    assert objetivo.melhor_evidencia == "calculo"
     assert res.ok and res.colunas == ["Filial", "Quantidade"]
     assert {filial: int(qtd) for filial, qtd in res.linhas} == {rotulo("01"): 2, rotulo("02"): 1}
     assert res.totais.registros == 3
