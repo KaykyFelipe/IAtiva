@@ -4,6 +4,11 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **Etapa 7 aprovada em 2026-11-16 por Diego; em andamento.** Feito: roteiro do piloto (`docs/piloto/ROTEIRO.md`) e auditoria de não armazenamento (`manage.py auditar_armazenamento`). Falta: usuários do Financeiro, conferência dos números com relatórios do Protheus, avaliação da interpretação e latência. Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M112 — manutenção entende "revisão reprovada" (2026-11-19)
+
+- Incidente #12 (revisão reprovada) terminou "não reproduzido" em 32 s. O agente de manutenção recebia a instrução de não mexer quando "o modelo escolheu mal", e a descrição do que faltava chegava cortada em 300 caracteres.
+- Agora, para a causa `revisao_reprovada`, a instrução diz que conduzir o modelo até a entrega certa É o defeito a corrigir, de forma geral (orientação em objetivos/agente, escolha de receita, cálculo), e como reproduzir (FakeProvider com `revisoes`). A descrição da capacidade vai inteira, até 600 caracteres.
+
 ## Mudança M110 — revisão reprovada não trava o assunto; IA aprende com a correção (2026-11-19)
 
 - Depois da M109, refazer o pedido calculava sobre a resposta anterior juntada (vários blocos), dava "não misture blocos" e encerrava com "não é falta de função; reformule". Três correções gerais:

@@ -431,3 +431,19 @@ def test_m108_executor_descarta_edicao_de_docs_do_projeto():
     import inspect
     fonte = inspect.getsource(mx.corrigir)
     assert '"STATUS.md", "DECISOES.md"' in fonte and fonte.index("STATUS.md") < fonte.index("validar_diff(")
+
+
+def test_m112_capacidade_longa_chega_ao_agente_e_prompt_explica_revisao():
+    cap = "A resposta montada não atende: " + "listar só quem atende ao critério (RA_DEMISSA < RA_ADMISSA + 90 dias); " * 6
+    diag = mx.validar_diagnostico({"incidente": 12, "codigo": "agente.objetivo.calculo.revisao_reprovada.x.-",
+                                   "categoria": "capacidade_ausente", "rastreamento": [], "versao": "abc",
+                                   "condicoes": {"causa": "revisao_reprovada", "trilha": ["revisao:entrega_nao_atende:-"],
+                                                 "capacidade": cap[:600]}})
+    assert diag["condicoes"]["capacidade"] == cap[:600]
+    assert "revisao_reprovada" in mx.prompt_capacidade(diag) and "É o defeito" in mx.prompt_capacidade(diag)
+
+
+@pytest.mark.django_db
+def test_m112_incidente_guarda_capacidade_de_ate_600():
+    from iativa.manutencao.incidentes import _condicoes
+    assert len(_condicoes({"capacidade": "x " * 400})["capacidade"]) == 600

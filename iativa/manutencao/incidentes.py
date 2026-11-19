@@ -52,14 +52,14 @@ _EMAIL = re.compile(r"\S+@\S+")
 _DATA = re.compile(r"\b\d{1,2}/\d{1,2}(?:/\d{2,4})?\b")
 _NUMERO_LONGO = re.compile(r"\d[\d.\-/]{3,}\d")
 _NOME = re.compile(r"(?<=[^\s.!?:])(\s+)[A-ZÀ-Ý][a-zà-ÿ]+(?:\s+(?:d[aeo]s?\s+)?[A-ZÀ-Ý][a-zà-ÿ]+)*")
-PERGUNTA_PERMITIDA = re.compile(r"^[\w\s.,;:!?()\[\]/%+\-–'\"ºª°]{1,300}$")
+PERGUNTA_PERMITIDA = re.compile(r"^[\w\s.,;:!?()\[\]/%+\-–'\"ºª°<>=]{1,600}$")  # M112: tamanho vem de mascarar_pergunta
 
 
-def mascarar_pergunta(texto: str) -> str:
+def mascarar_pergunta(texto: str, limite: int = 300) -> str:
     """M51: a pergunta vai à manutenção para ela saber QUAL capacidade falta, nunca com dado pessoal:
     e-mails, números longos (CPF, CNPJ, matrícula, valores) e nomes próprios viram marcadores.
     Datas curtas ficam (definem o período). Nada que venha do ERP passa por aqui."""
-    t = " ".join(str(texto or "").split())[:300]
+    t = " ".join(str(texto or "").split())[:limite]
     datas = []
     t = _DATA.sub(lambda m: datas.append(m.group(0)) or f"\x00{len(datas) - 1}\x00", t)
     t = _EMAIL.sub("[email]", t)
@@ -79,7 +79,8 @@ def _condicoes(cond: dict | None) -> dict:
         if limpa:
             out["trilha"] = limpa
     for campo in ("pergunta", "capacidade"):  # M51/M53: texto livre só mascarado
-        valor = mascarar_pergunta((cond or {}).get(campo, ""))
+        # M112: a capacidade (ex.: o que a revisão reprovou e como corrigir) cabe inteira, até 600.
+        valor = mascarar_pergunta((cond or {}).get(campo, ""), 600 if campo == "capacidade" else 300)
         if valor:
             out[campo] = valor
     for k, v in (cond or {}).items():

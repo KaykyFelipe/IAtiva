@@ -71,6 +71,7 @@ CODIGO_RE = re.compile(r"^[A-Za-z0-9_.<>-]{1,80}$")
 TRILHA_RE = re.compile(r"^[a-z_-]{1,40}:[a-z_-]{1,40}:[a-z_-]{1,40}$")
 # M51: pergunta já mascarada na aplicação (iativa/manutencao/incidentes.py:mascarar_pergunta).
 PERGUNTA_RE = re.compile(r"^[\w\s.,;:!?()\[\]/%+\-–'\"ºª°]{1,300}$")
+CAPACIDADE_RE = re.compile(r"^[\w\s.,;:!?()\[\]/%+\-–'\"ºª°<>=]{1,600}$")  # M112: descrição maior
 CATEGORIAS = ("erro_tecnico", "capacidade_ausente")
 
 
@@ -134,7 +135,7 @@ def validar_diagnostico(d: dict) -> dict:
         cond["trilha"] = trilha[-30:]
     for campo in ("pergunta", "capacidade"):
         valor = bruto.get(campo)
-        if isinstance(valor, str) and PERGUNTA_RE.match(valor):
+        if isinstance(valor, str) and (CAPACIDADE_RE if campo == "capacidade" else PERGUNTA_RE).match(valor):
             cond[campo] = valor
     return {"incidente": d["incidente"], "codigo": d["codigo"], "categoria": d["categoria"],
             "componente": str(d.get("componente", ""))[:60],
@@ -172,6 +173,14 @@ def prompt_capacidade(diag: dict) -> str:
         "tests/, templates/, static/; usar rede ou dados reais; escolher filtros para chegar a um valor esperado. "
         "Se a causa for o modelo ter escolhido mal (e não uma falta do sistema), ou se não conseguir reproduzir, "
         "NÃO altere o código: apenas termine dizendo NAO_REPRODUZIDO.\n"
+        "EXCEÇÃO (M112): se 'causa' for revisao_reprovada, o revisor de entrega (iativa/agent/revisao.py) reprovou a "
+        "resposta montada e 'capacidade' diz o que faltava e como corrigir. Aqui a escolha ruim do modelo É o defeito "
+        "a corrigir: o sistema precisa conduzir o ciclo até a entrega certa. Corrija de forma GERAL (vale para pedidos "
+        "parecidos), por exemplo: orientação ao modelo (regras em iativa/agent/objetivos.py, falta_obs; notas de "
+        "sistema em iativa/agent/agente.py, _notas), escolha da consulta/receita pelo backend, um cálculo ou ação que "
+        "falte (iativa/agent/calculos.py), ou o que a entrega precisa conter. Reproduza com FakeProvider roteirizado e "
+        "revisoes=[analise reprovando] (veja tests/test_m109_revisao.py): o teste novo falha porque o ciclo não chega "
+        "à entrega exigida e passa com a sua mudança. Não responda NAO_REPRODUZIDO só porque o modelo escolheu mal.\n"
         f"Resumo: código {diag['codigo']}."
     )
 
