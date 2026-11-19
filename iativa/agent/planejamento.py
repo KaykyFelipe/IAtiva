@@ -198,7 +198,9 @@ def conferir(analise, decisao, saida):
                                 and (saida.ficha or {}).get('tipo') == 'historico_cargo')
         if not cumpre(item['tipo'], ev) and not historico_com_calculo:
             faltantes.append(item['descricao'])
-        elif item.get('metrica') and getattr(res, 'medida_calculada', '') != item['metrica']:
+        elif item.get('metrica') and getattr(res, 'medida_calculada', '') != item['metrica'] and not (
+                # M108: contagem condicional por prazo entre duas datas também é contagem.
+                item['metrica'] == 'contagem' and getattr(res, 'medida_calculada', '') == 'intervalo_entre_datas'):
             # Agregações no banco já comprovam soma/média, mas não dias ou projeção.
             mapa = {'soma': 'SUM', 'media': 'AVG', 'contagem': 'COUNT'}
             medidas = getattr(getattr(res, 'totais', None), 'medidas', [])

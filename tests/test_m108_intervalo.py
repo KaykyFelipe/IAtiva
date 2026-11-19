@@ -48,3 +48,12 @@ def test_intervalo_sobre_admissoes_vai_para_a_manutencao(settings):
                          trilha=["preparar_consulta:parcial:consulta"], capacidade="")
     inc = coord.encaminhar_manutencao(ac, "falta_capacidade")
     assert inc is not None and inc.condicoes["pergunta"]
+
+
+def test_contagem_por_intervalo_cumpre_item_de_contagem():
+    from iativa.agent.planejamento import conferir
+    res = SimpleNamespace(ok=True, medida_calculada="intervalo_entre_datas", linhas=[["Menos de 90 dias", "7"]],
+                          colunas=["Cálculo", "Resultado"], totais=None)
+    saida = SimpleNamespace(ficha={"tipo": "calculo_resultado"}, observacao=None, resultado=res)
+    analise = {"entregas": [{"tipo": "calculo", "metrica": "contagem", "descricao": "Contar quem saiu antes de 90 dias"}]}
+    assert conferir(analise, SimpleNamespace(objetivo="", parametros=()), saida) == []
