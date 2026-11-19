@@ -9,7 +9,8 @@ import sqlglot
 
 # Valores que podem virar literal no SQL Server: só os caracteres que os parâmetros do sistema
 # usam (datas, filial, códigos, tipos, padrões de LIKE). Qualquer outro caractere recusa.
-LITERAL_SEGURO = re.compile(r"^[0-9A-Za-z %\-]*$")
+LITERAL_SEGURO = re.compile(r"^[0-9A-Za-zÀ-ÖØ-öø-ÿ %\-]*$")  # M117: nomes acentuados; nunca aspas/;/comentário
+LITERAL_MAX = 100  # M117: nome completo do cadastro (70 posições) cabe
 
 
 class TempoEsgotado(RuntimeError):
@@ -45,7 +46,7 @@ def _literal(v) -> str:
         raise ValorRecusado("Booleano não suportado.")
     if isinstance(v, (int, Decimal)) or (isinstance(v, float) and v == v):
         return str(v)
-    if isinstance(v, str) and LITERAL_SEGURO.match(v) and len(v) <= 40:
+    if isinstance(v, str) and LITERAL_SEGURO.match(v) and len(v) <= LITERAL_MAX:
         return "'" + v + "'"
     raise ValorRecusado("Valor fora do formato permitido.")
 

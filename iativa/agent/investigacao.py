@@ -419,10 +419,12 @@ def _consultar_com_retentativa(ses, plano, ctl, limite, o_que):
 
 
 def _literal_ok(valor: str, tamanho: int) -> bool:
-    from iativa.query.executor import LITERAL_SEGURO
+    from iativa.query.executor import LITERAL_MAX, LITERAL_SEGURO
 
+    # M117: o nome completo tem 70 posições; preenchido com espaços passava de 40 e a lista inteira ficava
+    # inconclusiva ("caracteres que a busca em lote não aceita").
     v = valor.ljust(tamanho or len(valor))
-    return bool(LITERAL_SEGURO.match(v)) and len(v) <= 40
+    return bool(LITERAL_SEGURO.match(v)) and len(v) <= LITERAL_MAX
 
 
 def buscar_relacionados(user, base, plano_inv, ctx: Contexto, ctl: Controle):

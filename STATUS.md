@@ -4,6 +4,13 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **Etapa 7 aprovada em 2026-11-16 por Diego; em andamento.** Feito: roteiro do piloto (`docs/piloto/ROTEIRO.md`) e auditoria de não armazenamento (`manage.py auditar_armazenamento`). Falta: usuários do Financeiro, conferência dos números com relatórios do Protheus, avaliação da interpretação e latência. Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M117 — "no mesmo ano" não é verificação; busca em lote aceita nome completo; verificação vazia não é entrega (2026-11-19)
+
+- "Quantos funcionários foram admitidos e desligados no mesmo ano, por filial, em 2026?" virou verificação de vínculos de 255 pessoas, toda inconclusiva, e encerrou sem a contagem. Três causas gerais:
+  - "foram ... no mesmo ano" era lido como "a mesma pessoa" (detector de verificação). Agora "mesmo ano/mês/período" é recorte de tempo;
+  - a busca em lote recusava o nome completo: 70 posições preenchidas com espaço passavam do limite de 40, e nomes acentuados também eram recusados. Agora o limite é 100 caracteres, com letras acentuadas e ainda sem aspas, ponto e vírgula ou comentário;
+  - verificação que termina sem ninguém verificado agora falha, replaneja e, sem saída, vai para a correção automática; antes contava como concluída.
+
 ## Mudança M116 — tudo que a IA não entrega vai para a correção automática (2026-11-19)
 
 - "Quantos funcionários foram admitidos e desligados no mesmo ano, por filial, em 2026?" terminou com "as tabelas encontradas não serviram; não é falta de função; reformule". Duas causas:

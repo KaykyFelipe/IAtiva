@@ -146,6 +146,8 @@ def _verificar_pessoas(t):
     pessoas = re.search(r'\b(demitid|desligad|readmit|funcionari|pessoas|matricula|vinculo)\w*', t)
     if not pessoas:
         return False
+    # M117: "no mesmo ano/mês/período" é recorte de tempo, não "a mesma pessoa" (verificação de vínculos).
+    t = re.sub(r'\b(?:n[oa]\s+)?mesm[oa]\s+(?:ano|mes|dia|periodo|semestre|trimestre|semana|data)\b', ' ', t)
     relacao = re.search(r'\bse\b|readmit|matricula\s+nova|nova\s+matricula|\bforam\b.*\bmesmo\b', t)
     if re.search(r'\b(quantos|quantas|conte|contagem|total|some|soma)\b', t) and not relacao:
         return False

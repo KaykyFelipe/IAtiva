@@ -49,6 +49,10 @@ def limites() -> dict:
             "lote": 40, "lease_s": 90, **getattr(settings, "IATIVA_TAREFAS", {})}
 
 
+class NadaVerificado(RuntimeError):
+    """M117: a verificação terminou sem nenhuma pessoa verificada."""
+
+
 class PerdeuExecucao(RuntimeError):
     """Outra execução assumiu a tarefa (lease vencido): esta para sem gravar nada."""
 
@@ -279,6 +283,10 @@ def executar(t: Tarefa):
                             raise inv.LimiteAtingido(
                                 f"A lista passou do limite de {lim['registros']} registros: {cob['total']} verificados; "
                                 "os demais ficaram de fora.")
+                        if cob["total"] and not cob["verificados"]:
+                            # M117: ninguém verificado (todos inconclusivos) não é entrega: tenta de novo, replaneja
+                            # e, sem saída, vai para a correção automática; nunca encerra só com "inconclusivo".
+                            raise NadaVerificado(f"nenhuma das {cob['total']} pessoas pôde ser verificada")
                 except inv.InvestigacaoInvalida as exc:
                     _etapa(t, e["id"], estado="pendente")
                     if _replanejar(t, str(exc)):

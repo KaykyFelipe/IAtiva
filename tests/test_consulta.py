@@ -87,7 +87,7 @@ def test_embutir_literais_so_valores_seguros():
 
     sql = embutir_literais("SELECT TOP 2 a FROM T WHERE x = ? AND y > ? AND z NOT LIKE ?", ("001001", 0, "%-"))
     assert sql == "SELECT TOP 2 a FROM T WHERE x = '001001' AND y > 0 AND z NOT LIKE '%-'"
-    for ruim in ("a'; DROP TABLE x --", "x'", "a;b", "a" * 41, True, None):
+    for ruim in ("a'; DROP TABLE x --", "x'", "a;b", "a" * 101, True, None):
         with pytest.raises(ValorRecusado):
             embutir_literais("SELECT ?", (ruim,))
     with pytest.raises(ValorRecusado):
