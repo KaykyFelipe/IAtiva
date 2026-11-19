@@ -4,6 +4,10 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **Etapa 7 aprovada em 2026-11-16 por Diego; em andamento.** Feito: roteiro do piloto (`docs/piloto/ROTEIRO.md`) e auditoria de não armazenamento (`manage.py auditar_armazenamento`). Falta: usuários do Financeiro, conferência dos números com relatórios do Protheus, avaliação da interpretação e latência. Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Ranking percentual de clientes entre meses (2026-11-19)
+
+- O diagnóstico 19 mostrou uma comparação cujo contexto se perdeu na confirmação do ano. O atendimento preserva o pedido, calcula os dois meses pela mesma consulta e ordena as quedas percentuais antes de aplicar o limite de clientes. Uma tabela intermediária fica fora da resposta enquanto faltar o ranking.
+
 ## Contagem por prazo de desligamento (2026-11-19)
 
 - O diagnóstico 18 mostrou uma contagem comum para um pedido com prazo. Quando a base autorizada contém as duas datas, o cálculo usa o intervalo do vínculo e o limite explícito. Se faltar uma data na consulta, o agente recebe a instrução de completar a base antes de contar.

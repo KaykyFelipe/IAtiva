@@ -283,7 +283,11 @@ def conversar(user, c, texto: str, provedor=None, mensagem_usuario_id=None, inte
     from .contagem import contextualizar
     texto, fontes = _pedido_com_fontes(user, c, texto, mensagem_usuario_id)
     if not fontes:
-        texto = contextualizar(user, c, texto)
+        from .comparacao import contextualizar_ano
+        com_ano = contextualizar_ano(c, texto, mensagem_usuario_id)
+        if acomp is not None and com_ano != texto:
+            acomp.texto = com_ano
+        texto = contextualizar(user, c, com_ano)
     try:
         provedor = provedor or obter_provedor(usuario=user)
         analise = planejamento.preparar(user, c, texto, provedor, _historico(c, mensagem_usuario_id))
@@ -693,13 +697,18 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
         registrar("interpretacao", "agente", usuario=user, estado_novo=d.acao, entidade_id=atual.pk if atual else None,
                   linhas=len(d.parametros))
         reduz = _reduz_escopo(d, cobertura)
-        comparada = (comparacao.executar(user,c,d,defs,objetivos,texto,interrompido)
-                     if comparacao.periodos(texto) and d.acao=='preparar_consulta' and comparacao.deste_passo(ac,d) else None)
-        if comparada is not None:
-            d=replace(d,atende=tuple(i for i,e in enumerate(ac.contrato) if e.get('comparacao')))
+        comparada = None
         try:
+            if comparacao.periodos(texto) and d.acao == 'preparar_consulta' and comparacao.deste_passo(ac, d) and not reduz:
+                comparada = comparacao.executar(user, c, d, defs, objetivos, texto, interrompido)
+            if comparada is not None:
+                d = replace(d, atende=tuple(i for i, e in enumerate(ac.contrato) if e.get('comparacao')))
             saida = reduz or comparada or _agir(user, c, d, atual, defs, texto, provedor, entrada_passo, objetivos,
                                                 administrador, interrompido=interrompido, resultado_base=resultado_base)
+        except ValidationError as exc:
+            observacoes.append(Observacao(d.acao, ERRO_PARAMETROS, ' '.join(exc.messages)))
+            ac.anotar(d.acao, ERRO_PARAMETROS)
+            continue
         except prazo.PrazoEsgotado:
             # M96: o tempo total acabou DENTRO da ação (ex.: aprendendo uma tabela nova). Antes virava erro 500 e a
             # mensagem sumia; agora segue o caminho do prazo: continua em segundo plano e responde no chat.
@@ -802,7 +811,7 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
                 entrada = replace(entrada, planejamento={**entrada.planejamento, 'pendentes': ac.pendentes(), 'cumpridas': ac.cumpridas})
                 atual = _ativa(user, c)
                 continue
-        if previa is not None:
+        if previa is not None and not comparacao.ranking(texto):
             saida = _juntar(previa, saida)
         ac.anotar(d.acao, saida.observacao.situacao if saida.observacao else ("ok" if ev else "sem_resultado"), ev)
         if d.acao == "lembrar":
@@ -953,6 +962,10 @@ def _encerrar_sem_cumprir(ac, user, c, mensagem_id, saida, previa, causa, observ
         registrar("modelo_falhou", "agente", usuario=user, estado_novo="prazo_esgotado", resultado="erro")
         return Saida(SEM_TEMPO + " Nada foi consultado. Tente de novo; se repetir, a IA está lenta agora.",
                      ficha={"tipo": "falha_modelo"}, observacao=Observacao("", TEMPO_ESGOTADO, "prazo total"))
+    from .comparacao import ranking
+    if ranking(ac.texto):
+        # A consulta intermediária é insumo. Uma entrega incompleta não tem ranking para exibir ou salvar.
+        saida, previa = None, None
     ficha = dict(saida.ficha) if saida is not None else {}
     texto = (saida.texto if saida is not None else "").strip()
     if prazo.esgotado() and saida is not None and saida.observacao is not None and saida.observacao.recuperavel:

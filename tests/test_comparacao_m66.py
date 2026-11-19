@@ -170,3 +170,63 @@ def test_pedido_misto_cumprido_quando_todas_as_entregas_conferem():
     assert not ac.cumprido('consulta')
     ac.cumpridas.append(1)
     assert ac.cumprido('consulta') and not ac.cumprido(PERGUNTA) and not ac.cumprido('')
+
+
+RANKING = 'Quais os 2 clientes que mais caíram em faturamento de setembro para outubro, em %?'
+
+
+def test_resposta_do_ano_preserva_ranking(faturamento):
+    from iativa.chat.models import Mensagem
+
+    user = faturamento['ana']
+    c = conversas.nova_individual(user)
+    Mensagem.objects.create(conversa=c, papel='usuario', texto=RANKING)
+    Mensagem.objects.create(conversa=c, papel='ia', texto='De qual ano são setembro e outubro?')
+    m = Mensagem.objects.create(conversa=c, papel='usuario', texto='Se eu não informar o ano, então estou me referindo a 2025')
+    pedido = comparacao.contextualizar_ano(c, m.texto, m.pk)
+    assert comparacao.ranking(pedido) == 2
+    assert [r for _, _, r in comparacao.periodos(pedido)] == ['09/2025', '10/2025']
+
+
+def test_ranking_compara_todos_os_clientes_antes_de_aplicar_top(faturamento, monkeypatch):
+    from iativa.agent import agente
+    from iativa.query.servico import Resultado
+
+    b = faturamento
+    cm = _consulta_sd2(b, ['D2_EMISSAO', 'D2_TOTAL'])
+    cm.spec['colunas'].append({'campo': 'D2_CLIENTE', 'rotulo': 'Cliente', 'tipo': 'texto'})
+    cm.save(update_fields=['spec'])
+    chamadas = []
+
+    def preparar(user, c, d, *_args, **_kwargs):
+        params = dict(d.parametros)
+        chamadas.append(params)
+        primeiro = params['periodo-analise'].startswith('01/09')
+        valores = [('A', '100'), ('B', '1000'), ('C', '100'), ('D', '0')] if primeiro else [
+            ('A', '10'), ('B', '400'), ('C', '110'), ('D', '10')]
+        return agente.Saida('', {}, resultado=Resultado(
+            True, '', colunas=['Cliente', 'Total'], tipos=['texto', 'dinheiro'], linhas=valores))
+
+    monkeypatch.setattr(agente, '_preparar', preparar)
+    m, r, _ = _comparar(b, cm, RANKING, 'soma:D2_TOTAL por D2_CLIENTE top 2')
+    assert r is not None and r.medida_calculada == 'comparacao', m.texto
+    assert [linha[0] for linha in r.linhas] == ['A', 'B']
+    assert len(chamadas) == 2
+    assert all(c['agregacao'] == 'soma:D2_TOTAL por D2_CLIENTE' for c in chamadas)
+
+
+def test_ranking_incompleto_nao_publica_a_tabela_de_um_mes(faturamento, monkeypatch):
+    from iativa.agent import agente
+    from iativa.query.servico import Resultado
+
+    b = faturamento
+    cm = _consulta_sd2(b, ['D2_EMISSAO', 'D2_TOTAL'])
+    monkeypatch.setattr(comparacao, 'executar', lambda *_a, **_kw: None)
+    monkeypatch.setattr(agente, '_agir', lambda *_a, **_kw: agente.Saida(
+        'Consulta executada.', resultado=Resultado(True, 'Setembro', colunas=['Cliente', 'Total'],
+                                                    tipos=['texto', 'dinheiro'], linhas=[['A', '10']])))
+    decisao = _d(acao='preparar_consulta', objetivo=cm.codigo, entrega='calculo')
+    p = FakeProvider([decisao, _d(acao='falta_capacidade', capacidade='Comparar e ordenar a queda de faturamento por cliente')])
+    _, resultado = conversas.enviar(b['ana'], conversas.nova_individual(b['ana']), RANKING, p)
+    assert resultado is None
+    assert Incidente.objects.exists()

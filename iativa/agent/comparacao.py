@@ -23,6 +23,38 @@ from .periodo import MESES, _norm
 _COMPARA = re.compile(r'\b(compar\w*|variac\w*|versus|vs\.?|em relacao a|frente a|contra)\b')
 
 
+_RANKING = re.compile(r'\b(\d{1,3})\s+clientes?\b[^?;]*?\b(?:cairam|queda|reduziram|diminuiram)\b')
+_MESES_RANKING = re.compile(r'\b(?:de\s+)?(' + '|'.join(MESES) + r')\b[^?;]*?\b(?:para|a)\s+(' + '|'.join(MESES) + r')\b')
+_ANO_RESPOSTA = re.compile(r'^(?:em |de |ano (?:de )?)?(20\d{2})[.!]?\s*$|^se eu nao informar o ano[^?;]*\b(20\d{2})[.!]?\s*$')
+
+
+def ranking(texto):
+    t = _norm(texto)
+    m = _RANKING.search(t)
+    if m and _MESES_RANKING.search(t) and ('%' in t or re.search(r'\bpercent\w*', t)):
+        return min(int(m[1]), 100)
+    return 0
+
+
+def contextualizar_ano(conversa, texto, mensagem_id):
+    ano = _ANO_RESPOSTA.fullmatch(_norm(texto).strip())
+    if not ano:
+        return texto
+    msgs = conversa.mensagens.all()
+    if mensagem_id is not None:
+        msgs = msgs.filter(pk__lt=mensagem_id)
+    ultimas = list(msgs.order_by('-pk')[:2])
+    if (len(ultimas) != 2 or ultimas[0].papel != 'ia' or ultimas[1].papel != 'usuario'
+            or not re.search(r'\bano\b', _norm(ultimas[0].texto)) or not ranking(ultimas[1].texto)):
+        return texto
+    # Insere o ano no segundo mês, ponto que o parser usa como padrão para os dois.
+    anterior = ultimas[1].texto
+    meses = _MESES_RANKING.search(_norm(anterior))
+    if re.search(r'\b20\d{2}\b', anterior):
+        return anterior
+    return anterior[:meses.end()] + f' de {ano[1] or ano[2]}' + anterior[meses.end():]
+
+
 def _mes(a, m):
     return (date(a, m, 1), date(a, m, calendar.monthrange(a, m)[1]), f'{m:02d}/{a}')
 
@@ -30,6 +62,8 @@ def _mes(a, m):
 def _oracao(texto):
     """M67: só a oração da comparação; "... e liste os admitidos em agosto" é outra entrega."""
     t = _norm(texto)
+    if ranking(texto):
+        return re.split(r'[;?]', t, maxsplit=1)[0]
     m = _COMPARA.search(t)
     if not m:
         return ''
@@ -75,6 +109,10 @@ def planejar(texto, analise):
     # Troca só a entrega de cálculo/comparação; as outras perguntas da mensagem continuam (M63).
     # M68: "Faturamento de julho por filial" e "... de agosto" são partes da própria comparação, não entregas
     # a mais (a pessoa não pediu cada período separado). Listas com campos pedidos ficam.
+    if ranking(texto):
+        return {**analise, 'entregas': [{
+            'descricao': 'Ranking de clientes pela maior queda percentual de faturamento entre os dois meses',
+            'tipo': 'calculo', 'metrica': 'comparacao', 'comparacao': True}]}
     alvo = assunto(texto)
     meses = {_norm(r) for _, _, r in periodos(texto)} | {m for m in MESES if re.search(rf'\b{m}\b', _oracao(texto))}
 
@@ -169,6 +207,13 @@ def executar(user, c, d, defs, objetivos, texto, interrompido=None):
         medidas = [c['campo'] for c in cm.spec.get('colunas', []) if c.get('tipo') in ('numero', 'dinheiro', 'valor')]
         if len(medidas) == 1:
             agreg = _agregacao(replace(d, parametros=d.parametros + (('agregacao', f'soma:{medidas[0]}'),)), texto)
+    limite = ranking(texto)
+    if limite and cm is not None and agreg is not None:
+        campos = [col['campo'] for col in cm.spec.get('colunas', [])
+                  if re.search(r'(?:^|_)CLI(?:ENTE)?$', col['campo'], re.I)]
+        if not campos or not agreg.lower().startswith('soma:'):
+            raise ValidationError('Use uma consulta de faturamento com valor somável e código do cliente para comparar os dois meses.')
+        agreg = agreg.split(' por ', 1)[0] + f' por {campos[0]}'
     if cm is None or not cm.spec.get('campo_data') or agreg is None:
         return None  # sem período ou sem medida: o ciclo normal decide (não inventa uma definição)
     saidas = []
@@ -203,7 +248,10 @@ def executar(user, c, d, defs, objetivos, texto, interrompido=None):
 
     hoje = timezone.localdate()
     nomes = [rot + (' (parcial, até hoje)' if ini <= hoje < fim else '') for ini, fim, rot in datas]
+    if limite and (not va or not vb or any(vazio)):
+        raise ValidationError('Um dos meses não retornou faturamento nesta fonte. Confira a cobertura dos dois períodos antes de calcular a queda.')
     linhas = []
+    quedas = []
     for grupo in sorted(set(va) | set(vb)):
         x = valor(va.get(grupo), vazio[0] or grupo not in va)
         y = valor(vb.get(grupo), vazio[1] or grupo not in vb)
@@ -213,7 +261,12 @@ def executar(user, c, d, defs, objetivos, texto, interrompido=None):
             linhas.append([grupo, cx, cy, 'Não calculável', 'Não calculável'])
             continue
         pct = _fmt((y - x) / x * 100, 'valor') + '%' if x else 'Indefinido (base zero)'
-        linhas.append([grupo, cx, cy, _fmt(y - x, tipo), pct])
+        linha = [grupo, cx, cy, _fmt(y - x, tipo), pct]
+        linhas.append(linha)
+        if limite and x > 0 and y < x:
+            quedas.append(((y - x) / x, grupo, linha))
+    if limite:
+        linhas = [linha for _, _, linha in sorted(quedas)[:limite]]
     premissas = list(dict.fromkeys(a.premissas + b.premissas)) + [
         f'Mesma consulta ({cm.nome}) e mesmos critérios nos dois períodos; medida: {rotulo}.',
         'Grupo sem registro em um período conta como zero em soma/contagem e fica sem valor em média.']
@@ -224,4 +277,8 @@ def executar(user, c, d, defs, objetivos, texto, interrompido=None):
                   colunas=[titulo, nomes[0], nomes[1], 'Diferença', 'Variação percentual'],
                   tipos=['texto', tipo, tipo, tipo, 'texto'], linhas=linhas, escopo=a.escopo,
                   medida_calculada='comparacao', premissas=premissas)
+    if limite:
+        r.mensagem = (f'{len(linhas)} cliente(s) com queda, em ordem de maior queda percentual, '
+                      f'entre {nomes[0]} e {nomes[1]}.')
+        r.premissas.append('A variação percentual usa o faturamento positivo do primeiro mês como base.')
     return Saida('', {'tipo': 'calculo_resultado'}, solicitacao=saidas[-1].solicitacao, resultado=r)
