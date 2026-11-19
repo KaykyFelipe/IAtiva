@@ -80,3 +80,12 @@ def test_prazo_usa_a_consulta_do_primeiro_evento():
     assert consulta_do_primeiro_evento(texto, [demitidos, admitidos]) is admitidos
     texto = "quantos demitidos em 2026 tinham sido admitidos há menos de 90 dias?"
     assert consulta_do_primeiro_evento(texto, [admitidos, demitidos]) is demitidos
+
+
+def test_prazo_prefere_receita_sem_filtro_de_ativos():
+    from iativa.agent.contagem import consulta_do_primeiro_evento
+    ativos = _receita("adm-ativos", "RA_ADMISSA", "Data de admissão")
+    ativos.spec["filtros_fixos"] = [{"campo": "RA_SITFOLH", "op": "<>", "valor": "D"}]
+    todos = _receita("adm-todos", "RA_ADMISSA", "Data de admissão")
+    assert consulta_do_primeiro_evento("Quantos admitidos em 2026 saíram antes de completar 90 dias?",
+                                       [ativos, todos]) is todos

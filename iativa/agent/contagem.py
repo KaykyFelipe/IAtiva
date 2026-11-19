@@ -127,9 +127,10 @@ def consulta_do_primeiro_evento(texto, modelos):
     for w in re.findall(r'[a-z]{5,}', _norm(texto)):
         if w in _VAZIAS:
             continue
-        alvo = next((m for m in modelos if _detalhavel(m) and _norm(_evento(m))[:4] == w[:4]), None)
-        if alvo is not None:
-            return alvo
+        do_evento = [m for m in modelos if _detalhavel(m) and _norm(_evento(m))[:4] == w[:4]]
+        if do_evento:
+            # Filtro fixo (ex.: só ativos) esconde quem já teve o segundo evento (desligados): prefere a sem filtro.
+            return min(do_evento, key=lambda m: bool(m.spec.get('filtros_fixos')))
     return None
 
 
