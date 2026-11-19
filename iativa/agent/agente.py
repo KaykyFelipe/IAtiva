@@ -181,7 +181,18 @@ def _historico(c, ate=None) -> list[dict]:
 
 def _notas(user, texto: str) -> list[str]:
     """Notas relevantes ao pedido (não as 40 mais recentes), com o tipo de cada uma."""
-    return [memoria.rotulo_nota(n) for n in memoria.notas_relevantes(user, texto)]
+    from . import objetivos as coord
+    notas = [memoria.rotulo_nota(n) for n in memoria.notas_relevantes(user, texto)]
+    if coord.pede_intervalo(coord._norm(texto)):
+        notas.append(INTERVALO_REGRA)  # M108: orienta a 1ª consulta, não só depois de errar a base
+    return notas
+
+
+INTERVALO_REGRA = ("[regra do sistema] Pedido de prazo entre dois eventos (ex.: admitidos em 2026 que saíram antes de "
+                   "90 dias): a consulta base filtra o período pela data do PRIMEIRO evento citado (admissão), nunca "
+                   "pela do segundo (demissão), e traz a data do segundo evento como coluna; depois calcular_resultado "
+                   "com operacao intervalo_entre_datas, campo = data do primeiro evento, campo_final = data do segundo, "
+                   "limite = dias pedidos.")
 
 
 def _pendencias_contexto(user) -> list[dict]:

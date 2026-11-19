@@ -57,3 +57,11 @@ def test_contagem_por_intervalo_cumpre_item_de_contagem():
     saida = SimpleNamespace(ficha={"tipo": "calculo_resultado"}, observacao=None, resultado=res)
     analise = {"entregas": [{"tipo": "calculo", "metrica": "contagem", "descricao": "Contar quem saiu antes de 90 dias"}]}
     assert conferir(analise, SimpleNamespace(objetivo="", parametros=()), saida) == []
+
+
+@pytest.mark.django_db
+def test_regra_de_intervalo_vai_ao_modelo_desde_a_primeira_decisao(django_user_model):
+    from iativa.agent import agente
+    u = django_user_model.objects.create_user("m108-notas")
+    assert agente.INTERVALO_REGRA in agente._notas(u, "Quantos admitidos em 2026 saíram antes de completar 90 dias?")
+    assert agente.INTERVALO_REGRA not in agente._notas(u, "Quantos admitidos em 2026?")

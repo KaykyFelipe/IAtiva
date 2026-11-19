@@ -381,6 +381,15 @@ class Acompanhamento:
         if metrica == 'projecao':
             return txt + (' A pessoa pediu uma PROJEÇÃO: a soma do que já aconteceu no período não basta. Use '
                           'calcular_resultado com a operação projecao sobre o resultado do período em andamento.')
+        if metrica == 'intervalo_entre_datas':
+            # M108: "admitidos em 2026 que saíram antes de 90 dias": a base é o PRIMEIRO evento no período pedido
+            # (consulta pela data de admissão), com a data do segundo evento como coluna. Filtrar pelo segundo
+            # evento (demitidos em 2026) conta outra população.
+            return txt + (' A pessoa pediu uma contagem pelo PRAZO entre dois eventos. A consulta base precisa filtrar '
+                          'o período pelo PRIMEIRO evento citado no pedido (ex.: "admitidos em 2026" → período na data de '
+                          'admissão, nunca na data de demissão) e trazer a data do segundo evento como coluna. Depois use '
+                          'calcular_resultado com operacao intervalo_entre_datas, campo = coluna do primeiro evento, '
+                          'campo_final = coluna do segundo evento e limite = número de dias pedido.')
         if metrica:
             return txt + (f' A unidade pedida é {metrica}: listar datas ou contar registros não basta. '
                           'Use calcular_resultado com essa operação e as colunas inicial/final, ou historico_cargo '
