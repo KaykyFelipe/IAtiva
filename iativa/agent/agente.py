@@ -845,6 +845,26 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
             observacoes.append(Observacao(d.acao, coord.ETAPA, coord.falta_parte(texto, [feita])))
             andamento.avisar("Uma pergunta respondida; agora a próxima")
             continue
+        if (ev and ev not in (coord.PERGUNTA, coord.BLOQUEIO, coord.DELEGADA, coord.ACAO)
+                and (ac.entregue or ac.cumprido(ev))):
+            # M109: a resposta está montada, mas ainda não foi enviada: a própria IA confere se atende ao pedido.
+            from . import revisao
+            falta_rev = revisao.revisar(user, provedor, texto, ac.contrato, saida)
+            if falta_rev:
+                ac.revisoes += 1
+                ac.reprovada = falta_rev
+                andamento.avisar("A resposta não atendia ao pedido; tentando de outro jeito")
+                if ac.revisoes > revisao.tentativas():
+                    causa = "revisao_reprovada"
+                    break
+                ac.cumpridas, ac.entregue, previa = [], "", None  # o que foi reprovado não vai para a resposta
+                ac.anotar("revisao", "entrega_nao_atende", "")
+                observacoes.append(Observacao("revisao", "entrega_nao_atende", falta_rev))
+                entrada = replace(entrada, planejamento={**entrada.planejamento, 'pendentes': ac.pendentes(),
+                                                         'cumpridas': ac.cumpridas})
+                atual = _ativa(user, c)
+                continue
+            ac.reprovada = ""
         if ac.entregue and ev and ev not in (coord.PERGUNTA, coord.BLOQUEIO, coord.DELEGADA, coord.ACAO):
             return _fechar(ac, user, c, mensagem_id, saida, ac.entregue)
         if ac.cumprido(ev) or ev in (coord.PERGUNTA, coord.BLOQUEIO, coord.DELEGADA):
@@ -877,6 +897,11 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
             continue
         causa = saida.observacao.situacao if saida.observacao is not None else "sem_resultado"
         break
+    if ac.reprovada:
+        # M109: a última resposta montada foi reprovada pelo revisor: nada dela vai para a pessoa; vai para a
+        # manutenção com o que faltava (que corrige e refaz o pedido, que passa pelo revisor de novo).
+        causa, saida, previa = "revisao_reprovada", Saida("", {}), None
+        ac.capacidade = ac.capacidade or ac.reprovada[:300]
     return _encerrar_sem_cumprir(ac, user, c, mensagem_id, saida, previa, causa, observacoes)
 
 
@@ -950,7 +975,7 @@ def _encerrar_sem_cumprir(ac, user, c, mensagem_id, saida, previa, causa, observ
         final = Saida(f"{texto}\n\n{falta}. Continuo em segundo plano e respondo aqui, sem você precisar pedir de novo."
                       .strip(), {**ficha, "tipo": ficha.get("tipo") or "objetivo", "objetivo": o.pk})
         registrar("modelo_falhou", "agente", usuario=user, estado_novo="objetivo_continua", resultado="erro")
-    elif causa not in PASSAGEIRAS and (classe := _classe_sem_codigo(ac)):
+    elif causa not in PASSAGEIRAS and causa != "revisao_reprovada" and (classe := _classe_sem_codigo(ac)):
         # M67 (auditoria 17/11, item 11): a falha tem causa conhecida que não é falta de código — escolha ou
         # parâmetro do modelo, metadado/ERP indisponível ou permissão. Não abre manutenção.
         if mensagem_id is not None:

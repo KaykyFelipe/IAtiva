@@ -215,6 +215,10 @@ LOGGING = {
 # Desligada: o incidente fica registrado para a TI, nada é corrigido sozinho e a resposta pede para a
 # pessoa avisar alguém da TI. Religar: IATIVA_MANUTENCAO_AUTOMATICA=1 no .env.
 IATIVA_MANUTENCAO_AUTOMATICA = False  # local.py lê IATIVA_MANUTENCAO_AUTOMATICA do .env
+# M109: revisor de entrega (a IA confere a resposta antes de enviar) e quantas reprovações por mensagem antes de
+# ir para a manutenção automática.
+IATIVA_REVISAO = True
+IATIVA_REVISAO_TENTATIVAS = 2
 
 # M73 — agentes em paralelo no worker (um por chat ao mesmo tempo; o mesmo chat nunca roda duas vezes).
 IATIVA_WORKER_AGENTES = 6  # local.py lê IATIVA_WORKER_AGENTES do .env

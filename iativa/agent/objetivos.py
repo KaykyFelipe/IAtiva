@@ -335,6 +335,8 @@ class Acompanhamento:
     contrato: list = field(default_factory=list)
     cumpridas: list = field(default_factory=list)
     divergencias: dict = field(default_factory=dict)  # M74: entrega -> período/filial usado diferente do pedido
+    revisoes: int = 0  # M109: respostas montadas que o revisor reprovou nesta mensagem
+    reprovada: str = ""  # M109: o que faltava na última resposta reprovada (vai à manutenção)
 
     def pendentes(self):
         return [e['descricao'] for i, e in enumerate(self.contrato) if i not in self.cumpridas]
@@ -440,7 +442,7 @@ def encaminhar_manutencao(ac: Acompanhamento, causa: str, tabela: str = ""):
     from . import entregas, comparacao
     # M108: prazo entre dois eventos ("admitidos que saíram antes de 90 dias") não é a contagem de admissões
     # existente: sem a capacidade, vai para a manutenção.
-    if not pede_intervalo(_norm(ac.texto)) and (
+    if causa != "revisao_reprovada" and not pede_intervalo(_norm(ac.texto)) and (
             admissoes.solicitado(ac.texto) or entregas.somente_lista(ac.texto) or comparacao.periodos(ac.texto)):
         return None
 

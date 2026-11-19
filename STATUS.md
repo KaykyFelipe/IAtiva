@@ -4,6 +4,13 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **Etapa 7 aprovada em 2026-11-16 por Diego; em andamento.** Feito: roteiro do piloto (`docs/piloto/ROTEIRO.md`) e auditoria de não armazenamento (`manage.py auditar_armazenamento`). Falta: usuários do Financeiro, conferência dos números com relatórios do Protheus, avaliação da interpretação e latência. Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M109 — a IA confere a resposta antes de enviar (2026-11-19)
+
+- Pedido de Diego: entender o pedido inteiro, montar a resposta em segundo plano, conferir se é o que foi pedido, tentar de outro jeito e, se não conseguir, cair na correção automática até entregar a resposta certa.
+- `iativa/agent/revisao.py`: quando o ciclo acha que terminou, o revisor (mesmo modelo, modo `revisar_entrega`) recebe o pedido, o contrato e SÓ metadados do que foi montado (títulos, colunas, nº de registros, medida, critérios, resumo do cálculo; nunca linhas). Há também uma checagem determinística sem custo (cálculo de prazo sobre base sem a data final).
+- Reprovada: nada é enviado, o motivo vira observação e o ciclo tenta de outro jeito (`IATIVA_REVISAO_TENTATIVAS`, padrão 2). Esgotado: causa `revisao_reprovada` vai para a manutenção automática (M107) com o que faltava. A retomada passa pelo revisor de novo. Desligável por `IATIVA_REVISAO=0`.
+- O cálculo `intervalo_entre_datas` (correção #10 da manutenção, agora no GitHub) devolve também QUEM atende (identificação, datas e dias), não só o número.
+
 ## Mudança M108 — prazo entre dois eventos exige cálculo; etapa não corta a frase (2026-11-19)
 
 - "Quantos admitidos em 2026 saíram antes de completar 90 dias?" entregava a lista de admitidos como resposta. Agora pedido com condição de tempo entre dois eventos (admissão→saída, vencimento→pagamento) exige o cálculo `intervalo_entre_datas`. Lista não conta como entrega; sem a capacidade, cai na manutenção automática (M107).

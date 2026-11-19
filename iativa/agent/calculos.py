@@ -268,7 +268,8 @@ def executar(user, conversa, plano, resultado_atual=None):
 
 def _contagem_intervalo(res, plano, premissas):
     """Contagem condicional: registros cujo intervalo em dias corridos entre `campo` (início) e `campo_final`
-    (fim) é menor que `limite`. Registros sem data final (evento ainda não ocorrido) são ignorados."""
+    (fim) é menor que `limite`. Registros sem data final (evento ainda não ocorrido) são ignorados.
+    M109: devolve também QUEM atende (identificação, as duas datas e os dias), não só o número."""
     limite = plano.get('limite')
     if type(limite) is not int or limite <= 0:
         raise ValidationError('Informe o limite em dias (inteiro positivo) para a contagem por intervalo.')
@@ -276,7 +277,8 @@ def _contagem_intervalo(res, plano, premissas):
         a, b = res.colunas.index(plano.get('campo')), res.colunas.index(plano.get('campo_final'))
     except ValueError:
         raise ValidationError('Escolha as colunas inicial e final dentre as colunas do resultado anterior.') from None
-    contados = ignorados = 0
+    ids = [i for i, t in enumerate(res.tipos) if t == 'texto' and i not in (a, b)][:4]
+    ignorados, atendem = 0, []
     for l in res.linhas:
         if not str(l[b] or '').strip():
             ignorados += 1
@@ -284,19 +286,20 @@ def _contagem_intervalo(res, plano, premissas):
         inicio, fim = _data(l[a]), _data(l[b])
         if fim < inicio:
             raise ValidationError('Há uma data final anterior à inicial; confira os critérios.')
-        contados += (fim - inicio).days < limite
+        dias = (fim - inicio).days
+        if dias < limite:
+            atendem.append([l[i] for i in ids] + [l[a], l[b], str(dias)])
+    contados = len(atendem)
     com_fim = len(res.linhas) - ignorados
     ini, fin = res.colunas[a], res.colunas[b]
     premissas = premissas + [f'Conta registros com menos de {limite} dias corridos entre {ini} e {fin}; '
                              f'{ignorados} registro(s) sem {fin} ignorado(s).']
     return Resultado(True, f'Registros com menos de {limite} dias corridos entre {ini} e {fin}: '
                      f'{contados} de {com_fim} com {fin}.',
-                     colunas=['Cálculo', 'Resultado'], tipos=['texto', 'inteiro'],
-                     linhas=[[f'Menos de {limite} dias', str(contados)], [f'Com {fin}', str(com_fim)],
-                             [f'Sem {fin} (ignorados)', str(ignorados)]],
-                     premissas=premissas, escopo=res.escopo, medida_calculada='intervalo_entre_datas',
-                     curta_salva=str(contados))
-
+                     colunas=[res.colunas[i] for i in ids] + [ini, fin, 'Dias'],
+                     tipos=[res.tipos[i] for i in ids] + [res.tipos[a], res.tipos[b], 'inteiro'],
+                     linhas=atendem, premissas=premissas, escopo=res.escopo,
+                     medida_calculada='intervalo_entre_datas', curta_salva=str(contados))
 
 def _participacao(res, plano, premissas):
     """M98: participação de cada grupo no total ("taxa por status", "% por filial"): só sobre resultado AGRUPADO e
