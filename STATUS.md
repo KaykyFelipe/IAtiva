@@ -4,6 +4,10 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **Etapa 7 aprovada em 2026-11-16 por Diego; em andamento.** Feito: roteiro do piloto (`docs/piloto/ROTEIRO.md`) e auditoria de não armazenamento (`manage.py auditar_armazenamento`). Falta: usuários do Financeiro, conferência dos números com relatórios do Protheus, avaliação da interpretação e latência. Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Compatibilidade do atendimento ChatGPT com Codex 0.167 (2026-11-19)
+
+- O app-server rejeitava o parâmetro legado de leitura antes da classificação do pedido. A sessão de atendimento agora usa um perfil de permissões nomeado, com leitura da pasta temporária e rede desabilitada para ferramentas.
+
 ## Mudança M114 — parar cancela a correção automática e desfaz o que publicou (2026-11-19)
 
 - Botão parar em pedido que espera a manutenção: se nenhum outro pedido espera o mesmo incidente, a correção é cancelada (incidente bloqueado "Cancelada pela pessoa", sai da fila).

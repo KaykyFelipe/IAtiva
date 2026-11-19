@@ -40,6 +40,9 @@ def ambiente(pasta):
     return env
 
 
+PERFIL_ATENDIMENTO = 'iativa_atendimento'
+
+
 class AppServer:
     def __init__(self, pasta, cli='codex', timeout=25):
         self.tmp = TemporaryDirectory(prefix='iativa-codex-')
@@ -56,6 +59,10 @@ class AppServer:
         args = [resolver_cli(cli), 'app-server', '--listen', 'stdio://']
         for k, v in config.items():
             args += ['-c', f'{k}={json.dumps(v)}']
+        # O perfil nomeado substitui o antigo readOnly.access no app-server.
+        args += ['-c', f'default_permissions={json.dumps(PERFIL_ATENDIMENTO)}',
+                 '-c', f'permissions.{PERFIL_ATENDIMENTO}.filesystem={{{json.dumps(self.cwd)} = "read"}}',
+                 '-c', f'permissions.{PERFIL_ATENDIMENTO}.network.enabled=false']
         try:
             self.proc = subprocess.Popen(args, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                 stderr=subprocess.DEVNULL, cwd=self.cwd, env=ambiente(pasta), shell=False,

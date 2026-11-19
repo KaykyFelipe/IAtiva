@@ -6,6 +6,7 @@ from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 
 from . import codex_login, decisao, esquema, prazo
+from .codex_rpc import PERFIL_ATENDIMENTO
 from .provedores import FalhaModelo, LLMProvider, INSTRUCOES, INSTRUCOES_AGENTE, _codigos, _catalogo, _renderizar, _contexto_agente
 
 
@@ -46,13 +47,11 @@ class CodexProvider(LLMProvider):
                 codex_login.marcar(self.usuario, 'atendimento', False)
                 raise FalhaModelo('Reconecte a conta ChatGPT em Conexões IA.')
             thread = s.request('thread/start', {'ephemeral': True, 'cwd': s.cwd, 'approvalPolicy': 'never',
-                'sandbox': 'read-only', 'environments': [], 'dynamicTools': [], 'selectedCapabilityRoots': [],
+                'permissions': PERFIL_ATENDIMENTO, 'environments': [], 'dynamicTools': [], 'selectedCapabilityRoots': [],
                 'modelProvider': 'openai', **({'model': pref['modelo']} if pref['modelo'] else {})},
                 timeout=max(0.01, fim - time.monotonic()))
             s.request('turn/start', {'threadId': thread['thread']['id'],
                 'input': [{'type': 'text', 'text': prompt}], 'approvalPolicy': 'never',
-                'sandboxPolicy': {'type': 'readOnly', 'access': {'type': 'restricted',
-                    'includePlatformDefaults': False, 'readableRoots': [s.cwd]}},
                 'outputSchema': schema_estrito(schema),
                 **({'effort': pref['esforco']} if pref['esforco'] else {})},
                 timeout=max(0.01, fim - time.monotonic()))

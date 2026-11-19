@@ -151,7 +151,9 @@ def test_provedor_usa_schema_ephemero_e_sem_acesso_ao_ambiente(admin, fake, sett
     assert calls['thread/start']['ephemeral'] and calls['thread/start']['environments'] == []
     assert calls['thread/start']['dynamicTools'] == [] and calls['thread/start']['model'] == 'modelo-teste'
     assert calls['turn/start']['effort'] == 'high'
-    assert calls['turn/start']['sandboxPolicy']['access']['includePlatformDefaults'] is False
+    assert calls['thread/start']['permissions'] == 'iativa_atendimento'
+    assert 'sandbox' not in calls['thread/start']
+    assert 'sandboxPolicy' not in calls['turn/start']
     assert calls['turn/start']['outputSchema']['additionalProperties'] is False
 
 
