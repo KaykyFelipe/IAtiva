@@ -91,7 +91,7 @@ def test_segunda_pergunta_sem_execucao_nao_marca_pedido_cumprido(ana):
         _d(acao="conversar", resposta="Já rodei as duas consultas."),
     ])
     msg, res = conversas.enviar(ana, c, "quanto vamos receber? e quanto está em atraso?", p)
-    assert res is not None and res.ok
+    assert res is None
     assert "Já rodei" not in msg.texto
     assert not Objetivo.objects.filter(conversa=c, situacao=SituacaoObjetivo.CUMPRIDO).exists()
 

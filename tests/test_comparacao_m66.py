@@ -230,3 +230,57 @@ def test_ranking_incompleto_nao_publica_a_tabela_de_um_mes(faturamento, monkeypa
     _, resultado = conversas.enviar(b['ana'], conversas.nova_individual(b['ana']), RANKING, p)
     assert resultado is None
     assert Incidente.objects.exists()
+
+
+PEDIDO_EVENTOS = ("Compare setembro e outubro de 2026 por filial. Em cada mês, mostre quantos contratos "
+                  "foram assinados e quantas locações começaram.")
+
+
+def test_assinatura_nao_comprova_inicio_de_locacao(faturamento, monkeypatch):
+    from types import SimpleNamespace
+    from iativa.query import servico
+    from iativa.agent.agente import Saida
+
+    cm = _consulta_sd2(faturamento, ['D2_EMISSAO', 'D2_TOTAL'])
+    cm.tabela = 'FP0'
+    cm.spec['campo_data'] = 'FP0_ZDTASS'
+    cm.save(update_fields=['tabela', 'spec'])
+    contrato = comparacao.planejar(PEDIDO_EVENTOS, {'entregas': []})['entregas']
+    assert [item['evento_mensal'] for item in contrato] == ['assinatura', 'inicio_locacao']
+    monkeypatch.setattr(servico, '_valores', lambda *_: {'periodo-analise': '01/09/2026..31/10/2026',
+                                                       'agregacao': 'contagem_distinta:FP0_PROJET por mes'})
+    s = SimpleNamespace(objetivo=cm.codigo, usuario=faturamento['ana'])
+    resultado = servico.Resultado(True, '', colunas=['Filial', 'Mês', 'Quantidade'], situacao='sucesso')
+    saida = Saida('', solicitacao=s, resultado=resultado)
+    assert comparacao.comprova_evento_mensal(contrato[0], saida)
+    assert not comparacao.comprova_evento_mensal(contrato[1], saida)
+    cm.tabela = 'FPA'
+    cm.spec['campo_data'] = 'FPA_DTINI'
+    cm.save(update_fields=['tabela', 'spec'])
+    assert not comparacao.comprova_evento_mensal(contrato[0], saida)
+    assert comparacao.comprova_evento_mensal(contrato[1], saida)
+
+
+def test_falha_de_calculo_no_worker_preserva_pedido_para_manutencao(faturamento, settings):
+    from iativa.agent import agente, objetivos
+    from iativa.agent.models import Objetivo, SituacaoObjetivo
+    from iativa.chat.models import Mensagem
+    from iativa.query.servico import Resultado
+
+    settings.IATIVA_MANUTENCAO_AUTOMATICA = True
+    u = faturamento['ana']
+    c = conversas.nova_individual(u)
+    m = Mensagem.objects.create(conversa=c, papel='usuario', texto=PEDIDO_EVENTOS)
+    ac = objetivos.Acompanhamento(PEDIDO_EVENTOS, exig=objetivos.CALCULO,
+                                  contrato=comparacao.contagens_mensais(PEDIDO_EVENTOS))
+    ac.anotar('aprender_tabela', agente.ERRO_METADADOS)
+    ac.anotar('criar_consulta', 'entrega_pendente', objetivos.CONSULTA)
+    o = objetivos.registrar(ac, u, c, m.pk, SituacaoObjetivo.CONTINUAR)
+    o.execucao = 'teste'
+    o.save(update_fields=['execucao'])
+    ac.registro = o
+    ac.anotar('calcular_resultado', agente.ERRO_PARAMETROS)
+    previa = agente.Saida('Consulta executada.', resultado=Resultado(True, 'Só a primeira contagem'))
+    final = agente._encerrar_sem_cumprir(ac, u, c, m.pk, previa, previa, 'acao_repetida', [])
+    assert final.resultado is None and 'Consulta executada' not in final.texto
+    assert Objetivo.objects.get(pk=o.pk).situacao == SituacaoObjetivo.MANUTENCAO

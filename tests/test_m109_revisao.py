@@ -89,3 +89,23 @@ def test_m113_revisor_ve_o_total_geral_sem_nomes():
                   linhas=[['001001', '12']])
     b = revisao.descrever(type('S', (), {'resultado': r})())[0]
     assert 'Total geral' in b['resumo'] and 'Quantidade: 40' in b['resumo'] and 'JOAO' not in b['resumo']
+
+
+def test_revisor_indisponivel_mantem_resultado_em_segundo_plano(datas):
+    from iativa.agent import revisao
+    from iativa.agent.models import Objetivo, SituacaoObjetivo
+    from iativa.agent.provedores import FalhaModelo
+
+    b, c = datas
+
+    class RevisorIndisponivel(FakeProvider):
+        def planejar(self, entrada):
+            if entrada.planejamento.get('modo') == revisao.MODO:
+                raise FalhaModelo('teste')
+            return super().planejar(entrada)
+
+    p = RevisorIndisponivel([_d(acao='preparar_consulta', objetivo=b['cm'].codigo, entrega='calculo'),
+                             _d(acao='calcular_resultado', calculo=CALC)])
+    _, res = conversas.enviar(b['u'], c, PERGUNTA, p)
+    assert res is None
+    assert Objetivo.objects.get().situacao == SituacaoObjetivo.CONTINUAR

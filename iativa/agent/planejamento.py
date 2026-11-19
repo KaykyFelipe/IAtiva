@@ -184,6 +184,11 @@ def conferir(analise, decisao, saida):
     res = saida.resultado
     faltantes = []
     for item in analise.get('entregas', []):
+        if item.get('evento_mensal'):
+            from .comparacao import comprova_evento_mensal
+            if not comprova_evento_mensal(item, saida):
+                faltantes.append(item['descricao'])
+            continue
         if item.get('campos_pedidos'):
             from .entregas import faltam
             if not getattr(res,'ok',False) or faltam(getattr(res,'colunas',[]),item['campos_pedidos']):
@@ -247,7 +252,8 @@ def divergencia(item, decisao):
 
 def registrar_entregas(acompanhamento, decisao, saida):
     contrato = acompanhamento.contrato
-    indices = decisao.atende or ((0,) if len(contrato) == 1 else ())
+    mensais = tuple(i for i, item in enumerate(contrato) if item.get('evento_mensal'))
+    indices = mensais or decisao.atende or ((0,) if len(contrato) == 1 else ())
     for indice in indices:
         if indice < len(contrato) and indice not in acompanhamento.cumpridas:
             motivo = divergencia(contrato[indice], decisao)

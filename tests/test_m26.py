@@ -59,7 +59,7 @@ def test_modelo_nao_pode_encerrar_so_com_a_lista(base):
     p = FakeProvider([_listar(base), _d(resposta="A lista já mostra o que você pediu."),
                       _d(resposta="Não precisa verificar mais nada.")])
     msg, res = conversas.enviar(base["u"], c, PEDIDO, p)
-    assert res.ok and not Tarefa.objects.exists()
+    assert res is None and not Tarefa.objects.exists()
     assert "A lista já mostra" not in msg.texto and "ainda não foi feita" in msg.texto
     assert msg.ficha.get("verificacao_pendente")
 

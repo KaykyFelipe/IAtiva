@@ -12,6 +12,7 @@ from django.utils import timezone
 from iativa.manutencao.incidentes import mascarar_pergunta
 
 MODO = "revisar_entrega"
+INDISPONIVEL = "A revisão da resposta está temporariamente indisponível."
 
 
 def ligado() -> bool:
@@ -74,7 +75,7 @@ def deterministico(blocos: list[dict]) -> str:
 
 
 def revisar(user, provedor, texto: str, contrato: list, saida) -> str:
-    """'' = aprovado (ou revisor indisponível: nunca trava a resposta por falha própria); senão, o que falta."""
+    """'' = aprovado; caso contrário, devolve o motivo para o atendimento retentar."""
     if not ligado():
         return ""
     blocos = descrever(saida)
@@ -95,9 +96,9 @@ def revisar(user, provedor, texto: str, contrato: list, saida) -> str:
     try:
         a = provedor.planejar(entrada)
     except Exception:
-        return ""
+        return INDISPONIVEL
     if not isinstance(a, dict):
-        return ""
+        return INDISPONIVEL
     faltas = [str(e.get("descricao", "")).strip() for e in (a.get("entregas") or [])
               if isinstance(e, dict) and str(e.get("descricao", "")).strip()]
     if not faltas:

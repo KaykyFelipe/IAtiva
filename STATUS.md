@@ -4,6 +4,11 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **Etapa 7 aprovada em 2026-11-16 por Diego; em andamento.** Feito: roteiro do piloto (`docs/piloto/ROTEIRO.md`) e auditoria de não armazenamento (`manage.py auditar_armazenamento`). Falta: usuários do Financeiro, conferência dos números com relatórios do Protheus, avaliação da interpretação e latência. Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Revisão antes de exibir comparações incompletas (2026-11-19)
+
+- Pedidos com entregas pendentes ficam em segundo plano sem publicar a tabela intermediária. A comparação de contratos assinados e locações iniciadas exige uma contagem mensal por filial para cada evento, com o período e a data de referência conferidos.
+- Uma falha transitória continua no worker. Um cálculo inválido persistente pode abrir manutenção mesmo quando a descoberta da fonte teve uma falha anterior. Investigações de divergência concluídas e consultas disparadas por resposta direta também passam pela revisão.
+
 ## Ranking percentual de clientes entre meses (2026-11-19)
 
 - O diagnóstico 19 mostrou uma comparação cujo contexto se perdeu na confirmação do ano. O atendimento preserva o pedido, calcula os dois meses pela mesma consulta e ordena as quedas percentuais antes de aplicar o limite de clientes. Uma tabela intermediária fica fora da resposta enquanto faltar o ranking.

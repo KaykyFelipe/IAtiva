@@ -172,7 +172,7 @@ def _pedido_que_nao_avanca(b):
 
 def test_capacidade_ausente_sem_excecao_vai_para_a_manutencao_sanitizada(base, capsys):
     msg, res, p, c = _pedido_que_nao_avanca(base)
-    assert res is not None and res.ok  # a lista (etapa) continua na tela
+    assert res is None  # a lista intermediária fica fora da resposta enquanto falta a entrega
     assert "A verificação pedida ainda não foi feita" in msg.texto and "A lista já mostra" not in msg.texto
     assert not Tarefa.objects.exists()
     o, inc = Objetivo.objects.get(), Incidente.objects.get()
@@ -274,7 +274,7 @@ def test_manutencao_que_nao_corrige_avisa_a_pessoa(base):
 def test_no_limite_de_passos_o_worker_continua_sem_nova_mensagem(base, settings, monkeypatch):
     settings.IATIVA_AGENTE_CICLO = {"passos": 1, "retentativas": 0, "tempo_s": 60, "espera_s": 0}
     msg, res, p, c = _enviar(base, PEDIDO, [_listar(base)])
-    assert res.ok and "Continuo em segundo plano" in msg.texto and not Incidente.objects.exists()
+    assert res is None and "Continuo em segundo plano" in msg.texto and not Incidente.objects.exists()
     o = Objetivo.objects.get()
     assert o.situacao == SO.CONTINUAR and o.trilha == ["preparar_consulta:sucesso:consulta"]
     settings.IATIVA_AGENTE_CICLO = {"passos": 3, "retentativas": 0, "tempo_s": 60, "espera_s": 0}

@@ -103,7 +103,58 @@ def periodos(texto):
     return []
 
 
+def contagens_mensais(texto):
+    t = _norm(texto)
+    if not (re.search(r'\bpor filia(?:l|is)\b', t) and re.search(r'\bcada mes\b', t)
+            and re.search(r'\bcontratos?\b.*\bassinad\w*', t)
+            and re.search(r'\blocacoes?\b.*\b(?:comecar\w*|iniciad\w*|inicio)\b', t)):
+        return []
+    datas = periodos(texto)
+    if len(datas) != 2 or datas[0][0] >= datas[1][0]:
+        return []
+    intervalo = f'{datas[0][0]:%d/%m/%Y}..{datas[1][1]:%d/%m/%Y}'
+    return [
+        {'descricao': f'{descricao} ({intervalo})', 'tipo': 'calculo', 'metrica': 'contagem',
+         'evento_mensal': evento, 'periodo_mensal': intervalo}
+        for evento, descricao in [
+            ('assinatura', 'Contratos assinados em cada mês por filial'),
+            ('inicio_locacao', 'Locações iniciadas em cada mês por filial'),
+        ]
+    ]
+
+
+def comprova_evento_mensal(item, resposta):
+    from iativa.query.servico import _valores
+    from iativa.chat.estados import TransicaoInvalida
+    from .models import ConsultaModelo
+
+    r = resposta.resultado
+    s = getattr(r, 'solicitacao', None) or resposta.solicitacao
+    if not s or not getattr(r, 'ok', False) or r.truncado or r.situacao != 'sucesso':
+        return False
+    modelo = ConsultaModelo.objects.filter(codigo=s.objetivo, situacao='aprovada').first()
+    if modelo is None:
+        return False
+    fonte_esperada = {
+        'assinatura': ('FP0', 'FP0_ZDTASS'),
+        'inicio_locacao': ('FPA', 'FPA_DTINI'),
+    }[item['evento_mensal']]
+    # A legenda escolhida pelo modelo não muda o significado do campo no ERP.
+    if (modelo.tabela, modelo.spec.get('campo_data')) != fonte_esperada:
+        return False
+    try:
+        valores = _valores(s.usuario, s)
+    except (KeyError, TransicaoInvalida):
+        return False
+    agregacao = valores.get('agregacao', '').lower()
+    return (valores.get('periodo-analise') == item['periodo_mensal']
+            and bool(re.fullmatch(r'contagem(?:_distinta)?:[a-z0-9_*]+ por mes', agregacao))
+            and {'filial', 'mes'} <= {_norm(c) for c in r.colunas})
+
+
 def planejar(texto, analise):
+    if contagens := contagens_mensais(texto):
+        return {**analise, 'entregas': contagens}
     if not periodos(texto):
         return analise
     # Troca só a entrega de cálculo/comparação; as outras perguntas da mensagem continuam (M63).

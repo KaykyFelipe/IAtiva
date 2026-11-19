@@ -185,6 +185,14 @@ def _notas(user, texto: str) -> list[str]:
     notas = [memoria.rotulo_nota(n) for n in memoria.notas_relevantes(user, texto)]
     if coord.pede_intervalo(coord._norm(texto)):
         notas.append(INTERVALO_REGRA)  # M108: orienta a 1ª consulta, não só depois de errar a base
+    from .comparacao import contagens_mensais
+    if contagens_mensais(texto):
+        notas.append(
+            "[regra do sistema] Este pedido tem duas contagens independentes. Use o Protheus local: "
+            "FP0_ZDTASS é a assinatura do contrato de locação e FPA_DTINI é o início registrado da locação. "
+            "Procure ou aprenda uma consulta autorizada para cada evento e conte por mês e filial no intervalo "
+            "completo. Use o identificador da entidade e confira a granularidade antes de contar. Não reaproveite "
+            "a data de assinatura, a data de cadastro ou a previsão de entrega como início da locação.")
     return notas
 
 
@@ -337,7 +345,14 @@ def _conversar_autorizado(user, c, texto, provedor, mensagem_usuario_id, interro
         registrar("interpretacao", "agente", usuario=user, estado_novo="resposta_direta", entidade_id=atual.pk, linhas=1)
         erros = orq._aplicar_parametros(user, atual, [direta], defs)
         atual.refresh_from_db()
-        return _avaliar_e_executar(user, atual, "", erros, {"provedor": "direto", "opcoes": []})
+        candidata = _avaliar_e_executar(user, atual, "", erros, {"provedor": "direto", "opcoes": []})
+        from . import revisao
+        obj = OBJETIVOS[atual.objetivo] if atual.objetivo in OBJETIVOS else None
+        pedido = f"Executar {obj.nome if obj else 'a consulta em andamento'} com o critério informado: {texto}"
+        falta_rev = revisao.revisar(user, provedor, pedido, [], candidata)
+        if not falta_rev:
+            return candidata
+        observacoes = [*(observacoes or []), Observacao("revisao", "entrega_nao_atende", falta_rev)]
     try:
         trechos = [{"documento": t.titulo_documento, "secao": t.secao, "texto": t.texto}
                    for t in orq.descoberta.conhecimento(user, orq.DOMINIO, texto, limite=3)]
@@ -788,6 +803,23 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
             if ac.contrato:
                 from .planejamento import registrar_entregas
                 registrar_entregas(ac, d, saida)
+            if saida.resultado is not None:
+                from . import revisao
+                falta_rev = revisao.revisar(user, provedor, texto, ac.contrato, saida)
+                if falta_rev == revisao.INDISPONIVEL:
+                    ac.anotar("revisao", "modelo_falhou")
+                    ac.reprovada = ""
+                    causa, saida, previa = "modelo_falhou", None, None
+                    break
+                if falta_rev:
+                    ac.reprovada, previa = falta_rev, None
+                    ac.revisoes += 1
+                    ac.cumpridas = []
+                    ac.anotar("revisao", "entrega_nao_atende")
+                    if ac.revisoes > revisao.tentativas():
+                        break
+                    observacoes.append(Observacao("revisao", "entrega_nao_atende", falta_rev))
+                    continue
             return _fechar(ac, user, c, mensagem_id, saida, ev or coord.INVESTIGACAO, parcial=not ev)
         ev = coord.evidencia(d, saida, texto)  # o que ESTA ação entregou (antes de juntar com a etapa anterior)
         if ac.contrato:
@@ -811,13 +843,15 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
                 entrada = replace(entrada, planejamento={**entrada.planejamento, 'pendentes': ac.pendentes(), 'cumpridas': ac.cumpridas})
                 atual = _ativa(user, c)
                 continue
-        if previa is not None and not comparacao.ranking(texto):
+        if (previa is not None and not comparacao.ranking(texto)
+                and (not comparacao.contagens_mensais(texto)
+                     or any(getattr(r, 'titulo_entrega', '') for r in _blocos(previa.resultado)))):
             saida = _juntar(previa, saida)
         ac.anotar(d.acao, saida.observacao.situacao if saida.observacao else ("ok" if ev else "sem_resultado"), ev)
         if d.acao == "lembrar":
             ac.memoria_feita = bool(saida.ficha.get("memoria_registrada"))
             if ac.entregue and ac.memoria_feita and ac.partes_faltam <= 0 and ev == coord.ACAO:
-                return _fechar(ac, user, c, mensagem_id, saida, ac.entregue)
+                ev = ac.entregue  # a resposta trouxe dados, então ainda precisa da revisão abaixo
         if ac.cumprido(ev) and d.acao != "lembrar":
             if ac.partes_faltam < 0:
                 ac.partes_faltam = coord.partes(texto) - 1
@@ -859,6 +893,11 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
             # M109: a resposta está montada, mas ainda não foi enviada: a própria IA confere se atende ao pedido.
             from . import revisao
             falta_rev = revisao.revisar(user, provedor, texto, ac.contrato, saida)
+            if falta_rev == revisao.INDISPONIVEL:
+                ac.anotar("revisao", "modelo_falhou")
+                ac.reprovada = ""
+                causa, saida, previa = "modelo_falhou", None, None
+                break
             if falta_rev:
                 ac.revisoes += 1
                 ac.reprovada = falta_rev
@@ -962,9 +1001,11 @@ def _encerrar_sem_cumprir(ac, user, c, mensagem_id, saida, previa, causa, observ
         registrar("modelo_falhou", "agente", usuario=user, estado_novo="prazo_esgotado", resultado="erro")
         return Saida(SEM_TEMPO + " Nada foi consultado. Tente de novo; se repetir, a IA está lenta agora.",
                      ficha={"tipo": "falha_modelo"}, observacao=Observacao("", TEMPO_ESGOTADO, "prazo total"))
-    from .comparacao import ranking
-    if ranking(ac.texto):
-        # A consulta intermediária é insumo. Uma entrega incompleta não tem ranking para exibir ou salvar.
+    tem_insumo = any(
+        getattr(r, 'ok', False) or getattr(r, 'linhas', None) or getattr(r, 'consolidado', False)
+        for r in (getattr(saida, 'resultado', None), getattr(previa, 'resultado', None)))
+    if ac.pendentes() or tem_insumo:
+        # Resultados usados como insumo ainda não passaram pela revisão da resposta completa.
         saida, previa = None, None
     ficha = dict(saida.ficha) if saida is not None else {}
     texto = (saida.texto if saida is not None else "").strip()
@@ -1020,7 +1061,8 @@ def _encerrar_sem_cumprir(ac, user, c, mensagem_id, saida, previa, causa, observ
             motivo = next((o.detalhe for o in reversed(tentativas) if o.situacao == classe and o.detalhe), motivo)
         final = Saida(f"{texto}\n\n{falta}. Parei porque {motivo}; isso não é falta de função no sistema, então não "
                       "abri correção de código. Tente de novo ou reformule o pedido.".strip(), ficha)
-    elif causa in PASSAGEIRAS:
+    elif causa in PASSAGEIRAS and not (causa in ("prazo", "passos") and ac.pendentes()
+                                        and _classe_sem_codigo(ac) in ("", ERRO_PARAMETROS)):
         # Falha passageira que persistiu: não é defeito de código, não vai para a manutenção.
         if mensagem_id is not None:
             o = coord.registrar(ac, user, c, mensagem_id, SO.IMPEDIDO, f"falha passageira persistente: {causa}")
@@ -1042,7 +1084,7 @@ def _encerrar_sem_cumprir(ac, user, c, mensagem_id, saida, previa, causa, observ
         # M113: revisão reprovada depois de uma correção volta à manutenção (o ciclo segue até a resposta certa);
         # os limites de tentativas/reaberturas do incidente e o diário da manutenção evitam laço sem fim.
         situacao = (SO.MANUTENCAO if (inc is not None and mensagem_id is not None
-                                      and (not retomado or causa == "revisao_reprovada")
+                                      and (not retomado or causa == "revisao_reprovada" or bool(ac.pendentes()))
                                       and (_vai_corrigir(inc) or inc.situacao == 'em_correcao'))
                     else SO.IMPEDIDO)
         if mensagem_id is not None:
@@ -1056,10 +1098,9 @@ def _encerrar_sem_cumprir(ac, user, c, mensagem_id, saida, previa, causa, observ
             if saida is None or (saida.resultado is None and (saida.observacao is None
                                                                or saida.observacao.acao == "conversar")):
                 texto = ""
-            parte = f"{falta}. " if texto else ""  # entregou só uma parte: diz qual falta
             # M53: diz O QUE vai ser implementado, quando o modelo declarou.
             oque = f" Vou implementar: {inc.condicoes.get('capacidade')}." if (inc.condicoes or {}).get("capacidade") else ""
-            final = Saida(f"{texto}\n\n{parte}Não tenho isso ainda, corrigindo…{oque} Estou ajustando o sistema "
+            final = Saida(f"{texto}\n\nNão tenho isso ainda, corrigindo… {falta}.{oque} Estou ajustando o sistema "
                           f"(registro nº {inc.pk}) para entregar a sua resposta. Assim que "
                           "a correção entrar no ar, refaço o pedido e respondo aqui, sem você precisar perguntar de "
                           "novo. Você acompanha cada etapa aqui.", ficha)
@@ -1119,7 +1160,8 @@ def continuar_objetivo(o):
                 texto='O pedido atingiu o limite de continuações e não foi concluído. Nenhuma nova tentativa foi iniciada.',
                 ficha={'tipo':'objetivo', 'objetivo':o.pk})
         ac = coord.Acompanhamento(o.mensagem.texto, exig=o.exigencia, origem=o.origem, registro=o,
-                                 contrato=o.contrato.get('entregas', []), cumpridas=o.contrato.get('cumpridas', []))
+                                 contrato=o.contrato.get('entregas', []),
+                                 cumpridas=[])
         feito = ", ".join(o.trilha[-6:]) or "nada concluído"
         obs = [Observacao("continuacao", "continuacao",
                           f"Continuação automática do MESMO pedido (a pessoa não mandou nova mensagem). Já tentado "
@@ -1166,9 +1208,14 @@ def _classe_sem_codigo(ac) -> str:
     # Só passos que tocaram dados contam; "conversar" carrega a observação de um passo anterior.
     situacoes = [x.split(":")[1] for x in ac.trilha if x.count(":") == 2
                  and x.split(":")[0] not in ("conversar", "continuacao", "falta_capacidade", "-")]
-    for classe in (SEM_PERMISSAO, ERRO_METADADOS, TEMPO_ESGOTADO, FALHA_TRANSITORIA, ERRO_PARAMETROS):
-        if classe in situacoes:
-            return classe
+    if SEM_PERMISSAO in situacoes:
+        return SEM_PERMISSAO
+    # Uma falha de descoberta antiga não explica um cálculo inválido depois de uma consulta executada.
+    for situacao in reversed(situacoes):
+        if situacao in (ERRO_METADADOS, TEMPO_ESGOTADO, FALHA_TRANSITORIA, ERRO_PARAMETROS):
+            return situacao
+        if situacao in (SUCESSO, "ok", "entrega_pendente"):
+            break
     return ""
 
 

@@ -177,7 +177,7 @@ def test_segunda_pergunta_sem_consulta_nao_vira_resposta(ana):
             {"codigo": "periodo-analise", "valor": "01/01/2020..31/12/2030"}]),
         _d(acao="conversar", resposta="Já rodei as duas consultas.")])
     msg, res = conversas.enviar(ana, c, "quanto vamos receber? e quanto está em atraso?", p)
-    assert p.chamadas == 2 and res is not None and res.ok
+    assert p.chamadas == 2 and res is None
     assert "Já rodei" not in msg.texto, msg.texto
 
 

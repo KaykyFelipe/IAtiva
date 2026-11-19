@@ -443,7 +443,7 @@ def encaminhar_manutencao(ac: Acompanhamento, causa: str, tabela: str = ""):
     from . import entregas, comparacao
     # M108: prazo entre dois eventos ("admitidos que saíram antes de 90 dias") não é a contagem de admissões
     # existente: sem a capacidade, vai para a manutenção.
-    if causa != "revisao_reprovada" and not pede_intervalo(_norm(ac.texto)) and not comparacao.ranking(ac.texto) and (
+    if causa != "revisao_reprovada" and not pede_intervalo(_norm(ac.texto)) and not comparacao.ranking(ac.texto) and not comparacao.contagens_mensais(ac.texto) and (
             admissoes.solicitado(ac.texto) or entregas.somente_lista(ac.texto) or comparacao.periodos(ac.texto)):
         return None
 
