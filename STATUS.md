@@ -4,6 +4,14 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **Etapa 7 aprovada em 2026-11-16 por Diego; em andamento.** Feito: roteiro do piloto (`docs/piloto/ROTEIRO.md`) e auditoria de não armazenamento (`manage.py auditar_armazenamento`). Falta: usuários do Financeiro, conferência dos números com relatórios do Protheus, avaliação da interpretação e latência. Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M124 — registro cancelado ou bloqueado não trava o mesmo pedido para sempre (2026-11-19)
+
+- O pedido "admitidos e desligados no mesmo ano" chegou a 3 de 4 partes e terminou com "Não vou repetir a mesma tentativa". O motivo: a mesma pergunta cai no mesmo registro, e esse registro (nº 26) tinha sido cancelado pelo botão parar. Registro cancelado ou bloqueado por "voltou depois da correção" ficava fora da correção para sempre.
+- Agora:
+  - o cancelamento vale só para aquele pedido: uma nova ocorrência reabre o registro com as tentativas zeradas;
+  - o bloqueio por "voltou depois da correção" cai quando a versão do código mudou.
+- O ensaio (M120) segura publicações erradas.
+
 ## Mudança M123 — ensaio da correção com o usuário de teste da TI (2026-11-19)
 
 - O ensaio (M120) criava a conversa temporária na conta de quem perguntou. A pessoa via um chat novo com a pergunta e o campo travado, porque a mensagem era enviada por outro processo.

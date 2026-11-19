@@ -93,3 +93,18 @@ def test_saida_do_agente_maior_que_o_buffer_nao_trava(tmp_path, monkeypatch):
     monkeypatch.setattr(mx, "pasta_cancelar", lambda: tmp_path)
     r = mx.rodar_agente([sys.executable, "-c", "print('x' * 300000)"], 8, 10)
     assert r.returncode == 0 and len(r.stdout) > 300000
+
+
+@pytest.mark.parametrize("motivo,versao_nova,reabre", [
+    ("Cancelada pela pessoa (botão parar).", False, True),
+    ("Voltou a ocorrer depois da correção; precisa de análise humana.", True, True),
+    ("Voltou a ocorrer depois da correção; precisa de análise humana.", False, False)])
+def test_m124_mesmo_pedido_de_novo_reabre_o_registro(monkeypatch, motivo, versao_nova, reabre):
+    from iativa.manutencao import incidentes
+    cond = {"trilha": ["preparar_consulta:acao_repetida:-"], "pergunta": "quantos?"}
+    monkeypatch.setattr(incidentes, "versao", lambda: "v1")
+    inc = incidentes._registrar("agente", "op", categoria="capacidade_ausente", condicoes=cond)
+    Incidente.objects.filter(pk=inc.pk).update(situacao="bloqueado_admin", motivo=motivo)
+    monkeypatch.setattr(incidentes, "versao", lambda: "v2" if versao_nova else "v1")
+    inc = incidentes._registrar("agente", "op", categoria="capacidade_ausente", condicoes=cond)
+    assert (inc.situacao == "aberto") is reabre

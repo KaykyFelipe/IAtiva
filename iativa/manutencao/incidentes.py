@@ -209,6 +209,14 @@ def _registrar(componente: str, operacao: str, exc=None, categoria: str = "", co
                 # Só uma nova ocorrência em versão posterior pode reabrir a tentativa que falhou.
                 mudancas.update(situacao=SituacaoIncidente.ABERTO, etapa="na_fila", motivo="",
                                 tentativas=0, reaberturas=F("reaberturas") + 1)
+            elif elegivel and atual.situacao == SituacaoIncidente.BLOQUEADO and (
+                    atual.motivo.startswith("Cancelada pela pessoa")
+                    or (atual.motivo.startswith("Voltou a ocorrer") and atual.versao != mudancas["versao"])):
+                # M124: cancelar (botão parar) vale só para aquele pedido; e o bloqueio por "voltou depois da
+                # correção" cai quando o código mudou. Antes o mesmo pedido, feito de novo, ficava fora da
+                # correção para sempre ("Não vou repetir a mesma tentativa").
+                mudancas.update(situacao=SituacaoIncidente.ABERTO, etapa="na_fila", motivo="", tentativas=0,
+                                reaberturas=0)
             Incidente.objects.filter(pk=atual.pk).update(**mudancas)
             atual.refresh_from_db()
             return atual
