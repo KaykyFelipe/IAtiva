@@ -7,6 +7,8 @@ documento), ELISA (só vínculo anterior), FABIO (vínculo simultâneo), IARA e 
 """
 import json
 import logging
+import sqlite3
+from contextlib import closing
 from io import StringIO
 
 import pytest
@@ -130,6 +132,40 @@ def test_classificacao_por_documento(base):
     assert p["ELISA SINTETICA DIAS"].classe == "so_vinculo_anterior"
     assert p["FABIO SINTETICO REIS"].classe == "vinculo_simultaneo"
     assert all(x.verificado for x in p.values())
+
+
+def test_worker_reconstroi_lista_com_filtro_em_juncao(base, erp_sintetico):
+    # Usa o cadastro sintético como tabela auxiliar, com chave matrícula/filial.
+    with closing(sqlite3.connect(erp_sintetico)) as erp, erp:
+        erp.executemany(
+            "UPDATE SA1010 SET A1_COD = ?, A1_MSBLQL = ? "
+            "WHERE A1_COD = ? AND A1_LOJA = '01' AND D_E_L_E_T_ = ' '",
+            [("000101", "2", "000001"), ("000102", "2", "000002"),
+             ("000103", "1", "000003"), ("000104", "2", "000004")],
+        )
+    cm = base["cm"]
+    cm.spec["juncoes"] = [{"alias": "j1", "tabela": "SA1", "pares": [
+        ["A1_COD", "RA_MAT"], ["A1_LOJA", "RA_FILIAL"],
+    ]}]
+    cm.spec["filtros_fixos"] = [{"alias": "j1", "campo": "A1_MSBLQL", "op": "=", "valor": "2"}]
+    cm.save(update_fields=["spec"])
+    c = conversas.nova_individual(base["u"])
+    p = FakeProvider([_d(acao="preparar_consulta", objetivo=cm.codigo, parametros=[
+        {"codigo": "filial-analise", "valor": "01"},
+        {"codigo": "periodo-analise", "valor": "15/09/2026..01/10/2026"},
+    ])])
+    msg, res = conversas.enviar(base["u"], c, "quem foi demitido de 15/09 a 01/10/2026?", p)
+    assert res is not None and res.ok, msg.texto
+    esperados = {"ANA SINTETICA SOUZA", "BRUNO SINTETICO LIMA"}
+    assert {linha[1].strip() for linha in res.linhas} == esperados
+
+    msg, _ = _investigar(base, c)
+    t = Tarefa.objects.get(pk=msg.ficha["tarefa"])
+    assert tarefas.processar_proxima()
+    t.refresh_from_db()
+    assert t.situacao == S.CONCLUIDA, t.motivo
+    assert t.cobertura["total"] == 2 and t.cobertura["lista_completa"]
+    assert set(_por_nome(tarefas.conclusao(base["u"], t))) == esperados
 
 
 def test_homonimo_nao_e_vinculado_quando_a_comparacao_e_por_nome(base, settings):

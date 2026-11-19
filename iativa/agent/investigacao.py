@@ -273,7 +273,8 @@ def _consultar(cat, plano, ctl, limite, timeout=None):
 
     ctl.antes_de_consultar()
     comp = compilar(plano, cat, limite)
-    permitidas = {t.fisica for t in cat.tabelas([plano.base]).values()}
+    tabelas = [plano.base] + [j.tabela for j in plano.juncoes]
+    permitidas = {t.fisica for t in cat.tabelas(tabelas).values()}
     validar(comp.sql, permitidas, limite + 1)
     tempo = _cfg()["timeout_s"] if timeout is None else min(timeout, _cfg()["timeout_s"])
     linhas, cortou = executar(cat, comp.sql, comp.params, limite, tempo,
