@@ -1304,7 +1304,7 @@ def _agir(user, c, d, atual, defs, texto, provedor, entrada, objetivos, administ
     if acao == 'calcular_resultado':
         from . import calculos
         try:
-            plano = d.calculo
+            plano = calculos.operacao_exigida(d.calculo, texto)
             if (plano.get('operacao') in ('dias_uteis', 'dias_corridos') and not plano.get('campo')
                     and not plano.get('mensagem') and resultado_base is None and calculos.intervalo_do_texto(texto)):
                 return Saida('Calculei sobre as datas informadas.', {**ficha, 'tipo': 'calculo_resultado'},

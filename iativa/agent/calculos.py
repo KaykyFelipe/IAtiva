@@ -305,6 +305,21 @@ def executar(user, conversa, plano, resultado_atual=None, *, texto=""):
                      curta_salva=curta)
 
 
+def operacao_exigida(plano, texto):
+    """M112: pedido de prazo entre dois eventos ("admitidos que saíram antes de 90 dias") exige a condição do prazo.
+    Se o modelo pediu dias corridos/úteis/contagem com as duas colunas, o backend aplica intervalo_entre_datas com
+    o limite em dias citado no pedido (sem limite explícito, não altera)."""
+    from .objetivos import _norm, metrica_exigida
+    if (metrica_exigida(texto) != 'intervalo_entre_datas' or plano.get('operacao') == 'intervalo_entre_datas'
+            or plano.get('operacao') not in ('dias_corridos', 'dias_uteis', 'contagem')
+            or not plano.get('campo') or not plano.get('campo_final')):
+        return plano
+    limites = {int(x) for x in re.findall(r'\b(\d{1,4})\s*dias?\b', _norm(texto))}
+    if len(limites) != 1:
+        return plano
+    return {**plano, 'operacao': 'intervalo_entre_datas', 'limite': limites.pop()}
+
+
 def _contagem_intervalo(res, plano, premissas):
     """Contagem condicional: registros cujo intervalo em dias corridos entre `campo` (início) e `campo_final`
     (fim) é menor que `limite`. Registros sem data final (evento ainda não ocorrido) são ignorados.
@@ -316,7 +331,10 @@ def _contagem_intervalo(res, plano, premissas):
         a, b = res.colunas.index(plano.get('campo')), res.colunas.index(plano.get('campo_final'))
     except ValueError:
         raise ValidationError('Escolha as colunas inicial e final dentre as colunas do resultado anterior.') from None
-    ids = [i for i, t in enumerate(res.tipos) if t == 'texto' and i not in (a, b)][:4]
+    ids = [i for i, t in enumerate(res.tipos) if t == 'texto' and i not in (a, b)]
+    nomes = [i for i in ids if re.search(r'\bnome\b', res.colunas[i], re.I)]
+    # M112: quem atende precisa vir identificado pelo nome, mesmo com muitas colunas de texto antes dele.
+    ids = sorted(set(nomes[:1] + [i for i in ids if i not in nomes[:1]][:4 - len(nomes[:1])]))
     ignorados, atendem = 0, []
     for l in res.linhas:
         if not str(l[b] or '').strip():
