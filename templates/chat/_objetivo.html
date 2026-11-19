@@ -8,9 +8,12 @@
       {% if objetivo.incidente %}
       {% with tempo=objetivo.incidente.tempo_restante_estimado %}
         {% if tempo %}<div>Tempo restante estimado: {{ tempo }}</div>
-        {% elif objetivo.incidente.situacao == "em_correcao" %}<div>Atualizando a estimativa de tempo…</div>
+        {% elif objetivo.incidente.situacao == "em_correcao" %}<div>Está levando mais que o previsto; continuo trabalhando nisso.</div>
         {% endif %}
       {% endwith %}
+      {% with n=objetivo.incidente.condicoes.tentativa_atual %}{% if n and n > 1 %}
+      <div class="manutencao-tentativa">Tentativa {{ n }} de 3. A anterior ainda não entregava o seu pedido{% if objetivo.incidente.condicoes.tentativa_motivo %}: {{ objetivo.incidente.condicoes.tentativa_motivo }}{% endif %}. Ajustando a correção.</div>
+      {% endif %}{% endwith %}
       <ol class="manutencao-etapas">
         {% for e in objetivo.incidente.etapas_andamento %}
         <li class="etapa-{{ e.estado }}">{% if e.estado == "feita" %}✓{% elif e.estado == "atual" %}…{% else %}·{% endif %} {{ e.texto }}</li>

@@ -4,6 +4,15 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **Etapa 7 aprovada em 2026-11-16 por Diego; em andamento.** Feito: roteiro do piloto (`docs/piloto/ROTEIRO.md`) e auditoria de não armazenamento (`manage.py auditar_armazenamento`). Falta: usuários do Financeiro, conferência dos números com relatórios do Protheus, avaliação da interpretação e latência. Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M122 — ensaio roda o segundo plano; card mostra a tentativa e o motivo (2026-11-19)
+
+- Incidente #25: o ensaio (M120) contou como falha um pedido que só precisava continuar em segundo plano ("continua: passos"), porque no ensaio não há worker. A correção voltou para "Implementando", sem explicação no chat.
+- Agora:
+  - o ensaio roda ali mesmo as continuações do pedido (até 4), como o worker faria para a pessoa;
+  - quando falha, o motivo para o agente é a lista de partes que não saíram ("não entregou: X (entregou 1 de 2)"), em vez de um código interno;
+  - o card mostra "Tentativa N de 3. A anterior ainda não entregava o seu pedido: …";
+  - quando a estimativa estoura, o card diz "Está levando mais que o previsto; continuo trabalhando nisso.".
+
 ## Mudança M121 — pedidos com várias partes andam mais por rodada e o andamento fica claro (2026-11-19)
 
 - A segunda leitura (M118) gerou 6 entregas (uma lista por evento). Com 5 passos por rodada, a IA entregava uma ou duas partes e empurrava o resto para o segundo plano repetidas vezes, com textos longos "Entregue: …; Não concluído: …".

@@ -554,6 +554,8 @@ def corrigir(diag: dict, c: dict) -> str:
         except (Recusa, subprocess.TimeoutExpired) as exc:
             feedback = str(exc)[:300] if isinstance(exc, Recusa) else "tempo limite"
             log(f"incidente #{inc}: tentativa {tentativa}/3 ({feedback})")
+            if tentativa < 3:
+                manage("tentativa", inc, tentativa + 1, "--motivo", feedback, verificar=False)  # M122: aparece no chat
             if tentativa == 3:
                 raise
         else:

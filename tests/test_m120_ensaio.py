@@ -61,3 +61,36 @@ def test_executor_le_o_resultado_do_ensaio(tmp_path, monkeypatch, saida, motivo)
     monkeypatch.setattr(mx, "etapa", lambda *a: None)
     monkeypatch.setattr(mx, "agente_de_teste", lambda: "")
     assert mx.ensaiar_pedido(tmp_path, 5) == motivo
+
+
+def test_m122_ensaio_roda_as_continuacoes_e_diz_o_que_faltou(base, monkeypatch):  # noqa: F811
+    from iativa.agent import agente
+    inc = _incidente_com_pedido(base)
+
+    def enviar(user, c, texto, *a, **k):
+        m = c.mensagens.create(papel="usuario", texto=texto, autor=user)
+        Objetivo.objects.create(usuario=user, conversa=c, mensagem=m, situacao=SO.CONTINUAR, exigencia="calculo",
+                                contrato={"entregas": [{"descricao": "Admitidos por filial"},
+                                                       {"descricao": "Desligados por filial"}], "cumpridas": [0]})
+        return SimpleNamespace(texto="Sigo em segundo plano", ficha={}), None
+    chamadas = []
+
+    def continuar(o):
+        chamadas.append(o.execucao)
+        Objetivo.objects.filter(pk=o.pk).update(situacao=SO.IMPEDIDO)
+    monkeypatch.setattr(conversas, "enviar", enviar)
+    monkeypatch.setattr(agente, "continuar_objetivo", continuar)
+    r = ensaiar(inc.pk)
+    assert chamadas and chamadas[0]  # continuação rodou com execução própria
+    assert r == "falha: não entregou: Desligados por filial (entregou 1 de 2)"
+
+
+def test_m122_tentativa_aparece_no_card(base, client):  # noqa: F811
+    from django.core.management import call_command
+    from django.urls import reverse
+    inc = _incidente_com_pedido(base)
+    call_command("manutencao", "tentativa", inc.pk, "2", "--motivo", "não entregou: Desligados por filial")
+    o = Objetivo.objects.get(incidente=inc)
+    client.force_login(base["u"])
+    html = client.get(reverse("chat:objetivo", args=[o.pk])).content.decode()
+    assert "Tentativa 2 de 3" in html and "Desligados por filial" in html

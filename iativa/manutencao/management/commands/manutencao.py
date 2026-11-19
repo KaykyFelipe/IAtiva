@@ -24,7 +24,7 @@ class Command(BaseCommand):
     help = "Incidentes técnicos para o executor de manutenção (sem dados do ERP)."
 
     def add_arguments(self, parser):
-        parser.add_argument("acao", choices=["listar", "exportar", "iniciar", "concluir", "retomar", "etapa", "cancelado", "ensaiar"])
+        parser.add_argument("acao", choices=["listar", "exportar", "iniciar", "concluir", "retomar", "etapa", "cancelado", "ensaiar", "tentativa"])
         parser.add_argument("id", nargs="?", type=int)
         parser.add_argument("situacao", nargs="?")
         parser.add_argument("--commit", default="")
@@ -64,7 +64,21 @@ class Command(BaseCommand):
                     raise CommandError("incidente não elegível")
                 Incidente.objects.filter(pk=i.pk).update(situacao=SituacaoIncidente.EM_CORRECAO, etapa="analisando",
                                                         tentativas=F("tentativas") + 1,
-                                                        condicoes={**(i.condicoes or {}), "etapa_inicio": timezone.now().timestamp()})
+                                                        condicoes={**{k: v for k, v in (i.condicoes or {}).items()
+                                                                      if k not in ("tentativa_atual", "tentativa_motivo")},
+                                                                   "etapa_inicio": timezone.now().timestamp()})
+            self.stdout.write("ok")
+            return
+        if acao == "tentativa":
+            # M122: o chat mostra em que tentativa está e por que a anterior não serviu (texto já sanitizado
+            # pelo executor: partes do pedido que faltaram ou falha de teste; sem dados do ERP).
+            from iativa.manutencao.incidentes import mascarar_pergunta
+            i = Incidente.objects.filter(pk=o["id"]).first()
+            n = int(o["situacao"] or 1)
+            if i is not None:
+                i.condicoes = {**(i.condicoes or {}), "tentativa_atual": n,
+                               "tentativa_motivo": mascarar_pergunta(o["motivo"], 300)}
+                i.save(update_fields=["condicoes"])
             self.stdout.write("ok")
             return
         if acao == "ensaiar":
@@ -112,14 +126,45 @@ def ensaiar(incidente_id: int) -> str:
     c = conversas.nova_individual(o.usuario)
     try:
         msg, res = conversas.enviar(o.usuario, c, o.mensagem.texto)
-        obj = c.objetivos.order_by("-pk").first() if hasattr(c, "objetivos") else None
+        obj = Objetivo.objects.filter(conversa=c).order_by("-pk").first()
         ficha = getattr(msg, "ficha", None) or {}
+        # M122: no ensaio não há worker: as continuações em segundo plano rodam aqui mesmo, como rodariam para a
+        # pessoa. Antes, "sigo em segundo plano" contava como falha e a correção voltava a ser implementada.
+        from uuid import uuid4
+
+        from iativa.agent import agente
+        continuou = False
+        for _ in range(4):
+            if obj is None or obj.situacao != SituacaoObjetivo.CONTINUAR:
+                break
+            Objetivo.objects.filter(pk=obj.pk).update(execucao=uuid4().hex, lease_ate=None)
+            obj.refresh_from_db()
+            agente.continuar_objetivo(obj)
+            continuou = True
+            obj.refresh_from_db()
+        if continuou:
+            ultima = c.mensagens.filter(papel="ia").order_by("-pk").first()
+            if obj.situacao == SituacaoObjetivo.CUMPRIDO:
+                return "ok"
+            return "falha: " + _motivo_ensaio(obj, getattr(ultima, "texto", ""))
         if ficha.get("corrigindo") or ficha.get("tipo") == "tarefa":
-            return "falha: " + " ".join((getattr(obj, "motivo", "") or msg.texto).split())[:300]
+            return "falha: " + _motivo_ensaio(obj, msg.texto)
         if obj is not None and obj.situacao != SituacaoObjetivo.CUMPRIDO:
-            return "falha: " + " ".join((obj.motivo or msg.texto).split())[:300]
+            return "falha: " + _motivo_ensaio(obj, msg.texto)
         if res is None or not (getattr(res, "ok", False) or getattr(res, "consolidado", False)):
             return "falha: " + " ".join(msg.texto.split())[:300]
         return "ok"
     finally:
         c.delete()
+
+
+def _motivo_ensaio(obj, texto: str) -> str:
+    """M122: o que o agente de manutenção precisa saber: as partes do pedido que não saíram (do contrato), e não
+    um código interno como "continua: passos"."""
+    contrato = (getattr(obj, "contrato", None) or {}) if obj is not None else {}
+    entregas, feitas = contrato.get("entregas") or [], set(contrato.get("cumpridas") or [])
+    faltam = [e.get("descricao", "") for i, e in enumerate(entregas) if i not in feitas and isinstance(e, dict)]
+    if faltam:
+        return ("não entregou: " + "; ".join(faltam) + (f" (entregou {len(feitas)} de {len(entregas)})"
+                                                        if feitas else ""))[:300]
+    return " ".join(((getattr(obj, "motivo", "") if obj is not None else "") or texto).split())[:300]
