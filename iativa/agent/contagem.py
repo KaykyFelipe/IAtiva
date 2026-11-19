@@ -139,6 +139,8 @@ def consulta_do_primeiro_evento(texto, modelos):
 
 def recuperar_filtro_do_ano(texto, decisao, objetivos, *, entrega_pendente=False):
     """Recompõe os intervalos do pedido após erro de parâmetro ou contagem anual incompleta."""
+    from iativa.query.plano import ler_agregacao
+
     from .contratos import campos_periodo
     from .models import ConsultaModelo, SituacaoModelo
     from .objetivos import ano_admissoes_e_desligamentos
@@ -151,8 +153,7 @@ def recuperar_filtro_do_ano(texto, decisao, objetivos, *, entrega_pendente=False
     partes = [parte.strip().upper() for parte in params.get('filtro-campo', '').split(';') if parte.strip()]
     formato = r'\s*[<>]=?\s*\d{8}'
     if entrega_pendente:
-        if (params.get('agregacao', '').lower() != 'contagem:* por filial'
-                or params.get('filial-analise') != 'TODAS'):
+        if params.get('filial-analise') != 'TODAS':
             return None
         formato = rf'(?:{formato}|@\d{{8}}\.\.\d{{8}})'
     if (not partes and not entrega_pendente) or not all(
@@ -164,6 +165,14 @@ def recuperar_filtro_do_ano(texto, decisao, objetivos, *, entrega_pendente=False
     modelo = ConsultaModelo.objects.filter(pk=objetivo.modelo_id, situacao=SituacaoModelo.APROVADA).first()
     if modelo is None or not set(campos) <= set(campos_periodo(modelo.spec)):
         return None
+    if entrega_pendente:
+        try:
+            medidas, grupo, top = ler_agregacao(params.get('agregacao', ''), modelo.spec)
+        except ValueError:
+            return None
+        # TODAS já separa as filiais. O parser normaliza o agrupamento por filial para grupo vazio.
+        if medidas != [('COUNT', '*')] or grupo or top:
+            return None
     intervalos = '; '.join(f'{campo}@{ano}0101..{ano}1231' for campo in campos)
     params['filtro-campo'] = intervalos
     if entrega_pendente and 'periodo-analise' in objetivo.obrigatorios:
