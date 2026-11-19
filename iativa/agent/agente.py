@@ -1035,12 +1035,21 @@ def _encerrar_sem_cumprir(ac, user, c, mensagem_id, saida, previa, causa, observ
         # M80: o ERP demorou/falhou de passagem e a IA repetiu a mesma ação: é lentidão, não pedido impossível.
         # Tenta de novo sozinha em segundo plano (com espera), em vez de pedir para a pessoa repetir.
         causa = _classe_sem_codigo(ac)
+    classe = _classe_sem_codigo(ac)
+    calculo_pendente = ac.exig == coord.CALCULO or any(
+        e.get("tipo") == "calculo" and i not in ac.cumpridas for i, e in enumerate(ac.contrato))
+    # Um prazo esgotado durante investigação pode ser transitório. Critérios recusados e um ciclo
+    # estagnado depois de executar consultas apontam para um defeito reproduzível no atendimento.
+    consultou = any(p.endswith((":consulta", ":calculo")) for p in ac.trilha)
+    if (causa in ("prazo", "passos") and calculo_pendente
+            and (classe == ERRO_PARAMETROS or (not classe and consultou and ac.estagnado()))):
+        causa = "calculo_pendente"
     andando = not ac.estagnado() or causa in (TEMPO_ESGOTADO, FALHA_TRANSITORIA, "modelo_falhou", "prazo")
     if (causa in PASSAGEIRAS and andando and mensagem_id is not None and feitas < int(coord.cfg()["continuacoes"])
             and not (registro is not None and registro.retomado and causa == "passos")):
         o = coord.registrar(ac, user, c, mensagem_id, SO.CONTINUAR, f"continua: {causa}",
                             espera_s=int(coord.cfg()["espera_s"]))
-        final = Saida(f"{texto}\n\n{falta}. Continuo em segundo plano e respondo aqui, sem você precisar pedir de novo."
+        final = Saida(f"{texto}\n\n{falta}. Continuo em segundo plano tentando concluir a consulta. A resposta aparece aqui."
                       .strip(), {**ficha, "tipo": ficha.get("tipo") or "objetivo", "objetivo": o.pk})
         registrar("modelo_falhou", "agente", usuario=user, estado_novo="objetivo_continua", resultado="erro")
     elif (causa not in PASSAGEIRAS and causa != "revisao_reprovada" and (classe := _classe_sem_codigo(ac))
@@ -1183,7 +1192,7 @@ def continuar_objetivo(o):
                 execucao='', lease_ate=None)
         prefixo = ("Depois da correção publicada, refiz o seu pedido. " if o.retomado
                    else "Continuando o seu pedido, sem você precisar pedir de novo. ")
-        texto = prefixo + saida.texto
+        texto = saida.texto if saida.ficha.get("corrigindo") else prefixo + saida.texto
         msg = Mensagem.objects.create(conversa=c, papel=Papel.IA, texto=texto[:4000], ficha=saida.ficha,
                                      solicitacao=saida.solicitacao)
         from iativa.chat.resultados import guardar

@@ -196,6 +196,11 @@ def _registrar(componente: str, operacao: str, exc=None, categoria: str = "", co
                                     motivo="Voltou a ocorrer depois da correção; precisa de análise humana.")
                 else:
                     mudancas.update(situacao=SituacaoIncidente.ABERTO, etapa="na_fila", reaberturas=F("reaberturas") + 1)
+            elif (elegivel and atual.situacao == SituacaoIncidente.FALHOU
+                  and atual.versao != mudancas["versao"] and atual.reaberturas < MAX_REABERTURAS):
+                # Só uma nova ocorrência em versão posterior pode reabrir a tentativa que falhou.
+                mudancas.update(situacao=SituacaoIncidente.ABERTO, etapa="na_fila", motivo="",
+                                tentativas=0, reaberturas=F("reaberturas") + 1)
             Incidente.objects.filter(pk=atual.pk).update(**mudancas)
             atual.refresh_from_db()
             return atual

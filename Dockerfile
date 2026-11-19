@@ -32,10 +32,13 @@ RUN pip install --no-cache-dir -r requirements-dev.txt
 # CLI oficial do Codex para login ChatGPT e execução isolada, com versão fixa.
 ARG CODEX_VERSION=0.167.0
 RUN curl -fsSL --retry 3 "https://github.com/openai/codex/releases/download/rust-v${CODEX_VERSION}/codex-x86_64-unknown-linux-musl.tar.gz" -o /tmp/codex.tar.gz \
+    && curl -fsSL --retry 3 "https://github.com/openai/codex/releases/download/rust-v${CODEX_VERSION}/codex-code-mode-host-x86_64-unknown-linux-musl.tar.gz" -o /tmp/codex-host.tar.gz \
     && mkdir /tmp/codex-bin \
     && tar -xzf /tmp/codex.tar.gz -C /tmp/codex-bin \
     && install -m 755 /tmp/codex-bin/codex-x86_64-unknown-linux-musl /usr/local/bin/codex \
-    && rm -rf /tmp/codex-bin /tmp/codex.tar.gz \
+    && tar -xzf /tmp/codex-host.tar.gz -C /tmp/codex-bin \
+    && install -m 755 /tmp/codex-bin/codex-code-mode-host-x86_64-unknown-linux-musl /usr/local/bin/codex-code-mode-host \
+    && rm -rf /tmp/codex-bin /tmp/codex.tar.gz /tmp/codex-host.tar.gz \
     && codex --version
 
 # Usuário sem privilégios; só a pasta var/ (base sintética) é gravável.

@@ -261,7 +261,8 @@ def test_assinatura_nao_comprova_inicio_de_locacao(faturamento, monkeypatch):
     assert comparacao.comprova_evento_mensal(contrato[1], saida)
 
 
-def test_falha_de_calculo_no_worker_preserva_pedido_para_manutencao(faturamento, settings):
+@pytest.mark.parametrize("causa", ["acao_repetida", "prazo"])
+def test_falha_de_calculo_no_worker_preserva_pedido_para_manutencao(faturamento, settings, causa):
     from iativa.agent import agente, objetivos
     from iativa.agent.models import Objetivo, SituacaoObjetivo
     from iativa.chat.models import Mensagem
@@ -281,6 +282,6 @@ def test_falha_de_calculo_no_worker_preserva_pedido_para_manutencao(faturamento,
     ac.registro = o
     ac.anotar('calcular_resultado', agente.ERRO_PARAMETROS)
     previa = agente.Saida('Consulta executada.', resultado=Resultado(True, 'Só a primeira contagem'))
-    final = agente._encerrar_sem_cumprir(ac, u, c, m.pk, previa, previa, 'acao_repetida', [])
+    final = agente._encerrar_sem_cumprir(ac, u, c, m.pk, previa, previa, causa, [])
     assert final.resultado is None and 'Consulta executada' not in final.texto
     assert Objetivo.objects.get(pk=o.pk).situacao == SituacaoObjetivo.MANUTENCAO

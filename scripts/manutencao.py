@@ -79,6 +79,10 @@ class Cancelada(Exception):
     """M114: a pessoa clicou em parar; a correção para e nada fica no ar."""
 
 
+class FerramentasIndisponiveis(Exception):
+    """O modelo não pode desenvolver no container. Repetir a mesma execução não resolve."""
+
+
 class Recusa(Exception):
     """A correção não pode seguir (motivo curto, sem dados)."""
 
@@ -177,7 +181,7 @@ def prompt_capacidade(diag: dict) -> str:
         "tests/, templates/, static/; usar rede ou dados reais; escolher filtros para chegar a um valor esperado. "
         "Se o sistema já corrigir a escolha ruim e ainda assim você não conseguir reproduzir o sintoma, "
         "NÃO altere o código: apenas termine dizendo NAO_REPRODUZIDO.\n"
-        "Se 'causa' for acao_repetida, reproduza o ciclo chegando a uma ação repetida sem a entrega; inclua respostas a esclarecimentos e o contexto do pedido se forem relevantes. Examine as alternativas autorizadas e corrija como o sistema preserva o objetivo e continua. Se 'causa' for revisao_reprovada, o revisor de entrega (iativa/agent/revisao.py) reprovou a "
+        "Se 'causa' for acao_repetida ou calculo_pendente, reproduza o ciclo chegando a uma ação repetida sem a entrega; inclua respostas a esclarecimentos e o contexto do pedido se forem relevantes. Examine as alternativas autorizadas e corrija como o sistema preserva o objetivo e continua. Se 'causa' for revisao_reprovada, o revisor de entrega (iativa/agent/revisao.py) reprovou a "
         "resposta montada e 'capacidade' diz o que faltava e como corrigir. Aqui a escolha ruim do modelo É o defeito "
         "a corrigir: o sistema precisa conduzir o ciclo até a entrega certa. Corrija de forma GERAL (vale para pedidos "
         "parecidos), por exemplo: orientação ao modelo (regras em iativa/agent/objetivos.py, falta_obs; notas de "
@@ -422,7 +426,7 @@ def comando_agente(wt: Path, pasta_diag: Path, imagem: str, c: dict, diag: dict)
             '--entrypoint', 'codex', imagem, 'exec', '--ephemeral', '--ignore-user-config', '--ignore-rules',
             '--skip-git-repo-check', '--sandbox', 'danger-full-access', '-c', 'approval_policy="never"',
             '--disable', 'apps', '--disable', 'plugins', '--disable', 'hooks', '--disable', 'multi_agent',
-            '--disable', 'code_mode', '--disable', 'code_mode_host',
+            '--enable', 'code_mode', '--enable', 'code_mode_host',
             '-c', 'forced_login_method="chatgpt"', '-c', 'cli_auth_credentials_store="file"',
             '-c', 'shell_environment_policy.inherit="none"', '-c', 'web_search="disabled"',
             '-c', 'shell_environment_policy.set.PATH="/opt/venv/bin:/usr/local/bin:/usr/bin:/bin"',
@@ -462,6 +466,15 @@ def etapa(inc: int, codigo: str):
         manage("etapa", inc, codigo, verificar=False)
     except Exception:
         pass
+
+
+def validar_executor(saida):
+    erros = (getattr(saida, 'stderr', '') or '').lower()
+    if any(erro in erros for erro in ('code-mode host is disabled', 'failed to locate codex-code-mode-host',
+                                       'code mode is unavailable')):
+        raise FerramentasIndisponiveis('Ferramentas de edição e testes indisponíveis no executor ChatGPT.')
+    if saida.returncode:
+        raise Recusa(f"executor do modelo encerrou com código {saida.returncode}")
 
 
 def validar_correcao(wt: Path, base: str, imagem: str, inc: int) -> list[str]:
@@ -508,8 +521,7 @@ def corrigir(diag: dict, c: dict) -> str:
             saida = rodar_agente(comando_agente(wt, pasta_diag, imagem, c, diag), inc,
                                  int(c["MANUTENCAO_TEMPO_S"]))
             checar_cancelamento(inc)
-            if saida.returncode:
-                raise Recusa(f"executor do modelo encerrou com código {saida.returncode}")
+            validar_executor(saida)
             novos = validar_correcao(wt, base, imagem, inc)
         except (Recusa, subprocess.TimeoutExpired) as exc:
             feedback = str(exc)[:300] if isinstance(exc, Recusa) else "tempo limite"
@@ -698,8 +710,8 @@ def principal(argv) -> int:
         if wt.exists():
             git("worktree", "remove", "--force", str(wt), verificar=False)
         (pasta_cancelar() / str(inc)).unlink(missing_ok=True)
-    except (Recusa, subprocess.TimeoutExpired) as exc:
-        motivo = str(exc) if isinstance(exc, Recusa) else "tempo limite"
+    except (FerramentasIndisponiveis, Recusa, subprocess.TimeoutExpired) as exc:
+        motivo = "tempo limite" if isinstance(exc, subprocess.TimeoutExpired) else str(exc)
         manage("concluir", inc, "falhou_correcao", "--motivo", motivo, verificar=False)
         log(f"incidente #{inc}: não publicado ({motivo})")
     finally:

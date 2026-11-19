@@ -20,6 +20,6 @@
     </div>
   {% else %}
     {% include "chat/_mascote.html" with estado="thinking" %}
-    <span class="atividade-texto">{% if objetivo.retomado %}Refazendo o pedido original e conferindo a resposta…{% else %}Continuando o seu pedido em segundo plano; a resposta aparece aqui.{% endif %}</span>
+    <span class="atividade-texto">{% if objetivo.retomado %}Refazendo o pedido original e conferindo a resposta…{% else %}Tentando concluir a consulta em segundo plano. A resposta aparece aqui.{% endif %}</span>
   {% endif %}
 </div>

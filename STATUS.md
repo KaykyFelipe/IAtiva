@@ -4,6 +4,11 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **Etapa 7 aprovada em 2026-11-16 por Diego; em andamento.** Feito: roteiro do piloto (`docs/piloto/ROTEIRO.md`) e auditoria de não armazenamento (`manage.py auditar_armazenamento`). Falta: usuários do Financeiro, conferência dos números com relatórios do Protheus, avaliação da interpretação e latência. Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Ferramentas de manutenção do ChatGPT (2026-11-19)
+
+- Os registros recentes terminavam sem alteração porque o Codex CLI respondia sem ferramentas. O container agora instala o executável auxiliar da mesma versão e habilita o modo de execução apenas para a manutenção. Uma falha de inicialização das ferramentas tem diagnóstico próprio.
+- Depois de uma nova ocorrência numa versão posterior, um diagnóstico que falhou pode voltar à fila dentro do limite de reabertura. Pedidos de cálculo com critérios inválidos ou ciclo estagnado após consultar seguem para manutenção. A espera por uma dependência transitória fica no atendimento em segundo plano.
+
 ## Revisão antes de exibir comparações incompletas (2026-11-19)
 
 - Pedidos com entregas pendentes ficam em segundo plano sem publicar a tabela intermediária. A comparação de contratos assinados e locações iniciadas exige uma contagem mensal por filial para cada evento, com o período e a data de referência conferidos.
