@@ -4,6 +4,11 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **Etapa 7 aprovada em 2026-11-16 por Diego; em andamento.** Feito: roteiro do piloto (`docs/piloto/ROTEIRO.md`) e auditoria de não armazenamento (`manage.py auditar_armazenamento`). Falta: usuários do Financeiro, conferência dos números com relatórios do Protheus, avaliação da interpretação e latência. Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M114 — parar cancela a correção automática e desfaz o que publicou (2026-11-19)
+
+- Botão parar em pedido que espera a manutenção: se nenhum outro pedido espera o mesmo incidente, a correção é cancelada (incidente bloqueado "Cancelada pela pessoa", sai da fila).
+- O executor do host interrompe o agente em até 2 s (container com nome, `docker kill`) e checa o cancelamento entre as etapas. Se já publicou, faz `git revert` do commit dela na main local e publica de novo (azul/verde). `manage.py manutencao concluir` não sobrescreve o cancelamento.
+
 ## Mudança M113 — revisor pragmático e com o total; reprovação após correção volta à manutenção (2026-11-19)
 
 - O revisor reprovava respostas certas. Exemplos: "admitidos que saíram antes de 90 dias" com 41 de 72 ("filtro não aparece") e "demitidos nos últimos 8 meses" com o total geral do banco ("falta o total"). Ele só via a frase de cálculos.

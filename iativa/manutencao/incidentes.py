@@ -109,6 +109,30 @@ def classificar(exc=None, situacao: str = "") -> str:
     return Categoria.ERRO_TECNICO
 
 
+def cancelar_pela_pessoa(incidente_id: int) -> bool:
+    """M114: a pessoa clicou em parar enquanto o pedido esperava a manutenção. Se nenhum outro pedido espera este
+    incidente, a correção é cancelada: sai da fila, o executor interrompe o agente se estiver rodando e desfaz o
+    commit local se já tiver publicado (arquivo-sinal no volume, lido pelo executor do host)."""
+    from pathlib import Path
+
+    from django.conf import settings
+
+    from iativa.agent.models import Objetivo, SituacaoObjetivo
+
+    if Objetivo.objects.filter(incidente_id=incidente_id, situacao=SituacaoObjetivo.MANUTENCAO).exists():
+        return False  # outro pedido ainda espera esta correção
+    Incidente.objects.filter(pk=incidente_id).exclude(situacao=SituacaoIncidente.BLOQUEADO).update(
+        situacao=SituacaoIncidente.BLOQUEADO, motivo="Cancelada pela pessoa (botão parar).", etapa="")
+    try:
+        pasta = Path(settings.BASE_DIR) / "var" / "manutencao-cancelar"
+        pasta.mkdir(parents=True, exist_ok=True)
+        (pasta / str(int(incidente_id))).write_text(timezone.now().isoformat())
+    except Exception as erro:
+        logger.warning("cancelamento não sinalizado: %s", type(erro).__name__)
+    acordar_manutencao()  # o executor desfaz na hora o que já tiver publicado
+    return True
+
+
 def acordar_manutencao() -> None:
     """M50: avisa o executor do host na hora (arquivo no volume vigiado por iativa-manutencao.path), em vez
     de esperar o agendamento. Só um carimbo de hora: nenhum dado do incidente sai da aplicação."""

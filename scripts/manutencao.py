@@ -75,6 +75,10 @@ CAPACIDADE_RE = re.compile(r"^[\w\s.,;:!?()\[\]/%+\-–'\"ºª°<>=]{1,600}$")  
 CATEGORIAS = ("erro_tecnico", "capacidade_ausente")
 
 
+class Cancelada(Exception):
+    """M114: a pessoa clicou em parar; a correção para e nada fica no ar."""
+
+
 class Recusa(Exception):
     """A correção não pode seguir (motivo curto, sem dados)."""
 
@@ -463,8 +467,8 @@ def corrigir(diag: dict, c: dict) -> str:
     pasta_diag.mkdir(exist_ok=True)
     (pasta_diag / "diagnostico.json").write_text(json.dumps(diag, ensure_ascii=False))
     etapa(inc, "implementando")
-    saida = rodar(comando_agente(wt, pasta_diag, imagem, c, diag), timeout=int(c["MANUTENCAO_TEMPO_S"]),
-                  verificar=False)
+    saida = rodar_agente(comando_agente(wt, pasta_diag, imagem, c, diag), inc, int(c["MANUTENCAO_TEMPO_S"]))
+    checar_cancelamento(inc)
     if "NAO_REPRODUZIDO" in (saida.stdout or ""):
         raise Recusa("não reproduzido: nada publicado")
     # M108: o CLAUDE.md do repositório pede para atualizar STATUS/DECISOES; na manutenção isso não vale (a TI
@@ -485,6 +489,7 @@ def corrigir(diag: dict, c: dict) -> str:
         raise Recusa("o teste novo não falha na versão afetada: defeito não demonstrado")
     if not suite_ok:
         raise Recusa("a suíte não passa com a correção")
+    checar_cancelamento(inc)
     git("-c", "user.name=IAtiva Manutenção", "-c", "user.email=manutencao@iativa.invalid", "commit", "-q", "-m",
         f"fix(manutenção): incidente #{inc} {diag['codigo']}\n\nIncidente: #{inc}\nTestes novos: {', '.join(novos)}\n\n"
         + ("Co-Authored-By: OpenAI Codex <noreply@openai.com>" if provedor_manutencao(c) == "chatgpt"
@@ -511,6 +516,74 @@ def corrigir(diag: dict, c: dict) -> str:
     return "publicado"
 
 
+# --- cancelamento pela pessoa (M114) --------------------------------------------------------------
+
+def pasta_cancelar() -> Path:
+    return Path(pasta_var() or "/nao-configurado") / "manutencao-cancelar"
+
+
+def cancelada(inc: int) -> bool:
+    return (pasta_cancelar() / str(int(inc))).exists()
+
+
+def checar_cancelamento(inc: int):
+    if cancelada(inc):
+        raise Cancelada(f"incidente #{inc} cancelado pela pessoa")
+
+
+def rodar_agente(cmd: list, inc: int, tempo: int):
+    """Roda o agente e o interrompe na hora se a pessoa cancelar (o container tem nome para ser parado)."""
+    if cmd[:2] == ["docker", "run"]:
+        cmd = cmd[:2] + ["--name", f"iativa-manutencao-inc-{int(inc)}"] + cmd[2:]
+        rodar(["docker", "rm", "-f", f"iativa-manutencao-inc-{int(inc)}"], verificar=False)
+    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    fim = time.monotonic() + tempo
+    while p.poll() is None:
+        if cancelada(inc) or time.monotonic() > fim:
+            if cmd[:2] == ["docker", "run"]:
+                rodar(["docker", "kill", f"iativa-manutencao-inc-{int(inc)}"], verificar=False)
+            p.kill()
+            p.communicate()
+            checar_cancelamento(inc)
+            raise subprocess.TimeoutExpired(cmd[:3], tempo)
+        time.sleep(2)
+    out, err = p.communicate()
+    return subprocess.CompletedProcess(cmd, p.returncode, out, err)
+
+
+def reverter_cancelados() -> list[int]:
+    """Desfaz no servidor o que uma correção cancelada já publicou: git revert do commit dela na main local e nova
+    publicação azul/verde (scripts/publicar_local.sh). Correção que não chegou a publicar só sai da fila."""
+    feitos = []
+    pasta = pasta_cancelar()
+    if not pasta.is_dir():
+        return feitos
+    for arq in sorted(pasta.iterdir()):
+        if not arq.name.isdigit():
+            continue
+        inc = int(arq.name)
+        commits = git("log", "--format=%H", f"--grep=incidente #{inc} ", "origin/main..main", verificar=False).stdout.split()
+        if commits:
+            wt = TRABALHO / f"inc-{inc}"
+            if wt.exists():
+                git("worktree", "remove", "--force", str(wt), verificar=False)
+            git("worktree", "add", "-B", f"manutencao/inc-{inc}", str(wt), "main")
+            ok = git("-c", "user.name=IAtiva Manutenção", "-c", "user.email=manutencao@iativa.invalid", "revert",
+                     "--no-edit", *commits, cwd=wt, verificar=False).returncode == 0
+            r = rodar([str(REPO / "scripts" / "publicar_local.sh"), f"manutencao/inc-{inc}"], timeout=1800,
+                      verificar=False) if ok else None
+            git("worktree", "remove", "--force", str(wt), verificar=False)
+            if r is None or r.returncode != 0:
+                log(f"incidente #{inc}: cancelado, mas não consegui desfazer a correção publicada; TI precisa reverter")
+                continue
+            log(f"incidente #{inc}: cancelado pela pessoa; correção desfeita no servidor")
+        else:
+            log(f"incidente #{inc}: cancelado pela pessoa antes de publicar; nada a desfazer")
+        arq.unlink(missing_ok=True)
+        feitos.append(inc)
+    return feitos
+
+
 def publicar_no_servidor(wt: Path, inc: int, base: str, imagem: str) -> str:
     """M107: a correção vai só para o servidor. scripts/publicar_local.sh leva o commit para a main local de
     /opt/IAtiva (sem push), constrói a imagem e troca a cor no ar sem interromper quem está usando."""
@@ -526,6 +599,9 @@ def publicar_no_servidor(wt: Path, inc: int, base: str, imagem: str) -> str:
                f"Validada, mas não entrou no ar (código {r.returncode}); ver var/atualizacao/atualizacao.log.")
         return "falhou_correcao"
     publicado = no_ar.group(1)
+    if cancelada(inc):  # M114: cancelou durante a publicação: desfaz já
+        reverter_cancelados()
+        return "cancelado"
     manage("concluir", inc, "publicado", "--commit", publicado, "--versao", publicado[:12], "--motivo",
            ("Só no servidor; revisar e enviar ao GitHub (git log origin/main..main). Arquivos: "
             + ", ".join(arquivos))[:300])
@@ -555,6 +631,7 @@ def principal(argv) -> int:
         fcntl.flock(trava, fcntl.LOCK_EX | fcntl.LOCK_NB)
     except BlockingIOError:
         return 0  # fila serializada: outra correção em andamento
+    reverter_cancelados()  # M114: o que a pessoa cancelou sai do ar antes de qualquer nova correção
     if contador_do_dia() >= int(c["MANUTENCAO_MAX_POR_DIA"]):
         log("limite diário de correções atingido")
         return 0
@@ -583,6 +660,12 @@ def principal(argv) -> int:
     try:
         resultado = corrigir(diag, c)
         log(f"incidente #{inc}: {resultado}")
+    except Cancelada:
+        log(f"incidente #{inc}: cancelado pela pessoa durante a correção; nada publicado")
+        wt = TRABALHO / f"inc-{inc}"
+        if wt.exists():
+            git("worktree", "remove", "--force", str(wt), verificar=False)
+        (pasta_cancelar() / str(inc)).unlink(missing_ok=True)
     except (Recusa, subprocess.TimeoutExpired) as exc:
         motivo = str(exc) if isinstance(exc, Recusa) else "tempo limite"
         manage("concluir", inc, "falhou_correcao", "--motivo", motivo, verificar=False)

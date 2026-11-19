@@ -549,7 +549,13 @@ def parar_objetivo(request, objetivo_id):
                                       ).update(situacao=SituacaoObjetivo.IMPEDIDO, motivo="Interrompido pela pessoa.",
                                                execucao="", lease_ate=None)
     if alterou:
-        Mensagem.objects.create(conversa=o.conversa, papel=Papel.IA, texto="Parei este pedido, como você pediu.",
+        texto = "Parei este pedido, como você pediu."
+        if o.situacao == SituacaoObjetivo.MANUTENCAO and o.incidente_id:
+            # M114: parar também cancela a correção deste pedido (sai da fila, interrompe e desfaz o que publicou).
+            from iativa.manutencao.incidentes import cancelar_pela_pessoa
+            if cancelar_pela_pessoa(o.incidente_id):
+                texto += " A correção automática deste pedido foi cancelada e o que ela tiver alterado será desfeito."
+        Mensagem.objects.create(conversa=o.conversa, papel=Papel.IA, texto=texto,
                                 ficha={"tipo": "objetivo", "objetivo": o.pk})
     return _render(request, o.conversa)
 

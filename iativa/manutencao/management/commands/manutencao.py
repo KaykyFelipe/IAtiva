@@ -21,7 +21,7 @@ class Command(BaseCommand):
     help = "Incidentes técnicos para o executor de manutenção (sem dados do ERP)."
 
     def add_arguments(self, parser):
-        parser.add_argument("acao", choices=["listar", "exportar", "iniciar", "concluir", "retomar", "etapa"])
+        parser.add_argument("acao", choices=["listar", "exportar", "iniciar", "concluir", "retomar", "etapa", "cancelado"])
         parser.add_argument("id", nargs="?", type=int)
         parser.add_argument("situacao", nargs="?")
         parser.add_argument("--commit", default="")
@@ -57,9 +57,20 @@ class Command(BaseCommand):
                                                         tentativas=F("tentativas") + 1)
             self.stdout.write("ok")
             return
+        if acao == "cancelado":
+            # M114: o executor pergunta, entre as etapas, se a pessoa cancelou (botão parar).
+            i = Incidente.objects.filter(pk=o["id"]).first()
+            self.stdout.write("sim" if i is None or (i.situacao == SituacaoIncidente.BLOQUEADO
+                                                     and i.motivo.startswith("Cancelada pela pessoa")) else "nao")
+            return
         if acao == "concluir":
             if o["situacao"] not in SituacaoIncidente.values:
                 raise CommandError("situação inválida")
+            atual = Incidente.objects.filter(pk=o["id"]).values_list("situacao", "motivo").first()
+            if atual and atual[0] == SituacaoIncidente.BLOQUEADO and atual[1].startswith("Cancelada pela pessoa"):
+                Incidente.objects.filter(pk=o["id"]).update(commit=o["commit"][:40])  # M114: cancelamento prevalece
+                self.stdout.write("cancelado")
+                return
             Incidente.objects.filter(pk=o["id"]).update(situacao=o["situacao"], commit=o["commit"][:40],
                                                          versao_corrigida=o["versao"][:40], motivo=o["motivo"][:300])
             if o["situacao"] in (SituacaoIncidente.FALHOU, SituacaoIncidente.BLOQUEADO, SituacaoIncidente.NAO_ELEGIVEL):
