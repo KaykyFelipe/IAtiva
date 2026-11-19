@@ -312,7 +312,7 @@ def operacao_exigida(plano, texto):
     from .objetivos import _norm, metrica_exigida
     if (metrica_exigida(texto) != 'intervalo_entre_datas' or plano.get('operacao') == 'intervalo_entre_datas'
             or plano.get('operacao') not in ('dias_corridos', 'dias_uteis', 'contagem')
-            or not plano.get('campo') or not plano.get('campo_final')):
+            or (plano.get('operacao') != 'contagem' and (not plano.get('campo') or not plano.get('campo_final')))):
         return plano
     limites = {int(x) for x in re.findall(r'\b(\d{1,4})\s*dias?\b', _norm(texto))}
     if len(limites) != 1:
@@ -327,6 +327,10 @@ def _contagem_intervalo(res, plano, premissas):
     limite = plano.get('limite')
     if type(limite) is not int or limite <= 0:
         raise ValidationError('Informe o limite em dias (inteiro positivo) para a contagem por intervalo.')
+    datas = [i for i, t in enumerate(res.tipos) if t == 'data']
+    if not plano.get('campo') and not plano.get('campo_final') and len(datas) == 2:
+        # M112: contagem sem colunas num pedido de prazo: usa as duas únicas datas do resultado, na ordem das colunas.
+        plano = {**plano, 'campo': res.colunas[datas[0]], 'campo_final': res.colunas[datas[1]]}
     try:
         a, b = res.colunas.index(plano.get('campo')), res.colunas.index(plano.get('campo_final'))
     except ValueError:
