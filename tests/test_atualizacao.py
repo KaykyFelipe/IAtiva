@@ -120,7 +120,7 @@ def test_atualiza_testa_e_implanta_a_mesma_imagem(ambiente):
     chamadas = ambiente.chamadas()
     imagem = f"iativa-app:{novo[:12]}"
     assert chamadas[0] == f"build --build-arg IATIVA_VERSAO={novo[:12]} -t {imagem} ."
-    assert chamadas[1].startswith(f"run --rm --network none --cpus 1.5 --memory 2g {imagem} pytest")
+    assert chamadas[1].startswith(f"run --rm --network none --cpus 4 --memory 3g {imagem} pytest")
     assert chamadas[2] == f"implantar {imagem}"  # a imagem testada é a implantada
     assert f"OK atualizado para {novo[:7]}" in ambiente.log()
 
