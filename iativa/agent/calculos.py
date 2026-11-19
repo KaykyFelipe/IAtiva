@@ -337,8 +337,12 @@ def _contagem_intervalo(res, plano, premissas):
         raise ValidationError('Escolha as colunas inicial e final dentre as colunas do resultado anterior.') from None
     ids = [i for i, t in enumerate(res.tipos) if t == 'texto' and i not in (a, b)]
     nomes = [i for i in ids if re.search(r'\bnome\b', res.colunas[i], re.I)]
+    # M115: matrícula/código identificam o registro junto com o nome; têm prioridade sobre colunas descritivas.
+    chaves = [i for i in ids if i not in nomes and re.search(r'\b(matr[ií]cula|c[oó]digo|registro)\b',
+                                                            res.colunas[i], re.I)]
     # M112: quem atende precisa vir identificado pelo nome, mesmo com muitas colunas de texto antes dele.
-    ids = sorted(set(nomes[:1] + [i for i in ids if i not in nomes[:1]][:4 - len(nomes[:1])]))
+    prior = nomes[:1] + chaves[:1]
+    ids = sorted(set(prior + [i for i in ids if i not in prior][:4 - len(prior)]))
     ignorados, atendem = 0, []
     for l in res.linhas:
         if not str(l[b] or '').strip():
