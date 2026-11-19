@@ -1,4 +1,5 @@
 """M114: parar o pedido que espera a manutenção cancela a correção (fila, agente rodando e o que já publicou)."""
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -54,6 +55,7 @@ def test_tempo_esgotado_interrompe(tmp_path, monkeypatch):
         mx.rodar_agente([sys.executable, "-c", "import time; time.sleep(30)"], 9, 1)
 
 
+@pytest.mark.skipif(not shutil.which("git"), reason="requer git")
 def test_correcao_publicada_e_desfeita_ao_cancelar(tmp_path, monkeypatch):
     def g(*a, cwd):
         return subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@x", *a], cwd=cwd, check=True,
