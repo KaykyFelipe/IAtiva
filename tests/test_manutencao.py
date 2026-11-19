@@ -425,3 +425,9 @@ def test_m107_publicar_no_servidor_nao_faz_push(tmp_path, monkeypatch):
     assert any(c[0].endswith("publicar_local.sh") and c[1] == "manutencao/inc-9" for c in chamadas)
     assert not any("push" in c for c in chamadas)
     assert ("concluir", 9, "publicado") == manage[1][:3] and manage[-1] == ("retomar", 9)
+
+
+def test_m108_executor_descarta_edicao_de_docs_do_projeto():
+    import inspect
+    fonte = inspect.getsource(mx.corrigir)
+    assert '"STATUS.md", "DECISOES.md"' in fonte and fonte.index("STATUS.md") < fonte.index("validar_diff(")

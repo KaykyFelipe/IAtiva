@@ -458,6 +458,10 @@ def corrigir(diag: dict, c: dict) -> str:
                   verificar=False)
     if "NAO_REPRODUZIDO" in (saida.stdout or ""):
         raise Recusa("não reproduzido: nada publicado")
+    # M108: o CLAUDE.md do repositório pede para atualizar STATUS/DECISOES; na manutenção isso não vale (a TI
+    # registra ao revisar). Descarta só esses arquivos em vez de recusar a correção inteira.
+    for doc in ("STATUS.md", "DECISOES.md", "PLANO.md"):
+        git("checkout", "--", doc, cwd=wt, verificar=False)
     etapa(inc, "testando")
     validar_diff(wt, base)
     novos = testes_novos(wt, base)
