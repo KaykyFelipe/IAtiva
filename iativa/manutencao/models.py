@@ -58,6 +58,24 @@ class Incidente(models.Model):
     # M53: etapa da correção em andamento, mostrada no chat de quem espera (só códigos de ETAPAS).
     etapa = models.CharField(max_length=20, blank=True, default="", db_default="")
 
+    def tempo_restante_estimado(self) -> str:
+        from django.utils import timezone
+
+        # Tempos típicos da análise, implementação, suíte, publicação e reconsulta.
+        segundos_por_etapa = (20, 180, 140, 40, 30)
+        etapas = tuple(ETAPAS)[1:]
+        if self.situacao != SituacaoIncidente.EM_CORRECAO or self.etapa not in etapas:
+            return ""
+        inicio = (self.condicoes or {}).get("etapa_inicio")
+        if not isinstance(inicio, (float, int)):
+            return ""
+        restante = sum(segundos_por_etapa[etapas.index(self.etapa):])
+        restante -= max(0, int(timezone.now().timestamp() - inicio))
+        if restante <= 0:
+            return ""
+        minutos, segundos = divmod(restante, 60)
+        return f"{minutos:02d}:{segundos:02d}"
+
     def etapas_andamento(self) -> list[dict]:
         """M53: lista de etapas para o chat: feitas, a atual e as que faltam."""
         atual = self.etapa or ("na_fila" if self.situacao == SituacaoIncidente.ABERTO else "")

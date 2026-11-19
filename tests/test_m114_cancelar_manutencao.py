@@ -87,3 +87,9 @@ def test_correcao_publicada_e_desfeita_ao_cancelar(tmp_path, monkeypatch):
     assert mx.reverter_cancelados() == [12]
     assert publicadas == ["manutencao/inc-12"] and (repo / "a.txt").read_text() == "v1\n"
     assert not (canc / "12").exists()
+
+
+def test_saida_do_agente_maior_que_o_buffer_nao_trava(tmp_path, monkeypatch):
+    monkeypatch.setattr(mx, "pasta_cancelar", lambda: tmp_path)
+    r = mx.rodar_agente([sys.executable, "-c", "print('x' * 300000)"], 8, 10)
+    assert r.returncode == 0 and len(r.stdout) > 300000

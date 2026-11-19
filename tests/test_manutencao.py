@@ -429,7 +429,7 @@ def test_m107_publicar_no_servidor_nao_faz_push(tmp_path, monkeypatch):
 
 def test_m108_executor_descarta_edicao_de_docs_do_projeto():
     import inspect
-    fonte = inspect.getsource(mx.corrigir)
+    fonte = inspect.getsource(mx.validar_correcao)
     assert '"STATUS.md", "DECISOES.md"' in fonte and fonte.index("STATUS.md") < fonte.index("validar_diff(")
 
 
@@ -447,3 +447,32 @@ def test_m112_capacidade_longa_chega_ao_agente_e_prompt_explica_revisao():
 def test_m112_incidente_guarda_capacidade_de_ate_600():
     from iativa.manutencao.incidentes import _condicoes
     assert len(_condicoes({"capacidade": "x " * 400})["capacidade"]) == 600
+
+
+def test_executor_tenta_de_novo_com_o_resultado_da_validacao(tmp_path, monkeypatch):
+    import json
+    from types import SimpleNamespace
+
+    monkeypatch.setattr(mx, "TRABALHO", tmp_path)
+    monkeypatch.setattr(mx, "imagem_ativa", lambda: "img")
+    monkeypatch.setattr(mx, "git", lambda *a, **kw: None)
+    monkeypatch.setattr(mx, "preparar_escrita", lambda wt: None)
+    monkeypatch.setattr(mx, "checar_cancelamento", lambda inc: None)
+    monkeypatch.setattr(mx, "etapa", lambda *a: None)
+    monkeypatch.setattr(mx, "comando_agente", lambda *a: [])
+    monkeypatch.setattr(mx, "rodar_agente", lambda *a: SimpleNamespace(returncode=0))
+    atualizadas = []
+
+    def validar(wt, base, imagem, inc):
+        atualizadas.append(json.loads((tmp_path / "inc-17-diag" / "diagnostico.json").read_text(encoding="utf8")))
+        if len(atualizadas) == 1:
+            raise mx.Recusa("o cenário da pergunta ainda falha")
+        return ["tests/test_pedido.py::test_resposta"]
+
+    monkeypatch.setattr(mx, "validar_correcao", validar)
+    monkeypatch.setattr(mx, "publicar_no_servidor", lambda *a: "publicado_no_servidor")
+    assert mx.corrigir({"incidente": 17, "codigo": "teste", "versao": ""},
+                       {"MANUTENCAO_TEMPO_S": "10", "MANUTENCAO_PUBLICAR": "servidor",
+                        "MANUTENCAO_PROVEDOR": "chatgpt"}) == "publicado_no_servidor"
+    assert [d["tentativa"] for d in atualizadas] == [1, 2]
+    assert atualizadas[1]["validacao_anterior"] == "o cenário da pergunta ainda falha"

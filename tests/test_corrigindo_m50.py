@@ -32,7 +32,7 @@ def test_chat_em_correcao_fica_ocupado_e_para(base, acordar, client):
     o = Objetivo.objects.get()
     client.force_login(base["u"])
     html = client.get(reverse("chat:conversa", args=[c.pk])).content.decode()
-    assert "data-objetivo-pendente" in html and "Implementando no sistema" in html
+    assert "data-objetivo-pendente" in html and "Corrigindo e testando em segundo plano" in html
     assert reverse("chat:parar_objetivo", args=[o.pk]) in html
     r = client.post(reverse("chat:parar_objetivo", args=[o.pk]), HTTP_HX_REQUEST="true")
     assert r.status_code == 200
@@ -48,3 +48,29 @@ def test_m53_card_mostra_etapas_da_manutencao():
     estados = [e["estado"] for e in i.etapas_andamento()]
     assert estados == ["feita", "feita", "feita", "atual", "falta", "falta"]
     assert Incidente(situacao="aberto").etapas_andamento()[0]["estado"] == "atual"
+
+def test_segunda_correcao_reenfileira_o_mesmo_pedido(base, acordar):
+    from iativa.agent import objetivos
+
+    _enviar(base, "quem foi demitido nos últimos meses?", ANUNCIOS)
+    o = Objetivo.objects.get()
+    assert objetivos.retomar_apos_correcao(o.incidente_id) == 1
+    o.refresh_from_db()
+    assert o.retomado and o.situacao == SO.CONTINUAR
+    assert objetivos.retomar_apos_correcao(o.incidente_id) == 0
+    Objetivo.objects.filter(pk=o.pk).update(situacao=SO.MANUTENCAO)
+    assert objetivos.retomar_apos_correcao(o.incidente_id) == 1
+
+
+def test_estimativa_de_manutencao_atualiza_no_polling(base, acordar, client, settings):
+    from django.core.management import call_command
+
+    settings.IATIVA_MANUTENCAO_AUTOMATICA = True
+    _enviar(base, "quem foi demitido nos últimos meses?", ANUNCIOS)
+    o = Objetivo.objects.get()
+    client.force_login(base["u"])
+    url = reverse("chat:objetivo", args=[o.pk])
+    assert "Tempo restante estimado" not in client.get(url).content.decode()
+    call_command("manutencao", "iniciar", o.incidente_id)
+    call_command("manutencao", "etapa", o.incidente_id, "testando")
+    assert "Tempo restante estimado" in client.get(url).content.decode()

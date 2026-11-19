@@ -190,6 +190,17 @@ def prompt_capacidade(diag: dict) -> str:
 
 
 def prompt(diag: dict) -> str:
+    instrucoes = (
+        "\nSe validacao_anterior estiver preenchida no diagnóstico, use a evidência do executor para revisar "
+        "a tentativa anterior no mesmo diretório. Rode o cenário da pergunta até a entrega cumprir o pedido "
+        "com dados sintéticos. Para contagens, teste o valor filtrado e os limites com casos que devem entrar "
+        "e sair. Confira o resultado produzido pelo fluxo, além dos testes isolados. Se faltarem alterações, "
+        "investigue outra hipótese antes de declarar que o defeito não pode ser reproduzido.\n"
+    )
+    return _prompt_base(diag) + instrucoes
+
+
+def _prompt_base(diag: dict) -> str:
     if diag.get("categoria") == "capacidade_ausente":
         return prompt_capacidade(diag)
     return (
@@ -247,13 +258,13 @@ def testes_novos(wt: Path, base: str) -> list[str]:
     return out
 
 
-def pytest_em(pasta: Path, imagem: str, alvos=(), tempo=1200) -> bool:
+def pytest_em(pasta: Path, imagem: str, alvos=(), tempo=1200, *, codigo_esperado=0) -> bool:
     # M53: suíte em paralelo (4 CPUs do servidor); imagem antiga sem xdist roda em série.
     paralelo = 'N=""; python -c "import xdist" 2>/dev/null && N="-n 4"; '
     cmd = ["docker", "run", "--rm", "--network", "none", "--cpus", "4", "--memory", "3g", "--pids-limit", "1024",
            "-v", f"{pasta}:/app/trabalho", "-w", "/app/trabalho", imagem, "sh", "-c",
            paralelo + 'exec python -m pytest -q -p no:cacheprovider $N "$@"', "pytest", *alvos]
-    return rodar(cmd, timeout=tempo, verificar=False).returncode == 0
+    return rodar(cmd, timeout=tempo, verificar=False).returncode == codigo_esperado
 
 
 def reproduz(wt: Path, base: str, imagem: str, novos: list[str]) -> bool:
@@ -267,7 +278,7 @@ def reproduz(wt: Path, base: str, imagem: str, novos: list[str]) -> bool:
         for a in arquivos:
             (rep / a).parent.mkdir(parents=True, exist_ok=True)
             (rep / a).write_bytes((wt / a).read_bytes())
-        return not pytest_em(rep, imagem, novos, tempo=600)
+        return pytest_em(rep, imagem, novos, tempo=600, codigo_esperado=1)
     finally:
         git("worktree", "remove", "--force", str(rep), verificar=False)
 
@@ -453,6 +464,28 @@ def etapa(inc: int, codigo: str):
         pass
 
 
+def validar_correcao(wt: Path, base: str, imagem: str, inc: int) -> list[str]:
+    for doc in ("STATUS.md", "DECISOES.md", "PLANO.md"):
+        git("checkout", "--", doc, cwd=wt, verificar=False)
+    etapa(inc, "testando")
+    validar_diff(wt, base)
+    novos = testes_novos(wt, base)
+    if not novos:
+        raise Recusa("sem teste de regressão novo")
+    if not pytest_em(wt, imagem, novos, tempo=600):
+        raise Recusa("o cenário da pergunta ainda falha na versão corrigida")
+    # M107: reprodução e suíte em paralelo (são árvores separadas) para caber no prazo de ~5 minutos.
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(2) as ex:
+        f_rep, f_suite = ex.submit(reproduz, wt, base, imagem, novos), ex.submit(pytest_em, wt, imagem)
+        reproduziu, suite_ok = f_rep.result(), f_suite.result()
+    if not reproduziu:
+        raise Recusa("o teste novo não falha na versão afetada: defeito não demonstrado")
+    if not suite_ok:
+        raise Recusa("a suíte não passa com a correção")
+    return novos
+
+
 def corrigir(diag: dict, c: dict) -> str:
     inc = diag["incidente"]
     imagem = imagem_ativa()
@@ -465,30 +498,26 @@ def corrigir(diag: dict, c: dict) -> str:
     preparar_escrita(wt)
     pasta_diag = TRABALHO / f"inc-{inc}-diag"
     pasta_diag.mkdir(exist_ok=True)
-    (pasta_diag / "diagnostico.json").write_text(json.dumps(diag, ensure_ascii=False))
-    etapa(inc, "implementando")
-    saida = rodar_agente(comando_agente(wt, pasta_diag, imagem, c, diag), inc, int(c["MANUTENCAO_TEMPO_S"]))
-    checar_cancelamento(inc)
-    if "NAO_REPRODUZIDO" in (saida.stdout or ""):
-        raise Recusa("não reproduzido: nada publicado")
-    # M108: o CLAUDE.md do repositório pede para atualizar STATUS/DECISOES; na manutenção isso não vale (a TI
-    # registra ao revisar). Descarta só esses arquivos em vez de recusar a correção inteira.
-    for doc in ("STATUS.md", "DECISOES.md", "PLANO.md"):
-        git("checkout", "--", doc, cwd=wt, verificar=False)
-    etapa(inc, "testando")
-    validar_diff(wt, base)
-    novos = testes_novos(wt, base)
-    if not novos:
-        raise Recusa("sem teste de regressão novo")
-    # M107: reprodução e suíte em paralelo (são árvores separadas) para caber no prazo de ~5 minutos.
-    from concurrent.futures import ThreadPoolExecutor
-    with ThreadPoolExecutor(2) as ex:
-        f_rep, f_suite = ex.submit(reproduz, wt, base, imagem, novos), ex.submit(pytest_em, wt, imagem)
-        reproduziu, suite_ok = f_rep.result(), f_suite.result()
-    if not reproduziu:
-        raise Recusa("o teste novo não falha na versão afetada: defeito não demonstrado")
-    if not suite_ok:
-        raise Recusa("a suíte não passa com a correção")
+    feedback = ""
+    for tentativa in range(1, 4):
+        checar_cancelamento(inc)
+        (pasta_diag / "diagnostico.json").write_text(json.dumps(
+            {**diag, "tentativa": tentativa, "validacao_anterior": feedback}, ensure_ascii=False), encoding="utf-8")
+        etapa(inc, "implementando")
+        try:
+            saida = rodar_agente(comando_agente(wt, pasta_diag, imagem, c, diag), inc,
+                                 int(c["MANUTENCAO_TEMPO_S"]))
+            checar_cancelamento(inc)
+            if saida.returncode:
+                raise Recusa(f"executor do modelo encerrou com código {saida.returncode}")
+            novos = validar_correcao(wt, base, imagem, inc)
+        except (Recusa, subprocess.TimeoutExpired) as exc:
+            feedback = str(exc)[:300] if isinstance(exc, Recusa) else "tempo limite"
+            log(f"incidente #{inc}: tentativa {tentativa}/3 ({feedback})")
+            if tentativa == 3:
+                raise
+        else:
+            break
     checar_cancelamento(inc)
     git("-c", "user.name=IAtiva Manutenção", "-c", "user.email=manutencao@iativa.invalid", "commit", "-q", "-m",
         f"fix(manutenção): incidente #{inc} {diag['codigo']}\n\nIncidente: #{inc}\nTestes novos: {', '.join(novos)}\n\n"
@@ -538,16 +567,19 @@ def rodar_agente(cmd: list, inc: int, tempo: int):
         rodar(["docker", "rm", "-f", f"iativa-manutencao-inc-{int(inc)}"], verificar=False)
     p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     fim = time.monotonic() + tempo
-    while p.poll() is None:
-        if cancelada(inc) or time.monotonic() > fim:
+    while True:
+        try:
+            out, err = p.communicate(timeout=min(2, max(0.01, fim - time.monotonic())))
+            break
+        except subprocess.TimeoutExpired:
+            if not cancelada(inc) and time.monotonic() < fim:
+                continue
             if cmd[:2] == ["docker", "run"]:
                 rodar(["docker", "kill", f"iativa-manutencao-inc-{int(inc)}"], verificar=False)
             p.kill()
             p.communicate()
             checar_cancelamento(inc)
-            raise subprocess.TimeoutExpired(cmd[:3], tempo)
-        time.sleep(2)
-    out, err = p.communicate()
+            raise subprocess.TimeoutExpired(cmd[:3], tempo) from None
     return subprocess.CompletedProcess(cmd, p.returncode, out, err)
 
 

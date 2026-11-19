@@ -40,12 +40,18 @@ class Command(BaseCommand):
             return
         if o["id"] is None:
             raise CommandError("informe o id do incidente")
+        from django.utils import timezone
+
         if acao == "etapa":
             from iativa.manutencao.models import ETAPAS
 
             if o["situacao"] not in ETAPAS:
                 raise CommandError("etapa inválida")
-            Incidente.objects.filter(pk=o["id"]).update(etapa=o["situacao"])
+            with transaction.atomic():
+                i = Incidente.objects.select_for_update().get(pk=o["id"])
+                if i.situacao == SituacaoIncidente.EM_CORRECAO:
+                    Incidente.objects.filter(pk=i.pk).update(
+                        etapa=o["situacao"], condicoes={**(i.condicoes or {}), "etapa_inicio": timezone.now().timestamp()})
             self.stdout.write("ok")
             return
         if acao == "iniciar":
@@ -54,7 +60,8 @@ class Command(BaseCommand):
                 if not elegivel(i):
                     raise CommandError("incidente não elegível")
                 Incidente.objects.filter(pk=i.pk).update(situacao=SituacaoIncidente.EM_CORRECAO, etapa="analisando",
-                                                        tentativas=F("tentativas") + 1)
+                                                        tentativas=F("tentativas") + 1,
+                                                        condicoes={**(i.condicoes or {}), "etapa_inicio": timezone.now().timestamp()})
             self.stdout.write("ok")
             return
         if acao == "cancelado":

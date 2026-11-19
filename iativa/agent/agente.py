@@ -1019,7 +1019,9 @@ def _encerrar_sem_cumprir(ac, user, c, mensagem_id, saida, previa, causa, observ
         tabela = ""
         if ultima is not None and ultima.objetivo in OBJETIVOS and OBJETIVOS[ultima.objetivo].modelo_id:
             tabela = OBJETIVOS[ultima.objetivo].tabelas[0]
-        inc = coord.encaminhar_manutencao(ac, causa, tabela)
+        esgotou_correcoes = registro is not None and (
+            coord.correcoes_publicadas(registro) >= coord.MAX_CORRECOES_POR_PEDIDO)
+        inc = None if esgotou_correcoes else coord.encaminhar_manutencao(ac, causa, tabela)
         retomado = registro is not None and registro.retomado
         # M61: só espera a manutenção se ela vai mesmo atuar agora; incidente bloqueado ou esgotado não deixa o
         # pedido parado "na fila" para sempre.
@@ -1045,7 +1047,7 @@ def _encerrar_sem_cumprir(ac, user, c, mensagem_id, saida, previa, causa, observ
             # M53: diz O QUE vai ser implementado, quando o modelo declarou.
             oque = f" Vou implementar: {inc.condicoes.get('capacidade')}." if (inc.condicoes or {}).get("capacidade") else ""
             final = Saida(f"{texto}\n\n{parte}Não tenho isso ainda, corrigindo…{oque} Estou ajustando o sistema "
-                          f"(registro nº {inc.pk}) para entregar a sua resposta; costuma levar até 5 minutos. Assim que "
+                          f"(registro nº {inc.pk}) para entregar a sua resposta. Assim que "
                           "a correção entrar no ar, refaço o pedido e respondo aqui, sem você precisar perguntar de "
                           "novo. Você acompanha cada etapa aqui.", ficha)
         else:

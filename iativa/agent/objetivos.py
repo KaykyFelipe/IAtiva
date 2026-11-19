@@ -419,6 +419,7 @@ def registrar(ac: Acompanhamento, user, conversa, mensagem_id, situacao: str, mo
               "tarefa_id": tarefa_id,
               "lease_ate": timezone.now() + timedelta(seconds=espera_s) if espera_s else None}
     if ac.registro is not None:
+        campos['contrato']['correcoes'] = correcoes_publicadas(ac.registro)
         alteradas = Objetivo.objects.filter(pk=ac.registro.pk, execucao=ac.registro.execucao,
                                             situacao=SO.CONTINUAR).update(passos=ac.registro.passos + len(ac.trilha), execucao="", **{
             **campos, "incidente": incidente if incidente is not None else ac.registro.incidente})
@@ -581,13 +582,21 @@ def superado(o: Objetivo) -> bool:
     return o.conversa.mensagens.filter(papel="usuario", pk__gt=o.mensagem_id).exists()
 
 
+MAX_CORRECOES_POR_PEDIDO = 3
+
+
+def correcoes_publicadas(o: Objetivo) -> int:
+    return (o.contrato or {}).get("correcoes", int(o.retomado))
+
+
 def retomar_apos_correcao(incidente_id: int) -> int:
     """Correção publicada e conferida: os pedidos que pararam por esse incidente voltam à fila UMA vez."""
     n = 0
-    for o in Objetivo.objects.filter(situacao=SO.MANUTENCAO, incidente_id=incidente_id, retomado=False):
-        n += Objetivo.objects.filter(pk=o.pk, situacao=SO.MANUTENCAO).update(
+    for o in Objetivo.objects.filter(situacao=SO.MANUTENCAO, incidente_id=incidente_id):
+        n += Objetivo.objects.filter(pk=o.pk, situacao=SO.MANUTENCAO, incidente_id=incidente_id).update(
             situacao=SO.TAREFA if o.tarefa_id else SO.CONTINUAR, retomado=True, continuacoes=0,
-            execucao="", lease_ate=None, motivo="Retomado após correção publicada.")
+            execucao="", lease_ate=None, motivo="Retomado após correção publicada.",
+            contrato={**(o.contrato or {}), "correcoes": correcoes_publicadas(o) + 1})
     return n
 
 

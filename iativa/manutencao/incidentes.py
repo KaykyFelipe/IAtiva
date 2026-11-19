@@ -195,7 +195,7 @@ def _registrar(componente: str, operacao: str, exc=None, categoria: str = "", co
                     mudancas.update(situacao=SituacaoIncidente.BLOQUEADO,
                                     motivo="Voltou a ocorrer depois da correção; precisa de análise humana.")
                 else:
-                    mudancas.update(situacao=SituacaoIncidente.ABERTO, reaberturas=F("reaberturas") + 1)
+                    mudancas.update(situacao=SituacaoIncidente.ABERTO, etapa="na_fila", reaberturas=F("reaberturas") + 1)
             Incidente.objects.filter(pk=atual.pk).update(**mudancas)
             atual.refresh_from_db()
             return atual
