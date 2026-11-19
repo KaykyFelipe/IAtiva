@@ -864,6 +864,8 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
                                                          'cumpridas': ac.cumpridas})
                 atual = _ativa(user, c)
                 continue
+            if ac.reprovada:
+                _aprender_revisao(user, texto, ac.reprovada)
             ac.reprovada = ""
         if ac.entregue and ev and ev not in (coord.PERGUNTA, coord.BLOQUEIO, coord.DELEGADA, coord.ACAO):
             return _fechar(ac, user, c, mensagem_id, saida, ac.entregue)
@@ -903,6 +905,18 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
         causa, saida, previa = "revisao_reprovada", Saida("", {}), None
         ac.capacidade = ac.capacidade or ac.reprovada[:300]
     return _encerrar_sem_cumprir(ac, user, c, mensagem_id, saida, previa, causa, observacoes)
+
+
+def _aprender_revisao(user, texto, falta):
+    """M110: a revisão reprovou uma resposta e a nova tentativa passou: guarda na memória como corrigir, para o
+    próximo pedido parecido já sair certo. Administrador guarda para a empresa; os demais, para si (memoria.lembrar)."""
+    como = falta.split("Como corrigir:", 1)[-1].strip() if "Como corrigir:" in falta else falta
+    try:
+        memoria.lembrar(user, f"Aprendido na revisão: em pedidos como “{' '.join(texto.split())[:110]}”, {como}"[:300],
+                        tipo="correcao")
+        andamento.avisar("Aprendi como responder esse tipo de pedido; guardei na memória")
+    except Exception:
+        pass  # aprender nunca impede a resposta
 
 
 PASSAGEIRAS = ("prazo", "passos", "modelo_falhou", TEMPO_ESGOTADO, FALHA_TRANSITORIA)
@@ -975,7 +989,10 @@ def _encerrar_sem_cumprir(ac, user, c, mensagem_id, saida, previa, causa, observ
         final = Saida(f"{texto}\n\n{falta}. Continuo em segundo plano e respondo aqui, sem você precisar pedir de novo."
                       .strip(), {**ficha, "tipo": ficha.get("tipo") or "objetivo", "objetivo": o.pk})
         registrar("modelo_falhou", "agente", usuario=user, estado_novo="objetivo_continua", resultado="erro")
-    elif causa not in PASSAGEIRAS and causa != "revisao_reprovada" and (classe := _classe_sem_codigo(ac)):
+    elif (causa not in PASSAGEIRAS and causa != "revisao_reprovada" and (classe := _classe_sem_codigo(ac))
+          and classe != ERRO_PARAMETROS):
+        # M110: critério recusado que persistiu NÃO encerra com "reformule": a IA não conseguiu montar o pedido
+        # com o que existe, então vai para a correção automática (else abaixo).
         # M67 (auditoria 17/11, item 11): a falha tem causa conhecida que não é falta de código — escolha ou
         # parâmetro do modelo, metadado/ERP indisponível ou permissão. Não abre manutenção.
         if mensagem_id is not None:

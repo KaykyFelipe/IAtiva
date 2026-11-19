@@ -196,13 +196,14 @@ def test_m54_destaque_por_filial_e_pelo_valor(ana):
     assert pf.mensagem.startswith("Maior Valor em atraso"), pf.mensagem
 
 
-def test_m67_parametro_invalido_repetido_nao_abre_manutencao(ana):
-    """Auditoria 17/11, item 11: critério inválido escolhido pelo modelo não é falta de código."""
+def test_m110_parametro_invalido_repetido_vai_para_a_correcao_automatica(ana):
+    """M110 (substitui a M67 neste ponto, pedido de Diego): critério recusado que persiste não encerra com
+    "reformule o pedido"; a IA não conseguiu montar o pedido com o que existe e aciona a correção automática."""
     from iativa.manutencao.models import Incidente
     ruim = _d(acao="preparar_consulta", objetivo="titulos-em-atraso", entrega="calculo", parametros=[
         {"codigo": "filial-analise", "valor": "TODAS"}, {"codigo": "data-corte", "valor": "13/11/2026"},
         {"codigo": "dias-tolerancia-atraso", "valor": "0"}, {"codigo": "tratamento-baixa-parcial", "valor": "considerar-saldo"},
         {"codigo": "agregacao", "valor": "media:E1_VALOR"}])
     msg, res = conversas.enviar(ana, conversas.nova_individual(ana), "qual a média do atraso?", FakeProvider([ruim] * 4))
-    assert not Incidente.objects.exists(), msg.texto
-    assert "não é falta de função" in msg.texto, msg.texto
+    assert Incidente.objects.exists(), msg.texto
+    assert "não é falta de função" not in msg.texto and "reformule" not in msg.texto.lower(), msg.texto

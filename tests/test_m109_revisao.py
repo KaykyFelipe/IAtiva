@@ -60,3 +60,24 @@ def test_revisor_desligado_aprova(settings):
     settings.IATIVA_REVISAO = False
     r = Resultado(True, '0 de 0', colunas=['A'], tipos=['texto'], linhas=[], medida_calculada='intervalo_entre_datas')
     assert revisao.revisar(None, None, PERGUNTA, [], type('S', (), {'resultado': r})()) == ''
+
+
+def test_m110_calculo_sobre_resposta_com_blocos_usa_o_bloco_certo():
+    from iativa.agent.calculos import _bloco
+    from iativa.agent.diagnostico import Bloco, Diagnostico
+    base = Resultado(True, 'Lista', colunas=['Nome', 'Admissão', 'Demissão'], tipos=['texto', 'data', 'data'], linhas=[])
+    calc = Resultado(True, 'x', colunas=['Cálculo', 'Resultado'], tipos=['texto', 'inteiro'], linhas=[],
+                     medida_calculada='contagem')
+    junto = Diagnostico([Bloco('Contagem', calc), Bloco('Lista', base)], '')
+    assert _bloco(junto, {'campo': 'Admissão', 'campo_final': 'Demissão'}) is base
+
+
+def test_m110_aprovada_depois_de_reprovar_guarda_o_aprendizado(datas):  # noqa: F811
+    from iativa.agent.models import NotaAgente
+    b, c = datas
+    p = FakeProvider([_d(acao='preparar_consulta', objetivo=b['cm'].codigo, entrega='calculo'),
+                      _d(acao='calcular_resultado', calculo=CALC),
+                      _d(acao='calcular_resultado', calculo={**CALC, 'limite': 91})], revisoes=[REPROVA])
+    conversas.enviar(b['u'], c, PERGUNTA, p)
+    nota = NotaAgente.objects.get(tipo='correcao')
+    assert 'liste só quem atende' in nota.texto and 'Quantos admitidos' in nota.texto

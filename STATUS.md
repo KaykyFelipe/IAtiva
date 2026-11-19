@@ -4,6 +4,13 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **Etapa 7 aprovada em 2026-11-16 por Diego; em andamento.** Feito: roteiro do piloto (`docs/piloto/ROTEIRO.md`) e auditoria de não armazenamento (`manage.py auditar_armazenamento`). Falta: usuários do Financeiro, conferência dos números com relatórios do Protheus, avaliação da interpretação e latência. Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M110 — revisão reprovada não trava o assunto; IA aprende com a correção (2026-11-19)
+
+- Depois da M109, refazer o pedido calculava sobre a resposta anterior juntada (vários blocos), dava "não misture blocos" e encerrava com "não é falta de função; reformule". Três correções gerais:
+  - cálculo sobre resposta com vários blocos usa o bloco que tem as colunas pedidas (`calculos._bloco`);
+  - critério recusado que persiste (ERRO_PARAMETROS) vai para a correção automática, não para "reformule" (substitui a M67 neste ponto);
+  - reprovada e depois aprovada: a IA guarda na memória como corrigir (nota tipo correção; da empresa para administradores, do usuário para os demais), para o próximo pedido parecido sair certo.
+
 ## Mudança M109 — a IA confere a resposta antes de enviar (2026-11-19)
 
 - Pedido de Diego: entender o pedido inteiro, montar a resposta em segundo plano, conferir se é o que foi pedido, tentar de outro jeito e, se não conseguir, cair na correção automática até entregar a resposta certa.

@@ -110,7 +110,24 @@ def entre_datas(texto, op):
                      escopo=dict(ESCOPO_CALENDARIO), medida_calculada=op)
 
 
-def _origem(user, conversa, mensagem=0):
+def _bloco(res, plano):
+    """M110: resultado com vários blocos (resposta anterior com contagem + lista): usa o bloco que tem as colunas
+    pedidas no cálculo, em vez de recusar. Sem colunas pedidas ou ambíguo: recusa como antes."""
+    if not getattr(res, 'consolidado', False):
+        return res
+    pedidas = [c for c in ((plano or {}).get('campo'), (plano or {}).get('campo_final')) if c]
+    blocos = [b.resultado for b in getattr(res, 'blocos', []) if b.resultado is not None
+              and not getattr(b.resultado, 'consolidado', False)]
+    candidatos = [r for r in blocos if pedidas and all(c in getattr(r, 'colunas', []) for c in pedidas)]
+    if not candidatos and len(blocos) == 1:
+        candidatos = blocos
+    if not candidatos:
+        raise ValidationError('Escolha uma consulta simples para calcular; não misture blocos de setores diferentes.')
+    # Prefere a base (consulta) a um cálculo anterior sobre ela.
+    return min(candidatos, key=lambda r: bool(getattr(r, 'medida_calculada', '')))
+
+
+def _origem(user, conversa, mensagem=0, plano=None):
     from iativa.chat.conversas import pode_ver
     if not pode_ver(user, conversa):
         raise PermissaoNegada('Conversa indisponível.')
@@ -122,7 +139,7 @@ def _origem(user, conversa, mensagem=0):
     if res is None:
         raise PermissaoNegada('Você não tem mais acesso ao resultado usado neste cálculo.')
     if getattr(res, 'consolidado', False):
-        raise ValidationError('Escolha uma consulta simples para calcular; não misture blocos de setores diferentes.')
+        res = _bloco(res, plano)
     return m, res
 
 
@@ -183,9 +200,9 @@ def executar(user, conversa, plano, resultado_atual=None):
             raise PermissaoNegada('O resultado atual não está autorizado para o cálculo.')
         m = SimpleNamespace(pk=0, resultado=dados)
         if getattr(res, 'consolidado', False):
-            raise ValidationError('Não misture blocos de setores diferentes no cálculo.')
+            res = _bloco(res, plano)
     else:
-        m, res = _origem(user, conversa, plano.get('mensagem', 0))
+        m, res = _origem(user, conversa, plano.get('mensagem', 0), plano)
     if plano['operacao'] == 'contagem':
         n = contar(res)
         if n is None:
