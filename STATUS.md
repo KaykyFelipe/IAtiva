@@ -4,6 +4,18 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **Etapa 7 aprovada em 2026-11-16 por Diego; em andamento.** Feito: roteiro do piloto (`docs/piloto/ROTEIRO.md`) e auditoria de não armazenamento (`manage.py auditar_armazenamento`). Falta: usuários do Financeiro, conferência dos números com relatórios do Protheus, avaliação da interpretação e latência. Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M115 — manutenção com permissão para corrigir regras de pedido (2026-11-19)
+
+- Diagnóstico do incidente #20 ("compare setembro e outubro por filial: contratos assinados e locações iniciadas"):
+  - antes do 657ad3a, o agente ChatGPT rodava sem ferramentas e saía em ~13 s com "nenhuma alteração";
+  - depois, ele corrigiu, mas a trava recusou porque tocava iativa/agent/comparacao.py, uma das regras de pedido travadas.
+- Pedido de Diego (permissão total para corrigir no servidor):
+  - ficam travados só segurança e acesso: accounts, auditoria, manutenção, credenciais/conexões, a conexão somente leitura com o ERP, o validador de SQL e os testes de segurança;
+  - planejamento, comparação, contratos, entregas, memória e descoberta podem ser corrigidos, sempre com teste novo, suíte e revisão da TI depois;
+  - limite por correção: 12 arquivos / 600 linhas;
+  - o agente Claude tem shell completo dentro do container isolado;
+  - a imagem ganhou git e ripgrep para os agentes analisarem o código.
+
 ## Ferramentas de manutenção do ChatGPT (2026-11-19)
 
 - Os registros recentes terminavam sem alteração porque o Codex CLI respondia sem ferramentas. O container agora instala o executável auxiliar da mesma versão e habilita o modo de execução apenas para a manutenção. Uma falha de inicialização das ferramentas tem diagnóstico próprio.

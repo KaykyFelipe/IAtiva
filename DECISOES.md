@@ -236,3 +236,4 @@ M60 (Diego, 2026-11-16, aprovada no chat): implementar os seis ajustes da revis�
 | M112 | 2026-11-19 | Pedido de Diego (corrigir para futuras correções): manutenção trata revisão reprovada como defeito a corrigir de forma geral; capacidade até 600 caracteres. |
 | M113 | 2026-11-19 | Pedido de Diego: revisor não pode reprovar resposta certa; vê total e resumo (sem nomes), critério pragmático; reprovação após correção volta à manutenção até a resposta certa. |
 | M114 | 2026-11-19 | Pedido de Diego: parar durante a manutenção cancela a correção (fila ou em andamento) e desfaz no servidor o que ela tiver publicado. |
+| M115 | 2026-11-19 | Pedido de Diego (permissão total para a manutenção corrigir no servidor): travas só de segurança/ERP/validador; regras de pedido liberadas com teste e revisão posterior da TI; 12 arquivos/600 linhas; shell completo no container; git e ripgrep na imagem. |

@@ -15,7 +15,7 @@ RUN apt-get update \
 # Microsoft ODBC Driver 18 para SQL Server (leitura do ERP; Etapa 3 só metadados).
 # ACCEPT_EULA=Y aceita a licença do driver da Microsoft, exigida pelo pacote.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl gnupg \
+    && apt-get install -y --no-install-recommends curl gnupg git ripgrep \
     && curl -fsSL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor -o /usr/share/keyrings/microsoft-prod.gpg \
     && curl -fsSL https://packages.microsoft.com/config/ubuntu/24.04/prod.list -o /etc/apt/sources.list.d/mssql-release.list \
     && apt-get update \

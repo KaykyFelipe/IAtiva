@@ -205,12 +205,15 @@ def test_executor_aceita_capacidade_com_trilha_e_recusa_texto_livre(base, capsys
         mx.validar_diagnostico({**diag, "condicoes": {"exigencia": "verificacao"}})  # sem trilha: nada a reproduzir
 
 
-def test_regra_financeira_fica_fora_do_alcance_da_manutencao():
+def test_m115_manutencao_corrige_regras_de_pedido_mas_nao_seguranca():
+    """M115 (Diego: permissão total para corrigir): regras de pedido podem ser corrigidas; segurança continua travada."""
     from .test_manutencao import mx
 
-    for caminho in ("iativa/query/plano.py", "iativa/agent/contratos.py", "iativa/memory/servicos.py",
-                    "iativa/accounts/authz.py", "iativa/query/validador.py"):
+    for caminho in ("iativa/accounts/authz.py", "iativa/query/validador.py", "iativa/metadata/erp_sqlserver.py",
+                    "iativa/manutencao/incidentes.py", "iativa/audit/models.py"):
         assert caminho.startswith(mx.PROIBIDOS), caminho
+    for caminho in ("iativa/agent/comparacao.py", "iativa/agent/planejamento.py", "iativa/query/plano.py"):
+        assert not caminho.startswith(mx.PROIBIDOS), caminho
 
 
 def _publicar(inc, monkeypatch, versao="v-corrigida"):

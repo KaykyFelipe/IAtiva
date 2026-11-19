@@ -58,14 +58,11 @@ PERMITIDOS = ("iativa/", "tests/", "templates/", "static/")
 PROIBIDOS = ("iativa/accounts/", "iativa/core/saude.py", "iativa/manutencao/", "iativa/audit/",
              "iativa/agent/codex_", "iativa/agent/claude_", "iativa/agent/conexoes.py",
              "iativa/metadata/erp_sqlserver.py", "iativa/query/validador.py", "tests/conftest.py",
-             # Regras financeiras, parâmetros e domínios: defeito técnico não autoriza mudar regra de negócio.
-             "iativa/query/plano.py", "iativa/agent/contratos.py", "iativa/memory/", "iativa/metadata/dominios.py",
-             "iativa/agent/planejamento.py", "iativa/agent/memoria.py", "iativa/agent/aprendizado.py",
-             "iativa/agent/escopo.py", "iativa/metadata/descoberta.py", "tests/test_evolucao_m60.py",
-             "iativa/agent/admissoes.py", "iativa/agent/entregas.py", "iativa/agent/comparacao.py", "iativa/agent/estrutura.py",
-             "knowledge/",
+             # M115 (Diego: permissão total para corrigir): só ficam travados segurança, permissões, credenciais,
+             # conexão somente leitura com o ERP e o validador de SQL. Regras de pedido (planejamento, comparação,
+             # contratos, entregas, memória) podem ser corrigidas, sempre com teste e revisão da TI depois.
              "tests/test_segredos.py", "tests/test_acessos.py", "tests/test_manutencao.py")
-MAX_ARQUIVOS, MAX_LINHAS = 6, 250
+MAX_ARQUIVOS, MAX_LINHAS = 12, 600
 RASTRO_RE = re.compile(r"^iativa/[A-Za-z0-9_/]+\.py:\d+:[A-Za-z_][A-Za-z0-9_<>]*$")
 CODIGO_RE = re.compile(r"^[A-Za-z0-9_.<>-]{1,80}$")
 TRILHA_RE = re.compile(r"^[a-z_-]{1,40}:[a-z_-]{1,40}:[a-z_-]{1,40}$")
@@ -176,8 +173,8 @@ def prompt_capacidade(diag: dict) -> str:
         "relacionados (python -m pytest -q <arquivos de teste do que você mudou>) até passar. Seja rápido: NÃO rode a suíte inteira, o executor roda depois em paralelo.\n"
         "Proibido: remover ou enfraquecer testes ou validações; afrouxar a exigência ou tratar uma evidência menor "
         "como suficiente; mexer em permissões (iativa/accounts), privacidade, credenciais, settings, scripts, "
-        "Docker, migrações, iativa/manutencao, regras financeiras e de negócio (iativa/query/plano.py, "
-        "iativa/agent/contratos.py, iativa/memory, knowledge), validador de SQL; criar arquivos fora de iativa/, "
+        "Docker, migrações, iativa/manutencao, conexão com o ERP (erp_sqlserver.py), validador de SQL; criar "
+        "arquivos fora de iativa/, "
         "tests/, templates/, static/; usar rede ou dados reais; escolher filtros para chegar a um valor esperado. "
         "Se o sistema já corrigir a escolha ruim e ainda assim você não conseguir reproduzir o sintoma, "
         "NÃO altere o código: apenas termine dizendo NAO_REPRODUZIDO.\n"
@@ -443,7 +440,7 @@ def comando_claude(wt: Path, pasta_diag: Path, imagem: str, c: dict, diag: dict)
             "--max-turns", str(c.get("MANUTENCAO_MAX_TURNOS", "")) if str(c.get("MANUTENCAO_MAX_TURNOS", "")).isdigit() else "40",
             *modelo_e_esforco(pasta_claude(c), c),
             "--permission-mode", "acceptEdits",
-            "--allowedTools", "Read,Edit,Write,Glob,Grep,Bash(python -m pytest:*)"]
+            "--allowedTools", "Read,Edit,Write,Glob,Grep,Bash"]  # M115: shell completo dentro do container isolado
 
 
 def preparar_escrita(wt: Path):
