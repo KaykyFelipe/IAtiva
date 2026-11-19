@@ -123,6 +123,54 @@ def contagens_mensais(texto):
     ]
 
 
+_FONTES_EVENTOS_MENSAIS = {
+    'assinatura': ('FP0', 'FP0_ZDTASS'),
+    'inicio_locacao': ('FPA', 'FPA_DTINI'),
+}
+_CONTAGEM_MENSAL = re.compile(r'contagem(?:_distinta)?:[a-z0-9_*]+ por mes(?: por filial)?', re.I)
+
+
+def agrupar_evento_mensal(ac, d):
+    if d.acao != 'preparar_consulta' or not any(e.get('evento_mensal') for e in ac.contrato):
+        return d
+    pares = dict(d.parametros)
+    agregacao = pares.get('agregacao', '')
+    if _CONTAGEM_MENSAL.fullmatch(agregacao) and agregacao.lower().endswith(' por mes'):
+        pares['agregacao'] = agregacao + ' por filial'
+        return replace(d, parametros=tuple(pares.items()))
+    return d
+
+
+def alternativas_mensais(ac, d, objetivos):
+    """Refaz uma contagem mensal repetida usando a fonte autorizada do evento pendente."""
+    from .models import ConsultaModelo
+
+    if d.acao != 'preparar_consulta':
+        return
+    pares = dict(d.parametros)
+    if pares.keys() - {'filial-analise', 'periodo-analise', 'agregacao'}:
+        return
+    agregacao = pares.get('agregacao', '').lower()
+    if not _CONTAGEM_MENSAL.fullmatch(agregacao):
+        return
+    campo_contado = agregacao.split(':', 1)[1].split()[0].upper()
+    permitidas = [o.codigo for o in objetivos if o.modelo_id and 'agregacao' in o.parametros]
+    for i, item in enumerate(ac.contrato):
+        if i in ac.cumpridas or not item.get('evento_mensal'):
+            continue
+        tabela, campo_data = _FONTES_EVENTOS_MENSAIS[item['evento_mensal']]
+        modelos = ConsultaModelo.objects.filter(codigo__in=permitidas, situacao='aprovada', tabela=tabela)
+        for modelo in modelos:
+            spec = modelo.spec
+            if spec.get('campo_data') != campo_data or spec.get('filtros_fixos') or spec.get('juncoes'):
+                continue
+            # Um identificador da fonte anterior não define a granularidade da nova fonte.
+            if campo_contado != '*' and not any(c['campo'] == campo_contado for c in spec['colunas']):
+                continue
+            parametros = {**pares, 'periodo-analise': item['periodo_mensal']}
+            yield replace(d, objetivo=modelo.codigo, resposta='', parametros=tuple(parametros.items()), atende=(i,))
+
+
 def comprova_evento_mensal(item, resposta):
     from iativa.query.servico import _valores
     from iativa.chat.estados import TransicaoInvalida
@@ -135,10 +183,7 @@ def comprova_evento_mensal(item, resposta):
     modelo = ConsultaModelo.objects.filter(codigo=s.objetivo, situacao='aprovada').first()
     if modelo is None:
         return False
-    fonte_esperada = {
-        'assinatura': ('FP0', 'FP0_ZDTASS'),
-        'inicio_locacao': ('FPA', 'FPA_DTINI'),
-    }[item['evento_mensal']]
+    fonte_esperada = _FONTES_EVENTOS_MENSAIS[item['evento_mensal']]
     # A legenda escolhida pelo modelo não muda o significado do campo no ERP.
     if (modelo.tabela, modelo.spec.get('campo_data')) != fonte_esperada:
         return False
@@ -146,9 +191,16 @@ def comprova_evento_mensal(item, resposta):
         valores = _valores(s.usuario, s)
     except (KeyError, TransicaoInvalida):
         return False
-    agregacao = valores.get('agregacao', '').lower()
-    return (valores.get('periodo-analise') == item['periodo_mensal']
-            and bool(re.fullmatch(r'contagem(?:_distinta)?:[a-z0-9_*]+ por mes', agregacao))
+    periodo = valores.get('periodo-analise')
+    if isinstance(periodo, dict):
+        try:
+            inicio = date.fromisoformat(periodo['inicio'])
+            fim = date.fromisoformat(periodo['fim'])
+        except (KeyError, TypeError, ValueError):
+            return False
+        periodo = f'{inicio:%d/%m/%Y}..{fim:%d/%m/%Y}'
+    return (periodo == item['periodo_mensal']
+            and bool(_CONTAGEM_MENSAL.fullmatch(valores.get('agregacao', '')))
             and {'filial', 'mes'} <= {_norm(c) for c in r.colunas})
 
 

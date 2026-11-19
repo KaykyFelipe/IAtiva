@@ -659,6 +659,7 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
         ac.definir(d)
         from . import contagem as admissoes
         d = admissoes.orientar(user, texto, d, objetivos)
+        d = comparacao.agrupar_evento_mensal(ac, d)
         if d.acao not in ("conversar", "falta_capacidade") and d.resposta.strip():
             andamento.avisar(d.resposta.strip().split("\n")[0])  # M53: o que a IA vai fazer aparece na hora
         if (d.acao == "falta_capacidade" and pode_aprender_sozinho(user)
@@ -688,6 +689,12 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
             causa = sem_acao
             break
         assinatura = _assinatura(d)
+        if assinatura in feitas and cobertura is None and ac.contrato:
+            for alternativa in comparacao.alternativas_mensais(ac, d, objetivos):
+                candidata = _assinatura(alternativa)
+                if candidata not in feitas:
+                    d, assinatura = alternativa, candidata
+                    break
         if assinatura in feitas:
             ac.anotar(d.acao, "acao_repetida")
             if ac.pode_cutucar():
