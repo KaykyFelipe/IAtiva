@@ -191,7 +191,28 @@ def contar(res):
     return len(res.linhas)
 
 
-def executar(user, conversa, plano, resultado_atual=None):
+def _prazo_no_resultado(texto, plano, res):
+    """Uma contagem de desligamentos por prazo exige as datas do mesmo vínculo."""
+    from .objetivos import _norm
+    from .contagem import solicitado
+
+    if plano.get('operacao') == 'intervalo_entre_datas':
+        return plano
+    normalizado = _norm(texto)
+    limite = re.search(r'\b(?:antes de (?:completar|fazer)|(?:em|com) menos de) (\d{1,4}) dias?\b', normalizado)
+    if not (limite and solicitado(texto) and re.search(r'\badmi(?:t|ss)\w*', normalizado)
+            and re.search(r'\b(?:sai\w*|deslig\w*|demi\w*)', normalizado)):
+        return plano
+    datas = [c for c, tipo in zip(res.colunas, res.tipos) if tipo == 'data']
+    inicio = [c for c in datas if re.search(r'\badmis\w*\b', _norm(c))]
+    fim = [c for c in datas if re.search(r'\b(?:dem(?:iss\w*|\b)|deslig\w*|saida)\b', _norm(c))]
+    if len(inicio) != 1 or len(fim) != 1:
+        raise ValidationError('Consulte as admissões no período pedido trazendo as datas de admissão e de desligamento do mesmo vínculo, inclusive dos desligados, para aplicar o limite de dias.')
+    return {**plano, 'operacao': 'intervalo_entre_datas', 'campo': inicio[0],
+            'campo_final': fim[0], 'limite': int(limite.group(1))}
+
+
+def executar(user, conversa, plano, resultado_atual=None, *, texto=""):
     if resultado_atual is not None and not plano.get('mensagem'):
         from iativa.chat.conversas import pode_ver
         dados = empacotar(resultado_atual)
@@ -203,6 +224,7 @@ def executar(user, conversa, plano, resultado_atual=None):
             res = _bloco(res, plano)
     else:
         m, res = _origem(user, conversa, plano.get('mensagem', 0), plano)
+    plano = _prazo_no_resultado(texto, plano, res)
     if plano['operacao'] == 'contagem':
         n = contar(res)
         if n is None:

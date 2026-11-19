@@ -1241,7 +1241,7 @@ def _agir(user, c, d, atual, defs, texto, provedor, entrada, objetivos, administ
                              resultado=calculos.entre_datas(texto, plano['operacao']))
             if resultado_base is None and not plano.get('mensagem') and entrada.resultado_anterior:
                 plano = {**plano, 'mensagem': entrada.resultado_anterior['mensagem']}
-            resultado = calculos.executar(user, c, plano, resultado_base)
+            resultado = calculos.executar(user, c, plano, resultado_base, texto=texto)
         except PermissaoNegada as exc:
             return Saida(str(exc), ficha, observacao=Observacao(acao, SEM_PERMISSAO, 'cálculo não autorizado'))
         except ValidationError as exc:

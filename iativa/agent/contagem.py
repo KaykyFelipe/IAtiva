@@ -99,6 +99,9 @@ def consulta_do_evento(texto, modelos):
 
 
 def planejar(texto, analise, user=None):
+    from .objetivos import pede_intervalo
+    if pede_intervalo(_norm(texto)):
+        return analise
     if not assunto_acompanhado(user, texto):
         return analise  # contagem simples: o ciclo normal (agregação no banco) responde só o número
     entregas = [dict(e) for e in analise.get('entregas', [])]
@@ -187,6 +190,9 @@ def tem_detalhes(res):
 
 
 def completar(texto, saida, user=None):
+    from .objetivos import pede_intervalo
+    if pede_intervalo(_norm(texto)):
+        return False  # a população da consulta ainda precisa passar pelo filtro do prazo
     if not assunto_acompanhado(user, texto) or not tem_detalhes(saida.resultado):
         return False
     from .calculos import contar

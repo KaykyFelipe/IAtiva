@@ -65,4 +65,8 @@ def periodo_da_mensagem(texto: str, hoje: date) -> str:
         mes = MESES[m.group(1)]
         a = _ano(mes, m.group(2), hoje)
         return _fmt(date(a, mes, 1), min(_fim_mes(a, mes), hoje) if (a, mes) == (hoje.year, hoje.month) else _fim_mes(a, mes))
+    m = re.search(r"\bem\s+([12]\d{3})\b", t)
+    if m:
+        ano = int(m.group(1))
+        return _fmt(date(ano, 1, 1), hoje if ano == hoje.year else date(ano, 12, 31))
     return ""

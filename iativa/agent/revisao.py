@@ -37,6 +37,9 @@ def descrever(saida) -> list[dict]:
         if not getattr(r, "ok", False) and not getattr(r, "consolidado", False):
             continue
         medida = getattr(r, "medida_calculada", "") or ""
+        criterios = list(getattr(r, "premissas", []) or [])
+        if medida == "intervalo_entre_datas" and len(criterios) > 8:
+            criterios = criterios[:7] + criterios[-1:]  # limite e datas usados pelo cálculo
         out.append({
             "titulo": str(titulo or "")[:200],
             "colunas": list(getattr(r, "colunas", []) or [])[:30],
@@ -47,7 +50,7 @@ def descrever(saida) -> list[dict]:
             # faltava o total que estava na resposta. São agregados do sistema, não linhas do ERP.
             "resumo": _resumo(getattr(r, "mensagem", ""), 400),
             "resumo_calculo": _resumo(getattr(r, "mensagem", ""), 300) if medida else "",
-            "criterios": [str(p)[:200] for p in (getattr(r, "premissas", []) or [])][:8],
+            "criterios": [str(p)[:200] for p in criterios[:8]],
         })
     return out
 

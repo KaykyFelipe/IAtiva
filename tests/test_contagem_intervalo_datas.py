@@ -42,3 +42,21 @@ def test_contagem_de_registros_com_intervalo_menor_que_limite(datas):
         _d(acao='falta_capacidade', capacidade='contagem condicional por intervalo entre datas')]))
     assert res is not None and res.medida_calculada == 'intervalo_entre_datas', msg.texto
     assert res.curta_salva == '2', msg.texto
+
+
+def test_contagem_sem_campos_aplica_prazo_com_as_colunas_autorizadas(datas, monkeypatch):
+    from iativa.agent import contagem
+    monkeypatch.setattr(contagem, 'assunto_acompanhado', lambda *_: True)
+    b, c = datas
+    msg, res = conversas.enviar(b['u'], c, PERGUNTA, FakeProvider([
+        _d(acao='preparar_consulta', objetivo=b['cm'].codigo, entrega='calculo'),
+        _d(acao='calcular_resultado', calculo={'operacao': 'contagem'}),
+    ]))
+    assert res is not None and res.medida_calculada == 'intervalo_entre_datas', msg.texto
+    assert res.curta_salva == '2'
+
+def test_periodo_do_ano_da_admissao():
+    from datetime import date
+
+    from iativa.agent.periodo import periodo_da_mensagem
+    assert periodo_da_mensagem(PERGUNTA, date(2026, 11, 19)) == '01/01/2026..19/11/2026'

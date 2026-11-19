@@ -4,6 +4,10 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **Etapa 7 aprovada em 2026-11-16 por Diego; em andamento.** Feito: roteiro do piloto (`docs/piloto/ROTEIRO.md`) e auditoria de não armazenamento (`manage.py auditar_armazenamento`). Falta: usuários do Financeiro, conferência dos números com relatórios do Protheus, avaliação da interpretação e latência. Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Contagem por prazo de desligamento (2026-11-19)
+
+- O diagnóstico 18 mostrou uma contagem comum para um pedido com prazo. Quando a base autorizada contém as duas datas, o cálculo usa o intervalo do vínculo e o limite explícito. Se faltar uma data na consulta, o agente recebe a instrução de completar a base antes de contar.
+
 ## Correção de pedidos acompanhados (2026-11-19)
 
 - O executor revisa a mudança isolada em até três tentativas, usando a falha da validação anterior para orientar a próxima. O novo teste precisa falhar na versão afetada e passar na candidata, junto com a suíte.
