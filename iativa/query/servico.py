@@ -35,7 +35,7 @@ from iativa.accounts.filiais import TODAS, rotulo
 
 from .compilador import PlanoInvalido, compilar, xfilial
 from .executor import TempoEsgotado, ValorRecusado, executar
-from .plano import Campo, REGRAS, medidas_do_plano, montar, plano_chave, plano_total
+from .plano import Campo, Filtro, REGRAS, medidas_do_plano, montar, plano_chave, plano_total
 from .validador import ConsultaRecusada, validar
 
 # Situação do resultado (observação estruturada para o agente).
@@ -101,6 +101,7 @@ class Resultado:
 
     fonte_inconclusiva: str = ""
     legenda_pendente: str = ""
+    filtros_contagem_por_filial: tuple[Filtro, ...] = ()
 
     @property
     def cabecalho(self):
@@ -643,6 +644,10 @@ def _executar_solicitacao(user, s: RequestContext) -> Resultado:
     res.escopo = escopo_do_plano(plano, s.setor_id, filiais)
     if transversais:
         res.escopo["fontes_transversais"] = sorted(transversais)
+    if (todas and not truncado and not plano.juncoes and not plano.agrupar and not plano.top
+            and len(plano.colunas) == 1 and plano.colunas[0].agregacao == "COUNT"
+            and plano.colunas[0].campo == plano.filtros[0].campo and plano.filtros[0].campo.nome.endswith("_FILIAL")):
+        res.filtros_contagem_por_filial = tuple(plano.filtros[1:])
     return res
 
 

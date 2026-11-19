@@ -177,10 +177,10 @@ def _explorar_dicionario(user, texto) -> bool:
     return False
 
 
-def conferir(analise, decisao, saida):
+def conferir(analise, decisao, saida, texto=""):
     """Uma tabela não comprova um cálculo; descrições não comprovam métricas."""
     from .objetivos import evidencia, cumpre
-    ev = evidencia(decisao, saida)
+    ev = evidencia(decisao, saida, texto)
     res = saida.resultado
     faltantes = []
     for item in analise.get('entregas', []):
@@ -214,7 +214,7 @@ def conferir(analise, decisao, saida):
     return faltantes
 
 
-def divergencia(item, decisao):
+def divergencia(item, decisao, ano_civil=""):
     """M74 (etapa 2): a entrega pede um período ou uma filial; o passo usou outro? Devolve o motivo ou ''.
     Vale para qualquer consulta: "admitidos em agosto" não é cumprida por uma consulta de julho, nem
     "faturamento de Cuiabá" por todas as filiais. A comparação tem os próprios períodos (não entra aqui)."""
@@ -230,6 +230,8 @@ def divergencia(item, decisao):
     desc = item.get('descricao', '')
     motivos = []
     pedido = periodo_da_mensagem(desc, timezone.localdate())
+    if ano_civil and re.search(rf'\bem {ano_civil}\b', _norm(desc)):
+        pedido = f'01/01/{ano_civil}..31/12/{ano_civil}'
     usado = params.get('periodo-analise', '')
     if pedido and usado and '..' in usado:
         def datas(p):
@@ -251,19 +253,22 @@ def divergencia(item, decisao):
 
 
 def registrar_entregas(acompanhamento, decisao, saida):
+    from .objetivos import ano_admissoes_e_desligamentos
+
     contrato = acompanhamento.contrato
+    ano_civil = ano_admissoes_e_desligamentos(acompanhamento.texto) if len(contrato) == 1 else ""
     mensais = tuple(i for i, item in enumerate(contrato) if item.get('evento_mensal'))
     indices = mensais or decisao.atende or ((0,) if len(contrato) == 1 else ())
     for indice in indices:
         if indice < len(contrato) and indice not in acompanhamento.cumpridas:
-            motivo = divergencia(contrato[indice], decisao)
+            motivo = divergencia(contrato[indice], decisao, ano_civil)
             if motivo:
                 # Fica pendente e o modelo recebe o motivo para refazer com o critério certo.
                 acompanhamento.divergencias = {**getattr(acompanhamento, 'divergencias', {}),
                                                contrato[indice]['descricao']: motivo}
                 continue
         if (indice < len(contrato) and indice not in acompanhamento.cumpridas
-                and not conferir({'entregas': [contrato[indice]]}, decisao, saida)):
+                and not conferir({'entregas': [contrato[indice]]}, decisao, saida, acompanhamento.texto)):
             acompanhamento.cumpridas.append(indice)
             if saida.resultado is not None and not getattr(saida.resultado, 'consolidado', False):
                 try:  # M68: título do bloco na resposta final com várias entregas

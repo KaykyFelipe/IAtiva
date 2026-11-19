@@ -179,6 +179,36 @@ def exigencia(texto: str, decisao=None) -> tuple[str, str]:
 
 # --- o que a ação entregou ----------------------------------------------------------------------
 
+def ano_admissoes_e_desligamentos(texto):
+    """Ano explícito de uma contagem por filial dos dois eventos no mesmo vínculo."""
+    t = _norm(texto)
+    if (re.search(r"\b(?:quantos|quantas|conte|contagem|total)\b", t)
+            and re.search(r"\b(?:admit|admiss|contrat)\w*", t)
+            and re.search(r"\b(?:deslig|demit|demiss|rescis)\w*", t)
+            and re.search(r"\bno mesmo ano\b", t)
+            and re.search(r"\bpor filia(?:l|is)\b", t)):
+        anos = re.findall(r"\bem ([12][0-9]{3})\b", t)
+        if len(anos) == 1:
+            return anos[0]
+    return ""
+
+
+def _comprova_admissoes_e_desligamentos(res, texto):
+    ano = ano_admissoes_e_desligamentos(texto)
+    filtros = getattr(res, "filtros_contagem_por_filial", ())
+    campos = {"RA_ADMISSA", "RA_DEMISSA"}
+    if not ano or not filtros or not campos <= set(res.escopo.get("campos", {}).get("SRA", ())):
+        return False
+
+    from iativa.query.plano import Campo, Filtro
+
+    esperados = tuple(Filtro(Campo("e1", campo), op, ano + limite)
+                      for campo in campos for op, limite in ((">=", "0101"), ("<=", "1231")))
+    # O período principal pode repetir um dos intervalos. Qualquer condição adicional
+    # mudaria a população verificada.
+    return all(f in filtros for f in esperados) and all(f in esperados for f in filtros)
+
+
 def evidencia(decisao, saida, texto='') -> str:
     """Tipo de evidência que a saída comprova. Vazio = nada entregue (falha ou etapa sem resultado)."""
     ficha = saida.ficha or {}
@@ -203,6 +233,8 @@ def evidencia(decisao, saida, texto='') -> str:
         return BLOQUEIO
     res = saida.resultado
     if res is not None and (getattr(res, "ok", False) or getattr(res, "consolidado", False)):
+        if _comprova_admissoes_e_desligamentos(res, texto):
+            return VERIFICACAO
         if getattr(res, 'medida_calculada', ''):
             return CALCULO
         calculo = any(k == "agregacao" for k, _ in getattr(decisao, "parametros", ())) or bool(
@@ -374,6 +406,11 @@ class Acompanhamento:
     def falta_obs(self, consulta=None) -> str:
         txt = (f"{FALTA[self.exig]}. A etapa anterior deu certo, mas é só parte do pedido: {COMO[self.exig]}. Só pare "
                "para perguntar à pessoa (conversar terminando em pergunta) se faltar uma decisão que só ela pode dar.")
+        if ano_admissoes_e_desligamentos(self.texto):
+            return ("Use preparar_consulta com filtro-campo no formato CAMPO@AAAAMMDD..AAAAMMDD, "
+                    "uma condição para cada data do vínculo, separadas por ponto e vírgula. "
+                    "Use o ano completo nas duas condições e em periodo-analise se exigido. "
+                    "Use agregacao contagem:* por filial e filial-analise TODAS.")
         metrica = metrica_exigida(self.texto)
         if any(e.get('metrica') == 'percentual' for i, e in enumerate(self.contrato) if i not in self.cumpridas):
             # M98: taxa/participação por grupo nunca se calcula sobre lista cortada.

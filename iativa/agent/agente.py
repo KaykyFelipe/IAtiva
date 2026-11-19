@@ -185,6 +185,11 @@ def _notas(user, texto: str) -> list[str]:
     notas = [memoria.rotulo_nota(n) for n in memoria.notas_relevantes(user, texto)]
     if coord.pede_intervalo(coord._norm(texto)):
         notas.append(INTERVALO_REGRA)  # M108: orienta a 1ª consulta, não só depois de errar a base
+    if coord.ano_admissoes_e_desligamentos(texto):
+        notas.append(
+            "[regra do sistema] Conte vínculos com as duas datas no ano civil pedido na mesma consulta. "
+            "Use filtro-campo com intervalos para admissão e desligamento, o ano completo em periodo-analise "
+            "se exigido, agregacao contagem:* por filial e filial-analise TODAS.")
     from .comparacao import contagens_mensais
     if contagens_mensais(texto):
         notas.append(
@@ -845,12 +850,16 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
                 observacoes.append(Observacao(d.acao, coord.ETAPA, 'Ainda faltam entregas verificadas: ' + '; '.join(ac.pendentes())
                     + (('. Critério diferente do pedido, refaça com o período/filial da entrega: ' + '; '.join(diverg))
                        if diverg else '')))
+                if ac.exig == coord.VERIFICACAO and len(ac.contrato) == 1 and ev == coord.CONSULTA:
+                    observacoes.append(Observacao(d.acao, coord.ETAPA, ac.falta_obs(_consulta_recente(user, c))))
                 if diverg:
                     andamento.avisar('O critério usado não é o pedido; refazendo com o período/filial certos')
                 entrada = replace(entrada, planejamento={**entrada.planejamento, 'pendentes': ac.pendentes(), 'cumpridas': ac.cumpridas})
                 atual = _ativa(user, c)
                 continue
         if (previa is not None and not comparacao.ranking(texto)
+                and not (ev == coord.VERIFICACAO and coord.ano_admissoes_e_desligamentos(texto)
+                         and not any(getattr(r, 'titulo_entrega', '') for r in _blocos(previa.resultado)))
                 and (not comparacao.contagens_mensais(texto)
                      or any(getattr(r, 'titulo_entrega', '') for r in _blocos(previa.resultado)))):
             saida = _juntar(previa, saida)
@@ -1494,7 +1503,10 @@ def _preparar(user, c, d, atual, defs, ficha, texto="") -> Saida:
         # O modelo não mandou período: usa o que a mensagem diz ("desde janeiro"), se disser.
         from .periodo import periodo_da_mensagem
 
-        lido = periodo_da_mensagem(texto, timezone.localdate())
+        from .objetivos import ano_admissoes_e_desligamentos
+
+        ano = ano_admissoes_e_desligamentos(texto)
+        lido = f"01/01/{ano}..31/12/{ano}" if ano else periodo_da_mensagem(texto, timezone.localdate())
         if lido:
             pares.append(("periodo-analise", lido))
     erros = orq._aplicar_parametros(user, atual, pares, defs)

@@ -103,8 +103,15 @@ def _catalogo(objetivos, defs: dict) -> list[dict]:
                         ". Pode agrupar por mes/ano." if spec.get("campo_data") else ".")
                     if (prova := spec.get("operacao_validada")) and prova.get("agregacao"):
                         descricao += f" Operação já validada: {prova['agregacao']}. Domínio local: {prova['dominio']}."
-                if codigo == "filtro-campo" and o.filtraveis:
-                    descricao += " Campos desta consulta: " + ", ".join(f"{c} ({r})" for c, r in o.filtraveis) + "."
+                if codigo == "filtro-campo" and o.modelo_id:
+                    from .contratos import campos_periodo
+                    from .models import ConsultaModelo
+
+                    if o.filtraveis:
+                        descricao += " Campos de texto/código: " + ", ".join(f"{c} ({r})" for c, r in o.filtraveis) + "."
+                    if datas := campos_periodo(ConsultaModelo.objects.get(pk=o.modelo_id).spec):
+                        descricao += (" Use CAMPO@AAAAMMDD..AAAAMMDD para limites inclusivos nos campos de data: "
+                                      + ", ".join(datas) + ". Separe condições simultâneas com ponto e vírgula.")
                 params.append({"codigo": codigo, "nome": d.nome, "descricao": descricao, "tipo": d.tipo,
                                "opcoes": list(d.opcoes or []), "opcional": codigo in o.opcionais})
         out.append({"codigo": o.codigo, "nome": o.nome, "descricao": o.descricao, "parametros": params})
@@ -140,9 +147,14 @@ def _registrar_parametro(user, s: RequestContext, definicao, texto: str):
     if definicao.codigo == "filtro-campo":
         from iativa.query.plano import ler_filtros
 
-        permitidos = {c for c, _ in OBJETIVOS[s.objetivo].filtraveis}
+        from .contratos import campos_periodo
+        from .models import ConsultaModelo
+
+        obj = OBJETIVOS[s.objetivo]
+        permitidos = {c for c, _ in obj.filtraveis}
+        datas = campos_periodo(ConsultaModelo.objects.get(pk=obj.modelo_id).spec) if obj.modelo_id else ()
         try:
-            valor = "; ".join(f"{c}{op}{v}" for c, v, op in ler_filtros(valor, permitidos))
+            valor = "; ".join(f"{c}{op}{v}" for c, v, op in ler_filtros(valor, permitidos, datas))
         except ValueError as exc:
             raise ValidationError(f"{exc}. Campos aceitos: {', '.join(sorted(permitidos)) or 'nenhum'}.") from None
     if definicao.codigo == "agregacao":

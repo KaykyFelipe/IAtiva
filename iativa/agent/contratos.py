@@ -94,10 +94,15 @@ def campos_filtraveis(spec: dict) -> list[tuple[str, str]]:
     return [(c, colunas[c]) for c in (escolhidos + textos)[:MAX_FILTRAVEIS + 6]]
 
 
+def campos_periodo(spec: dict) -> tuple[str, ...]:
+    """Colunas de data aprovadas que podem receber limites próprios."""
+    return tuple(c["campo"] for c in spec.get("colunas", []) if c.get("tipo") == "data")
+
+
 def de_modelo(cm) -> Objetivo:
     obrig = ["filial-analise"] + (["periodo-analise"] if cm.spec.get("campo_data") else [])
     filtraveis = tuple(campos_filtraveis(cm.spec))
-    opcionais = ((BUSCA,) if campo_busca(cm.spec) else ()) + ((FILTRO,) if filtraveis else ()) + (AGREGACAO,)
+    opcionais = ((BUSCA,) if campo_busca(cm.spec) else ()) + ((FILTRO,) if filtraveis or campos_periodo(cm.spec) else ()) + (AGREGACAO,)
     return Objetivo(
         codigo=cm.codigo, dominio=DOMINIO_APRENDIDO, nome=cm.nome, descricao=cm.descricao,
         tabelas=(cm.tabela,), obrigatorios=tuple(obrig), modelo_id=cm.pk,

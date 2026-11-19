@@ -107,13 +107,25 @@ VALOR_FILTRO_RE = re.compile(r"^[0-9A-Za-z][0-9A-Za-z -]{0,29}$")
 VALOR_CONTEM_RE = re.compile(r"^[0-9A-Za-zÀ-ÿ][0-9A-Za-zÀ-ÿ .,/-]{0,59}$")
 
 
-def ler_filtros(texto: str, permitidos) -> list[tuple[str, str, str]]:
+def ler_filtros(texto: str, permitidos, datas=()) -> list[tuple[str, str, str]]:
     """"R7_MAT=000123; C1_DESCRI~carregador apple" → [(campo, valor, op)]. "=" é valor exato; "~" (M91) é
-    "contém" em texto, sem diferenciar maiúsculas/acentos. Campo fora da lista ou valor fora do formato seguro é
+    "contém" em texto. "@" é um intervalo inclusivo de datas. Campo fora da lista ou valor fora do formato seguro é
     recusado (ValueError), nunca ignorado em silêncio."""
     out = []
     for parte in (texto or "").split(";"):
         if not parte.strip():
+            continue
+        if faixa := re.fullmatch(r"\s*(\w+)\s*@\s*([0-9]{8})\.\.([0-9]{8})\s*", parte):
+            campo, inicio, fim = faixa.groups()
+            campo = campo.upper()
+            if campo not in datas:
+                raise ValueError(f"campo de data fora da consulta: {campo}")
+            try:
+                if date.fromisoformat(inicio) > date.fromisoformat(fim):
+                    raise ValueError
+            except ValueError:
+                raise ValueError(f"intervalo inválido para {campo}") from None
+            out.append((campo, f"{inicio}..{fim}", "@"))
             continue
         contem = "~" in parte and ("=" not in parte or parte.index("~") < parte.index("="))
         campo, sep, valor = parte.partition("~" if contem else "=")
@@ -123,6 +135,8 @@ def ler_filtros(texto: str, permitidos) -> list[tuple[str, str, str]]:
         if not (VALOR_CONTEM_RE if contem else VALOR_FILTRO_RE).match(valor):
             raise ValueError(f"valor inválido para {campo}")
         out.append((campo, valor, "~" if contem else "="))
+    if len(out) > 6 and any(op == "@" for _, _, op in out):
+        raise ValueError("informe até seis filtros por campo")
     return out[:6]
 
 
@@ -425,16 +439,22 @@ def montar_modelo(tabela: str, spec: dict, valores: dict, codigo: str) -> Plano:
     if campo_busca(spec):
         _aplicar_busca(plano, Campo(apelido(spec, campo_busca(spec)), campo_busca(spec)), valores)
     if valores.get(FILTRO):
-        from iativa.agent.contratos import campos_filtraveis
+        from iativa.agent.contratos import campos_filtraveis, campos_periodo
 
         try:
-            filtros = ler_filtros(valores[FILTRO], {c for c, _ in campos_filtraveis(spec)})
+            filtros = ler_filtros(valores[FILTRO], {c for c, _ in campos_filtraveis(spec)}, campos_periodo(spec))
         except ValueError as exc:
             from .compilador import PlanoInvalido
 
             raise PlanoInvalido(str(exc)) from None
         for campo, valor, op in filtros:
-            if op == "~":
+            if op == "@":
+                inicio, fim = valor.split("..")
+                coluna = Campo(apelido(spec, campo), campo)
+                plano.filtros.extend((Filtro(coluna, ">=", inicio), Filtro(coluna, "<=", fim)))
+                plano.premissas.append(
+                    f"Período de {campo}: {date.fromisoformat(inicio):%d/%m/%Y} a {date.fromisoformat(fim):%d/%m/%Y}.")
+            elif op == "~":
                 plano.filtros.append(Filtro(Campo(apelido(spec, campo), campo), "LIKE", padrao_busca(valor)))
                 plano.premissas.append(f"Filtro: {campo} contém “{valor}”.")
             else:
