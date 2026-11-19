@@ -121,11 +121,25 @@ def planejar(texto, analise, user=None):
     return {**analise, 'entregas': entregas}
 
 
+def consulta_do_primeiro_evento(texto, modelos):
+    """M108: prazo entre dois eventos ("admitidos ... saíram antes de 90 dias"): a base é a consulta do PRIMEIRO
+    evento citado no pedido, na ordem do texto."""
+    for w in re.findall(r'[a-z]{5,}', _norm(texto)):
+        if w in _VAZIAS:
+            continue
+        alvo = next((m for m in modelos if _detalhavel(m) and _norm(_evento(m))[:4] == w[:4]), None)
+        if alvo is not None:
+            return alvo
+    return None
+
+
 def orientar(user, texto, decisao, objetivos):
     """Mantém a consulta do evento pedido, sem agregação, com o período da mensagem."""
     if decisao.acao not in ('preparar_consulta', 'criar_consulta'):
         return decisao
-    if not assunto_acompanhado(user, texto):
+    from .objetivos import _norm as _n, pede_intervalo
+    intervalo = pede_intervalo(_n(texto))
+    if not intervalo and not assunto_acompanhado(user, texto):
         return decisao
     from django.utils import timezone
 
@@ -143,7 +157,7 @@ def orientar(user, texto, decisao, objetivos):
     permitidas = {o.codigo for o in objetivos if o.modelo_id}
     modelos = list(ConsultaModelo.objects.filter(codigo__in=permitidas, tabela=tabela, situacao='aprovada').order_by('pk'))
     atual = next((m for m in modelos if m.codigo == decisao.objetivo), None)
-    alvo = consulta_do_evento(texto, ([atual] if atual else []) + modelos)
+    alvo = (consulta_do_primeiro_evento(texto, modelos) if intervalo else None) or         consulta_do_evento(texto, ([atual] if atual else []) + modelos)
     if alvo is None:
         # O pedido não fala do evento de nenhuma consulta desta tabela (ex.: outra parte de um pedido misto).
         return replace(decisao, parametros=pares) if atual is not None and _detalhavel(atual) else decisao

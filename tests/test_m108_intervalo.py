@@ -65,3 +65,18 @@ def test_regra_de_intervalo_vai_ao_modelo_desde_a_primeira_decisao(django_user_m
     u = django_user_model.objects.create_user("m108-notas")
     assert agente.INTERVALO_REGRA in agente._notas(u, "Quantos admitidos em 2026 saíram antes de completar 90 dias?")
     assert agente.INTERVALO_REGRA not in agente._notas(u, "Quantos admitidos em 2026?")
+
+
+def _receita(codigo, campo, rotulo):
+    return SimpleNamespace(codigo=codigo, spec={"campo_data": campo, "colunas": [
+        {"campo": "RA_NOME", "rotulo": "Nome", "tipo": "texto"}, {"campo": campo, "rotulo": rotulo, "tipo": "data"}]})
+
+
+def test_prazo_usa_a_consulta_do_primeiro_evento():
+    from iativa.agent.contagem import consulta_do_primeiro_evento
+    demitidos = _receita("dem", "RA_DEMISSA", "Data de demissão")
+    admitidos = _receita("adm", "RA_ADMISSA", "Data de admissão")
+    texto = "Quantos admitidos em 2026 saíram antes de completar 90 dias?"
+    assert consulta_do_primeiro_evento(texto, [demitidos, admitidos]) is admitidos
+    texto = "quantos demitidos em 2026 tinham sido admitidos há menos de 90 dias?"
+    assert consulta_do_primeiro_evento(texto, [admitidos, demitidos]) is demitidos
