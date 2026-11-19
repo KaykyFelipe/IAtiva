@@ -466,6 +466,10 @@ def etapa(inc: int, codigo: str):
 
 
 def validar_executor(saida):
+    if saida.returncode:
+        # M123: o motivo do "código 1" fica no log da manutenção (últimas linhas do erro do executor).
+        cauda = " | ".join(l.strip() for l in (getattr(saida, "stderr", "") or "").splitlines()[-3:] if l.strip())
+        log(f"executor do modelo saiu com código {saida.returncode}: {cauda[:400]}")
     erros = (getattr(saida, 'stderr', '') or '').lower()
     if any(erro in erros for erro in ('code-mode host is disabled', 'failed to locate codex-code-mode-host',
                                        'code mode is unavailable')):

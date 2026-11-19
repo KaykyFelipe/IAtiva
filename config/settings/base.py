@@ -218,6 +218,7 @@ IATIVA_MANUTENCAO_AUTOMATICA = False  # local.py lê IATIVA_MANUTENCAO_AUTOMATIC
 # M109: revisor de entrega (a IA confere a resposta antes de enviar) e quantas reprovações por mensagem antes de
 # ir para a manutenção automática.
 IATIVA_REVISAO = True
+IATIVA_ENSAIO_USUARIO = "teste.ti"  # M123: quem faz o ensaio da correção (usuário de teste da TI)
 IATIVA_REVISAO_TENTATIVAS = 2
 
 # M73 — agentes em paralelo no worker (um por chat ao mesmo tempo; o mesmo chat nunca roda duas vezes).

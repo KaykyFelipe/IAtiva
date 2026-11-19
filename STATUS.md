@@ -4,6 +4,13 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **Etapa 7 aprovada em 2026-11-16 por Diego; em andamento.** Feito: roteiro do piloto (`docs/piloto/ROTEIRO.md`) e auditoria de não armazenamento (`manage.py auditar_armazenamento`). Falta: usuários do Financeiro, conferência dos números com relatórios do Protheus, avaliação da interpretação e latência. Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M123 — ensaio da correção com o usuário de teste da TI (2026-11-19)
+
+- O ensaio (M120) criava a conversa temporária na conta de quem perguntou. A pessoa via um chat novo com a pergunta e o campo travado, porque a mensagem era enviada por outro processo.
+- Agora o ensaio roda com `teste.ti` (`IATIVA_ENSAIO_USUARIO`), que tem acesso a todos os setores. A conversa temporária fica só nessa conta e é apagada no fim.
+- Quando o agente de manutenção sai com erro ("código 1"), o executor registra o fim do erro no log da manutenção, para diagnóstico.
+- A trava de chat ocupado é por conversa; outro chat da mesma pessoa continua respondendo.
+
 ## Mudança M122 — ensaio roda o segundo plano; card mostra a tentativa e o motivo (2026-11-19)
 
 - Incidente #25: o ensaio (M120) contou como falha um pedido que só precisava continuar em segundo plano ("continua: passos"), porque no ensaio não há worker. A correção voltou para "Implementando", sem explicação no chat.

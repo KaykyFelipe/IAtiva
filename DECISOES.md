@@ -244,3 +244,4 @@ M60 (Diego, 2026-11-16, aprovada no chat): implementar os seis ajustes da revis�
 | M120 | 2026-11-19 | Pedido de Diego (a manutenção deve verificar que vai entregar a resposta antes de concluir): ensaio do pedido real na imagem candidata antes de publicar; reprovado volta ao agente. |
 | M121 | 2026-11-19 | Pedido de Diego (deixar claro o que a IA está fazendo): andamento em lista (feito/falta); passos proporcionais às entregas; lista única de quem foi contado. |
 | M122 | 2026-11-19 | Pedido de Diego: ensaio executa as continuações; tentativa e motivo visíveis no chat; mensagem clara quando passa do tempo estimado. |
+| M123 | 2026-11-19 | Pedido de Diego: ensaio da correção usa o usuário de teste da TI (teste.ti), nunca a conta de quem perguntou; erro do agente registrado no log. |

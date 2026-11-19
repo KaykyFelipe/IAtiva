@@ -94,3 +94,19 @@ def test_m122_tentativa_aparece_no_card(base, client):  # noqa: F811
     client.force_login(base["u"])
     html = client.get(reverse("chat:objetivo", args=[o.pk])).content.decode()
     assert "Tentativa 2 de 3" in html and "Desligados por filial" in html
+
+
+def test_m123_ensaio_usa_o_usuario_de_teste_da_ti(base, monkeypatch, django_user_model, settings):  # noqa: F811
+    inc = _incidente_com_pedido(base)
+    settings.IATIVA_ENSAIO_USUARIO = "teste.ensaio"
+    from iativa.accounts.models import UserProfile
+    ti = django_user_model.objects.create_user("teste.ensaio")
+    UserProfile.objects.create(user=ti, department=base["u"].perfil_iativa.department)
+    usados = []
+
+    def enviar(user, c, texto, *a, **k):
+        usados.append((user, c.usuario_id))
+        return SimpleNamespace(texto="ok", ficha={}), SimpleNamespace(ok=True)
+    monkeypatch.setattr(conversas, "enviar", enviar)
+    assert ensaiar(inc.pk) == "ok"
+    assert usados == [(ti, ti.pk)]  # nunca na conta de quem perguntou

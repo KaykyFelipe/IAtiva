@@ -123,9 +123,15 @@ def ensaiar(incidente_id: int) -> str:
          .order_by("-pk").first())
     if o is None or o.mensagem_id is None or not o.usuario.is_active:
         return "sem_pedido"
-    c = conversas.nova_individual(o.usuario)
+    # M123: o ensaio roda com o usuário de teste da TI (acesso a todos os setores), nunca na conta de quem
+    # perguntou: a conversa temporária não aparece para a pessoa nem trava o chat dela.
+    from django.conf import settings
+    from django.contrib.auth import get_user_model
+    ator = get_user_model().objects.filter(username=getattr(settings, "IATIVA_ENSAIO_USUARIO", "teste.ti"),
+                                           is_active=True).first() or o.usuario
+    c = conversas.nova_individual(ator)
     try:
-        msg, res = conversas.enviar(o.usuario, c, o.mensagem.texto)
+        msg, res = conversas.enviar(ator, c, o.mensagem.texto)
         obj = Objetivo.objects.filter(conversa=c).order_by("-pk").first()
         ficha = getattr(msg, "ficha", None) or {}
         # M122: no ensaio não há worker: as continuações em segundo plano rodam aqui mesmo, como rodariam para a
