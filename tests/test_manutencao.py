@@ -399,3 +399,29 @@ def test_transcricao_do_agente_e_apagada(tmp_path):
     (tmp_path / "iativa-ativado").write_text("")
     mx.limpar_transcricoes(str(tmp_path))
     assert not (tmp_path / "projects").exists() and (tmp_path / "iativa-ativado").exists()
+
+
+def test_m107_padrao_e_opus_com_esforco_baixo(tmp_path):
+    c = mx.cfg() | {"MANUTENCAO_CLAUDE_DIR": str(tmp_path)}
+    assert mx.modelo_e_esforco(str(tmp_path), c) == ["--model", "opus", "--effort", "low"]
+    (tmp_path / "iativa-preferencias.json").write_text('{"modelo": "sonnet", "esforco": "high"}')
+    assert mx.modelo_e_esforco(str(tmp_path), c) == ["--model", "sonnet", "--effort", "high"]  # a tela manda
+
+
+def test_m107_publicar_no_servidor_nao_faz_push(tmp_path, monkeypatch):
+    """Modo servidor: chama publicar_local.sh, conclui como publicado e retoma o pedido; nunca git push."""
+    chamadas, manage = [], []
+    wt = tmp_path / "wt"
+
+    def rodar(cmd, **k):
+        chamadas.append(cmd)
+        saida = "PUBLICADO abcdef1234567890\n" if cmd[0].endswith("publicar_local.sh") else "versao_no_proxy=abcdef123456\n"
+        return type("R", (), {"returncode": 0, "stdout": saida})()
+
+    monkeypatch.setattr(mx, "rodar", rodar)
+    monkeypatch.setattr(mx, "git", lambda *a, **k: type("R", (), {"stdout": "x.py\n", "returncode": 0})())
+    monkeypatch.setattr(mx, "manage", lambda *a, **k: manage.append(a) or "")
+    assert mx.publicar_no_servidor(wt, 9, "base", "img") == "publicado_no_servidor"
+    assert any(c[0].endswith("publicar_local.sh") and c[1] == "manutencao/inc-9" for c in chamadas)
+    assert not any("push" in c for c in chamadas)
+    assert ("concluir", 9, "publicado") == manage[1][:3] and manage[-1] == ("retomar", 9)

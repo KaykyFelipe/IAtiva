@@ -988,9 +988,10 @@ def _encerrar_sem_cumprir(ac, user, c, mensagem_id, saida, previa, causa, observ
             parte = f"{falta}. " if texto else ""  # entregou só uma parte: diz qual falta
             # M53: diz O QUE vai ser implementado, quando o modelo declarou.
             oque = f" Vou implementar: {inc.condicoes.get('capacidade')}." if (inc.condicoes or {}).get("capacidade") else ""
-            final = Saida(f"{texto}\n\n{parte}Não tenho isso ainda, corrigindo…{oque} A manutenção vai ajustar o "
-                          f"sistema (registro nº {inc.pk}) e, assim que a correção entrar no ar, refaço o pedido e "
-                          "respondo aqui, sem você precisar perguntar de novo. Você acompanha cada etapa aqui.", ficha)
+            final = Saida(f"{texto}\n\n{parte}Não tenho isso ainda, corrigindo…{oque} Estou ajustando o sistema "
+                          f"(registro nº {inc.pk}) para entregar a sua resposta; costuma levar até 5 minutos. Assim que "
+                          "a correção entrar no ar, refaço o pedido e respondo aqui, sem você precisar perguntar de "
+                          "novo. Você acompanha cada etapa aqui.", ficha)
         else:
             from iativa.manutencao.incidentes import AVISAR_TI, automatica
             aviso = (" Isso já tinha sido encaminhado à manutenção e voltou a acontecer; ficou para análise de uma "

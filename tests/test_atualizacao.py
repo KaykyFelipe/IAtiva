@@ -165,3 +165,17 @@ def test_log_nao_contem_conteudo_do_env(ambiente):
     ambiente.publicar("v2\n")
     ambiente.rodar()
     assert "valor-que-nao-pode-vazar" not in ambiente.log()
+
+
+def test_correcao_local_da_manutencao_e_preservada(ambiente):
+    """M107: commit feito só no servidor (manutenção) é reaplicado sobre a main nova do GitHub."""
+    (ambiente.servidor / "local.txt").write_text("correção local\n")
+    _git(ambiente.servidor, "add", "local.txt")
+    _git(ambiente.servidor, "commit", "-q", "-m", "fix local")
+    assert ambiente.rodar().returncode == 0  # nada novo no GitHub: não mexe
+    ambiente.publicar("v2\n")
+    resultado = ambiente.rodar()
+    assert resultado.returncode == 0, ambiente.log()
+    assert (ambiente.servidor / "app.txt").read_text() == "v2\n"
+    assert (ambiente.servidor / "local.txt").read_text() == "correção local\n"
+    assert _git(ambiente.servidor, "rev-list", "--count", "origin/main..HEAD") == "1"

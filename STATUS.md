@@ -4,6 +4,14 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **Etapa 7 aprovada em 2026-11-16 por Diego; em andamento.** Feito: roteiro do piloto (`docs/piloto/ROTEIRO.md`) e auditoria de não armazenamento (`manage.py auditar_armazenamento`). Falta: usuários do Financeiro, conferência dos números com relatórios do Protheus, avaliação da interpretação e latência. Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M107 — correção automática só no servidor (2026-11-19)
+
+- Pedido de Diego: quando a IA esgota as formas nativas, a manutenção corrige o código no próprio servidor e entrega a resposta, sem GitHub e sem interromper ninguém.
+- `MANUTENCAO_PUBLICAR=servidor` (scripts/manutencao.py): a correção validada (teste de regressão novo, suíte, travas de caminhos) vira commit na main LOCAL de /opt/IAtiva. `scripts/publicar_local.sh` constrói a imagem e troca a cor (azul/verde). Depois o pedido é refeito no mesmo chat.
+- Padrão do agente de manutenção: Opus, esforço baixo, 25 turnos (a escolha da tela Conexões Claude prevalece). Reprodução e suíte rodam em paralelo.
+- `scripts/atualizar.sh` reaplica as correções locais sobre a main do GitHub (rebase); conflito mantém a versão no ar e registra no log.
+- A TI revisa (`git log origin/main..main` no servidor) e envia ao GitHub manualmente.
+
 ## Mudança M106 — legenda aprendida para campo de legenda dinâmica (2026-11-18)
 
 - A SX3010 não grava os nomes do FP0_STATUS (X3_CBOX chama LOCA001CI). Diego informou a legenda. Ela fica como nota aprovada da empresa (`iativa/agent/legendas.py`). O catálogo a usa no lugar da rotina dinâmica, e a contagem por status sai como "código - nome".

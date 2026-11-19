@@ -19,6 +19,10 @@ Sem credencial de push ou com MANUTENCAO_PUBLICAR=0, para no passo 4: correção
 Configuração (fora do repositório; o executor não pode alterá-la): /etc/iativa/manutencao.env
   MANUTENCAO_ATIVA=1            interruptor geral (padrão 0: não faz nada)
   MANUTENCAO_PUBLICAR=1         publica e implanta (padrão 0: só prepara e valida)
+  MANUTENCAO_PUBLICAR=servidor  M107: aplica a correção SÓ no servidor (commit na main local de /opt/IAtiva, sem
+                                push) e troca a versão no ar (azul/verde). A TI revisa e publica no GitHub depois:
+                                git log origin/main..main
+  MANUTENCAO_MODELO=opus  MANUTENCAO_ESFORCO=low  MANUTENCAO_MAX_TURNOS=25  (valem se a tela não escolheu outro)
   MANUTENCAO_GIT_SSH_KEY=...    chave SSH com escrita no repositório (só o executor usa)
   MANUTENCAO_GIT_REMOTO=git@github.com:KaykyFelipe/IAtiva.git
   MANUTENCAO_CLAUDE_DIR=...     login do Claude só da manutenção (padrão: a conexão "Agente de manutenção"
@@ -76,7 +80,8 @@ class Recusa(Exception):
 
 def cfg() -> dict:
     out = {"MANUTENCAO_ATIVA": "0", "MANUTENCAO_PUBLICAR": "0", "MANUTENCAO_MAX_POR_DIA": "3",
-           "MANUTENCAO_TEMPO_S": "1800", "MANUTENCAO_GIT_REMOTO": "git@github.com:KaykyFelipe/IAtiva.git"}
+           "MANUTENCAO_TEMPO_S": "1800", "MANUTENCAO_MODELO": "opus", "MANUTENCAO_ESFORCO": "low",
+           "MANUTENCAO_MAX_TURNOS": "25", "MANUTENCAO_GIT_REMOTO": "git@github.com:KaykyFelipe/IAtiva.git"}
     if CONFIG.exists():
         for linha in CONFIG.read_text().splitlines():
             if "=" in linha and not linha.lstrip().startswith("#"):
@@ -324,16 +329,21 @@ def pasta_claude(c: dict) -> str:
     return str(Path(root) / "claude-manutencao") if root else ""
 
 
-def modelo_e_esforco(pasta: str) -> list[str]:
-    """Modelo e esforço escolhidos na tela para o agente de manutenção (padrão: Opus)."""
+def modelo_e_esforco(pasta: str, c: dict | None = None) -> list[str]:
+    """Modelo e esforço escolhidos na tela para o agente de manutenção. Sem escolha na tela: os da configuração
+    do executor (M107: Opus com esforço baixo, para corrigir rápido); sem configuração: Opus."""
     try:
         pref = json.loads((Path(pasta) / "iativa-preferencias.json").read_text())
     except (OSError, ValueError):
         pref = {}
     if not isinstance(pref, dict):
         pref = {}
-    modelo = pref.get("modelo") if pref.get("modelo") in ("opus", "sonnet", "haiku") else "opus"
-    esforco = pref.get("esforco") if pref.get("esforco") in ("low", "medium", "high", "xhigh", "max") else ""
+    c = c or {}
+    padrao = c.get("MANUTENCAO_MODELO") if c.get("MANUTENCAO_MODELO") in ("opus", "sonnet", "haiku") else "opus"
+    modelo = pref.get("modelo") if pref.get("modelo") in ("opus", "sonnet", "haiku") else padrao
+    esforcos = ("low", "medium", "high", "xhigh", "max")
+    esforco = pref.get("esforco") if pref.get("esforco") in esforcos else (
+        c.get("MANUTENCAO_ESFORCO") if c.get("MANUTENCAO_ESFORCO") in esforcos else "")
     return ["--model", modelo] + (["--effort", esforco] if esforco else [])
 
 
@@ -401,8 +411,9 @@ def comando_claude(wt: Path, pasta_diag: Path, imagem: str, c: dict, diag: dict)
     return ["docker", "run", "--rm", "--cpus", "4", "--memory", "3g", "--pids-limit", "512",
             "-e", "CLAUDE_CONFIG_DIR=/claude", "-v", f"{pasta_claude(c)}:/claude",
             "-v", f"{wt}:/app/trabalho", "-v", f"{wt}/.git:/app/trabalho/.git:ro", "-v", f"{pasta_diag}:/diag:ro", "-w", "/app/trabalho",
-            "--entrypoint", "claude", imagem, "-p", prompt(diag), "--max-turns", "40",
-            *modelo_e_esforco(pasta_claude(c)),
+            "--entrypoint", "claude", imagem, "-p", prompt(diag),
+            "--max-turns", str(c.get("MANUTENCAO_MAX_TURNOS", "")) if str(c.get("MANUTENCAO_MAX_TURNOS", "")).isdigit() else "40",
+            *modelo_e_esforco(pasta_claude(c), c),
             "--permission-mode", "acceptEdits",
             "--allowedTools", "Read,Edit,Write,Glob,Grep,Bash(python -m pytest:*)"]
 
@@ -452,14 +463,21 @@ def corrigir(diag: dict, c: dict) -> str:
     novos = testes_novos(wt, base)
     if not novos:
         raise Recusa("sem teste de regressão novo")
-    if not reproduz(wt, base, imagem, novos):
+    # M107: reprodução e suíte em paralelo (são árvores separadas) para caber no prazo de ~5 minutos.
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(2) as ex:
+        f_rep, f_suite = ex.submit(reproduz, wt, base, imagem, novos), ex.submit(pytest_em, wt, imagem)
+        reproduziu, suite_ok = f_rep.result(), f_suite.result()
+    if not reproduziu:
         raise Recusa("o teste novo não falha na versão afetada: defeito não demonstrado")
-    if not pytest_em(wt, imagem):
+    if not suite_ok:
         raise Recusa("a suíte não passa com a correção")
     git("-c", "user.name=IAtiva Manutenção", "-c", "user.email=manutencao@iativa.invalid", "commit", "-q", "-m",
         f"fix(manutenção): incidente #{inc} {diag['codigo']}\n\nIncidente: #{inc}\nTestes novos: {', '.join(novos)}\n\n"
         + ("Co-Authored-By: OpenAI Codex <noreply@openai.com>" if provedor_manutencao(c) == "chatgpt"
          else "Co-Authored-By: Claude <noreply@anthropic.com>"), cwd=wt)
+    if c["MANUTENCAO_PUBLICAR"] == "servidor":
+        return publicar_no_servidor(wt, inc, base, imagem)
     if c["MANUTENCAO_PUBLICAR"] != "1" or not c.get("MANUTENCAO_GIT_SSH_KEY"):
         manage("concluir", inc, "pronto_publicar", "--motivo",
                f"Validada no branch manutencao/inc-{inc}; publicação automática desligada ou sem credencial.")
@@ -478,6 +496,29 @@ def corrigir(diag: dict, c: dict) -> str:
     etapa(inc, "refazendo")
     manage("retomar", inc, verificar=False)
     return "publicado"
+
+
+def publicar_no_servidor(wt: Path, inc: int, base: str, imagem: str) -> str:
+    """M107: a correção vai só para o servidor. scripts/publicar_local.sh leva o commit para a main local de
+    /opt/IAtiva (sem push), constrói a imagem e troca a cor no ar sem interromper quem está usando."""
+    etapa(inc, "publicando")
+    commit = git("rev-parse", "HEAD", cwd=wt).stdout.strip()
+    arquivos = git("diff", "--name-only", f"{commit}~1", commit, cwd=wt).stdout.split()
+    r = rodar([str(REPO / "scripts" / "publicar_local.sh"), f"manutencao/inc-{inc}"], timeout=1800, verificar=False)
+    no_ar = re.search(r"^PUBLICADO (\w+)", r.stdout or "", re.M)
+    estado = rodar([str(REPO / "scripts" / "implantar.sh"), "--estado"], verificar=False).stdout
+    versao = re.search(r"versao_no_proxy=(\S+)", estado)
+    if r.returncode != 0 or not no_ar or not versao or versao.group(1) != no_ar.group(1)[:12]:
+        manage("concluir", inc, "falhou_correcao", "--commit", commit, "--motivo",
+               f"Validada, mas não entrou no ar (código {r.returncode}); ver var/atualizacao/atualizacao.log.")
+        return "falhou_correcao"
+    publicado = no_ar.group(1)
+    manage("concluir", inc, "publicado", "--commit", publicado, "--versao", publicado[:12], "--motivo",
+           ("Só no servidor; revisar e enviar ao GitHub (git log origin/main..main). Arquivos: "
+            + ", ".join(arquivos))[:300])
+    etapa(inc, "refazendo")
+    manage("retomar", inc, verificar=False)
+    return "publicado_no_servidor"
 
 
 def principal(argv) -> int:

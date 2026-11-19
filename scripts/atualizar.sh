@@ -62,14 +62,18 @@ fi
 OLD="$(git rev-parse HEAD)"
 NEW="$(git rev-parse "origin/$BRANCH")"
 
-if [[ "$OLD" == "$NEW" ]]; then
+# M107: o GitHub não trouxe nada novo (inclui o caso de só haver correções locais da manutenção à frente).
+if [[ "$OLD" == "$NEW" ]] || git merge-base --is-ancestor "$NEW" "$OLD"; then
     [[ "$MODE" == "--checar" ]] && log "OK sem atualização (${OLD:0:7})."
     exit 0
 fi
 
+LOCAIS=0
 if ! git merge-base --is-ancestor "$OLD" "$NEW"; then
-    log "ERRO o histórico remoto não continua o local (${OLD:0:7} -> ${NEW:0:7}). Atualização manual necessária."
-    exit 5
+    # M107: correções feitas só no servidor (scripts/publicar_local.sh) ainda não enviadas ao GitHub:
+    # são reaplicadas por cima da main nova (as que a TI já enviou somem no rebase), nunca descartadas.
+    LOCAIS="$(git rev-list --count "$NEW..$OLD")"
+    log "INFO $LOCAIS correção(ões) local(is) fora do GitHub; serão reaplicadas sobre ${NEW:0:7}."
 fi
 
 if [[ "$MODE" == "--checar" ]]; then
@@ -88,7 +92,13 @@ rollback() {
     exit 1
 }
 
-git merge --quiet --ff-only "$NEW" || rollback "falha no git merge"
+if [[ "$LOCAIS" == 0 ]]; then
+    git merge --quiet --ff-only "$NEW" || rollback "falha no git merge"
+else
+    git -c user.name="IAtiva Manutenção" -c user.email=manutencao@iativa.invalid rebase --quiet "$NEW"         >> "$RUN_OUTPUT" 2>&1 || { git rebase --abort >/dev/null 2>&1 || true
+        rollback "conflito entre a main do GitHub e correções locais (git log origin/$BRANCH..$BRANCH); TI precisa integrar"; }
+    NEW="$(git rev-parse HEAD)"
+fi
 
 # Imagem imutável do commit, construída e testada com limites (não disputa CPU com as consultas).
 IMAGEM="iativa-app:${NEW:0:12}"
