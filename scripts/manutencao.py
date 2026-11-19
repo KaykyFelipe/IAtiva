@@ -496,6 +496,31 @@ def validar_correcao(wt: Path, base: str, imagem: str, inc: int) -> list[str]:
     return novos
 
 
+def ensaiar_pedido(wt: Path, inc: int) -> str:
+    """M120: antes de publicar, constrói a imagem candidata a partir da cópia corrigida e refaz o pedido real do
+    incidente nela (conversa temporária, como a própria pessoa, revisor incluído, IATIVA_ENSAIO=1 não abre
+    incidente). Devolve "" se entregou (ou se o incidente não veio de um pedido); senão, o motivo."""
+    if agente_de_teste():
+        return ""
+    etapa(inc, "ensaiando")
+    imagem = f"iativa-app:ensaio-inc-{int(inc)}"
+    b = rodar(["docker", "build", "-q", "--build-arg", "IATIVA_VERSAO=ensaio", "-t", imagem, str(wt)],
+              timeout=900, verificar=False)
+    if b.returncode != 0:
+        return "a imagem com a correção não foi construída"
+    r = rodar(["docker", "run", "--rm", "--network", f"{PROJETO}_default", "--env-file", str(REPO / ".env"),
+               "-e", "IATIVA_DB_HOST=db", "-e", "IATIVA_DB_PORT=5432", "-e", "IATIVA_ENSAIO=1",
+               "-e", "IATIVA_SYNTHETIC_ERP_PATH=/app/var/erp_sintetico.sqlite3",
+               "-v", f"{PROJETO}_iativa_var:/app/var", "--cpus", "2", "--memory", "3g",
+               imagem, "python", "manage.py", "manutencao", "ensaiar", str(int(inc))], timeout=600, verificar=False)
+    rodar(["docker", "image", "rm", "-f", imagem], verificar=False)
+    linhas = [l.strip() for l in (r.stdout or "").splitlines() if l.strip()]
+    final = linhas[-1] if linhas else ""
+    if final in ("ok", "sem_pedido"):
+        return ""
+    return final.removeprefix("falha:").strip() or f"o ensaio não terminou (código {r.returncode})"
+
+
 def corrigir(diag: dict, c: dict) -> str:
     inc = diag["incidente"]
     imagem = imagem_ativa()
@@ -520,6 +545,12 @@ def corrigir(diag: dict, c: dict) -> str:
             checar_cancelamento(inc)
             validar_executor(saida)
             novos = validar_correcao(wt, base, imagem, inc)
+            checar_cancelamento(inc)
+            motivo = ensaiar_pedido(wt, inc)
+            if motivo:
+                # M120: testes passaram, mas o pedido real ainda não sai: não publica; a próxima tentativa recebe
+                # o motivo e continua na mesma cópia.
+                raise Recusa(f"o ensaio com o pedido real não entregou: {motivo}")
         except (Recusa, subprocess.TimeoutExpired) as exc:
             feedback = str(exc)[:300] if isinstance(exc, Recusa) else "tempo limite"
             log(f"incidente #{inc}: tentativa {tentativa}/3 ({feedback})")

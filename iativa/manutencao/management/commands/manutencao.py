@@ -6,6 +6,9 @@
   manage.py manutencao concluir <id> <situacao> [--commit X] [--versao Y] [--motivo Z]
   manage.py manutencao etapa <id> <codigo>     M53: etapa em andamento, mostrada no chat (models.ETAPAS)
   manage.py manutencao retomar <id>            retoma UMA vez as tarefas que falharam por esse incidente
+  manage.py manutencao ensaiar <id>            M120: refaz o pedido real do incidente numa conversa temporária
+                                               (imagem candidata, IATIVA_ENSAIO=1) e diz se entregou: "ok",
+                                               "sem_pedido" ou "falha: <motivo>"
 """
 import json
 
@@ -21,7 +24,7 @@ class Command(BaseCommand):
     help = "Incidentes técnicos para o executor de manutenção (sem dados do ERP)."
 
     def add_arguments(self, parser):
-        parser.add_argument("acao", choices=["listar", "exportar", "iniciar", "concluir", "retomar", "etapa", "cancelado"])
+        parser.add_argument("acao", choices=["listar", "exportar", "iniciar", "concluir", "retomar", "etapa", "cancelado", "ensaiar"])
         parser.add_argument("id", nargs="?", type=int)
         parser.add_argument("situacao", nargs="?")
         parser.add_argument("--commit", default="")
@@ -64,6 +67,9 @@ class Command(BaseCommand):
                                                         condicoes={**(i.condicoes or {}), "etapa_inicio": timezone.now().timestamp()})
             self.stdout.write("ok")
             return
+        if acao == "ensaiar":
+            self.stdout.write(ensaiar(o["id"]))
+            return
         if acao == "cancelado":
             # M114: o executor pergunta, entre as etapas, se a pessoa cancelou (botão parar).
             i = Incidente.objects.filter(pk=o["id"]).first()
@@ -91,3 +97,29 @@ class Command(BaseCommand):
             from iativa.agent.tarefas import retomar_apos_correcao
 
             self.stdout.write(f"retomadas={retomar_apos_correcao(o['id'])}")
+
+
+def ensaiar(incidente_id: int) -> str:
+    """M120: antes de publicar, a imagem candidata responde ao pedido que abriu o incidente, como a própria
+    pessoa, numa conversa temporária (apagada no fim). Passa pelo mesmo ciclo, revisor incluído. Só "ok" publica."""
+    from iativa.agent.models import Objetivo, SituacaoObjetivo
+    from iativa.chat import conversas
+
+    o = (Objetivo.objects.select_related("mensagem", "usuario").filter(incidente_id=incidente_id)
+         .order_by("-pk").first())
+    if o is None or o.mensagem_id is None or not o.usuario.is_active:
+        return "sem_pedido"
+    c = conversas.nova_individual(o.usuario)
+    try:
+        msg, res = conversas.enviar(o.usuario, c, o.mensagem.texto)
+        obj = c.objetivos.order_by("-pk").first() if hasattr(c, "objetivos") else None
+        ficha = getattr(msg, "ficha", None) or {}
+        if ficha.get("corrigindo") or ficha.get("tipo") == "tarefa":
+            return "falha: " + " ".join((getattr(obj, "motivo", "") or msg.texto).split())[:300]
+        if obj is not None and obj.situacao != SituacaoObjetivo.CUMPRIDO:
+            return "falha: " + " ".join((obj.motivo or msg.texto).split())[:300]
+        if res is None or not (getattr(res, "ok", False) or getattr(res, "consolidado", False)):
+            return "falha: " + " ".join(msg.texto.split())[:300]
+        return "ok"
+    finally:
+        c.delete()

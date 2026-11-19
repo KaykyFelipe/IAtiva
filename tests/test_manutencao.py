@@ -451,6 +451,7 @@ def test_executor_tenta_de_novo_com_o_resultado_da_validacao(tmp_path, monkeypat
 
     monkeypatch.setattr(mx, "TRABALHO", tmp_path)
     monkeypatch.setattr(mx, "imagem_ativa", lambda: "img")
+    monkeypatch.setattr(mx, "ensaiar_pedido", lambda *a: "")  # M120: ensaio coberto em test_m120_ensaio
     monkeypatch.setattr(mx, "git", lambda *a, **kw: None)
     monkeypatch.setattr(mx, "preparar_escrita", lambda wt: None)
     monkeypatch.setattr(mx, "checar_cancelamento", lambda inc: None)

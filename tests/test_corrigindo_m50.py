@@ -46,7 +46,7 @@ def test_m53_card_mostra_etapas_da_manutencao():
     from iativa.manutencao.models import Incidente
     i = Incidente(situacao="em_correcao", etapa="testando")
     estados = [e["estado"] for e in i.etapas_andamento()]
-    assert estados == ["feita", "feita", "feita", "atual", "falta", "falta"]
+    assert estados == ["feita", "feita", "feita", "atual", "falta", "falta", "falta"]  # M120: + ensaio
     assert Incidente(situacao="aberto").etapas_andamento()[0]["estado"] == "atual"
 
 def test_segunda_correcao_reenfileira_o_mesmo_pedido(base, acordar):

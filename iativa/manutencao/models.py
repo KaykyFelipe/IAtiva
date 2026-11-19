@@ -31,6 +31,7 @@ ETAPAS = {
     "analisando": "Analisando o que falta no sistema",
     "implementando": "Implementando a nova capacidade no código",
     "testando": "Testando a correção (testes novos e a suíte inteira)",
+    "ensaiando": "Ensaiando o seu pedido com a correção, antes de publicar",
     "publicando": "Colocando a correção no ar",
     "refazendo": "Correção no ar; refazendo o seu pedido",
 }
@@ -62,7 +63,7 @@ class Incidente(models.Model):
         from django.utils import timezone
 
         # Tempos típicos da análise, implementação, suíte, publicação e reconsulta.
-        segundos_por_etapa = (20, 180, 140, 40, 30)
+        segundos_por_etapa = (20, 180, 140, 90, 40, 30)  # M120: + ensaio do pedido real antes de publicar
         etapas = tuple(ETAPAS)[1:]
         if self.situacao != SituacaoIncidente.EM_CORRECAO or self.etapa not in etapas:
             return ""

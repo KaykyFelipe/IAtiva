@@ -4,6 +4,14 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **Etapa 7 aprovada em 2026-11-16 por Diego; em andamento.** Feito: roteiro do piloto (`docs/piloto/ROTEIRO.md`) e auditoria de não armazenamento (`manage.py auditar_armazenamento`). Falta: usuários do Financeiro, conferência dos números com relatórios do Protheus, avaliação da interpretação e latência. Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M120 — a manutenção ensaia o pedido real antes de publicar (2026-11-19)
+
+- O registro nº 24 publicou uma correção que passou nos testes sintéticos. O pedido refeito caiu na manutenção de novo.
+- Agora, depois dos testes e antes de publicar, o executor:
+  - constrói a imagem candidata com a correção;
+  - refaz o pedido que abriu o incidente, como a própria pessoa e numa conversa temporária (apagada no fim), com o ERP real e o revisor de entrega (`manage.py manutencao ensaiar`, `IATIVA_ENSAIO=1` não abre incidente).
+- Só publica se o ensaio entregar o que foi pedido. Se não, o motivo volta para o agente na próxima tentativa (até 3), na mesma cópia. O chat mostra a etapa "Ensaiando o seu pedido".
+
 ## Mudança M118 — o pedido é lido duas vezes antes de agir (2026-11-19)
 
 - "Quantos funcionários foram admitidos e desligados no mesmo ano, por filial, em 2026?" entregou só a interseção (72), sem a contagem de cada evento nem quem foi contado.

@@ -148,7 +148,15 @@ def acordar_manutencao() -> None:
         logger.warning("manutenção não acordada: %s", type(erro).__name__)
 
 
+def em_ensaio() -> bool:
+    """M120: ensaio da correção com o pedido real (container descartável): não abre nem atualiza incidente."""
+    import os
+    return os.environ.get("IATIVA_ENSAIO") == "1"
+
+
 def registrar(componente: str, operacao: str, exc=None, categoria: str = "", condicoes: dict | None = None):
+    if em_ensaio():
+        return None
     inc = _registrar(componente, operacao, exc, categoria, condicoes)
     if inc is not None and elegivel(inc):
         acordar_manutencao()
