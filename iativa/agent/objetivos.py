@@ -135,7 +135,7 @@ def _detectores():
 
     return (
         (INVESTIGACAO, lambda bruto, t: diagnostico.solicitado(bruto)),
-        (CALCULO, lambda bruto, t: historico_funcional.pede_tempo_estagio(bruto) or
+        (CALCULO, lambda bruto, t: historico_funcional.pede_tempo_estagio(bruto) or pede_intervalo(t) or
          (bool(re.search(r'\bdias?\s+(?:uteis|util|corridos?)\b', t)) and not re.search(r'^o que|^explique|^defina', t))),
         (HISTORICO, lambda bruto, t: historico_funcional.solicitado(bruto)),
         (VERIFICACAO, lambda bruto, t: _verificar_pessoas(t)),
@@ -227,8 +227,25 @@ def evidencia(decisao, saida, texto='') -> str:
     return ""
 
 
+# M108: condição sobre o tempo ENTRE dois eventos do mesmo registro ("admitidos que saíram antes de completar 90
+# dias", "títulos pagos mais de 30 dias depois do vencimento"). Listar um dos eventos não responde: exige o cálculo.
+_INTERVALO_RE = re.compile(r'\b(?:antes\s+de\s+(?:completar|fazer)|em\s+menos\s+de|com\s+menos\s+de|dentro\s+de|'
+                           r'nos\s+primeiros|em\s+ate|ate|apos|depois\s+de|mais\s+de)\s+(?:\d+|um|uma|dois|duas|tres|seis)'
+                           r'\s+(?:dias?|mes|meses|anos?)\b')
+_EVENTO_RE = re.compile(r'\b(?:sai\w*|demit\w*|deslig\w*|admit\w*|contrat\w*|pag\w*|receb\w*|entreg\w*|encerr\w*|'
+                        r'cancel\w*|assin\w*|venc\w*|baix\w*|devolv\w*)')
+
+
+def pede_intervalo(t: str) -> bool:
+    eventos = {m.group(0)[:4] for m in _EVENTO_RE.finditer(t)}
+    return bool(_INTERVALO_RE.search(t) and len(eventos) >= 2
+                and re.search(r'\b(?:quant[oa]s?|quem|quais|liste|list[ae]|mostre|conte)\b', t))
+
+
 def metrica_exigida(texto):
     t = _norm(texto)
+    if pede_intervalo(t):
+        return 'intervalo_entre_datas'
     if re.search(r'\bdias?\s+(?:uteis|util)\b', t):
         return 'dias_uteis'
     # M52: projeção (estimar o fechamento de um período em andamento) não é a soma do que já aconteceu.

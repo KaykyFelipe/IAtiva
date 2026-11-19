@@ -4,6 +4,11 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **Etapa 7 aprovada em 2026-11-16 por Diego; em andamento.** Feito: roteiro do piloto (`docs/piloto/ROTEIRO.md`) e auditoria de não armazenamento (`manage.py auditar_armazenamento`). Falta: usuários do Financeiro, conferência dos números com relatórios do Protheus, avaliação da interpretação e latência. Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M108 — prazo entre dois eventos exige cálculo; etapa não corta a frase (2026-11-19)
+
+- "Quantos admitidos em 2026 saíram antes de completar 90 dias?" entregava a lista de admitidos como resposta. Agora pedido com condição de tempo entre dois eventos (admissão→saída, vencimento→pagamento) exige o cálculo `intervalo_entre_datas`. Lista não conta como entrega; sem a capacidade, cai na manutenção automática (M107).
+- O texto das etapas ("Vou buscar…") era cortado em 160 caracteres; agora vai até 400.
+
 ## Mudança M107 — correção automática só no servidor (2026-11-19)
 
 - Pedido de Diego: quando a IA esgota as formas nativas, a manutenção corrige o código no próprio servidor e entrega a resposta, sem GitHub e sem interromper ninguém.

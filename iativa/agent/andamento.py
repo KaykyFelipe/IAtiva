@@ -49,7 +49,7 @@ def avisar(texto: str):
     chave = _ATUAL.get()
     if chave is None or not texto:
         return
-    texto = " ".join(str(texto).split())[:160]
+    texto = " ".join(str(texto).split())[:400]  # M108: frase inteira (em 160 cortava no meio)
     with _TRAVA:
         item = _PASSOS.get(chave)
         if item is None or (item["passos"] and item["passos"][-1] == texto):
