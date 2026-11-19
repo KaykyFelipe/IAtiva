@@ -8,6 +8,8 @@
 
 - "Quantos admitidos em 2026 saíram antes de completar 90 dias?" entregava a lista de admitidos como resposta. Agora pedido com condição de tempo entre dois eventos (admissão→saída, vencimento→pagamento) exige o cálculo `intervalo_entre_datas`. Lista não conta como entrega; sem a capacidade, cai na manutenção automática (M107).
 - O texto das etapas ("Vou buscar…") era cortado em 160 caracteres; agora vai até 400.
+- Prazo entre eventos: a consulta base é a do PRIMEIRO evento citado (admissão), preferindo receita sem filtro de ativos; regra enviada ao modelo desde a 1ª decisão; contagem por intervalo cumpre item "contagem" do contrato. Receita nova no servidor: "Funcionários admitidos (inclusive desligados)".
+- Manutenção: descarta edições em STATUS/DECISOES/PLANO feitas pelo agente (antes recusava a correção). Primeira correção real publicada só no servidor: incidente #10, operação `intervalo_entre_datas` em calculos.py (commit local, aguardando revisão da TI: `git log origin/main..main`).
 
 ## Mudança M107 — correção automática só no servidor (2026-11-19)
 
