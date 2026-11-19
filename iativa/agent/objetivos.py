@@ -155,6 +155,19 @@ def _verificar_pessoas(t):
                 re.search(r'\b(foram|estao|tiveram)\b.*\b(mesmo|nova|readmit)\w*', t))
 
 
+_SO_CONVERSA = re.compile(
+    r"^(?:(?:um |so um |apenas um )?(?:teste|testando)\b|oi\b|ola\b|bom dia\b|boa tarde\b|boa noite\b|"
+    r"obrigad[oa]s?\b|valeu\b|ok\b|tudo bem\b)")
+_PEDE_DADOS = re.compile(
+    r"\b(?:quant[oa]s?|qual|quais|liste|listar|lista|traga|traz|mostre|mostra|consult\w*|calcul\w*|some|soma|"
+    r"total|relatorio|funcionari\w*|demitid\w*|admitid\w*|titulos?|filia(?:l|is)|matricula\w*)\b")
+
+
+def _so_conversa(t: str) -> bool:
+    """Mensagem social ou de teste do chat, sem nenhum termo de pedido de dados."""
+    return len(t) <= 60 and bool(_SO_CONVERSA.search(t)) and not _PEDE_DADOS.search(t)
+
+
 def exigencia(texto: str, decisao=None) -> tuple[str, str]:
     """(exigência, origem). Ordem: detector do backend, declaração do modelo, ação escolhida."""
     t = _norm(texto)
@@ -165,6 +178,10 @@ def exigencia(texto: str, decisao=None) -> tuple[str, str]:
         except Exception:
             continue
     declarada = getattr(decisao, "entrega", "") if decisao is not None else ""
+    if getattr(decisao, "acao", "") == "conversar" and _so_conversa(t):
+        # Inc. 27: teste do chat, saudação ou agradecimento não pedem dados; a entrega "consulta" declarada pelo
+        # modelo ao responder conversando prendia o ciclo em ação repetida até a manutenção.
+        return RESPOSTA, "detector"
     if declarada in EXIGENCIAS:
         if declarada == CONSULTA and any(k == "agregacao" for k, _ in getattr(decisao, "parametros", ())):
             return CALCULO, "modelo"
