@@ -37,3 +37,19 @@ def test_falha_do_modelo_na_segunda_leitura_mantem_a_primeira():
         def planejar(self, entrada):
             raise RuntimeError("x")
     assert planejamento._segunda_leitura(P(), PEDIDO, [], PRIMEIRA, TIPOS, METRICAS) is PRIMEIRA
+
+
+def test_m121_andamento_em_lista_e_passos_proporcionais(base):  # noqa: F811
+    import inspect
+    from iativa.agent import agente
+    from iativa.agent.objetivos import Acompanhamento
+    from iativa.chat import conversas
+    ac = Acompanhamento(PEDIDO, exig="calculo")
+    ac.contrato = [{"descricao": d, "tipo": "calculo"} for d in ("Admitidos por filial", "Desligados por filial", "Lista")]
+    ac.cumpridas = [2]
+    ac.anotar("preparar_consulta", "entrega_pendente", "consulta")
+    c = conversas.nova_individual(base["u"])
+    m = c.mensagens.create(papel="usuario", texto=PEDIDO, autor=base["u"])
+    s = agente._encerrar_sem_cumprir(ac, base["u"], c, m.pk, None, None, "passos", [])
+    assert "Já tenho 1 de 3 partes do seu pedido:\n✓ Lista\nAinda falta:\n• Admitidos por filial" in s.texto, s.texto
+    assert "passos = min(14, max(int(cfg[\"passos\"]), 2 * len(ac.contrato) + 1))" in inspect.getsource(agente)

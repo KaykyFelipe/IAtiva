@@ -277,7 +277,7 @@ def test_manutencao_que_nao_corrige_avisa_a_pessoa(base):
 def test_no_limite_de_passos_o_worker_continua_sem_nova_mensagem(base, settings, monkeypatch):
     settings.IATIVA_AGENTE_CICLO = {"passos": 1, "retentativas": 0, "tempo_s": 60, "espera_s": 0}
     msg, res, p, c = _enviar(base, PEDIDO, [_listar(base)])
-    assert res is None and "Continuo em segundo plano" in msg.texto and not Incidente.objects.exists()
+    assert res is None and "em segundo plano" in msg.texto and not Incidente.objects.exists()
     o = Objetivo.objects.get()
     assert o.situacao == SO.CONTINUAR and o.trilha == ["preparar_consulta:sucesso:consulta"]
     settings.IATIVA_AGENTE_CICLO = {"passos": 3, "retentativas": 0, "tempo_s": 60, "espera_s": 0}
@@ -311,7 +311,7 @@ def test_falha_passageira_continua_e_depois_para_com_motivo(base, settings, monk
 
     monkeypatch.setattr(servico, "executar", sempre)
     msg, res, p, c = _enviar(base, "liste os demitidos", [_listar(base)])
-    assert res is None and "Continuo em segundo plano" in msg.texto and p.chamadas == 1
+    assert res is None and "em segundo plano" in msg.texto and p.chamadas == 1
     o = Objetivo.objects.get()
     assert o.situacao == SO.CONTINUAR and not Incidente.objects.filter(categoria=Categoria.CAPACIDADE).exists()
     monkeypatch.setattr(agente, "obter_provedor", lambda usuario=None: Espiao([_listar(base)]))

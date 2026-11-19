@@ -242,3 +242,4 @@ M60 (Diego, 2026-11-16, aprovada no chat): implementar os seis ajustes da revis�
 | M118 | 2026-11-19 | Pedido de Diego (analisar o pedido pelo menos 2 vezes): segunda leitura obrigatória completa o contrato com cada evento citado, a interseção quando cabível e quem foi contado. |
 | M119 | 2026-11-19 | Pedido de Diego: scripts/enviar_correcoes.sh envia ao GitHub as correções da manutenção que estão só no servidor (sudo, chave da manutenção, push normal; GitHub à frente exige atualizar.sh antes). Quando Diego pedir para mandar, a Claude roda o script. |
 | M120 | 2026-11-19 | Pedido de Diego (a manutenção deve verificar que vai entregar a resposta antes de concluir): ensaio do pedido real na imagem candidata antes de publicar; reprovado volta ao agente. |
+| M121 | 2026-11-19 | Pedido de Diego (deixar claro o que a IA está fazendo): andamento em lista (feito/falta); passos proporcionais às entregas; lista única de quem foi contado. |

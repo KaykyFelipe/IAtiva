@@ -572,7 +572,10 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
     previa_parte = None  # M41: resposta já conferida da 1ª pergunta de uma mensagem com várias
     resultado_base = None  # M45: última consulta desta mensagem; só em memória, autorizada pelo backend
     causa = "passos"
-    for _ in range(max(1, int(cfg["passos"]))):
+    # M121: pedido com várias entregas ganha passos proporcionais (cerca de 2 por entrega, até 14), em vez de
+    # empurrar quase tudo para o segundo plano.
+    passos = min(14, max(int(cfg["passos"]), 2 * len(ac.contrato) + 1))
+    for _ in range(max(1, passos)):
         if prazo.esgotado():
             causa = "prazo"
             break
@@ -1050,8 +1053,11 @@ def _encerrar_sem_cumprir(ac, user, c, mensagem_id, saida, previa, causa, observ
     if ac.contrato and ac.pendentes():
         # M67: estado explícito por entrega — o que já está comprovado e o que não foi feito.
         feitas = [e['descricao'] for i, e in enumerate(ac.contrato) if i in ac.cumpridas]
-        falta = (("Entregue: " + "; ".join(feitas) + ". " if feitas else "")
-                 + "Não concluído: " + "; ".join(ac.pendentes()))
+        # M121: em lista, uma parte por linha (o chat mostra cada linha como parágrafo).
+        total = len(ac.contrato)
+        falta = "\n".join(([f"Já tenho {len(feitas)} de {total} partes do seu pedido:"] + [f"✓ {d}" for d in feitas]
+                           if feitas else [f"Seu pedido tem {total} partes."])
+                          + ["Ainda falta:"] + [f"• {d}" for d in ac.pendentes()])
     if exig == coord.VERIFICACAO:
         ficha["verificacao_pendente"] = True
     registro = ac.registro
@@ -1074,7 +1080,9 @@ def _encerrar_sem_cumprir(ac, user, c, mensagem_id, saida, previa, causa, observ
             and not (registro is not None and registro.retomado and causa == "passos")):
         o = coord.registrar(ac, user, c, mensagem_id, SO.CONTINUAR, f"continua: {causa}",
                             espera_s=int(coord.cfg()["espera_s"]))
-        final = Saida(f"{texto}\n\n{falta}. Continuo em segundo plano tentando concluir a consulta. A resposta aparece aqui."
+        ponto = "" if "\n" in falta or falta.endswith((".", ":")) else "."
+        final = Saida(f"{texto}\n\n{falta}{ponto}\nSigo trabalhando nas partes que faltam, em segundo plano. A resposta completa "
+                      "aparece aqui, sem você precisar pedir de novo."
                       .strip(), {**ficha, "tipo": ficha.get("tipo") or "objetivo", "objetivo": o.pk})
         registrar("modelo_falhou", "agente", usuario=user, estado_novo="objetivo_continua", resultado="erro")
     elif (causa not in PASSAGEIRAS and causa != "revisao_reprovada" and (classe := _classe_sem_codigo(ac))
@@ -1135,7 +1143,7 @@ def _encerrar_sem_cumprir(ac, user, c, mensagem_id, saida, previa, causa, observ
                 texto = ""
             # M53: diz O QUE vai ser implementado, quando o modelo declarou.
             oque = f" Vou implementar: {inc.condicoes.get('capacidade')}." if (inc.condicoes or {}).get("capacidade") else ""
-            final = Saida(f"{texto}\n\nNão tenho isso ainda, corrigindo… {falta}.{oque} Estou ajustando o sistema "
+            final = Saida(f"{texto}\n\nNão tenho isso ainda, corrigindo…\n{falta}\n{oque.strip()} Estou ajustando o sistema "
                           f"(registro nº {inc.pk}) para entregar a sua resposta. Assim que "
                           "a correção entrar no ar, refaço o pedido e respondo aqui, sem você precisar perguntar de "
                           "novo. Você acompanha cada etapa aqui.", ficha)
