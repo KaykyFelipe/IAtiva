@@ -189,7 +189,8 @@ def _notas(user, texto: str) -> list[str]:
         notas.append(
             "[regra do sistema] Conte vínculos com as duas datas no ano civil pedido na mesma consulta. "
             "Use filtro-campo com intervalos para admissão e desligamento, o ano completo em periodo-analise "
-            "se exigido, agregacao contagem:* por filial e filial-analise TODAS.")
+            "se exigido, agregacao contagem:* por filial e filial-analise TODAS. Isso é só a interseção: entregue "
+            "também as outras entregas do contrato (contagem de cada evento e a lista de quem foi contado).")
     from .comparacao import contagens_mensais
     if contagens_mensais(texto):
         notas.append(

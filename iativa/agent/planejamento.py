@@ -140,8 +140,32 @@ def preparar(user, conversa, texto, provedor, historico):
         not isinstance(e, dict) or e.get('tipo') not in tipos or e.get('metrica', '') not in metricas
         or not isinstance(e.get('descricao'), str) or len(e['descricao']) > 200 for e in entregas):
         raise FalhaModelo('Entregas inválidas.')
+    if analise.get('natureza') == 'dados':
+        analise = _segunda_leitura(provedor, texto, historico, analise, tipos, metricas)
     from . import contagem as admissoes, entregas, comparacao
     return comparacao.planejar(texto, entregas.planejar(texto, admissoes.planejar(texto, {**analise, 'setores': sorted(set(alvos)), 'contextos': entrada.planejamento['contextos_recuperados']}, user)))
+
+
+def _segunda_leitura(provedor, texto, historico, analise, tipos, metricas):
+    """M118: o pedido é lido DUAS vezes antes de agir. A segunda leitura recebe a pergunta e a primeira
+    interpretação (só a lista de entregas) e devolve a lista completa e corrigida: cada evento citado separado,
+    a interseção quando pedida e quem compõe cada contagem. Falha ou resposta inválida: fica a primeira leitura."""
+    primeira = [dict(e) for e in analise.get('entregas', [])]
+    entrada = EntradaAgente(texto, timezone.localdate().isoformat(), historico, [], None,
+                            planejamento={'modo': 'reler_pedido', 'pedido': texto[:1000], 'primeira_leitura': primeira})
+    try:
+        a = provedor.planejar(entrada)
+    except Exception:
+        return analise
+    novas = a.get('entregas') if isinstance(a, dict) else None
+    if not isinstance(novas, list) or not novas or len(novas) > 6 or any(
+            not isinstance(e, dict) or e.get('tipo') not in tipos or e.get('metrica', '') not in metricas
+            or not isinstance(e.get('descricao'), str) or not e['descricao'].strip() or len(e['descricao']) > 200
+            for e in novas):
+        return analise
+    return {**analise, 'entregas': [{'descricao': e['descricao'].strip(), 'tipo': e['tipo'],
+                                     'metrica': e.get('metrica', '')} for e in novas],
+            'primeira_leitura': primeira}
 
 
 def _continua_assunto(conversa, alvos) -> bool:

@@ -4,6 +4,15 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **Etapa 7 aprovada em 2026-11-16 por Diego; em andamento.** Feito: roteiro do piloto (`docs/piloto/ROTEIRO.md`) e auditoria de não armazenamento (`manage.py auditar_armazenamento`). Falta: usuários do Financeiro, conferência dos números com relatórios do Protheus, avaliação da interpretação e latência. Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M118 — o pedido é lido duas vezes antes de agir (2026-11-19)
+
+- "Quantos funcionários foram admitidos e desligados no mesmo ano, por filial, em 2026?" entregou só a interseção (72), sem a contagem de cada evento nem quem foi contado.
+- Agora, depois da 1ª interpretação, a IA faz uma SEGUNDA leitura obrigatória (`planejamento._segunda_leitura`, modo `reler_pedido`): relê a pergunta inteira contra a 1ª lista de entregas e devolve a lista completa. Regras:
+  - cada evento citado separado ("admitidos e desligados" → duas contagens), mais a interseção quando o texto também puder significá-la;
+  - contagem de pessoas ou registros vem com a lista de quem foi contado, salvo "só o número";
+  - mantém período, filiais e agrupamento.
+- O contrato completo é o que o revisor (M109) cobra antes de enviar. Falha ou resposta inválida na 2ª leitura mantém a 1ª.
+
 ## Mudança M117 — "no mesmo ano" não é verificação; busca em lote aceita nome completo; verificação vazia não é entrega (2026-11-19)
 
 - "Quantos funcionários foram admitidos e desligados no mesmo ano, por filial, em 2026?" virou verificação de vínculos de 255 pessoas, toda inconclusiva, e encerrou sem a contagem. Três causas gerais:
