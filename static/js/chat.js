@@ -402,21 +402,8 @@
   }
 
   function montarPensando(pensando) {
-    // M69: etapas recolhidas atrás de uma seta ao lado do passo atual (clica e abre; clica de novo e fecha).
-    pensando.innerHTML = '<ol class="pensando-passos" data-pensando-passos hidden></ol>' +
-      '<div class="pensando-linha"><span class="pontos" aria-hidden="true"><i></i><i></i><i></i></span>' +
-      '<span class="pensando-atual" data-pensando-atual>Pensando…</span>' +
-      '<button type="button" class="pensando-seta" data-pensando-seta aria-expanded="false" ' +
-      'aria-label="Mostrar as etapas" title="Mostrar as etapas" hidden>' +
-      '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" ' +
-      'stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>';
-    pensando.querySelector("[data-pensando-seta]").addEventListener("click", (ev) => {
-      const b = ev.currentTarget, aberto = b.getAttribute("aria-expanded") !== "true";
-      b.setAttribute("aria-expanded", String(aberto));
-      b.setAttribute("aria-label", aberto ? "Esconder as etapas" : "Mostrar as etapas");
-      b.title = b.getAttribute("aria-label");
-      pensando.querySelector("[data-pensando-passos]").hidden = !aberto;
-    });
+    pensando.innerHTML = '<div class="pensando-linha"><span class="pontos" aria-hidden="true"><i></i><i></i><i></i></span>' +
+      '<span class="pensando-atual" data-pensando-atual>Entendendo o que você pediu…</span></div>';
   }
 
   function mostrarPensando(texto) {
@@ -446,45 +433,41 @@
     return [bolha, pensando];
   }
 
-  // M26: o "Pensando…" mostra o que a IA está fazendo agora (texto operacional vindo do servidor).
+  // O servidor devolve uma frase pública e registra a conversa antes da primeira resposta.
   let acompanhamento = null;
   function acompanhar(form, pedido) {
     pararAcompanhamento();
     const base = form.dataset.andamentoUrl;
     if (!base || !pedido) return;
+    const area = form.closest("#conversa");
+    const nova = area?.dataset.conversaId === "0" && atual?.form === form;
     const url = base.replace("00000000-0000-0000-0000-000000000000", pedido);
-    let vistos = 0;
-    const ler = () => fetch(url, { credentials: "same-origin", cache: "no-store" })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((dados) => {
-        if (!dados || (!atual && !document.querySelector("[data-envio-pendente]"))) return;
-        const bolha = document.querySelector(".msg.pensando");
-        if (!bolha) return;
-        const passos = dados.passos || [];
-        if (passos.length === vistos) return;
-        const lista = bolha.querySelector("[data-pensando-passos]");
-        const agora = bolha.querySelector("[data-pensando-atual]");
-        for (let i = Math.max(0, vistos - 1); i < passos.length - 1; i++) {
-          if (i < vistos - 1) continue;
-          // M68: um passo já listado não se repete (antes "Conferindo as junções" aparecia várias vezes).
-          if (Array.from(lista.children).some((li) => li.textContent === passos[i])) continue;
-          const li = document.createElement("li");
-          li.textContent = passos[i]; // texto puro
-          lista.append(li);
+    const ativo = { timer: null };
+    let lendo = false, registrada = false;
+    const ler = async () => {
+      if (lendo) return;
+      lendo = true;
+      try {
+        const r = await fetch(nova && !registrada ? url + "?nova=1" : url,
+          { credentials: "same-origin", cache: "no-store" });
+        const dados = r.ok ? await r.json() : null;
+        if (!dados || acompanhamento !== ativo || !area?.isConnected) return;
+        if (nova && !registrada && dados.lateral && !document.getElementById("lateral").contains(document.activeElement)) {
+          registrada = atualizarLateral(dados.lateral);
         }
-        const seta = bolha.querySelector("[data-pensando-seta]");
-        if (seta) seta.hidden = !lista.children.length;
-        // M70: consulta filial por filial não troca o texto de cima a cada filial (o detalhe fica na seta).
-        const ultimo = passos[passos.length - 1];
-        const texto = /^(Consultando o ERP —|Conferindo se as junções|Calculando o total no banco)/.test(ultimo)
-          ? "Consultando no banco" : ultimo;
-        const mudouTexto = agora.textContent !== texto + "…";
-        agora.textContent = texto + "…";
-        if (mudouTexto) { agora.classList.remove("trocou"); void agora.offsetWidth; agora.classList.add("trocou"); }
-        vistos = passos.length;
-      })
-      .catch(() => {});
-    acompanhamento = setInterval(ler, 700);
+        const agora = area.querySelector("[data-pensando-atual]");
+        if (agora && dados.mensagem && agora.textContent !== dados.mensagem) {
+          agora.textContent = dados.mensagem;
+          agora.classList.remove("trocou");
+          void agora.offsetWidth;
+          agora.classList.add("trocou");
+        }
+      } catch (_) { /* Tenta de novo no próximo ciclo. */ }
+      finally { lendo = false; }
+    };
+    acompanhamento = ativo;
+    ativo.timer = setInterval(ler, 700);
+    ler();
   }
 
   // M79: página recarregada (ou reaberta) com a IA ainda trabalhando: mostra o "trabalhando" e acompanha.
@@ -498,7 +481,7 @@
     atualizarBotaoTarefa();
   }
   function pararAcompanhamento() {
-    if (acompanhamento) clearInterval(acompanhamento);
+    if (acompanhamento) clearInterval(acompanhamento.timer);
     acompanhamento = null;
   }
 
@@ -902,6 +885,20 @@
   window.matchMedia("(max-width: 680px)").addEventListener("change", () => app.classList.remove("menu-aberto"));
 
   let sincronizando = false, versaoRemota = "";
+  function atualizarLateral(html) {
+    const doc = new DOMParser().parseFromString(html, "text/html");
+    const novo = doc.getElementById("lateral");
+    const antigo = document.getElementById("lateral");
+    if (!novo || !antigo) return false;
+    const scroll = antigo.querySelector("nav")?.scrollTop || 0;
+    antigo.replaceWith(novo);
+    if (window.htmx) htmx.process(novo);
+    prepararLateral();
+    const nav = novo.querySelector("nav");
+    if (nav) nav.scrollTop = scroll;
+    return true;
+  }
+
   async function sincronizar() {
     const area = document.getElementById("conversa");
     if (document.hidden || atual || sincronizando || document.body.classList.contains("redimensionando") ||
@@ -916,15 +913,7 @@
       if (atual || area !== document.getElementById("conversa")) return;
       const lateralOcupada = document.getElementById("lateral").contains(document.activeElement);
       if (dados.lateral && !lateralOcupada) {
-        const doc = new DOMParser().parseFromString(dados.lateral, "text/html");
-        const novo = doc.getElementById("lateral");
-        const antigo = document.getElementById("lateral");
-        const nav = antigo.querySelector("nav");
-        const scroll = nav ? nav.scrollTop : 0;
-        antigo.replaceWith(novo);
-        if (window.htmx) htmx.process(novo);
-        prepararLateral();
-        if (novo.querySelector("nav")) novo.querySelector("nav").scrollTop = scroll;
+        atualizarLateral(dados.lateral);
       }
       if (dados.conversa && area) {
         const doc = new DOMParser().parseFromString(dados.conversa, "text/html");

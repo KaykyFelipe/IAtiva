@@ -32,7 +32,7 @@ def test_chat_em_correcao_fica_ocupado_e_para(base, acordar, client):
     o = Objetivo.objects.get()
     client.force_login(base["u"])
     html = client.get(reverse("chat:conversa", args=[c.pk])).content.decode()
-    assert "data-objetivo-pendente" in html and "Corrigindo e testando em segundo plano" in html
+    assert "data-objetivo-pendente" in html and "Corrigindo em segundo plano" in html
     assert reverse("chat:parar_objetivo", args=[o.pk]) in html
     r = client.post(reverse("chat:parar_objetivo", args=[o.pk]), HTTP_HX_REQUEST="true")
     assert r.status_code == 200

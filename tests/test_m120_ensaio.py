@@ -85,7 +85,7 @@ def test_m122_ensaio_roda_as_continuacoes_e_diz_o_que_faltou(base, monkeypatch):
     assert r == "falha: não entregou: Desligados por filial (entregou 1 de 2)"
 
 
-def test_m122_tentativa_aparece_no_card(base, client):  # noqa: F811
+def test_progresso_da_correcao_resume_a_tentativa_no_chat(base, client):  # noqa: F811
     from django.core.management import call_command
     from django.urls import reverse
     inc = _incidente_com_pedido(base)
@@ -93,7 +93,8 @@ def test_m122_tentativa_aparece_no_card(base, client):  # noqa: F811
     o = Objetivo.objects.get(incidente=inc)
     client.force_login(base["u"])
     html = client.get(reverse("chat:objetivo", args=[o.pk])).content.decode()
-    assert "Tentativa 2 de 3" in html and "Desligados por filial" in html
+    assert "Corrigindo em segundo plano" in html
+    assert "Tentativa 2 de 3" not in html and "Desligados por filial" not in html
 
 
 def test_ensaio_preserva_o_contexto_e_a_conta_sem_gravar_conversa(base, monkeypatch):

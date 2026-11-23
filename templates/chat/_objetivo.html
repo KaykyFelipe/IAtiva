@@ -3,27 +3,19 @@
      hx-get="{% url 'chat:objetivo' objetivo.pk %}" hx-trigger="every 3s" hx-target="this" hx-swap="outerHTML">
   {% if objetivo.situacao == "manutencao" %}
     <div class="atividade-corpo">
-      <span class="atividade-texto"><strong>Correção automática{% if objetivo.incidente %} (registro nº {{ objetivo.incidente.pk }}){% endif %}:</strong> o sistema ainda não sabia fazer esta parte. Corrigindo e testando em segundo plano; quando a correção estiver no ar, o pedido é refeito aqui.</span>
+      <span class="atividade-texto"><strong>Corrigindo em segundo plano.</strong> Vou refazer o seu pedido e trazer o resultado aqui.</span>
       {% if objetivo.incidente %}
       {% if objetivo.incidente.situacao == "aberto" and objetivo.incidente.condicoes.executor_falha %}
-      <div class="manutencao-tentativa">Aguardando o ambiente de correção voltar ({{ objetivo.incidente.condicoes.executor_falha }}). A correção é retomada sozinha, sem perder a tentativa.</div>
+      <div>A correção está aguardando para continuar.</div>
       {% endif %}
       {% with tempo=objetivo.incidente.tempo_restante_estimado %}
         {% if tempo %}<div>Tempo restante estimado: {{ tempo }}</div>
         {% elif objetivo.incidente.situacao == "em_correcao" %}<div>Está levando mais que o previsto; continuo trabalhando nisso.</div>
         {% endif %}
       {% endwith %}
-      {% with n=objetivo.incidente.condicoes.tentativa_atual %}{% if n and n > 1 %}
-      <div class="manutencao-tentativa">Tentativa {{ n }} de 3. A anterior ainda não entregava o seu pedido{% if objetivo.incidente.condicoes.tentativa_motivo %}: {{ objetivo.incidente.condicoes.tentativa_motivo }}{% endif %}. Ajustando a correção.</div>
-      {% endif %}{% endwith %}
-      <ol class="manutencao-etapas">
-        {% for e in objetivo.incidente.etapas_andamento %}
-        <li class="etapa-{{ e.estado }}">{% if e.estado == "feita" %}✓{% elif e.estado == "atual" %}…{% else %}·{% endif %} {{ e.texto }}</li>
-        {% endfor %}
-      </ol>
       {% endif %}
     </div>
   {% else %}
-    <span class="atividade-texto">{% if objetivo.retomado %}<strong>Correção no ar:</strong> refazendo o pedido original com a nova versão e conferindo a resposta antes de mostrar…{% else %}<strong>Continuação da consulta:</strong> ainda dá para avançar com as ferramentas que já existem; tentando outra abordagem em segundo plano. A resposta aparece aqui depois de conferida.{% endif %}</span>
+    <span class="atividade-texto">{% if objetivo.retomado %}Refazendo o seu pedido após a correção…{% else %}Continuando a busca em segundo plano. A resposta aparece aqui.{% endif %}</span>
   {% endif %}
 </div>

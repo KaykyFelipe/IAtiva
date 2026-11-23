@@ -7,22 +7,11 @@
     {% endif %}
     <div class="tarefa-titulos">
       <p class="tarefa-titulo">{{ tarefa.objetivo }}</p>
-      <p class="tarefa-agora">{{ tarefa.progresso|default:tarefa.get_situacao_display }}</p>
+      {% if not tarefa.terminal %}<p class="tarefa-agora">{{ tarefa.progresso_publico }}</p>{% endif %}
     </div>
     <span class="tarefa-selo">{{ tarefa.get_situacao_display }}</span>
   </div>
 
-  <ol class="tarefa-etapas">
-    {% for e in tarefa.etapas %}
-      <li class="{{ e.estado }}"><span class="marca" aria-hidden="true"></span><span>{{ e.nome }}</span></li>
-    {% endfor %}
-  </ol>
-
-  {% if tarefa.consumo.correcoes %}
-    <ul class="tarefa-correcoes" aria-label="Correções feitas sozinha">
-      {% for x in tarefa.consumo.correcoes %}<li>{{ x }}</li>{% endfor %}
-    </ul>
-  {% endif %}
   {% if tarefa.motivo and tarefa.situacao != "concluida" %}<p class="tarefa-motivo">{{ tarefa.motivo }}</p>{% endif %}
   {% if tarefa.cobertura.total %}
     <p class="tarefa-cobertura"><strong>{{ tarefa.cobertura.verificados }}</strong> verificada(s) · <strong>{{ tarefa.cobertura.inconclusivos }}</strong> inconclusiva(s) · {{ tarefa.cobertura.total }} na lista</p>
@@ -41,7 +30,7 @@
     {# A conclusão com os dados não fica salva: é consultada de novo e aparece sozinha aqui. #}
     <div class="tarefa-conclusao" id="conclusao-{{ tarefa.pk }}"
          hx-get="{% url 'chat:tarefa_conclusao' tarefa.pk %}" hx-trigger="load" hx-target="this" hx-swap="innerHTML">
-      <p class="tarefa-carregando"><span class="giro" aria-hidden="true"></span>Montando a conclusão de cada pessoa (consultando o ERP de novo)…</p>
+      <p class="tarefa-carregando"><span class="giro" aria-hidden="true"></span>Organizando os resultados da verificação…</p>
     </div>
   {% endif %}
 </section>

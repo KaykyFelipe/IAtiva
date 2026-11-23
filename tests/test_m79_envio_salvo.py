@@ -2,6 +2,7 @@
 import uuid
 
 import pytest
+from django.test import Client
 from django.urls import reverse
 
 from iativa.agent import agente
@@ -40,3 +41,25 @@ def test_envio_parado_ou_com_falha_tira_a_mensagem(base, monkeypatch):
     with pytest.raises(agente.Interrompido):
         conversas.enviar(base['u'], c, 'oi', pedido=uuid.uuid4())
     assert not Mensagem.objects.filter(conversa=c).exists()
+
+
+def test_nova_conversa_aparece_na_lateral_antes_da_primeira_resposta(base, client, monkeypatch, novo_usuario):
+    pedido = uuid.uuid4()
+    user = base['u']
+    client.force_login(user)
+    andamento_url = reverse('chat:andamento', args=[pedido])
+    outro = Client()
+    outro.force_login(novo_usuario("outra-pessoa", base["cob"]))
+
+    def conversar(usuario, conversa, texto, **kwargs):
+        assert not conversa.mensagens.filter(papel="ia").exists()
+        dados = client.get(andamento_url, {"nova": "1"}).json()
+        assert reverse('chat:conversa', args=[conversa.pk]) in dados["lateral"]
+        assert "Nova conversa" in dados["lateral"]
+        assert "lateral" not in outro.get(andamento_url, {"nova": "1"}).json()
+        return agente.Saida("Pronto.")
+
+    monkeypatch.setattr(agente, 'conversar', conversar)
+    r = client.post(reverse('chat:nova'), {"mensagem": "Quantos admitidos?", "pedido": pedido}, HTTP_HX_REQUEST="true")
+    assert r.status_code == 200
+    assert "Pronto." in r.content.decode()

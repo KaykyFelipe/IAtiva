@@ -121,6 +121,14 @@ class Tarefa(models.Model):
     def terminal(self) -> bool:
         return self.situacao in TERMINAIS
 
+    @property
+    def progresso_publico(self) -> str:
+        return {
+            SituacaoTarefa.PENDENTE: "A verificação vai começar em instantes…",
+            SituacaoTarefa.EXECUTANDO: "Conferindo os registros e reunindo as conclusões…",
+            SituacaoTarefa.AGUARDANDO: "Aguardando sua resposta no chat.",
+        }.get(self.situacao, self.get_situacao_display())
+
 
 class SituacaoObjetivo(models.TextChoices):
     CUMPRIDO = "cumprido", "Cumprido"

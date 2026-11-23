@@ -77,7 +77,7 @@ def test_pergunta_a_pessoa_e_permitida(base):
     msg, res = conversas.enviar(base["u"], c, PEDIDO, p)
     assert msg.texto.strip().endswith("?") and "ainda não foi feita" not in msg.texto
 
-def test_pensando_mostra_as_etapas_reais(base, client):
+def test_andamento_publico_resume_a_etapa_real(base, client):
     c = _lista(base)
     pedido = uuid.uuid4()
     conversas.enviar(base["u"], c, PEDIDO, FakeProvider([_listar(base), _investigar()]), pedido=pedido)
@@ -89,7 +89,8 @@ def test_pensando_mostra_as_etapas_reais(base, client):
     assert not any("SINTETIC" in p for p in passos)  # nada do ERP
     client.force_login(base["u"])
     r = client.get(reverse("chat:andamento", args=[pedido]))
-    assert r.json()["fim"] and r.json()["passos"] == passos and "no-store" in r["Cache-Control"]
+    assert r.json() == {"mensagem": "Organizando o resultado para mostrar aqui…", "fim": True}
+    assert "no-store" in r["Cache-Control"]
 
 
 def test_andamento_de_outra_pessoa_vem_vazio(base, client, novo_usuario):
@@ -98,7 +99,17 @@ def test_andamento_de_outra_pessoa_vem_vazio(base, client, novo_usuario):
         andamento.avisar("Consultando o ERP — Matriz")
     outro = novo_usuario("outro", base["cob"])
     client.force_login(outro)
-    assert client.get(reverse("chat:andamento", args=[pedido])).json() == {"passos": [], "fim": False}
+    assert client.get(reverse("chat:andamento", args=[pedido]), {"nova": "1"}).json() == {"mensagem": "", "fim": False}
+
+
+def test_andamento_publico_nao_repete_texto_do_modelo_ou_nome_da_fonte(base, client):
+    pedido = uuid.uuid4()
+    client.force_login(base["u"])
+    with andamento.acompanhar(base["u"].pk, pedido):
+        andamento.avisar("Preparando a consulta “nome interno”")
+        andamento.avisar("Texto livre vindo do modelo")
+        r = client.get(reverse("chat:andamento", args=[pedido]))
+    assert r.json() == {"mensagem": "Organizando os critérios para a consulta…", "fim": False}
 
 
 def test_barra_fixa_acompanha_a_tarefa(base, client):

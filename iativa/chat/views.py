@@ -513,12 +513,19 @@ def tarefa_conclusao(request, tarefa_id):
 
 @require_GET
 def andamento(request, pedido):
-    """O que a IA está fazendo agora neste envio (M26). Só textos operacionais, só do próprio usuário."""
-    from django.http import JsonResponse
-
+    """Progresso resumido e, no primeiro envio, o chat já registrado do próprio usuário."""
     from iativa.agent import andamento as ao_vivo
 
-    resposta = JsonResponse(ao_vivo.ler(request.user.pk, pedido))
+    dados = ao_vivo.estado_publico(request.user.pk, pedido)
+    if request.GET.get("nova") == "1":
+        mensagem = (Mensagem.objects.filter(pedido=pedido, papel=Papel.USUARIO, autor=request.user,
+                                            conversa__usuario=request.user, conversa__tipo=TipoConversa.INDIVIDUAL,
+                                            conversa__encerrada_em__isnull=True)
+                    .select_related("conversa").order_by("-pk").first())
+        if mensagem and conversas.pode_ver(request.user, mensagem.conversa):
+            ctx = _contexto(request, mensagem.conversa)
+            dados["lateral"] = render_to_string("chat/_lateral.html", ctx, request)
+    resposta = JsonResponse(dados)
     resposta["Cache-Control"] = "no-store"
     return resposta
 

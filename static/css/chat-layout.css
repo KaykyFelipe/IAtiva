@@ -218,17 +218,6 @@ button.secundario:hover { background: #f0f5f1; }
 .tarefa-card.aguardando_usuario .tarefa-selo { background: var(--pendente-claro); color: var(--pendente); }
 .tarefa-card.cancelada .tarefa-selo { background: #eef1ef; color: var(--sutil); }
 
-.tarefa-etapas { list-style: none; margin: 0 0 0 7px; padding: 0 0 0 16px; border-left: 1px solid var(--linha);
-  display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: var(--sutil); }
-.tarefa-etapas li { display: flex; align-items: center; gap: 8px; position: relative; }
-.tarefa-etapas .marca { position: absolute; left: -21px; width: 9px; height: 9px; border-radius: 50%;
-  background: #fff; border: 1.5px solid #c9d4ce; }
-.tarefa-etapas li.concluida { color: var(--texto); }
-.tarefa-etapas li.concluida .marca { background: var(--verde-texto); border-color: var(--verde-texto); }
-.tarefa-etapas li.em_andamento { color: var(--texto); font-weight: 600; }
-.tarefa-etapas li.em_andamento .marca { border-color: var(--acento); border-top-color: transparent; animation: girar .8s linear infinite; }
-.tarefa-etapas li.bloqueada .marca { background: var(--pendente); border-color: var(--pendente); }
-
 .tarefa-motivo { margin: 0; font-size: 12px; color: var(--pendente); background: var(--pendente-claro);
   padding: 7px 10px; border-radius: 8px; }
 .tarefa-cobertura { margin: 0; font-size: 12px; color: var(--sutil); }
@@ -248,15 +237,11 @@ button.secundario:hover { background: #f0f5f1; }
 .atividade-fixa { display: flex; align-items: center; gap: 9px; margin: 0 4px 8px; padding: 7px 12px;
   border: 1px solid var(--linha); border-radius: 12px; background: #f6f9f7; font-size: 12px; color: var(--sutil); }
 .atividade-fixa:empty, .atividade-fixa[hidden] { display: none; }
-.tarefa-correcoes { list-style: none; margin: 0; padding: 8px 10px; border-radius: 8px; background: #f4f7fb;
-  display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--sutil); }
-.tarefa-correcoes li::before { content: "↻ "; color: var(--acento); font-weight: 700; }
 .atividade-fixa.terminada { background: #fff; }
-.atividade-fixa .atividade-texto { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.atividade-fixa .atividade-texto { flex: 1; min-width: 0; }
 
 .msg.pensando { gap: 3px; }
 .pensando-linha { display: flex; align-items: center; gap: 10px; font-size: 13px; }
-.pensando-passos { font-size: 12px; }
 @media (max-width: 680px) {
   .tarefa-rodape { flex-direction: column; align-items: stretch; }
   .tarefa-selo { display: none; }
@@ -293,13 +278,7 @@ button.secundario:hover { background: #f0f5f1; }
   .conclusao-tabela tr { border-top: 1px solid var(--linha); padding: 6px 0; }
 }
 
-/* M53: etapas da manutenção no card do pedido em correção */
 .atividade-fixa .atividade-corpo { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
-.atividade-fixa .atividade-corpo .atividade-texto { white-space: normal; }
-.manutencao-etapas { list-style: none; margin: 0; padding: 0; font-size: 0.85em; line-height: 1.6; }
-.manutencao-etapas .etapa-feita { color: var(--cor-texto-suave, #6b7280); }
-.manutencao-etapas .etapa-atual { font-weight: 600; }
-.manutencao-etapas .etapa-falta { color: var(--cor-texto-suave, #9ca3af); opacity: .7; }
 /* M71: excluir conversa (lixeira ao lado do lápis) e confirmação */
 .conversa .excluir:hover { background: #f6e1df; color: #a33a2f; }
 .confirmar-fundo { position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center;

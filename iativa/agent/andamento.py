@@ -1,8 +1,7 @@
 """Andamento ao vivo do "Pensando…" (M26).
 
-Enquanto o chat processa uma mensagem, cada etapa avisa o que está fazendo ("Decidindo o que
-fazer", "Consultando o ERP — Matriz", "Calculando o total no banco"…). O navegador lê esses avisos
-a cada fração de segundo e troca o texto do "Pensando…".
+Enquanto o chat processa uma mensagem, cada etapa registra seu andamento. A interface recebe
+somente uma mensagem resumida e previamente definida para a fase atual.
 
 Só textos operacionais: nunca linhas, nomes, números ou SQL do ERP. Ficam só na memória do processo
 web (não vão a banco, cache nem log) e somem alguns minutos depois. Exige um único processo web,
@@ -17,7 +16,28 @@ _ATUAL: ContextVar[tuple | None] = ContextVar("iativa_andamento", default=None)
 _PASSOS: dict = {}
 _TRAVA = threading.Lock()
 VALIDADE_S = 600
-MAX_PASSOS = 80  # M69: a lista inteira fica disponível na seta (antes cortava e "parava" na 5ª filial)
+MAX_PASSOS = 80
+
+_FASES_PUBLICAS = (
+    (("Lendo o pedido", "Decidindo o que fazer"), "Entendendo o que você pediu…"),
+    (("Preparando a consulta", "Usando a receita", "Executando um passo da receita"),
+     "Organizando os critérios para a consulta…"),
+    (("Procurando no dicionário", "Montando a consulta nova", "Criando a consulta", "A tabela ",
+      "Nada no nome"), "Procurando a fonte mais adequada para responder…"),
+    (("Calculando o total no banco",), "Calculando os totais dos dados encontrados…"),
+    (("Consultando o ERP", "Localizando as matrículas", "Consultando alterações", "Calculando "),
+     "Buscando as informações que correspondem ao seu pedido…"),
+    (("Conferindo se as junções", "Conferindo no dicionário", "Conferindo se a resposta",
+      "Lista pronta", "Verificação de toda a lista"),
+     "Conferindo os registros para montar a resposta…"),
+    (("A consulta não respondeu a tempo", "A consulta conhecida encontrou uma falha temporária"),
+     "A consulta demorou mais que o esperado. Tentando novamente…"),
+    (("Ajustando o caminho", "O critério usado", "A mesma ação", "A resposta não atendia",
+      "Etapa concluída", "Uma pergunta respondida", "Investigando divergência"),
+     "Ajustando a busca para completar o seu pedido…"),
+    (("Escrevendo a resposta", "Resposta pronta", "Aprendi como responder"),
+     "Organizando o resultado para mostrar aqui…"),
+)
 
 
 def _limpar(agora):
@@ -62,3 +82,12 @@ def ler(usuario_id, pedido) -> dict:
     with _TRAVA:
         item = _PASSOS.get((usuario_id, str(pedido)))
         return {"passos": list(item["passos"]), "fim": item["fim"]} if item else {"passos": [], "fim": False}
+
+
+def estado_publico(usuario_id, pedido):
+    estado = ler(usuario_id, pedido)
+    for passo in reversed(estado["passos"]):
+        for prefixos, mensagem in _FASES_PUBLICAS:
+            if passo.startswith(prefixos):
+                return {"mensagem": mensagem, "fim": estado["fim"]}
+    return {"mensagem": "", "fim": estado["fim"]}

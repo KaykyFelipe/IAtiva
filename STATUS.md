@@ -18,6 +18,7 @@
 
 ## Leitura dos resultados no chat
 
+- A primeira mensagem registrada já coloca a nova conversa na barra lateral. O progresso mostra frases curtas sobre o pedido, sem abrir etapas internas.
 - Colar uma tabela no campo de mensagem preserva o texto inteiro. Se a mensagem ultrapassar o limite de envio, o chat mostra o aviso antes de enviar.
 - Recarregar a conversa abre na última mensagem. Quando uma verificação carrega a tabela depois, o chat mantém quem está no fim junto da última mensagem e preserva a leitura de quem subiu.
 - Ao entrar ou voltar para um chat pela navegação, a conversa abre na última mensagem após estabilizar o conteúdo.
