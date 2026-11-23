@@ -173,10 +173,11 @@ def _consultas_conversa(user, c, defs) -> list[dict]:
 
 
 def _historico(c, ate=None) -> list[dict]:
-    msgs = list(c.mensagens.order_by("-criado_em", "-id")[:HISTORICO + 1])[::-1]
+    msgs = c.mensagens.all()
     if ate is not None:
-        msgs = [m for m in msgs if m.pk != ate]
-    return [{"quem": "usuario" if m.papel == "usuario" else "iativa", "texto": m.texto[:600]} for m in msgs[-HISTORICO:]]
+        msgs = msgs.filter(pk__lt=ate)
+    return [{"quem": "usuario" if m.papel == "usuario" else "iativa", "texto": m.texto[:600]}
+            for m in reversed(list(msgs.order_by("-criado_em", "-id")[:HISTORICO]))]
 
 
 def _notas(user, texto: str) -> list[str]:
@@ -283,7 +284,7 @@ def _pedido_com_fontes(user, conversa, texto, mensagem_id):
 
 
 def conversar(user, c, texto: str, provedor=None, mensagem_usuario_id=None, interrompido=None, acomp=None,
-              observacoes=None) -> Saida:
+              observacoes=None, contexto_id=None) -> Saida:
     from .escopo import pedido_codigo, RECUSA
     if pedido_codigo(texto):
         return Saida(RECUSA, ficha={"tipo": "fora_escopo"})
@@ -298,18 +299,19 @@ def conversar(user, c, texto: str, provedor=None, mensagem_usuario_id=None, inte
 
     from . import planejamento
     from .contagem import contextualizar, contextualizar_separadas
-    texto, fontes = _pedido_com_fontes(user, c, texto, mensagem_usuario_id)
+    contexto_id = contexto_id or mensagem_usuario_id
+    texto, fontes = _pedido_com_fontes(user, c, texto, contexto_id)
     if not fontes:
         from .comparacao import contextualizar_ano
-        com_ano = contextualizar_ano(c, texto, mensagem_usuario_id)
+        com_ano = contextualizar_ano(c, texto, contexto_id)
         if acomp is not None and com_ano != texto:
             acomp.texto = com_ano
-        texto = contextualizar(user, c, contextualizar_separadas(c, user, com_ano, mensagem_usuario_id))
+        texto = contextualizar(user, c, contextualizar_separadas(c, user, com_ano, contexto_id))
         if acomp is not None:
             acomp.texto = texto
     try:
         provedor = provedor or obter_provedor(usuario=user)
-        analise = planejamento.preparar(user, c, texto, provedor, _historico(c, mensagem_usuario_id))
+        analise = planejamento.preparar(user, c, texto, provedor, _historico(c, contexto_id))
     except PermissaoNegada as exc:
         return Saida(str(exc), ficha={'tipo': 'bloqueada'})
     except ValidationError as exc:
@@ -329,6 +331,9 @@ def conversar(user, c, texto: str, provedor=None, mensagem_usuario_id=None, inte
         analise["fontes_indicadas"] = fontes
     if analise['natureza'] == 'fora':
         return Saida(RECUSA, ficha={'tipo': 'fora_escopo'})
+    if mensagem_usuario_id is not None and not c.titulo:
+        from iativa.chat.conversas import definir_titulo
+        definir_titulo(c, analise.get('titulo'), texto)
 
     from iativa.accounts.authz import limitar_consulta
     from iativa.accounts.models import Department
@@ -336,12 +341,14 @@ def conversar(user, c, texto: str, provedor=None, mensagem_usuario_id=None, inte
     with limitar_consulta(user, ids):
         token = planejamento.provedor_do_pedido.set(provedor)
         try:
-            return _conversar_autorizado(user, c, texto, provedor, mensagem_usuario_id, interrompido, acomp, observacoes, analise)
+            return _conversar_autorizado(user, c, texto, provedor, mensagem_usuario_id, interrompido, acomp, observacoes,
+                                        analise, contexto_id)
         finally:
             planejamento.provedor_do_pedido.reset(token)
 
 
-def _conversar_autorizado(user, c, texto, provedor, mensagem_usuario_id, interrompido, acomp, observacoes, analise):
+def _conversar_autorizado(user, c, texto, provedor, mensagem_usuario_id, interrompido, acomp, observacoes, analise,
+                          contexto_id):
     from . import planejamento
     objetivos = objetivos_para(user)
     administrador = pode_aprender(user)
@@ -410,7 +417,7 @@ def _conversar_autorizado(user, c, texto, provedor, mensagem_usuario_id, interro
         consultas_conversa=consultas_conversa,
         resultado_anterior=calculos.contexto(user, c),
         lista_anterior=lista,
-        mensagem=texto, hoje=timezone.localdate().isoformat(), historico=_historico(c, mensagem_usuario_id),
+        mensagem=texto, hoje=timezone.localdate().isoformat(), historico=_historico(c, contexto_id),
         objetivos=_catalogo(user, objetivos, defs), solicitacao_atual=_estado(user, atual, defs),
         notas=_notas(user, texto), aprendidos=aprendidos, trechos=trechos, administrador=administrador,
         pendencias=_pendencias_contexto(user),
@@ -1335,11 +1342,14 @@ def continuar_objetivo(o):
         try:
             with tempos.pedido("retomada" if o.retomado else "continuacao") as t:
                 saida = conversar(user, c, o.mensagem.texto, mensagem_usuario_id=o.mensagem_id, acomp=ac,
-                                  observacoes=obs, interrompido=interrompido)
+                                  observacoes=obs, interrompido=interrompido,
+                                  contexto_id=o.mensagem.ficha.get("mensagem_origem"))
             # M125: tempo desta continuação e o total desde a mensagem da pessoa (fila, manutenção e refazer).
             from django.utils import timezone
             saida.ficha = {**(saida.ficha or {}), "tempos_ms": {
                 **t, "desde_o_pedido": int((timezone.now() - o.mensagem.criado_em).total_seconds() * 1000)}}
+            if saida.resultado is not None and getattr(saida.resultado, "ok", True):
+                saida.ficha["mensagem_origem"] = o.mensagem.ficha.get("mensagem_origem") or o.mensagem_id
         except Interrompido:
             if superado():
                 descartar()

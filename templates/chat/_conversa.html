@@ -1,13 +1,12 @@
-{% load static %}<div class="conversa-area{% if not conversa and not aprendizado %} inicio{% endif %}" id="conversa" data-conversa-id="{{ conversa.pk|default:0 }}" data-historico-versao="{{ historico_versao }}" data-falha="{% if mascote_falha %}1{% else %}0{% endif %}">
+{% load static %}<div class="conversa-area{% if not conversa and not aprendizado %} inicio{% endif %}" id="conversa" data-conversa-id="{{ conversa.pk|default:0 }}" data-historico-versao="{{ historico_versao }}">
   <header class="cabecalho">
-    <div class="agente-capsula" aria-label="Assistente IAtiva">{% include "chat/_mascote.html" %}<div><strong>IAtiva</strong><small data-mascote-status>Pronta para ajudar</small></div></div>
     {% include "chat/_cabecalho_acoes.html" %}
     <div class="titulo-conversa">
-      <h1>{% if conversa %}{{ conversa.titulo|default:"Conversa" }}{% else %}IAtiva{% endif %}</h1>
+      <h1>{% if conversa %}{{ conversa.titulo|default:"Nova conversa" }}{% else %}IAtiva{% endif %}</h1>
       <span class="escopo">
-        {% if not conversa or conversa.tipo == TipoConversa.INDIVIDUAL %}Conversa individual
-        {% elif conversa.tipo == TipoConversa.SETOR %}Conversa do setor {{ conversa.setor.nome }}{% if not pode_escrever %} (somente leitura){% endif %}
-        {% else %}Chat mestre: setores liberados na sua política{% endif %}
+        {% if conversa.tipo == TipoConversa.SETOR %}Setor {{ conversa.setor.nome }}{% if not pode_escrever %} (somente leitura){% endif %}
+        {% elif conversa.tipo == TipoConversa.MESTRE %}Setores autorizados
+        {% endif %}
       </span>
     </div>
     <button class="icone expandir-leitura" type="button" data-expandir-leitura aria-label="Expandir área de leitura" aria-pressed="false" title="Expandir área de leitura">{% include "chat/_icone.html" with nome="expandir" %}</button>
@@ -35,8 +34,9 @@
             <div class="msg usuario"><p>{{ m.texto|linebreaksbr }}</p></div>
           {% endif %}
         {% else %}
-          {% include "chat/_resposta.html" with m=m editavel=item.editavel executavel=item.executavel repetivel=item.repetivel aprendivel=item.aprendivel aprovavel=item.aprovavel ultima=item.ultima %}
-          <div class="resultado-de" data-resultado-de="{{ m.pk }}">
+          <div class="resposta-chat" data-resultado-de="{{ m.pk }}">
+          <div data-copiar-conteudo>
+            {% include "chat/_resposta.html" with m=m linhas=item.linhas_resposta editavel=item.editavel executavel=item.executavel aprendivel=item.aprendivel aprovavel=item.aprovavel ultima=item.ultima %}
             {% if m.resultado %}
               {% if item.resultado_salvo %}
                 {% if item.resultado_salvo.consolidado %}{% include "chat/_consolidado.html" with resultado=item.resultado_salvo %}{% else %}{% include "chat/_resultado.html" with resultado=item.resultado_salvo formato=m.ficha.formato %}{% endif %}
@@ -45,7 +45,25 @@
               {% if resultado.consolidado %}{% include "chat/_consolidado.html" %}{% else %}{% include "chat/_resultado.html" with formato=m.ficha.formato %}{% endif %}
             {% endif %}
           </div>
+          {% if item.linhas_resposta or item.resultado_salvo or resultado_msg == m.pk %}
+            <div class="acoes-resposta">
+              <button class="icone" type="button" data-copiar-resposta aria-label="Copiar resposta" title="Copiar resposta">{% include "chat/_icone.html" with nome="copiar" %}</button>
+              {% if item.refazer and pode_escrever %}
+                <form data-refazer-resposta method="post" action="{% url 'chat:mensagem' conversa.pk %}">
+                  {% csrf_token %}<input type="hidden" name="refazer" value="{{ m.pk }}"><input type="hidden" name="mensagem" value="Executar de novo">
+                  <button class="icone" type="submit" aria-label="Executar de novo" title="Executar de novo">{% include "chat/_icone.html" with nome="repetir" %}</button>
+                </form>
+              {% elif item.repetivel and pode_escrever %}
+                <form method="post" action="{% url 'chat:executar_de_novo' conversa.pk m.solicitacao_id %}"
+                      hx-post="{% url 'chat:executar_de_novo' conversa.pk m.solicitacao_id %}" hx-target="#conversa" hx-swap="outerHTML" hx-disabled-elt="find button">
+                  {% csrf_token %}<button class="icone" type="submit" aria-label="Executar de novo" title="Executar de novo">{% include "chat/_icone.html" with nome="repetir" %}</button>
+                </form>
+              {% endif %}
+              <span class="sr" data-estado-copia aria-live="polite"></span>
+            </div>
+          {% endif %}
           {% if item.tarefa %}{% include "chat/_tarefa.html" with tarefa=item.tarefa %}{% endif %}
+          </div>
         {% endif %}
         {% endwith %}
       {% empty %}
@@ -72,6 +90,7 @@
           data-compositor data-parar-url="{% url 'chat:parar' %}" data-andamento-url="{% url 'chat:andamento' '00000000-0000-0000-0000-000000000000' %}">
       {% csrf_token %}
       <input type="hidden" name="pedido" value="" data-pedido>
+      <input type="hidden" name="refazer" value="" data-refazer>
       {% if erro %}<p class="erro" role="alert">{{ erro }}</p>{% endif %}
       {% for e in form.mensagem.errors %}<p class="erro" role="alert">{{ e }}</p>{% endfor %}
       <label class="sr" for="campo-mensagem">Mensagem</label>
@@ -79,9 +98,9 @@
       {% if objetivo_pendente %}{% include "chat/_objetivo.html" with objetivo=objetivo_pendente %}{% endif %}
       <div class="caixa-compositor">
         <textarea id="campo-mensagem" name="mensagem" rows="1" maxlength="{{ form.fields.mensagem.max_length }}" placeholder="{% if conversa %}Continue a conversa…{% else %}Pergunte à IAtiva…{% endif %}" required data-campo></textarea>
-        <div class="compositor-acoes"><span class="contexto-compositor">{% include "chat/_icone.html" with nome="cadeado" %}{% if conversa.tipo == TipoConversa.SETOR %}Conversa do setor{% elif conversa.tipo == TipoConversa.MESTRE %}Seus setores autorizados{% else %}Somente os dados que você pode consultar{% endif %}</span><button type="submit" class="enviar" aria-label="Enviar" data-botao-enviar>{% include "chat/_icone.html" with nome="enviar" %}</button></div>
+        <button type="submit" class="enviar" aria-label="Enviar" title="Enviar" data-botao-enviar>{% include "chat/_icone.html" with nome="enviar" %}</button>
       </div>
-      <div class="rodape-compositor"><span>Não envie CPF ou CNPJ. Resultados salvos no histórico.</span><span class="dica-teclado"><kbd>Enter</kbd> enviar · <kbd>Shift + Enter</kbd> nova linha</span></div>
+      <p class="rodape-compositor">Não envie CPF ou CNPJ.</p>
     </form>
   {% else %}
     <p class="rodape-compositor somente-leitura">{% if erro %}{{ erro }}{% else %}Você pode ler esta conversa, mas não enviar mensagens.{% endif %}</p>

@@ -253,7 +253,7 @@ def test_executar_pelo_chat_salva_resultado_no_historico_m44(client, ana):
 
     client.force_login(ana)
     html = client.post(reverse("chat:nova"), {"mensagem": ATRASO}, HTTP_HX_REQUEST="true").content.decode()
-    assert "<table>" in html and "R$" in html and "Critérios e premissas" in html  # executou direto
+    assert "<table>" in html and "R$" in html and "Critérios e premissas" not in html
     assert "CLIENTE SINTETICO" in html
     c = ConversationContext.objects.get()
     assert "CLIENTE SINTETICO" not in repr(list(Mensagem.objects.values_list("texto", "ficha")))

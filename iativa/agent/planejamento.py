@@ -97,6 +97,7 @@ def preparar(user, conversa, texto, provedor, historico):
                       .values_list('codigo', flat=True))
     entrada = EntradaAgente(texto, timezone.localdate().isoformat(), historico, [], None,
         planejamento={'modo': 'classificar', 'setores_disponiveis': setores, 'autorizados': permitidos,
+                      'criar_titulo': conversa.tipo == 'individual' and not conversa.titulo,
                       'contextos_recuperados': contextos(user, conversa, texto)})
     from . import tempos
     try:

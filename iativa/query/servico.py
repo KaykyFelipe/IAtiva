@@ -160,6 +160,11 @@ class Resultado:
     def rodape_tela(self):
         return [(v, cls) for v, (_, cls) in zip(self.rodape, self.cabecalho)]
 
+    @property
+    def avisos_leitura(self):
+        return [p for p in self.premissas if p.startswith(("Há período em andamento", "Há mais de uma moeda",
+                                                          "Há códigos sem correspondência")) and p not in self.mensagem]
+
 
 def _cfg():
     """Tempo de cada consulta: o configurado ou o que resta do prazo da mensagem (M24)."""

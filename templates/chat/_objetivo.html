@@ -2,7 +2,6 @@
 <div class="atividade-fixa" id="objetivo-{{ objetivo.pk }}" data-objetivo-pendente data-cancelar-url="{% url 'chat:parar_objetivo' objetivo.pk %}" role="status" aria-live="polite"
      hx-get="{% url 'chat:objetivo' objetivo.pk %}" hx-trigger="every 3s" hx-target="this" hx-swap="outerHTML">
   {% if objetivo.situacao == "manutencao" %}
-    {% include "chat/_mascote.html" with estado="thinking" %}
     <div class="atividade-corpo">
       <span class="atividade-texto"><strong>Correção automática{% if objetivo.incidente %} (registro nº {{ objetivo.incidente.pk }}){% endif %}:</strong> o sistema ainda não sabia fazer esta parte. Corrigindo e testando em segundo plano; quando a correção estiver no ar, o pedido é refeito aqui.</span>
       {% if objetivo.incidente %}
@@ -25,7 +24,6 @@
       {% endif %}
     </div>
   {% else %}
-    {% include "chat/_mascote.html" with estado="thinking" %}
     <span class="atividade-texto">{% if objetivo.retomado %}<strong>Correção no ar:</strong> refazendo o pedido original com a nova versão e conferindo a resposta antes de mostrar…{% else %}<strong>Continuação da consulta:</strong> ainda dá para avançar com as ferramentas que já existem; tentando outra abordagem em segundo plano. A resposta aparece aqui depois de conferida.{% endif %}</span>
   {% endif %}
 </div>

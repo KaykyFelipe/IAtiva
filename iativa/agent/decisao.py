@@ -105,6 +105,7 @@ def esquema(codigos_objetivo, codigos_parametro) -> dict:
                 "setores": {"type": "array", "items": {"type": "string"}, "maxItems": 12},
                 "confianca": {"type": "number", "minimum": 0, "maximum": 1},
                 "resumo": {"type": "string", "maxLength": 1000},
+                "titulo": {"type": "string", "maxLength": 80},
                 "entregas": {"type": "array", "maxItems": 6, "items": {"type": "object", "properties": {
                     "descricao": {"type": "string", "maxLength": 200},
                     "tipo": {"type": "string", "enum": ["resposta", "consulta", "calculo", "verificacao", "investigacao", "historico"]},
@@ -115,7 +116,7 @@ def esquema(codigos_objetivo, codigos_parametro) -> dict:
                     "trecho": {"type": "string", "maxLength": 300},
                     "tipo": {"type": "string", "enum": ["preferencia", "termo", "correcao"]}},
                     "required": ["texto", "trecho", "tipo"]}}},
-                "required": ["natureza", "setores", "confianca", "resumo", "entregas", "memorias"]},
+                "required": ["natureza", "setores", "confianca", "resumo", "titulo", "entregas", "memorias"]},
             "resposta": {"type": "string", "description": "Texto ao usuário, em português, tom de conversa."},
             "calculo": {"type": "object", "description": "Ação calcular_resultado: usa o resultado autorizado anterior. "
                 "Para estágio, deixe campos vazios: os intervalos são resolvidos pelo backend.", "properties": {

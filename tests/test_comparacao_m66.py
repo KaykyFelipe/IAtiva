@@ -96,6 +96,39 @@ def test_total_por_filial_em_consulta_de_um_mes(faturamento):
     assert r.rodape == ['Total', 'R$ 8.431,27']
 
 
+def test_refazer_resposta_consulta_os_dois_meses_novamente(faturamento, client, monkeypatch):
+    from django.urls import reverse
+    from iativa.agent import agente
+    from iativa.chat.resultados import restaurar
+
+    b = faturamento
+    cm = _consulta_sd2(b, ['D2_EMISSAO', 'D2_TOTAL'])
+    respostas = [_d(acao='preparar_consulta', objetivo=cm.codigo, entrega='calculo', parametros=[
+        {'codigo': 'filial-analise', 'valor': 'TODAS'},
+        {'codigo': 'agregacao', 'valor': 'soma:D2_TOTAL por filial'},
+    ])]
+    c = conversas.nova_individual(b['ana'])
+    pergunta = 'Qual o faturamento de setembro e outubro de 2026 por filial?'
+    with sqlite3.connect(b['erp']) as conn:
+        conn.execute('INSERT INTO SD2010 VALUES (?,?,?,?,?,?,?)', ('01', '20261001', '501', '5102', 200, 1, ' '))
+    primeira, anterior = conversas.enviar(b['ana'], c, pergunta, FakeProvider(respostas.copy()))
+    assert anterior.rodape == ['Total', 'R$ 8.431,27', 'R$ 200,00']
+    with sqlite3.connect(b['erp']) as conn:
+        conn.executemany('INSERT INTO SD2010 VALUES (?,?,?,?,?,?,?)', [
+            ('02', '20260901', '501', '5102', 500, 1, ' '),
+            ('02', '20261001', '501', '5102', 800, 1, ' '),
+        ])
+    monkeypatch.setattr(agente, 'obter_provedor', lambda **_: FakeProvider(respostas.copy()))
+    client.force_login(b['ana'])
+    url = reverse('chat:mensagem', args=[c.pk])
+    r = client.post(url, {'mensagem': 'Executar de novo', 'refazer': primeira.pk}, HTTP_HX_REQUEST='true')
+    resultado = restaurar(b['ana'], c.mensagens.last().resultado)
+    assert resultado.colunas == anterior.colunas
+    assert resultado.rodape == ['Total', 'R$ 8.931,27', 'R$ 1.000,00']
+    assert 'data-refazer-resposta' in r.content.decode()
+    assert c.mensagens.filter(papel='usuario', texto=pergunta).count() == 2
+
+
 def test_compara_por_outro_agrupamento_sem_forcar_filial(faturamento):
     """Agrupamento pedido (por CFOP) é preservado; nada vira "por filial"."""
     b = faturamento

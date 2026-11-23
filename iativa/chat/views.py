@@ -13,6 +13,7 @@ from django.template.loader import render_to_string
 from django.db.models import Max, Q
 from django.shortcuts import redirect, render
 from django.urls import reverse
+from django.utils import timezone
 from django.views.decorators.http import require_GET, require_POST
 
 from iativa.accounts.authz import PermissaoNegada, setor_do_usuario
@@ -80,7 +81,6 @@ def _contexto(request, c=None, form=None, erro="", resultado=None, resultado_msg
     nome = request.user.get_full_name() or request.user.get_username()
     iniciais = "".join(p[0] for p in nome.split()[:2]).upper()
     msgs = conversas.mensagens_com_interacao(request.user, c) if c else []
-    ultimo_tipo = msgs[-1]['m'].ficha.get('tipo') if msgs else ''
     # A versão representa o histórico autorizado, não o progresso dos cartões que
     # já possuem polling próprio. Inclui a versão para atualizar os estilos de abas abertas.
     historico_versao = hashlib.sha256(json.dumps([versao_app(), [
@@ -96,8 +96,6 @@ def _contexto(request, c=None, form=None, erro="", resultado=None, resultado_msg
         "versao_interface": versao_app(),
         # M79: pedido desta pessoa ainda em andamento (página recarregada ou reaberta): mostra o "trabalhando".
         "envio_pendente": _pendente(request.user, c),
-        "mascote_falha": bool(erro or (form is not None and form.errors) or getattr(resultado, 'ok', None) is False or ultimo_tipo in (
-            'falha_modelo', 'falha_execucao', 'bloqueada', 'impedimento_dados')),
         "pode_escrever": conversas.pode_escrever(request.user, c) if c else bool(setor),
         "form": form or MessageForm(),
         "erro": erro,
@@ -179,7 +177,7 @@ def sincronizar(request):
     from iativa.accounts.authz import politicas_vigentes
     from iativa.metadata.models import RestricaoMetadado
     versao = hashlib.sha256(json.dumps([registros, list(politicas_vigentes(request.user).order_by('pk').values()),
-        versao_app(), list(RestricaoMetadado.objects.order_by("id", "setores_permitidos__pk").values(
+        versao_app(), timezone.localdate(), list(RestricaoMetadado.objects.order_by("id", "setores_permitidos__pk").values(
             "id", "tabela", "campo", "ativo", "setores_permitidos__pk")), cid],
         default=str, sort_keys=True).encode()).hexdigest()
     if request.GET.get("versao") == versao:
@@ -247,12 +245,18 @@ def mensagem(request, conversa_id):
     if not form.is_valid():
         return _render(request, c, form=form)
     try:
-        msg, resultado = conversas.enviar(request.user, c, form.cleaned_data["mensagem"], pedido=_pedido(request))
+        refazer = request.POST.get("refazer", "")
+        if refazer:
+            if not refazer.isascii() or not refazer.isdecimal() or len(refazer) > 18:
+                raise ValidationError("Esta resposta não está disponível para reexecução.")
+            msg, resultado = conversas.refazer(request.user, c, int(refazer), _pedido(request))
+        else:
+            msg, resultado = conversas.enviar(request.user, c, form.cleaned_data["mensagem"], pedido=_pedido(request))
     except Interrompido:
         conversas.limpar_interrupcao(request.user, _pedido(request))
         return _interrompido()
-    except PermissaoNegada:
-        return _render(request, c, erro="Esta conversa é somente leitura para você.")
+    except PermissaoNegada as exc:
+        return _render(request, c, erro=str(exc))
     except ValidationError as exc:
         return _render(request, c, form=form, erro=exc.messages[0])
     return _render(request, c, resultado=resultado, resultado_msg=msg.pk)

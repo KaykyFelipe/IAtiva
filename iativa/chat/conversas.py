@@ -9,6 +9,7 @@ Guarda texto, fichas e snapshots de apresentação autorizados na M44. Nunca SQL
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import OuterRef, Subquery
+from django.db.models.functions import Coalesce
 from django.utils import timezone
 
 from iativa.accounts.authz import Permissao, PermissaoNegada, setor_do_usuario, setores_autorizados, tem_permissao
@@ -84,6 +85,8 @@ def _grupo(data, hoje) -> str:
     dias = (hoje - data).days
     if dias <= 0:
         return "Hoje"
+    if dias == 1:
+        return "Ontem"
     if dias <= 7:
         return "Últimos 7 dias"
     nome = MESES[data.month - 1].capitalize()
@@ -94,11 +97,13 @@ def lateral(user) -> dict:
     hoje = timezone.localdate()
     individuais = ConversationContext.objects.filter(
         tipo=T.INDIVIDUAL, usuario=user, encerrada_em__isnull=True, mensagens__isnull=False
-    ).annotate(estado_ativo=Subquery(RequestContext.objects.filter(conversa_id=OuterRef("pk"),
-        estado__in=list(EM_PREPARACAO)).order_by("-id").values("estado")[:1])).distinct().order_by("-atualizado_em")[:60]
+    ).annotate(ultima_enviada=Subquery(Mensagem.objects.filter(conversa_id=OuterRef("pk"), papel=Papel.USUARIO)
+        .order_by("-pk").values("criado_em")[:1]), estado_ativo=Subquery(RequestContext.objects.filter(conversa_id=OuterRef("pk"),
+        estado__in=list(EM_PREPARACAO)).order_by("-id").values("estado")[:1])).distinct().order_by(
+            Coalesce("ultima_enviada", "atualizado_em").desc(), "-pk")[:60]
     grupos: list[tuple[str, list]] = []
     for c in individuais:
-        rotulo = _grupo(timezone.localdate(c.atualizado_em), hoje)
+        rotulo = _grupo(timezone.localdate(c.ultima_enviada or c.atualizado_em), hoje)
         if not grupos or grupos[-1][0] != rotulo:
             grupos.append((rotulo, []))
         grupos[-1][1].append({"conversa": c, "estado": _estado_lateral(c)})
@@ -173,10 +178,29 @@ def _validar_texto(texto: str) -> str:
 
 
 def _tocar(c, texto):
-    if not c.titulo:
-        c.titulo = texto[:80]
     c.atualizado_em = timezone.now()
-    c.save(update_fields=["titulo", "atualizado_em"])
+    c.save(update_fields=["atualizado_em"])
+
+
+def definir_titulo(c, sugerido, texto):
+    """Usa a sugestão da triagem. Uma atualização condicional preserva renomeações em outra aba."""
+    import re
+    from iativa.agent.periodo import _norm
+
+    if c.tipo != T.INDIVIDUAL or c.titulo:
+        return
+    titulo = " ".join(sugerido.split()).strip(' .?!“”"') if isinstance(sugerido, str) else ""
+    if (not 3 <= len(titulo) <= 80 or not re.fullmatch(r"[\wÀ-ÿ ()-]+", titulo)
+            or re.search(r"\d|_", titulo) or _norm(titulo) == _norm(texto).strip(" .?!")):
+        assuntos = (
+            (r"\bfatur\w*\b", "Consulta de faturamento"),
+            (r"\binadimpl\w*\b", "Consulta de inadimplência"),
+            (r"\bcontrat\w*\b", "Consulta de contratos"),
+            (r"\b(?:admiss\w*|admit\w*|demit\w*|deslig\w*)\b", "Movimentações de pessoal"),
+        )
+        titulo = next((rotulo for padrao, rotulo in assuntos if re.search(padrao, _norm(texto))), "")
+    if titulo and ConversationContext.objects.filter(pk=c.pk, titulo="").update(titulo=titulo):
+        c.titulo = titulo
 
 
 def _verificador(user, pedido):
@@ -209,7 +233,7 @@ def limpar_interrupcao(user, pedido) -> None:
         PedidoInterrompido.objects.filter(pedido=pedido, usuario=user).delete()
 
 
-def enviar(user, c: ConversationContext, texto: str, provedor=None, pedido=None) -> None:
+def enviar(user, c: ConversationContext, texto: str, provedor=None, pedido=None, *, origem=None):
     """`pedido`: id do envio gerado no navegador; se a pessoa clicar em "parar" antes da IA agir,
     `agente.Interrompido` é lançado e o envio é desfeito (inclusive a mensagem dela).
 
@@ -230,7 +254,8 @@ def enviar(user, c: ConversationContext, texto: str, provedor=None, pedido=None)
         _ocupar(c)
         if envio_pendente(c) is not None:
             raise ValidationError(OCUPADA)
-        m = Mensagem.objects.create(conversa=c, papel=Papel.USUARIO, autor=user, texto=texto, pedido=pedido)
+        m = Mensagem.objects.create(conversa=c, papel=Papel.USUARIO, autor=user, texto=texto, pedido=pedido,
+                                    ficha={"mensagem_origem": origem.pk} if origem is not None else {})
     from iativa.agent import andamento
 
     try:
@@ -241,13 +266,16 @@ def enviar(user, c: ConversationContext, texto: str, provedor=None, pedido=None)
                 from iativa.agent import prazo as _prazo, tempos
                 with tempos.pedido() as t:
                     try:
+                        contexto = {"contexto_id": origem.pk} if origem is not None else {}
                         saida = agente.conversar(user, c, texto, provedor=provedor, mensagem_usuario_id=m.pk,
-                                                 interrompido=_verificador(user, pedido))
+                                                 interrompido=_verificador(user, pedido), **contexto)
                     except _prazo.PrazoEsgotado:
                         # M96: rede de segurança: tempo esgotado fora do ciclo (ex.: na triagem) não vira erro 500.
                         saida = agente.Saida(agente.SEM_TEMPO + " A IA demorou para responder. Tente de novo; se "
                                              "repetir, pergunte de forma mais direta.", ficha={"tipo": "falha_modelo"})
                 saida.ficha = {**(saida.ficha or {}), "tempos_ms": dict(t)}  # M125: onde o prazo foi gasto
+                if saida.resultado is not None and getattr(saida.resultado, "ok", True):
+                    saida.ficha["mensagem_origem"] = origem.pk if origem is not None else m.pk
                 parado = _verificador(user, pedido)
                 if parado is not None and parado():
                     raise agente.Interrompido  # M94: parou enquanto esperava o ERP: a resposta é descartada
@@ -256,6 +284,7 @@ def enviar(user, c: ConversationContext, texto: str, provedor=None, pedido=None)
                                           ficha=saida.ficha, solicitacao=saida.solicitacao)
             from .resultados import guardar
             guardar(msg, saida.resultado)
+            definir_titulo(c, "", texto)  # fallback em fluxos que não chegam à triagem
             _tocar(c, texto)
     except BaseException:
         Mensagem.objects.filter(pk=m.pk).delete()  # parado ou falhou: a mensagem sai, como antes
@@ -460,16 +489,28 @@ def mensagens_com_interacao(user, c: ConversationContext) -> list[dict]:
         if m.solicitacao_id and m.ficha:
             ultima_por_solicitacao[m.solicitacao_id] = m.pk
     out = []
+    anterior = None
+    por_id = {m.pk: m for m in msgs if m.papel == Papel.USUARIO}
     for m in msgs:
         s = m.solicitacao
         ultima_dono = bool(s and ultima_por_solicitacao.get(s.pk) == m.pk and s.usuario_id == user.pk)
+        if m.papel == Papel.USUARIO:
+            anterior = m
+        resultado = restaurar(user, m.resultado)
+        origem = por_id.get(m.ficha.get("mensagem_origem"))
+        if (origem is None and m.resultado and s and s.usuario_id == user.pk
+                and (m.resultado.get("consolidado") or m.resultado.get("medida_calculada") == "comparacao")):
+            origem = anterior
         out.append({
             "m": m,
-            "resultado_salvo": restaurar(user, m.resultado),
+            "linhas_resposta": _linhas_resposta(m, resultado),
+            "resultado_salvo": resultado,
             "proprio": m.autor_id == user.pk,
             "editavel": ultima_dono and s.estado == "aguardando_parametros",
             "executavel": ultima_dono and s.estado == "pronta",
-            "repetivel": ultima_dono and m.ficha.get("tipo") in ("executada", "falha_execucao"),
+            "repetivel": ultima_dono and (resultado or m.ficha.get("tipo") == "falha_execucao"),
+            "refazer": (origem.pk if m.papel == Papel.IA and resultado is not None and origem
+                        and origem.autor_id == user.pk and origem.pk < m.pk else None),
             "aprendivel": administrador and m.ficha.get("tipo") == "aprendizado" and m.pk == msgs[-1].pk,
             "ultima": m.pk == msgs[-1].pk,
             "tarefa": tarefas.get(m.ficha.get("tarefa")) if m.ficha.get("tipo") == "tarefa" else None,
@@ -477,4 +518,26 @@ def mensagens_com_interacao(user, c: ConversationContext) -> list[dict]:
                               and m.ficha["modelo"] in modelos and pode_aprovar(user, modelos[m.ficha["modelo"]])),
         })
     return out
+
+
+def _linhas_resposta(m, resultado):
+    import re
+
+    texto = m.texto
+    if resultado is not None:
+        texto = re.sub(r"(?m)^Consulta executada (?:às|em) [^:\n]+(?::\d\d)*:\s*\d+ linha\(s\)\.[ \t]*", "", texto)
+        texto = texto.replace('Resultado salvo no histórico; use “Executar de novo” para atualizar os dados.', '')
+        texto = texto.removeprefix("Continuando o seu pedido, sem você precisar pedir de novo. ")
+        texto = texto.strip()
+    return texto.splitlines()
+
+
+def refazer(user, c, resposta_id, pedido=None):
+    if not pode_escrever(user, c):
+        raise PermissaoNegada("Somente leitura nesta conversa.")
+    item = next((i for i in mensagens_com_interacao(user, c) if i["m"].pk == resposta_id), None)
+    if item is None or not item["refazer"]:
+        raise PermissaoNegada("Esta resposta não está disponível para reexecução.")
+    origem = c.mensagens.get(pk=item["refazer"], autor=user, papel=Papel.USUARIO)
+    return enviar(user, c, origem.texto, pedido=pedido, origem=origem)
 

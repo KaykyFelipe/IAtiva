@@ -23,12 +23,6 @@
       </table>
     </div>
   {% endif %}
-  {% if resultado.premissas and formato != "direto" and formato != "resumo" %}
-    <details class="premissas">
-      <summary>Critérios e premissas desta consulta</summary>
-      <ul>{% for p in resultado.premissas %}<li>{{ p }}</li>{% endfor %}</ul>
-    </details>
-  {% endif %}
-  {% if not formato %}<p class="nota">Resultado salvo no histórico, com os dados da execução original. Use “Executar de novo” para atualizar.</p>{% endif %}
+  {% for aviso in resultado.avisos_leitura %}<p class="nota">{{ aviso }}</p>{% endfor %}
 </div>
 {% endif %}

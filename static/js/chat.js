@@ -217,8 +217,11 @@
     if (!campo || campo.dataset.preparado) return;
     campo.dataset.preparado = "1";
     const ajustar = () => {
+      const painel = document.querySelector("[data-rolagem]");
+      const noFim = painel && painel.scrollHeight - painel.clientHeight - painel.scrollTop <= 24;
       campo.style.height = "auto";
-      campo.style.height = Math.min(campo.scrollHeight, 200) + "px";
+      campo.style.height = campo.scrollHeight + "px";
+      if (noFim) painel.scrollTop = painel.scrollHeight;
     };
     campo.addEventListener("input", ajustar);
     campo.addEventListener("keydown", (e) => {
@@ -369,14 +372,6 @@
       b.title = b.getAttribute("aria-label");
       pensando.querySelector("[data-pensando-passos]").hidden = !aberto;
     });
-    if (window.IAtivaMascote) {
-      const rosto = document.createElement('div'); rosto.className = 'pensando-mascote';
-      rosto.append(IAtivaMascote.criar('thinking'));
-      const linha = pensando.querySelector('.pensando-linha');
-      linha.querySelector('.pontos').remove();
-      rosto.append(linha); pensando.prepend(rosto);
-      IAtivaMascote.estado('thinking');
-    }
   }
 
   function mostrarPensando(texto) {
@@ -437,7 +432,6 @@
           ? "Consultando no banco" : ultimo;
         const mudouTexto = agora.textContent !== texto + "…";
         agora.textContent = texto + "…";
-        if (window.IAtivaMascote) IAtivaMascote.estado(IAtivaMascote.etapa(agora.textContent));
         if (mudouTexto) { agora.classList.remove("trocou"); void agora.offsetWidth; agora.classList.add("trocou"); }
         vistos = passos.length;
       })
@@ -460,11 +454,10 @@
     acompanhamento = null;
   }
 
-  function encerrar(restaurar, estadoMascote = 'paused') {
+  function encerrar(restaurar) {
     if (!atual) return;
-    const { form, texto, elementos } = atual;
+    const { form, texto, elementos, rascunho } = atual;
     atual = null;
-    if (window.IAtivaMascote) IAtivaMascote.estado(estadoMascote);
     pararAcompanhamento();
     setTimeout(atualizarBotaoTarefa, 0);
     elementos.forEach((el) => el.remove());
@@ -482,7 +475,7 @@
       if (campo.dataset.placeholderOriginal) campo.placeholder = campo.dataset.placeholderOriginal;
     }
     if (campo && restaurar) {
-      campo.value = texto;
+      campo.value = rascunho ?? texto;
       campo.dispatchEvent(new Event("input"));
       campo.focus({ preventScroll: true });
     }
@@ -549,7 +542,6 @@
       if (texto) texto.textContent = "Parando o pedido…";
       htmx.ajax("POST", barra.dataset.cancelarUrl, { target: "#conversa", swap: "outerHTML",
         values: { csrfmiddlewaretoken: form.querySelector("[name=csrfmiddlewaretoken]").value } });
-      if (window.IAtivaMascote) IAtivaMascote.estado('paused');
       return;
     }
     const dados = new FormData();
@@ -563,7 +555,6 @@
         if (html && cartao) { cartao.outerHTML = html; }
         barra.removeAttribute("data-tarefa-ativa");
         barra.hidden = true;
-        if (window.IAtivaMascote) IAtivaMascote.estado('paused');
         atualizarBotaoTarefa();
       })
       .catch(() => {});
@@ -581,9 +572,78 @@
     }
   }, true);
 
+  function copiarTexto(texto) {
+    const campo = document.createElement("textarea");
+    const foco = document.activeElement;
+    campo.value = texto;
+    campo.readOnly = true;
+    campo.style.cssText = "position:fixed;left:-9999px;top:0";
+    document.body.append(campo);
+    campo.select();
+    try { return document.execCommand("copy"); }
+    finally { campo.remove(); foco?.focus({ preventScroll: true }); }
+  }
+
+  async function copiarResposta(botao) {
+    const resposta = botao.closest(".resposta-chat");
+    const conteudo = resposta.querySelector("[data-copiar-conteudo]").cloneNode(true);
+    conteudo.querySelectorAll("form, button, link, details, svg").forEach((el) => el.remove());
+    const html = conteudo.innerHTML;
+    for (const tabela of conteudo.querySelectorAll("table")) {
+      const linhas = Array.from(tabela.rows, (linha) =>
+        "| " + Array.from(linha.cells, (c) => c.textContent.trim().replaceAll("|", "\\|")).join(" | ") + " |");
+      if (tabela.tHead && linhas.length > 1) {
+        linhas.splice(1, 0, "| " + Array.from(tabela.rows[0].cells, () => "---").join(" | ") + " |");
+      }
+      const textoTabela = document.createElement("pre");
+      textoTabela.textContent = linhas.join("\n");
+      tabela.replaceWith(textoTabela);
+    }
+    conteudo.querySelectorAll("br").forEach((el) => el.replaceWith("\n"));
+    const texto = Array.from(conteudo.querySelectorAll("p,h3,dt,dd,pre"),
+      (el) => el.textContent.trim()).filter(Boolean).join("\n\n");
+    let copiado = false;
+    try {
+      if (navigator.clipboard && window.ClipboardItem) {
+        await navigator.clipboard.write([new ClipboardItem({
+          "text/html": new Blob([html], { type: "text/html" }),
+          "text/plain": new Blob([texto], { type: "text/plain" }),
+        })]);
+        copiado = true;
+      }
+    } catch (_) { /* HTTP interno e navegadores sem cópia rica usam texto. */ }
+    if (!copiado) {
+      try { copiado = copiarTexto(texto); } catch (_) { /* permissão negada */ }
+    }
+    const feedback = copiado ? "Resposta copiada" : "Cópia indisponível";
+    botao.title = feedback;
+    botao.classList.toggle("copiado", copiado);
+    resposta.querySelector("[data-estado-copia]").textContent = feedback;
+    setTimeout(() => { botao.title = "Copiar resposta"; botao.classList.remove("copiado"); }, 1600);
+  }
+
+  document.addEventListener("click", (e) => {
+    const botao = e.target.closest("[data-copiar-resposta]");
+    if (botao) copiarResposta(botao);
+  });
+
   // Captura: roda antes do htmx ler o formulário.
   document.addEventListener("submit", (e) => {
     const form = e.target;
+    if (form.matches("[data-refazer-resposta]") && window.htmx) {
+      e.preventDefault(); e.stopImmediatePropagation();
+      const compositor = document.querySelector("[data-compositor]");
+      const campo = compositor?.querySelector("[data-campo]");
+      if (atual || tarefaAtiva() || !campo || campo.disabled) return;
+      const rascunho = campo.value;
+      campo.value = "Executar de novo";
+      compositor.querySelector("[data-refazer]").value = form.elements.refazer.value;
+      compositor.requestSubmit();
+      compositor.querySelector("[data-refazer]").value = "";
+      if (atual?.form === compositor) atual.rascunho = rascunho;
+      else campo.value = rascunho;
+      return;
+    }
     if (form.matches("[data-opcao-mensagem]")) {
       e.preventDefault(); e.stopImmediatePropagation();
       const compositor = document.querySelector("[data-compositor]");
@@ -633,7 +693,7 @@
   });
   ["htmx:responseError", "htmx:sendError", "htmx:timeout"].forEach((ev) =>
     document.body.addEventListener(ev, (e) => {
-      if (atual && e.detail.elt === atual.form) encerrar(true, 'attention');
+      if (atual && e.detail.elt === atual.form) encerrar(true);
     }));
   document.body.addEventListener("htmx:afterRequest", (e) => {
     const xhr = e.detail && e.detail.xhr;
@@ -690,6 +750,7 @@
       const ias = document.querySelectorAll(".mensagens .msg.ia:not(.pensando)");
       animarResposta(ias[ias.length - 1]);
     }
+    const rascunho = atual?.rascunho;
     if (atual && !atual.form.isConnected) { atual = null; pararAcompanhamento(); }
     atualizarBotaoTarefa();
     atualizarSaudacao();
@@ -697,6 +758,11 @@
     const area = document.getElementById("conversa");
     const vista = leituraPorRequisicao.get(e.detail.xhr);
     prepararCampo(vista?.conversa !== area?.dataset.conversaId);
+    const campo = area?.querySelector("[data-campo]");
+    if (campo && rascunho !== undefined && vista?.conversa === area.dataset.conversaId) {
+      campo.value = rascunho;
+      campo.dispatchEvent(new Event("input"));
+    }
     retomarEnvio();
     if (!restaurarLeitura(area, vista)) rolarParaFim();
   });
@@ -746,8 +812,7 @@
           restaurarLeitura(area, vista);
         }
         area.querySelector("h1").textContent = doc.querySelector("h1").textContent;
-        area.dataset.falha = doc.getElementById('conversa').dataset.falha;
-        if (window.IAtivaMascote) IAtivaMascote.sincronizar();
+        document.title = area.querySelector("h1").textContent + " · IAtiva";
       }
       versaoRemota = lateralOcupada ? "" : dados.versao;
     } catch (_) { /* indisponibilidade transitória: tentar no próximo ciclo */ }

@@ -89,7 +89,7 @@ def test_primeira_mensagem_cria_conversa(logado, ana):
     r = logado.post(reverse("chat:nova"), {"mensagem": INADIMPLENTES})
     c = ConversationContext.objects.get()
     assert r.status_code == 200 and r["HX-Push-Url"] == reverse("chat:conversa", args=[c.pk])
-    assert c.tipo == TipoConversa.INDIVIDUAL and c.usuario == ana and c.titulo == INADIMPLENTES
+    assert c.tipo == TipoConversa.INDIVIDUAL and c.usuario == ana and c.titulo == "Consulta de inadimplência"
     papeis = list(c.mensagens.values_list("papel", flat=True))
     assert papeis == ["usuario", "ia"]
 
@@ -108,8 +108,35 @@ def test_conversa_em_texto_e_execucao_automatica(logado, ana):
     r = logado.post(url, {"mensagem": "corte 31/12/2025, 5 dias, considerar saldo, filial 001001"}, HTTP_HX_REQUEST="true")
     html = r.content.decode()
     assert 'id="conversa"' in html and "<html" not in html
-    assert "Consulta executada" in html and "Critérios:" in html  # completou e executou sozinha
+    assert c.mensagens.last().ficha["tipo"] == "executada" and "data-copiar-resposta" in html
+    assert "Critérios e premissas desta consulta" not in html and "Somente os dados que você pode consultar" not in html
     assert c.mensagens.count() == 4
+
+
+def test_titulo_sugerido_pela_ia_e_titulo_manual_tem_prioridade(ana):
+    from iativa.agent.provedores import FakeProvider
+
+    c = conversas.nova_individual(ana)
+    titulo = "Clientes com títulos em atraso"
+    p = FakeProvider(analises=[{"natureza": "geral", "setores": [], "confianca": 1, "resumo": "",
+                               "entregas": [], "memorias": [], "titulo": titulo}])
+    conversas.enviar(ana, c, INADIMPLENTES, p)
+    assert c.titulo == titulo
+    conversas.renomear(ana, c.pk, "Relatório de cobrança")
+    c.titulo = ""  # Outra aba ainda tem o título antigo.
+    conversas.definir_titulo(c, "Tema sugerido depois", INADIMPLENTES)
+    c.refresh_from_db()
+    assert c.titulo == "Relatório de cobrança"
+
+
+def test_lateral_separa_ontem_pela_data_da_ultima_mensagem_enviada(ana):
+    hoje = timezone.now()
+    for dias in (0, 1, 3):
+        c = conversas.nova_individual(ana)
+        m = c.mensagens.create(papel="usuario", autor=ana, texto=f"Consulta {dias}")
+        Mensagem.objects.filter(pk=m.pk).update(criado_em=hoje - timedelta(days=dias))
+        c.mensagens.create(papel="ia", texto="Resposta publicada hoje")
+    assert [nome for nome, _ in conversas.lateral(ana)["grupos"]] == ["Hoje", "Ontem", "Últimos 7 dias"]
 
 def test_resposta_pelo_formulario_vira_mensagem(logado):
     logado.post(reverse("chat:nova"), {"mensagem": INADIMPLENTES})

@@ -61,9 +61,10 @@ body { font-family: "Segoe UI Variable Text", "Segoe UI", Arial, sans-serif; fon
 .redimensionando * { cursor: col-resize !important; }
 .principal { min-width: 0; }
 .conversa-area { overflow: hidden; }
-.cabecalho { min-height: 69px; flex: none; padding: 10px 31px; gap: 11px; border-bottom: 0; background: var(--papel); }
-.titulo-conversa h1 { font-size: 16px; font-weight: 560; letter-spacing: -.15px; }
+.cabecalho { min-height: 53px; flex: none; padding: 10px 24px; gap: 11px; border-bottom: 1px solid var(--linha); background: var(--papel); }
+.titulo-conversa h1 { font-size: 15px; font-weight: 600; line-height: 1.35; white-space: normal; overflow-wrap: anywhere; }
 .escopo { font-size: 10px; color: #84928a; }
+.escopo:empty { display: none; }
 .inicio .escopo { display: none; }
 .abrir-lateral { display: none; }
 .lateral-recolhida .abrir-lateral { display: inline-grid; }
@@ -74,8 +75,12 @@ body { font-family: "Segoe UI Variable Text", "Segoe UI", Arial, sans-serif; fon
 .msg { line-height: 1.8; min-width: 0; animation: aparecer-mensagem .18s ease-out; }
 .msg p { margin-bottom: 14px; }
 .msg.usuario { max-width: 85%; padding: 12px 19px; background: #eef3f0; border: 1px solid #e8eeea; border-radius: 19px 19px 5px 19px; color: #30493b; line-height: 1.65; }
-.assinatura-ia { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; font-size: 12px; font-weight: 650; }
-.marca-ia { display: inline-grid; place-items: center; width: 24px; height: 24px; background: #edf3fa; color: var(--azul); font-size: 11px; font-weight: 700; border-radius: 7px; }
+.resposta-chat { min-width: 0; }
+.resposta-chat [data-copiar-conteudo] > .msg.ia:not(.resultado) > p { font-size: 15px; line-height: 1.65; color: var(--texto); }
+.acoes-resposta { display: flex; align-items: center; gap: 3px; margin-top: 6px; }
+.acoes-resposta .icone { width: 29px; height: 29px; padding: 0; color: var(--sutil); background: transparent; }
+.acoes-resposta .icone:hover, .acoes-resposta .icone.copiado { color: var(--azul); background: #eaf1f9; }
+.acoes-resposta .simbolo-svg { width: 15px; height: 15px; }
 .nota { font-size: 11px; color: #819087; }
 .msg .criterios-linha { font-size: 11px; line-height: 1.9; }
 .resultado > p:first-child { font-size: 12px; color: #3c5846; }
@@ -111,18 +116,16 @@ button.secundario:hover { background: #f0f5f1; }
 .subtitulo-inicio { font-size: 13px; color: #7e8e84; margin: 0; }
 .compositor { width: 100%; max-width: var(--largura-leitura); margin: 0 auto; padding: 13px 25px 16px; flex: none; }
 .inicio .compositor { margin-top: 29px; padding-top: 0; padding-bottom: 0; }
-.caixa-compositor { background: #fff; border: 1px solid #dfe7e2; border-radius: 19px; padding: 15px 16px 11px; box-shadow: 0 5px 22px #223c2a08, 0 1px 3px #223c2a05; transition: border-color .15s, box-shadow .15s; }
-.caixa-compositor:focus-within { border-color: #a7bfb0; box-shadow: 0 5px 25px #223c2a09, 0 0 0 3px #eaf1ec70; }
-.compositor textarea { display: block; width: 100%; min-height: 31px; max-height: 200px; padding: 0 2px; border: 0; border-radius: 0; background: transparent; box-shadow: none; outline: none; font-size: 14px; line-height: 1.55; }
+.caixa-compositor { display: flex; align-items: flex-end; gap: 7px; background: #fff; border: 1px solid var(--linha); border-radius: 14px; padding: 6px 8px 6px 13px; transition: border-color .15s, box-shadow .15s; }
+.caixa-compositor:focus-within { border-color: #92b1d3; box-shadow: 0 0 0 2px #15559f14; }
+.compositor textarea { display: block; flex: 1; min-width: 0; min-height: 32px; max-height: min(30dvh, 240px); padding: 5px 2px; border: 0; border-radius: 0; resize: none; background: transparent; box-shadow: none; outline: none; font-size: 14px; line-height: 22px; }
 .compositor textarea::placeholder { color: #8e9b93; }
-.compositor-acoes { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 7px; }
-.contexto-compositor { display: flex; align-items: center; gap: 6px; font-size: 10px; color: #7c9082; min-width: 0; }
-.contexto-compositor .simbolo-svg { width: 12px; height: 12px; }
-.enviar { position: static; display: inline-grid; place-items: center; flex: none; width: 32px; height: 32px; padding: 0; border-radius: 50%; background: var(--azul); color: #fff; }
-.enviar:hover { background: var(--azul-escuro); }
+.enviar { position: static; display: inline-grid; place-items: center; flex: none; width: 32px; height: 32px; padding: 0; border-radius: 8px; background: #eaf1f9; color: var(--azul-escuro); }
+.enviar:hover { background: #dbe8f6; }
 .enviar .simbolo-svg { width: 17px; height: 17px; }
-.enviar.parar { background: #334d3e; }
-.enviar.parar .simbolo-svg { width: 12px; height: 12px; fill: currentColor; stroke: none; }
+.enviar.parar { background: #edf0f4; color: var(--texto); opacity: 1; }
+.enviar.parar:hover { background: #dce3ee; }
+.enviar.parar .simbolo-svg { width: 15px; height: 15px; fill: currentColor; stroke: none; }
 .rodape-compositor { display: flex; justify-content: space-between; gap: 10px; margin: 9px 5px 0; font-size: 10px; color: #899b8f; text-align: left; }
 .rodape-compositor kbd { font: inherit; padding: 1px 3px; border: 1px solid #e7ece8; background: #f5f7f6; border-radius: 3px; }
 .sugestoes-inicio { width: 100%; max-width: 510px; margin: 25px auto 0; padding: 0 12px; display: flex; flex-direction: column; }
@@ -145,7 +148,7 @@ button.secundario:hover { background: #f0f5f1; }
   .app.lateral-recolhida { grid-template-columns: minmax(0, 1fr); }
   .abrir-lateral { display: inline-grid; }
   .divisoria-lateral, .expandir-leitura { display: none; }
-  .cabecalho { min-height: 62px; padding: 8px 13px; gap: 7px; }
+  .cabecalho { min-height: 48px; padding: 8px 13px; gap: 7px; }
   .titulo-conversa h1 { font-size: 14px; }
   .escopo { font-size: 9px; }
   .mensagens { padding: 15px 20px 25px; gap: 22px; }
@@ -158,9 +161,8 @@ button.secundario:hover { background: #f0f5f1; }
   .compositor { padding: 8px 13px 12px; }
   .inicio .compositor { margin-top: 28px; padding-left: 22px; padding-right: 22px; }
   .compositor textarea { font-size: 13px; }
-  .caixa-compositor { padding: 14px 13px 10px; border-radius: 17px; }
+  .caixa-compositor { padding: 6px 7px 6px 11px; }
   .rodape-compositor { font-size: 9px; }
-  .contexto-compositor { font-size: 9px; }
   .sugestoes-inicio { padding: 0 22px; }
   .sugestoes-inicio button { font-size: 11px; padding: 12px 10px; }
   .ficha dl > div { grid-template-columns: 1fr; gap: 4px; }

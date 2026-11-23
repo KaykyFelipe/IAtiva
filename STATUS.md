@@ -18,6 +18,8 @@
 
 ## Leitura dos resultados no chat
 
+- O chat tem títulos por assunto gerados na primeira triagem, cabeçalho com quebra de linha, grupo “Ontem” pela última mensagem enviada e campo de texto que cresce mantendo a posição de leitura.
+- Respostas têm controles de copiar e refazer abaixo do resultado. A cópia inclui tabelas e totais, e a reexecução de uma resposta com várias consultas volta ao pedido que a originou. As mensagens e o andamento no chat dispensam o mascote e os avisos repetitivos.
 - Tabelas de consulta têm altura máxima, cabeçalho fixo e rolagem própria. Ao atualizar a conversa em uso, o chat preserva a posição de leitura, a rolagem das tabelas e os detalhes abertos. O estilo acompanha a atualização da conversa para alcançar abas já abertas.
 
 ## Respostas com detalhes e resumo lado a lado
