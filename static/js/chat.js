@@ -403,7 +403,7 @@
 
   function montarPensando(pensando) {
     pensando.innerHTML = '<div class="pensando-linha"><span class="pontos" aria-hidden="true"><i></i><i></i><i></i></span>' +
-      '<span class="pensando-atual" data-pensando-atual>Entendendo o que você pediu…</span></div>';
+      '<span class="pensando-atual" data-pensando-atual>Lendo o seu pedido…</span></div>';
   }
 
   function mostrarPensando(texto) {

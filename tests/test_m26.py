@@ -89,7 +89,7 @@ def test_andamento_publico_resume_a_etapa_real(base, client):
     assert not any("SINTETIC" in p for p in passos)  # nada do ERP
     client.force_login(base["u"])
     r = client.get(reverse("chat:andamento", args=[pedido]))
-    assert r.json() == {"mensagem": "Organizando o resultado para mostrar aqui…", "fim": True}
+    assert r.json() == {"mensagem": "Montando a resposta…", "fim": True}
     assert "no-store" in r["Cache-Control"]
 
 
@@ -109,7 +109,21 @@ def test_andamento_publico_nao_repete_texto_do_modelo_ou_nome_da_fonte(base, cli
         andamento.avisar("Preparando a consulta “nome interno”")
         andamento.avisar("Texto livre vindo do modelo")
         r = client.get(reverse("chat:andamento", args=[pedido]))
-    assert r.json() == {"mensagem": "Organizando os critérios para a consulta…", "fim": False}
+    assert r.json() == {"mensagem": "Preparando a consulta…", "fim": False}
+
+
+def test_m126_andamento_diz_o_que_faz_e_numera_a_volta(base, client):
+    pedido = uuid.uuid4()
+    client.force_login(base["u"])
+    url = reverse("chat:andamento", args=[pedido])
+    with andamento.acompanhar(base["u"].pk, pedido):
+        andamento.avisar("Consultando o ERP — Matriz")
+        assert client.get(url).json()["mensagem"] == "Consultando o ERP — Matriz…"
+        andamento.avisar("Calculando o total no banco, sobre todos os registros")
+        assert client.get(url).json()["mensagem"] == "Calculando o total no banco, sobre todos os registros…"
+        andamento.avisar("A mesma ação já foi feita; mudando de estratégia")
+        andamento.avisar("Consultando o ERP — Matriz")
+        assert client.get(url).json()["mensagem"] == "Consultando o ERP — Matriz (tentativa 2)…"
 
 
 def test_barra_fixa_acompanha_a_tarefa(base, client):

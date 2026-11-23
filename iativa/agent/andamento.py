@@ -18,26 +18,43 @@ _TRAVA = threading.Lock()
 VALIDADE_S = 600
 MAX_PASSOS = 80
 
-_FASES_PUBLICAS = (
-    (("Lendo o pedido", "Decidindo o que fazer"), "Entendendo o que você pediu…"),
-    (("Preparando a consulta", "Usando a receita", "Executando um passo da receita"),
-     "Organizando os critérios para a consulta…"),
-    (("Procurando no dicionário", "Montando a consulta nova", "Criando a consulta", "A tabela ",
-      "Nada no nome"), "Procurando a fonte mais adequada para responder…"),
-    (("Calculando o total no banco",), "Calculando os totais dos dados encontrados…"),
-    (("Consultando o ERP", "Localizando as matrículas", "Consultando alterações", "Calculando "),
-     "Buscando as informações que correspondem ao seu pedido…"),
-    (("Conferindo se as junções", "Conferindo no dicionário", "Conferindo se a resposta",
-      "Lista pronta", "Verificação de toda a lista"),
-     "Conferindo os registros para montar a resposta…"),
-    (("A consulta não respondeu a tempo", "A consulta conhecida encontrou uma falha temporária"),
-     "A consulta demorou mais que o esperado. Tentando novamente…"),
-    (("Ajustando o caminho", "O critério usado", "A mesma ação", "A resposta não atendia",
-      "Etapa concluída", "Uma pergunta respondida", "Investigando divergência"),
-     "Ajustando a busca para completar o seu pedido…"),
-    (("Escrevendo a resposta", "Resposta pronta", "Aprendi como responder"),
-     "Organizando o resultado para mostrar aqui…"),
+# M126: a tela mostra o passo REAL (consulta, filial, tabela, cálculo), não uma frase fixa por fase. Só os
+# avisos internos ganham redação para a pessoa; a parte específica (nome da consulta, filial) é mantida.
+_REESCRITA = (
+    ("Decidindo o que fazer", "Analisando o pedido para escolher a consulta"),
+    ("Lendo o pedido e o histórico da conversa", "Lendo o seu pedido e o histórico da conversa"),
+    ("Ajustando o caminho: ", "Ajustando a busca: "),
+    ("A mesma ação já foi feita", "Esse caminho já foi tentado; mudando de abordagem"),
+    ("A resposta só anunciava a ação", "Executando a ação anunciada"),
+    ("Etapa concluída; ainda falta parte do pedido", "Uma parte pronta; seguindo para a próxima"),
+    ("Escrevendo a resposta", "Montando a resposta"),
 )
+MAX_PUBLICO = 160
+# Avisos do próprio sistema. Texto livre do modelo (o que ele anuncia) não vai para a tela.
+_DO_SISTEMA = tuple(p for p, _ in _REESCRITA) + (
+    "A consulta", "A resposta não atendia", "A soma inicial", "A tabela ", "Aprendi como", "Calculando",
+    "Conferindo", "Consultando", "Criando a consulta", "Executando um passo da receita", "Falta uma definição",
+    "Guardando na memória", "Investigando divergência", "Localizando", "Montando a consulta", "Nada no nome",
+    "Não tenho isso ainda", "O critério usado", "O pedido envolve", "Preparando a consulta", "Procurando",
+    "Resposta pronta", "Retomando", "Uma pergunta respondida", "Usando a receita", "Verificação de toda")
+
+
+def _publico(passo: str) -> str:
+    """Passo do sistema na redação da tela; '' para texto que não é do sistema. Nome interno de consulta (entre
+    aspas) e código de tabela entre parênteses saem; filial, período e o tipo de ação ficam."""
+    import re
+    if not passo.startswith(_DO_SISTEMA):
+        return ""
+    passo = re.sub(r"\s*“[^”]*”", "", passo)
+    passo = re.sub(r"\s*\([A-Z][A-Z0-9]{2}\)", "", passo)
+    passo = re.sub(r"(?<=Montando a consulta nova com os campos de )[A-Z0-9, ]+", "outra tabela", passo)
+    for prefixo, texto in _REESCRITA:
+        if passo.startswith(prefixo):
+            resto = passo[len(prefixo):] if prefixo.endswith(": ") else ""
+            passo = texto + resto
+            break
+    passo = passo.split(". ")[0].rstrip(".;")
+    return passo if len(passo) <= MAX_PUBLICO else passo[:MAX_PUBLICO - 1].rstrip() + "…"
 
 
 def _limpar(agora):
@@ -85,9 +102,12 @@ def ler(usuario_id, pedido) -> dict:
 
 
 def estado_publico(usuario_id, pedido):
+    """O passo atual como ele é. Se a mesma ação volta depois de outras (nova tentativa), diz qual tentativa é,
+    em vez de repetir o mesmo nome de etapa."""
     estado = ler(usuario_id, pedido)
-    for passo in reversed(estado["passos"]):
-        for prefixos, mensagem in _FASES_PUBLICAS:
-            if passo.startswith(prefixos):
-                return {"mensagem": mensagem, "fim": estado["fim"]}
-    return {"mensagem": "", "fim": estado["fim"]}
+    passos = [p for p in (_publico(p) for p in estado["passos"]) if p]
+    if not passos:
+        return {"mensagem": "", "fim": estado["fim"]}
+    atual = passos[-1]
+    vezes = sum(1 for k, p in enumerate(passos) if p == atual and (k == 0 or passos[k - 1] != p))
+    return {"mensagem": atual + (f" (tentativa {vezes})" if vezes > 1 else "") + "…", "fim": estado["fim"]}

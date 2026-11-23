@@ -18,10 +18,12 @@ def _norm(t):
     return unicodedata.normalize("NFKD", t or "").encode("ascii", "ignore").decode().lower()
 
 
-def _ano(mes, ano_txt, hoje):
+def _ano(mes, ano_txt, hoje, desde=False):
     if ano_txt:
         return int(ano_txt)
-    return hoje.year if mes <= hoje.month else hoje.year - 1  # "desde dezembro" em março = ano passado
+    if desde and mes > hoje.month:
+        return hoje.year - 1  # "desde dezembro" em março = ano passado (senão o intervalo seria invertido)
+    return hoje.year  # M126: mês sem ano é do ano corrente (pedido de Diego), mesmo que ainda não tenha chegado
 
 
 def _fim_mes(a, m):
@@ -52,7 +54,7 @@ def periodo_da_mensagem(texto: str, hoje: date) -> str:
     m = re.search(r"\b(?:desde|a partir de)\s+(?:o\s+(?:mes\s+de\s+)?)?" + _MES, t)
     if m:
         mes = MESES[m.group(1)]
-        return _fmt(date(_ano(mes, m.group(2), hoje), mes, 1), hoje)
+        return _fmt(date(_ano(mes, m.group(2), hoje, desde=True), mes, 1), hoje)
     if re.search(r"\bmes\s+passado\b|\bultimo\s+mes\b", t):
         a, mes = (hoje.year, hoje.month - 1) if hoje.month > 1 else (hoje.year - 1, 12)
         return _fmt(date(a, mes, 1), _fim_mes(a, mes))
