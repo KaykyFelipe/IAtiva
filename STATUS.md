@@ -18,6 +18,8 @@
 
 ## Leitura dos resultados no chat
 
+- Colar uma tabela no campo de mensagem preserva o texto inteiro. Se a mensagem ultrapassar o limite de envio, o chat mostra o aviso antes de enviar.
+- Recarregar a conversa abre na última mensagem. Quando uma verificação carrega a tabela depois, o chat mantém quem está no fim junto da última mensagem e preserva a leitura de quem subiu.
 - Cada tabela tem sua própria ação de cópia. Tanto a cópia da tabela quanto a da resposta escrevem texto com colunas separadas por ` | `, incluindo cabeçalhos, nomes, todos os campos apresentados e totais. Tabelas limitadas pelo ERP informam que a consulta ficou parcial.
 - A Memória abre na área do chat e organiza preferências pessoais, a fila com propostas completas e as regras e consultas aprovadas por setor.
 - Ao concluir um pedido, o chat ancora a mensagem em leitura. A seta acima do campo aparece quando há mensagens mais abaixo e volta para a mais recente.

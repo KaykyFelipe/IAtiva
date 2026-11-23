@@ -103,9 +103,10 @@
       {% if tarefa_fixa %}{% include "chat/_atividade.html" %}{% endif %}
       {% if objetivo_pendente %}{% include "chat/_objetivo.html" with objetivo=objetivo_pendente %}{% endif %}
       <div class="caixa-compositor">
-        <textarea id="campo-mensagem" name="mensagem" rows="1" maxlength="{{ form.fields.mensagem.max_length }}" placeholder="{% if conversa %}Continue a conversa…{% else %}Pergunte à IAtiva…{% endif %}" required data-campo></textarea>
+        <textarea id="campo-mensagem" name="mensagem" rows="1" data-limite-mensagem="{{ form.fields.mensagem.max_length }}" aria-describedby="limite-mensagem" placeholder="{% if conversa %}Continue a conversa…{% else %}Pergunte à IAtiva…{% endif %}" required data-campo></textarea>
         <button type="submit" class="enviar" aria-label="Enviar" title="Enviar" data-botao-enviar>{% include "chat/_icone.html" with nome="enviar" %}</button>
       </div>
+      <p class="erro" id="limite-mensagem" role="status" hidden>O texto foi colado por inteiro. Para enviar, reduza a mensagem a {{ form.fields.mensagem.max_length }} caracteres.</p>
       <p class="rodape-compositor">Não envie CPF ou CNPJ.</p>
     </form>
   {% else %}

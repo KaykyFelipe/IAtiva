@@ -4,6 +4,8 @@
   const grupos = new Map();
   let busca = "";
   let larguraLateral = parseInt(app.dataset.largura, 10) || 278;
+  // O chat escolhe o fim ao abrir e mantém sua própria posição nas atualizações.
+  history.scrollRestoration = "manual";
   // A CSP bloqueia o style inline vindo do HTML; aplicar a largura pelo script autorizado.
   app.style.setProperty("--largura-lateral", larguraLateral + "px");
 
@@ -235,9 +237,16 @@
     const campo = document.querySelector("[data-campo]");
     if (!campo || campo.dataset.preparado) return;
     campo.dataset.preparado = "1";
+    const avisoLimite = campo.form.querySelector("#limite-mensagem");
+    const limite = Number(campo.dataset.limiteMensagem);
     const ajustar = () => {
       const painel = document.querySelector("[data-rolagem]");
       const noFim = painel && distanciaAteFim(painel) <= 24;
+      if (avisoLimite && limite > 0) {
+        const excedeu = Array.from(campo.value.trim()).length > limite;
+        avisoLimite.hidden = !excedeu;
+        campo.setCustomValidity(excedeu ? `A mensagem pode ter até ${limite} caracteres.` : "");
+      }
       campo.style.height = "auto";
       campo.style.height = campo.scrollHeight + "px";
       if (noFim) painel.scrollTop = painel.scrollHeight;
@@ -762,10 +771,10 @@
   document.addEventListener("DOMContentLoaded", () => {
     atualizarSaudacao();
     prepararLateral();
-    rolarParaFim();
     prepararCampo();
     atualizarBotaoTarefa();
     retomarEnvio();
+    rolarParaFim();
     // M53: o cartão do pedido é trocado por outerHTML quando termina; o evento do htmx sai do elemento
     // já removido e não chega aqui. Observa a página para destravar o campo assim que o cartão some.
     let pendente = false;
@@ -774,6 +783,9 @@
       pendente = true;
       requestAnimationFrame(() => { pendente = false; atualizarBotaoTarefa(); });
     }).observe(document.body, { childList: true, subtree: true });
+  });
+  window.addEventListener("pageshow", (e) => {
+    if (!e.persisted) rolarParaFim();
   });
   // Anima apenas a opacidade, mantendo a altura da resposta durante a leitura.
   function animarResposta(msg) {
@@ -786,20 +798,26 @@
   const leituraPorRequisicao = new WeakMap();
   document.body.addEventListener("htmx:beforeSwap", (e) => {
     const { target, xhr, shouldSwap } = e.detail;
-    if (shouldSwap && target?.id === "conversa" && xhr) {
-      if (target !== document.getElementById("conversa")) {
-        e.detail.shouldSwap = false;
-        return;
-      }
-      leituraPorRequisicao.set(xhr, capturarLeitura(target));
+    if (!shouldSwap || !xhr) return;
+    const area = document.getElementById("conversa");
+    if (target?.id === "conversa" && target !== area) {
+      e.detail.shouldSwap = false;
+      return;
+    }
+    const parte = target?.closest(".tarefa-card, .atividade-fixa");
+    if (target === area || (parte && area?.contains(parte))) {
+      leituraPorRequisicao.set(xhr, { vista: capturarLeitura(area), area, fragmento: target !== area });
     }
   });
 
   document.body.addEventListener("htmx:afterSwap", (e) => {
     atualizarBotaoTarefa();
-    // Progresso, objetivos e conclusões atualizam apenas seus cartões. Não
-    // devem mexer na leitura nem reinicializar a sincronização da conversa.
-    if (!e.detail || !e.detail.target || e.detail.target.id !== "conversa") return;
+    const leitura = leituraPorRequisicao.get(e.detail?.xhr);
+    if (leitura?.fragmento) {
+      if (leitura.area.isConnected) restaurarLeitura(leitura.area, leitura.vista);
+      return;
+    }
+    if (e.detail?.target?.id !== "conversa") return;
     if (animarProxima) {
       animarProxima = false;
       const ias = document.querySelectorAll(".mensagens .msg.ia:not(.pensando)");
@@ -811,7 +829,7 @@
     atualizarSaudacao();
     prepararLateral();
     const area = document.getElementById("conversa");
-    const vista = leituraPorRequisicao.get(e.detail.xhr);
+    const vista = leitura?.vista;
     document.title = area.querySelector("h1").textContent + " · IAtiva";
     prepararCampo(vista?.conversa !== area?.dataset.conversaId);
     const campo = area?.querySelector("[data-campo]");
@@ -823,9 +841,11 @@
     if (!restaurarLeitura(area, vista)) rolarParaFim();
   });
   document.body.addEventListener("htmx:afterSettle", (e) => {
-    const vista = leituraPorRequisicao.get(e.detail?.xhr);
-    if (vista && e.detail.target?.id === "conversa") {
-      restaurarLeitura(document.getElementById("conversa"), vista);
+    const leitura = leituraPorRequisicao.get(e.detail?.xhr);
+    if (!leitura) return;
+    const area = document.getElementById("conversa");
+    if (leitura.fragmento ? area === leitura.area : e.detail.target?.id === "conversa") {
+      restaurarLeitura(area, leitura.vista);
     }
   });
   setInterval(atualizarSaudacao, 60000);
