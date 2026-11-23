@@ -7,7 +7,7 @@
 <div class="msg ia resultado">
   {% if formato != "direto" and resultado.mensagem %}<p><strong>{{ resultado.mensagem }}</strong></p>{% endif %}
   {% if resultado.linhas %}
-    <div class="tabela-rolagem">
+    <div class="tabela-rolagem tabela-resultado" tabindex="0" role="region" aria-label="Tabela do resultado">
       <table>
         <thead><tr>{% for c, cls in resultado.cabecalho %}<th class="{{ cls }}">{{ c }}</th>{% endfor %}</tr></thead>
         <tbody>

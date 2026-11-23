@@ -83,7 +83,7 @@
     campo.setAttribute("aria-label", "Novo nome da conversa");
     titulo.hidden = true;
     titulo.after(campo);
-    campo.focus();
+    campo.focus({ preventScroll: true });
     campo.select();
     let feito = false;
     const fechar = (novo) => {
@@ -154,7 +154,7 @@
       app.classList.remove("lateral-recolhida");
       if (innerWidth <= 680) app.classList.add("menu-aberto");
       const campo = document.querySelector("[data-busca-conversas]");
-      if (campo) campo.focus();
+      if (campo) campo.focus({ preventScroll: true });
     }
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
       const link = document.querySelector(".nova");
@@ -162,12 +162,57 @@
     }
   });
 
+  function capturarLeitura(area) {
+    const painel = area?.querySelector("[data-rolagem]");
+    if (!painel) return null;
+    const resultados = new Map();
+    const topoPainel = painel.getBoundingClientRect().top;
+    let ancora = null;
+    for (const resposta of painel.querySelectorAll("[data-resultado-de]")) {
+      const caixa = resposta.getBoundingClientRect();
+      if (caixa.top <= topoPainel && caixa.bottom > topoPainel) {
+        ancora = { id: resposta.dataset.resultadoDe, distancia: caixa.top - topoPainel };
+      }
+      resultados.set(resposta.dataset.resultadoDe, {
+        tabelas: Array.from(resposta.querySelectorAll(".tabela-resultado"),
+          (el) => ({ topo: el.scrollTop, esquerda: el.scrollLeft, foco: document.activeElement === el })),
+        detalhes: Array.from(resposta.querySelectorAll("details"), (el) => el.open),
+      });
+    }
+    return { conversa: area.dataset.conversaId, topo: painel.scrollTop, resultados, ancora };
+  }
+
+  function restaurarLeitura(area, vista) {
+    const painel = area?.querySelector("[data-rolagem]");
+    if (!painel || !vista || vista.conversa !== area.dataset.conversaId) return false;
+    let ancora = null;
+    for (const resposta of painel.querySelectorAll("[data-resultado-de]")) {
+      const estado = vista.resultados.get(resposta.dataset.resultadoDe);
+      if (!estado) continue;
+      if (vista.ancora?.id === resposta.dataset.resultadoDe) ancora = resposta;
+      resposta.querySelectorAll("details").forEach((el, i) => {
+        if (i < estado.detalhes.length) el.open = estado.detalhes[i];
+      });
+      resposta.querySelectorAll(".tabela-resultado").forEach((el, i) => {
+        const posicao = estado.tabelas[i];
+        if (!posicao) return;
+        el.scrollTop = posicao.topo;
+        el.scrollLeft = posicao.esquerda;
+        if (posicao.foco) el.focus({ preventScroll: true });
+      });
+    }
+    painel.scrollTop = ancora
+      ? painel.scrollTop + ancora.getBoundingClientRect().top - painel.getBoundingClientRect().top - vista.ancora.distancia
+      : vista.topo;
+    return true;
+  }
+
   function rolarParaFim() {
     const r = document.querySelector("[data-rolagem]");
     if (r) r.scrollTop = r.scrollHeight;
   }
 
-  function prepararCampo() {
+  function prepararCampo(autofoco = true) {
     const campo = document.querySelector("[data-campo]");
     if (!campo || campo.dataset.preparado) return;
     campo.dataset.preparado = "1";
@@ -184,7 +229,7 @@
       }
     });
     ajustar();
-    if (innerWidth > 680 && !document.activeElement.matches("input, textarea, select")) campo.focus();
+    if (autofoco && innerWidth > 680 && !document.activeElement.matches("input, textarea, select")) campo.focus({ preventScroll: true });
   }
 
   // M71: excluir conversa, com confirmação.
@@ -230,10 +275,6 @@
     const nav = document.querySelector("#lateral nav");
     const rolagem = nav ? nav.scrollTop : 0;
     htmx.ajax("GET", url, { target: "#conversa", swap: "outerHTML" }).then(() => {
-      // M89: abre sempre na última mensagem; tabelas e o mascote mudam a altura depois da troca.
-      rolarParaFim();
-      requestAnimationFrame(rolarParaFim);
-      [150, 400, 900].forEach((ms) => setTimeout(rolarParaFim, ms));
       const nova = document.querySelector("#lateral nav");
       if (nova) { nova.scrollTop = rolagem; requestAnimationFrame(() => { nova.scrollTop = rolagem; }); }
       if (empilhar) history.pushState({ conversa: true }, "", url);
@@ -281,7 +322,7 @@
       if (campo) {
         campo.value = alvo.getAttribute("data-sugestao");
         campo.dispatchEvent(new Event("input"));
-        campo.focus();
+        campo.focus({ preventScroll: true });
       }
     }
   });
@@ -327,7 +368,6 @@
       b.setAttribute("aria-label", aberto ? "Esconder as etapas" : "Mostrar as etapas");
       b.title = b.getAttribute("aria-label");
       pensando.querySelector("[data-pensando-passos]").hidden = !aberto;
-      rolarParaFim();
     });
     if (window.IAtivaMascote) {
       const rosto = document.createElement('div'); rosto.className = 'pensando-mascote';
@@ -400,7 +440,6 @@
         if (window.IAtivaMascote) IAtivaMascote.estado(IAtivaMascote.etapa(agora.textContent));
         if (mudouTexto) { agora.classList.remove("trocou"); void agora.offsetWidth; agora.classList.add("trocou"); }
         vistos = passos.length;
-        rolarParaFim();
       })
       .catch(() => {});
     acompanhamento = setInterval(ler, 700);
@@ -415,7 +454,6 @@
     montarPensando(el);
     acompanhar(form, el.dataset.pedido);
     atualizarBotaoTarefa();
-    rolarParaFim();
   }
   function pararAcompanhamento() {
     if (acompanhamento) clearInterval(acompanhamento);
@@ -446,7 +484,7 @@
     if (campo && restaurar) {
       campo.value = texto;
       campo.dispatchEvent(new Event("input"));
-      campo.focus();
+      campo.focus({ preventScroll: true });
     }
   }
 
@@ -614,7 +652,6 @@
     atualizarSaudacao();
     prepararLateral();
     rolarParaFim();
-    window.addEventListener("load", rolarParaFim, { once: true });  // M89: depois das tabelas e imagens
     prepararCampo();
     atualizarBotaoTarefa();
     retomarEnvio();
@@ -627,28 +664,21 @@
       requestAnimationFrame(() => { pendente = false; atualizarBotaoTarefa(); });
     }).observe(document.body, { childList: true, subtree: true });
   });
-  // M68: a resposta nova aparece aos poucos (texto palavra a palavra; tabelas surgem depois), como num chat.
+  // Anima apenas a opacidade, mantendo a altura da resposta durante a leitura.
   function animarResposta(msg) {
     if (!msg || msg.dataset.animada || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     msg.dataset.animada = "1";
-    const textos = Array.from(msg.querySelectorAll("p")).filter((p) =>
-      !p.closest("table, .resultado, .consolidado, details") && !p.children.length && p.textContent.trim());
-    const resto = Array.from(msg.children).filter((el) => !textos.some((p) => el === p || el.contains(p)));
-    resto.forEach((el) => { el.style.opacity = "0"; el.style.transition = "opacity .35s ease"; });
-    const fila = textos.map((p) => { const t = p.textContent; p.textContent = ""; return [p, t.split(/(\s+)/)]; });
-    let i = 0, j = 0;
-    const passo = () => {
-      if (i >= fila.length) { resto.forEach((el) => { el.style.opacity = ""; }); rolarParaFim(); return; }
-      const [p, partes] = fila[i];
-      p.textContent += partes.slice(j, j + 6).join("");
-      j += 6;
-      if (j >= partes.length) { i++; j = 0; }
-      rolarParaFim();
-      setTimeout(passo, 30);
-    };
-    passo();
+    msg.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 180 });
   }
   let animarProxima = false;
+
+  const leituraPorRequisicao = new WeakMap();
+  document.body.addEventListener("htmx:beforeSwap", (e) => {
+    const { target, xhr, shouldSwap } = e.detail;
+    if (shouldSwap && target?.id === "conversa" && xhr) {
+      leituraPorRequisicao.set(xhr, capturarLeitura(target));
+    }
+  });
 
   document.body.addEventListener("htmx:afterSwap", (e) => {
     atualizarBotaoTarefa();
@@ -664,9 +694,11 @@
     atualizarBotaoTarefa();
     atualizarSaudacao();
     prepararLateral();
-    rolarParaFim();
-    prepararCampo();
+    const area = document.getElementById("conversa");
+    const vista = leituraPorRequisicao.get(e.detail.xhr);
+    prepararCampo(vista?.conversa !== area?.dataset.conversaId);
     retomarEnvio();
+    if (!restaurarLeitura(area, vista)) rolarParaFim();
   });
   setInterval(atualizarSaudacao, 60000);
   document.addEventListener("visibilitychange", () => { if (!document.hidden) atualizarSaudacao(); });
@@ -700,9 +732,7 @@
         const doc = new DOMParser().parseFromString(dados.conversa, "text/html");
         const recebida = doc.getElementById("conversa");
         const mensagens = area.querySelector(".mensagens"), novas = doc.querySelector(".mensagens");
-        const rolagem = area.querySelector("[data-rolagem]");
-        const noFim = rolagem.scrollHeight - rolagem.scrollTop - rolagem.clientHeight < 100;
-        const posicao = rolagem.scrollTop;
+        const vista = capturarLeitura(area);
         const mudou = !recebida.dataset.historicoVersao || recebida.dataset.historicoVersao !== area.dataset.historicoVersao;
         if (mudou && mensagens && novas) {
           const antes = mensagens.querySelectorAll(".msg.ia:not(.pensando)").length;
@@ -713,7 +743,7 @@
           retomarEnvio();
           area.dataset.historicoVersao = recebida.dataset.historicoVersao || "";
           if (window.htmx) htmx.process(novas);
-          rolagem.scrollTop = noFim ? rolagem.scrollHeight : posicao;
+          restaurarLeitura(area, vista);
         }
         area.querySelector("h1").textContent = doc.querySelector("h1").textContent;
         area.dataset.falha = doc.getElementById('conversa').dataset.falha;
