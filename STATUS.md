@@ -4,6 +4,18 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **Etapa 7 aprovada em 2026-11-16 por Diego; em andamento.** Feito: roteiro do piloto (`docs/piloto/ROTEIRO.md`) e auditoria de não armazenamento (`manage.py auditar_armazenamento`). Falta: usuários do Financeiro, conferência dos números com relatórios do Protheus, avaliação da interpretação e latência. Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M129 — tabela personalizada com consultas que a IA já sabe fazer (2026-11-23)
+
+- "Quantos funcionários foram admitidos e desligados em setembro e outubro, por filial?" ia para a manutenção (registro nº 32), embora cada evento já tenha consulta aprovada. Faltava montar a tabela.
+- Novo `iativa/agent/tabela.py`:
+  1. lê os eventos citados juntos ("admitidos e desligados", "admitidos, transferidos e desligados"), os períodos (2 ou mais meses/anos; sem ano = ano corrente) e o agrupamento (por filial);
+  2. acha a consulta aprovada de cada evento pelo campo de data, entre as que a pessoa pode usar (prefere a sem filtro fixo; "desligados" = "demissão");
+  3. conta no banco cada evento em cada período, pelo caminho autorizado;
+  4. monta uma tabela: Filial | Admitidos - 09/2026 | Admitidos - 10/2026 | Desligados - 09/2026 | Desligados - 10/2026, com o total de cada coluna no rodapé.
+- Não chama o modelo nem a manutenção. O contrato vira uma entrega só, e só essa tabela completa a cumpre.
+- Se algum evento não tiver consulta, o ciclo normal decide.
+- Um período só continua com a composição de contagens separadas (resumo + detalhes dos vínculos). Interseção ("no mesmo ano") continua uma contagem única.
+
 ## Mudança M128 — contagem de dois meses na mesma tabela (2026-11-23)
 
 - "Quantos funcionários foram desligados em setembro e outubro, por filial?" voltava um total único dos dois meses juntos, sem dizer de qual mês era cada valor. A tabela de dois meses (só faturamento/total) não reconhecia perguntas que começam com "quantos/quantas".

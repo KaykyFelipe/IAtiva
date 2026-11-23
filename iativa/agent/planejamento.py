@@ -149,7 +149,8 @@ def preparar(user, conversa, texto, provedor, historico):
         from .fidelidade import ajustar
         analise = {**analise, 'entregas': ajustar(texto, analise.get('entregas', []), user)}
     from . import contagem as admissoes, entregas, comparacao
-    return comparacao.planejar(texto, entregas.planejar(texto, admissoes.planejar(texto, {**analise, 'setores': sorted(set(alvos)), 'contextos': entrada.planejamento['contextos_recuperados']}, user)))
+    from . import tabela  # M129: vários eventos e períodos = uma tabela só
+    return tabela.planejar(texto, comparacao.planejar(texto, entregas.planejar(texto, admissoes.planejar(texto, {**analise, 'setores': sorted(set(alvos)), 'contextos': entrada.planejamento['contextos_recuperados']}, user))))
 
 
 def _segunda_leitura(provedor, texto, historico, analise, tipos, metricas):
@@ -216,6 +217,11 @@ def conferir(analise, decisao, saida, texto=""):
     res = saida.resultado
     faltantes = []
     for item in analise.get('entregas', []):
+        if item.get('tabela'):
+            # M129: uma contagem parcial (um evento ou um período) não cumpre a tabela pedida.
+            if not getattr(res, 'tabela_pedida', False):
+                faltantes.append(item['descricao'])
+            continue
         if item.get('campo_evento'):
             from .contagem import comprova_separada
             if not comprova_separada(item, saida):
