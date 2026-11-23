@@ -600,7 +600,9 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
             receita_d, receita_id = None, None
     from .contagem import consultas_separadas
     if not fila_receita and not ac.trilha:
-        fila_receita = consultas_separadas(texto, objetivos)
+        deterministicas = consultas_separadas(texto, objetivos)
+        if deterministicas:
+            fila_receita, receita_d = deterministicas, None
     for _ in range(max(1, passos)):
         if prazo.esgotado():
             causa = "prazo"
@@ -1008,6 +1010,41 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
                 except Exception:
                     import logging
                     logging.getLogger(__name__).warning("receita não gravada", exc_info=True)
+            if comprovadas:
+                if len(separadas) == 1:
+                    quantidade = saida.resultado.totais.medidas[0].valor
+                    saida.resultado.curta_salva = f"{quantidade} {separadas[0]['descricao'].split()[0].lower()}"
+                    ac.formato = "direto"
+                else:
+                    from .contagem import detalhe_eventos_separados, resumo_lado_a_lado
+                    from .diagnostico import Bloco, Diagnostico
+                    por_titulo = {r.titulo_entrega: r for r in _blocos(saida.resultado)}
+                    resumo = resumo_lado_a_lado([por_titulo[e["descricao"]] for e in separadas],
+                                                ["Admitidos", "Desligados"])
+                    if resumo is not None:
+                        detalhes = detalhe_eventos_separados(user, c, separadas, objetivos, defs, resumo.escopo)
+                        n_adm, n_des = resumo.linhas[-1][1:]
+                        introducao = (f"Em {separadas[0]['ano_evento']}, foram {n_adm} admissões e "
+                                      f"{n_des} desligamentos nas filiais consultadas.")
+                        saida.texto = ""
+                        blocos = ([Bloco("Detalhes dos vínculos", detalhes)] if detalhes else [])
+                        if detalhes is None:
+                            introducao += " Os detalhes nominais ficaram indisponíveis para esta consulta."
+                        resumo.premissas = ["Admissões pela data de admissão. Desligamentos pela data de desligamento."]
+                        blocos.append(Bloco("Resumo por filial", resumo))
+                        saida.resultado = Diagnostico(blocos, resumo=introducao)
+                        saida.ficha["tipo"] = "calculo_resultado"
+                        saida.solicitacao = None  # repetir um único evento não refaz os dois
+            elif (len(ac.contrato) > 1 and not ac.pendentes() and all(
+                    e.get("metrica") == "contagem" and e.get("tipo") == coord.CALCULO for e in ac.contrato)):
+                from .contagem import resumo_lado_a_lado
+                blocos = _blocos(saida.resultado)
+                resumo = resumo_lado_a_lado(blocos, [getattr(r, "titulo_entrega", "") for r in blocos])
+                if resumo is not None and len(blocos) == len(ac.contrato):
+                    saida.resultado = resumo
+                    saida.texto = ""
+                    saida.ficha["tipo"] = "calculo_resultado"
+                    saida.solicitacao = None
         if ac.entregue and ev and ev not in (coord.PERGUNTA, coord.BLOQUEIO, coord.DELEGADA, coord.ACAO):
             return _fechar(ac, user, c, mensagem_id, saida, ac.entregue)
         if ac.cumprido(ev) or ev in (coord.PERGUNTA, coord.BLOQUEIO, coord.DELEGADA):

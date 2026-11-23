@@ -4,6 +4,11 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **Etapa 7 aprovada em 2026-11-16 por Diego; em andamento.** Feito: roteiro do piloto (`docs/piloto/ROTEIRO.md`) e auditoria de não armazenamento (`manage.py auditar_armazenamento`). Falta: usuários do Financeiro, conferência dos números com relatórios do Protheus, avaliação da interpretação e latência. Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Respostas com detalhes e resumo lado a lado
+
+- Admissões e desligamentos por filial saem em dois indicadores separados, com os vínculos autorizados na mesma tabela de detalhes e totais no fim. Um pedido seguinte de apenas um número preserva o período.
+- Contagens verificadas com a mesma dimensão e o mesmo escopo podem ser reunidas em uma tabela. As permissões de origem de cada campo continuam valendo ao restaurar no histórico.
+
 ## Admissões e desligamentos em separado
 
 - Uma resposta curta de separação conserva o ano e a divisão por filial do pedido de interseção no mesmo chat. Com duas consultas aprovadas, o atendimento computa cada evento com a sua data de referência e verifica as duas entregas antes de publicar.

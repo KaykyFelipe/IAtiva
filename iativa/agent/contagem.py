@@ -304,31 +304,51 @@ _SEPARADAS = re.compile(
 _EVENTOS_SEPARADOS = (("RA_ADMISSA", "Admitidos"), ("RA_DEMISSA", "Desligados"))
 
 
+_ANUAL_RH = re.compile(r"quantos funcionarios foram admitidos e desligados no mesmo ano,? por filial,? em "
+                        r"([12]\d{3})[.?!]?")
+_SO_EVENTO = re.compile(r"(?:quero )?(?:so|somente|apenas) (?:o )?(?:valor|total|numero|quantidade) "
+                       r"(?:dos |de )?(admitidos|desligados|demitidos)[.?!]?")
+
+
 def contextualizar_separadas(conversa, user, texto, mensagem_id=None):
-    if not re.fullmatch(r"admitidos e desligados separadamente[.?!]?", _norm(texto).strip()):
+    atual = _norm(texto).strip()
+    if _ANUAL_RH.fullmatch(atual):
+        return re.sub("no mesmo ano", "separadamente", texto, flags=re.I)
+    so_evento = _SO_EVENTO.fullmatch(atual)
+    curta = r"admitidos e desligados separadamente[.?!]?"
+    if not so_evento and not re.fullmatch(curta, atual):
         return texto
     msgs = conversa.mensagens.filter(papel="usuario", autor=user)
     if mensagem_id is not None:
         msgs = msgs.filter(pk__lt=mensagem_id)
-    recentes = msgs.order_by("-pk").values_list("texto", flat=True)[:8]
-    anterior = next((t for t in recentes if not re.fullmatch(
-        r"admitidos e desligados separadamente[.?!]?", _norm(t).strip())), "")
-    # Neste esclarecimento, o usuário só alterou a combinação dos dois eventos.
-    if re.fullmatch(r"quantos funcionarios foram admitidos e desligados no mesmo ano,? por filial,? em "
-                    r"[12]\d{3}[.?!]?", _norm(anterior).strip()):
-        return re.sub("no mesmo ano", "separadamente", anterior, flags=re.I)
+    anteriores = msgs.order_by("-pk").values_list("texto", flat=True)[:8]
+    for anterior in anteriores:
+        normalizado = _norm(anterior).strip()
+        if re.fullmatch(curta, normalizado) or _SO_EVENTO.fullmatch(normalizado):
+            continue
+        fonte = _ANUAL_RH.fullmatch(normalizado) or _SEPARADAS.fullmatch(normalizado)
+        if fonte and so_evento:
+            return f"Somente o total de {so_evento[1]} em {fonte[1]} (filiais autorizadas)"
+        if fonte:
+            return (re.sub("no mesmo ano", "separadamente", anterior, flags=re.I)
+                    if _ANUAL_RH.fullmatch(normalizado) else anterior)
+        break
     return texto
 
 
 def entregas_separadas(texto):
     m = _SEPARADAS.fullmatch(_norm(texto).strip())
-    if not m:
+    unico = re.fullmatch(r"somente o total de (admitidos|desligados|demitidos) em ([12]\d{3}) "
+                         r"\(filiais autorizadas\)", _norm(texto).strip())
+    if not m and not unico:
         return []
-    periodo = f"01/01/{m[1]}..31/12/{m[1]}"
-    return [{"descricao": f"{nome} por filial em {m[1]}",
+    ano = m[1] if m else unico[2]
+    eventos = _EVENTOS_SEPARADOS if m else (_EVENTOS_SEPARADOS[0 if unico[1] == "admitidos" else 1],)
+    periodo = f"01/01/{ano}..31/12/{ano}"
+    return [{"descricao": f"{nome} por filial em {ano}",
              "tipo": "calculo", "metrica": "contagem", "campo_evento": campo, "periodo_evento": periodo,
-             "ano_evento": m[1]}
-            for campo, nome in _EVENTOS_SEPARADOS]
+             "ano_evento": ano}
+            for campo, nome in eventos]
 
 
 def consultas_separadas(texto, objetivos):
@@ -372,6 +392,113 @@ def comprova_separada(item, saida):
             and valores["filial-analise"] == "TODAS" and valores["agregacao"] == "contagem:*"
             and valores["periodo-analise"] == {"inicio": f"{ano}-01-01", "fim": f"{ano}-12-31"}
             and any(m.funcao == "COUNT" for m in getattr(r.totais, "medidas", [])))
+
+
+def _escopo_comum(resultados):
+    """Agrupa apenas resultados com o mesmo conjunto de filiais e a mesma política."""
+    escopos = [r.escopo for r in resultados]
+    base = {k: v for k, v in escopos[0].items() if k != "campos"}
+    if not base.get("filiais") or any({k: v for k, v in e.items() if k != "campos"} != base for e in escopos):
+        return None
+    campos = {}
+    for e in escopos:
+        for alias, nomes in e.get("campos", {}).items():
+            campos.setdefault(alias, set()).update(nomes)
+    return {**base, "campos": {alias: sorted(nomes) for alias, nomes in campos.items()}}
+
+
+def resumo_lado_a_lado(resultados, rotulos):
+    from iativa.accounts.filiais import rotulo
+    from iativa.query.servico import Resultado
+
+    if len(resultados) < 2 or len(resultados) != len(rotulos) or not all(rotulos) or any(
+            not r.ok or r.truncado or len(r.colunas) != 2 or _norm(r.colunas[0]) != "filial"
+            or r.tipos[1] != "inteiro" or not r.totais or len(r.totais.medidas) != 1
+            or r.totais.medidas[0].funcao not in ("COUNT", "COUNT_DISTINCT") for r in resultados):
+        return None
+    escopo = _escopo_comum(resultados)
+    if not escopo:
+        return None
+    por_evento = [{f: int(str(q).replace(".", "")) for f, q in r.linhas} for r in resultados]
+    totais = [int(r.totais.medidas[0].valor) for r in resultados]
+    if any(len(valores) != len(r.linhas) or sum(valores.values()) != total
+           for valores, r, total in zip(por_evento, resultados, totais)):
+        return None
+    filiais = [rotulo(f) for f in escopo["filiais"]]
+    if any(set(evento) - set(filiais) for evento in por_evento):
+        return None
+    linhas = [[f, *(str(evento.get(f, 0)) for evento in por_evento)] for f in filiais]
+    linhas.append(["Total", *map(str, totais)])
+    return Resultado(True, "", colunas=["Filial", *rotulos], tipos=["texto"] + ["inteiro"] * len(rotulos),
+                     linhas=linhas, escopo=escopo)
+
+
+def detalhe_eventos_separados(user, conversa, itens, objetivos, defs, escopo_resumo):
+    from iativa.accounts.filiais import rotulo
+    from iativa.query.servico import Resultado, _valores
+    from iativa.chat.estados import TransicaoInvalida
+    from . import prazo
+    from .agente import _preparar
+    from .decisao import Decisao
+    from .models import ConsultaModelo
+
+    permitidos = [o.modelo_id for o in objetivos if o.modelo_id and o.tabelas == ("SRA",)]
+    modelos = list(ConsultaModelo.objects.filter(pk__in=permitidos, situacao="aprovada").order_by("pk"))
+    resultados, linhas = [], {}
+    obrigatorios = {"RA_MAT", "RA_ADMISSA", "RA_DEMISSA"}
+    for item in itens:
+        opcoes = [(m, {c["campo"]: c["rotulo"] for c in m.spec.get("colunas", [])}) for m in modelos
+                  if m.spec.get("campo_data") == item["campo_evento"] and not m.spec.get("filtros_fixos")]
+        opcoes = [(m, campos) for m, campos in opcoes if obrigatorios <= campos.keys()
+                  and campos.keys() & {"RA_NOMECMP", "RA_NOME"}]
+        if not opcoes or prazo.esgotado():
+            return None
+        m, campos = max(opcoes, key=lambda p: ("RJ_DESC" in p[1], "RA_CODFUNC" in p[1], "RA_NOMECMP" in p[1]))
+        d = Decisao("", "preparar_consulta", m.codigo, (("filial-analise", "TODAS"),
+                   ("periodo-analise", item["periodo_evento"])), "", "", False, ())
+        try:
+            res = _preparar(user, conversa, d, None, defs, {}, texto="").resultado
+        except prazo.PrazoEsgotado:
+            return None
+        if (not res or not res.ok or res.solicitacao is None
+                or not _escopo_comum([res, Resultado(True, "", escopo=escopo_resumo)])):
+            return None
+        try:
+            valores = _valores(user, res.solicitacao)
+        except (KeyError, TransicaoInvalida):
+            return None
+        ano = item["ano_evento"]
+        if valores != {"filial-analise": "TODAS", "periodo-analise": {
+                "inicio": f"{ano}-01-01", "fim": f"{ano}-12-31"}}:
+            return None
+        resultados.append(res)
+        filial_unica = escopo_resumo["filiais"]
+        for linha in res.linhas:
+            valores = dict(zip(res.colunas, linha))
+            filial = valores.get("Filial") or (rotulo(filial_unica[0]) if len(filial_unica) == 1 else "")
+            matricula = valores.get(campos["RA_MAT"])
+            if not filial or not matricula:
+                return None
+            nome = valores.get(campos.get("RA_NOMECMP")) or valores.get(campos.get("RA_NOME")) or ""
+            funcao = valores.get(campos.get("RJ_DESC")) or ""
+            codigo = valores.get(campos.get("RA_CODFUNC"))
+            linha_saida = [nome, filial, funcao or (f"Cód. {codigo}" if codigo else "—"),
+                           valores.get(campos["RA_ADMISSA"]) or "—", valores.get(campos["RA_DEMISSA"]) or "—"]
+            anterior = linhas.get((filial, matricula))
+            if anterior is None or anterior[2] == "—" or (anterior[2].startswith("Cód.") and funcao):
+                linhas[filial, matricula] = linha_saida
+    escopo = _escopo_comum(resultados)
+    if not escopo:
+        return None
+    truncado = any(r.truncado for r in resultados)
+    mensagem = "Vínculos com admissão ou desligamento no ano consultado."
+    if truncado:
+        mensagem += " A lista está limitada às linhas exibidas. O resumo usa as contagens completas."
+    return Resultado(True, mensagem,
+                     colunas=["Nome", "Filial", "Função", "Data de admissão", "Data de desligamento"],
+                     tipos=["texto", "texto", "texto", "data", "data"], escopo=escopo,
+                     linhas=sorted(linhas.values(), key=lambda l: (l[1], l[0])),
+                     truncado=truncado)
 
 
 def contextualizar(user, conversa, texto):

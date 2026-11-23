@@ -41,7 +41,7 @@ def test_contagem_por_filial_recupera_filtro_invalido_repetido(base, erp_sinteti
     }])
     conversa = conversas.nova_individual(base["u"])
     msg, res = conversas.enviar(
-        base["u"], conversa, "Quantos funcionários foram admitidos e desligados no mesmo ano, por filial, em 2026?",
+        base["u"], conversa, "Quantos funcionários foram admitidos e desligados ambos no mesmo ano, por filial, em 2026?",
         provedor,
     )
 
@@ -89,7 +89,7 @@ def test_contagem_por_filial_recupera_agregacao_repetida(base, erp_sintetico, fi
     }])
     conversa = conversas.nova_individual(base["u"])
     msg, res = conversas.enviar(
-        base["u"], conversa, "Quantos funcionários foram admitidos e desligados no mesmo ano, por filial, em 2026?",
+        base["u"], conversa, "Quantos funcionários foram admitidos e desligados ambos no mesmo ano, por filial, em 2026?",
         provedor,
     )
 
@@ -134,7 +134,7 @@ def test_contagem_anual_recupera_agrupamento_pelo_campo_da_filial(base, erp_sint
     }])
     conversa = conversas.nova_individual(base["u"])
     msg, res = conversas.enviar(
-        base["u"], conversa, "Quantos funcionários foram admitidos e desligados no mesmo ano, por filial, em 2026?",
+        base["u"], conversa, "Quantos funcionários foram admitidos e desligados ambos no mesmo ano, por filial, em 2026?",
         provedor,
     )
 

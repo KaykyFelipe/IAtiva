@@ -5,7 +5,7 @@
 </div>
 {% else %}
 <div class="msg ia resultado">
-  {% if formato != "direto" %}<p><strong>{{ resultado.mensagem }}</strong></p>{% endif %}
+  {% if formato != "direto" and resultado.mensagem %}<p><strong>{{ resultado.mensagem }}</strong></p>{% endif %}
   {% if resultado.linhas %}
     <div class="tabela-rolagem">
       <table>

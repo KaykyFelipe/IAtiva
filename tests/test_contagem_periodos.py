@@ -65,7 +65,7 @@ def test_admitidos_e_desligados_no_mesmo_ano_por_filial(base, erp_sintetico, rec
         "entregas": [{"descricao": "Contagem por filial dos dois eventos em 2026", "tipo": "calculo"}],
     }])
     c = conversas.nova_individual(base["u"])
-    msg, res = conversas.enviar(base["u"], c, "Quantos funcionários foram admitidos e desligados no mesmo ano, por filial, em 2026?", p)
+    msg, res = conversas.enviar(base["u"], c, "Quantos funcionários foram admitidos e desligados ambos no mesmo ano, por filial, em 2026?", p)
 
     objetivo = c.objetivos.latest("pk")
     assert objetivo.exigencia != "verificacao"  # M117: "no mesmo ano" é recorte de tempo, não vínculo

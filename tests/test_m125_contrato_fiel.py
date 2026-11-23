@@ -17,6 +17,7 @@ from iativa.chat import conversas
 from .test_tarefas import _d, base  # noqa: F401
 
 PEDIDO = "Quantos funcionários foram admitidos e desligados no mesmo ano, por filial, em 2026?"
+INTERSECAO_EXPLICITA = PEDIDO.replace("no mesmo ano", "ambos no mesmo ano")
 QUATRO = [
     {'descricao': 'Contagem de funcionários admitidos em 2026, por filial', 'tipo': 'calculo', 'metrica': 'contagem'},
     {'descricao': 'Contagem de funcionários desligados em 2026, por filial', 'tipo': 'calculo', 'metrica': 'contagem'},
@@ -118,7 +119,7 @@ def test_pergunta_do_diagnostico_24_entrega_a_intersecao_por_filial(base, erp_si
         'natureza': 'dados', 'setores': [base['cob'].codigo], 'confianca': 1, 'resumo': '', 'memorias': [],
         'entregas': [QUATRO[2]]}], releituras=[{'natureza': 'dados', 'entregas': QUATRO}])
     conversa = conversas.nova_individual(base['u'])
-    msg, res = conversas.enviar(base['u'], conversa, PEDIDO, provedor)
+    msg, res = conversas.enviar(base['u'], conversa, INTERSECAO_EXPLICITA, provedor)
     objetivo = conversa.objetivos.order_by('-pk').first()  # só existe quando o 1º passo não basta
     assert objetivo is None or (objetivo.situacao == SituacaoObjetivo.CUMPRIDO
                                 and len(objetivo.contrato['entregas']) == 1), (objetivo.trilha, msg.texto)
@@ -155,7 +156,7 @@ def test_receita_verificada_e_reaproveitada_sem_o_modelo(base, erp_sintetico):
     analise = {'natureza': 'dados', 'setores': [base['cob'].codigo], 'confianca': 1, 'resumo': '', 'memorias': [],
                'entregas': [QUATRO[2]]}
     conversa = conversas.nova_individual(base['u'])
-    conversas.enviar(base['u'], conversa, PEDIDO, FakeProvider([_consulta(base)], analises=[dict(analise)]))
+    conversas.enviar(base['u'], conversa, INTERSECAO_EXPLICITA, FakeProvider([_consulta(base)], analises=[dict(analise)]))
     nota = NotaAgente.objects.get(criterios__has_key="receita", ativo=True)
     r = nota.criterios["receita"]
     assert r["objetivo"] == base["cm"].codigo and r["assinatura"]["intersecao"]
@@ -198,7 +199,7 @@ def test_revisor_indisponivel_nao_publica_e_preserva_o_pedido(base, erp_sintetic
         'natureza': 'dados', 'setores': [base['cob'].codigo], 'confianca': 1, 'resumo': '', 'memorias': [],
         'entregas': [QUATRO[2]]}])
     conversa = conversas.nova_individual(base['u'])
-    msg, res = conversas.enviar(base['u'], conversa, PEDIDO, provedor)
+    msg, res = conversas.enviar(base['u'], conversa, INTERSECAO_EXPLICITA, provedor)
     objetivo = conversa.objetivos.latest('pk')
     assert objetivo.situacao == SituacaoObjetivo.CONTINUAR, (objetivo.trilha, msg.texto)
     assert res is None or not getattr(res, 'linhas', None), msg.texto  # nada sem conferência vai ao chat
@@ -226,15 +227,18 @@ def test_receita_composta_reusa_dois_passos_e_revalida_o_acesso(django_user_mode
 
 
 @pytest.mark.django_db
-def test_separadamente_herda_ano_e_entrega_duas_contagens(base, erp_sintetico):
+@pytest.mark.parametrize("pedido", [PEDIDO, "Admitidos e desligados separadamente"])
+def test_separadamente_herda_ano_e_entrega_duas_contagens(base, erp_sintetico, pedido):
     from django.http import QueryDict
     from iativa.agent import aprendizado
 
     _erp(erp_sintetico)
+    with sqlite3.connect(erp_sintetico) as conn:
+        conn.execute("UPDATE SRA010 SET RA_NOME='Ana Ribeiro' WHERE RA_FILIAL='01' AND RA_MAT='000001'")
     u = base["u"]
     q = QueryDict(mutable=True)
     q.update({"nome": "Admissões sem excluir desligados", "campo_data": "RA_ADMISSA"})
-    q.setlist("colunas", ["RA_MAT", "RA_ADMISSA", "RA_DEMISSA"])
+    q.setlist("colunas", ["RA_MAT", "RA_NOME", "RA_ADMISSA", "RA_DEMISSA"])
     q.setlist("setores", [str(base["cob"].pk)])
     aprendizado.aprovar(u, aprendizado.salvar_proposta(u, "SRA", q))
     c = conversas.nova_individual(u)
@@ -242,11 +246,21 @@ def test_separadamente_herda_ano_e_entrega_duas_contagens(base, erp_sintetico):
     c.mensagens.create(papel="usuario", texto="Admitidos e desligados separadamente", autor=u)
     p = FakeProvider([], analises=[{'natureza': 'dados', 'setores': [base['cob'].codigo], 'confianca': 1,
                                    'resumo': '', 'memorias': [], 'entregas': QUATRO}])
-    msg, res = conversas.enviar(u, c, "Admitidos e desligados separadamente", p)
+    msg, res = conversas.enviar(u, c, pedido, p)
     assert p.chamadas == 0 and res is not None and res.consolidado, msg.texto
-    assert [b.titulo for b in res.blocos] == ["Admitidos por filial em 2026", "Desligados por filial em 2026"]
-    contagens = [{f: int(q) for f, q in b.resultado.linhas} for b in res.blocos]
-    assert contagens == [{rotulo('01'): 3, rotulo('02'): 2}, {rotulo('01'): 3, rotulo('02'): 1}]
+    assert [b.titulo for b in res.blocos] == ["Detalhes dos vínculos", "Resumo por filial"]
+    detalhes, resumo = [b.resultado for b in res.blocos]
+    assert detalhes.colunas == ["Nome", "Filial", "Função", "Data de admissão", "Data de desligamento"]
+    assert len(detalhes.linhas) == 6  # os vínculos que estão nas duas consultas aparecem uma vez
+    assert sum(linha[0] == "Ana Ribeiro" for linha in detalhes.linhas) == 1
+    from iativa.chat.resultados import restaurar
+    assert restaurar(u, msg.resultado).blocos[1].resultado.linhas[-1] == ["Total", "5", "4"]
+    assert resumo.colunas == ["Filial", "Admitidos", "Desligados"]
+    assert resumo.linhas[-1] == ["Total", "5", "4"]
+    assert [rotulo('01'), "3", "3"] in resumo.linhas
+    assert [rotulo('02'), "2", "1"] in resumo.linhas
+    msg_direta, direta = conversas.enviar(u, c, "Quero apenas o valor dos admitidos", FakeProvider([]))
+    assert msg_direta.ficha["formato"] == "direto" and direta.curta == "5 admitidos"
     assert not c.objetivos.filter(situacao=SituacaoObjetivo.MANUTENCAO).exists()
     from iativa.agent.models import NotaAgente
     nota = NotaAgente.objects.get(criterios__receita__chave_composta__isnull=False)
