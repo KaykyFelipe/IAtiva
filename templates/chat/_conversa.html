@@ -47,7 +47,11 @@
           </div>
           {% if item.linhas_resposta or item.resultado_salvo or resultado_msg == m.pk %}
             <div class="acoes-resposta">
-              <button class="icone" type="button" data-copiar-resposta aria-label="Copiar resposta" title="Copiar resposta">{% include "chat/_icone.html" with nome="copiar" %}</button>
+              <button class="icone botao-copia" type="button" data-copiar-resposta aria-label="Copiar" title="Copiar">
+                {% include "chat/_icone.html" with nome="copiar" %}
+                <span class="seta-copia">{% include "chat/_icone.html" with nome="seta" %}</span>
+              </button>
+              <div class="menu-copia" popover data-menu-copia></div>
               {% if item.refazer and pode_escrever %}
                 <form data-refazer-resposta method="post" action="{% url 'chat:mensagem' conversa.pk %}">
                   {% csrf_token %}<input type="hidden" name="refazer" value="{{ m.pk }}"><input type="hidden" name="mensagem" value="Executar de novo">

@@ -1,5 +1,5 @@
 {# Conclusão da verificação (M25): consultada agora e mostrada só nesta resposta. Não é salva. #}
-<div class="conclusao" data-tabela-copiavel{% if reconstruindo %} hx-get="{% url 'chat:tarefa_conclusao' tarefa.pk %}" hx-trigger="every 3s" hx-target="closest .tarefa-conclusao" hx-swap="innerHTML"{% endif %}>
+<div class="conclusao"{% if reconstruindo %} hx-get="{% url 'chat:tarefa_conclusao' tarefa.pk %}" hx-trigger="every 3s" hx-target="closest .tarefa-conclusao" hx-swap="innerHTML"{% endif %}>
   {% if reconstruindo %}
     <p class="tarefa-carregando"><span class="giro" aria-hidden="true"></span>Refazendo a conclusão em segundo plano (ela não estava guardada)…</p>
   {% elif erro %}
@@ -11,7 +11,7 @@
       {% for rotulo, n in c.resumo %}<span class="chip">{{ rotulo }}: {{ n }}</span>{% endfor %}
     </div>
     <p class="conclusao-ref">Consultado em {{ c.consultado_em }}. {{ c.referencia }}</p>
-    <div class="conclusao-tabela">
+    <div class="conclusao-tabela" data-tabela-copiavel>
       <table>
         <thead><tr><th>Pessoa</th><th>Situação</th><th>Conclusão</th></tr></thead>
         <tbody>
@@ -32,7 +32,6 @@
         </tbody>
       </table>
     </div>
-    {% include "chat/_copiar_tabela.html" %}
     {% if c.limitacoes %}
       <details class="premissas"><summary>Limitações</summary><ul>{% for l in c.limitacoes %}<li>{{ l }}</li>{% endfor %}</ul></details>
     {% endif %}

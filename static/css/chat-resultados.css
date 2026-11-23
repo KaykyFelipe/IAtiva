@@ -7,4 +7,3 @@
 .tabela-resultado table { border-collapse: separate; border-spacing: 0; }
 .tabela-resultado thead th { position: sticky; top: 0; z-index: 1; }
 .tabela-resultado:focus-visible { outline: 2px solid var(--azul); outline-offset: 2px; }
-.acoes-tabela { justify-content: flex-end; margin-top: 0; }

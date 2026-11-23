@@ -4,10 +4,10 @@
   <p class="resposta-direta"><strong>{{ resultado.curta }}</strong></p>
 </div>
 {% else %}
-<div class="msg ia resultado" data-tabela-copiavel>
+<div class="msg ia resultado">
   {% if formato != "direto" and resultado.mensagem %}<p><strong>{{ resultado.mensagem }}</strong></p>{% endif %}
   {% if resultado.linhas or resultado.rodape %}
-    <div class="tabela-rolagem tabela-resultado" tabindex="0" role="region" aria-label="Tabela do resultado">
+    <div class="tabela-rolagem tabela-resultado" tabindex="0" role="region" aria-label="Tabela do resultado" data-tabela-copiavel>
       <table>
         <thead><tr>{% for c, cls in resultado.cabecalho %}<th class="{{ cls }}">{{ c }}</th>{% endfor %}</tr></thead>
         <tbody>
@@ -22,7 +22,6 @@
         {% endif %}
       </table>
     </div>
-    {% include "chat/_copiar_tabela.html" %}
   {% endif %}
   {% if resultado.truncado %}<p class="nota" data-resultado-parcial>Consulta parcial. Foram disponibilizadas {{ resultado.linhas|length }} linhas nesta tabela.</p>{% endif %}
   {% for aviso in resultado.avisos_leitura %}<p class="nota">{{ aviso }}</p>{% endfor %}

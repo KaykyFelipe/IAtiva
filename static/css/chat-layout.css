@@ -84,6 +84,13 @@ body { font-family: "Segoe UI Variable Text", "Segoe UI", Arial, sans-serif; fon
 .acoes-resposta .icone { width: 29px; height: 29px; padding: 0; color: var(--sutil); background: transparent; }
 .acoes-resposta .icone:hover, .acoes-resposta .icone.copiado { color: var(--azul); background: #eaf1f9; }
 .acoes-resposta .simbolo-svg { width: 15px; height: 15px; }
+.seta-copia { display: none; }
+.resposta-chat:has([data-tabela-copiavel]) .botao-copia { display: inline-flex; width: 38px; justify-content: center; gap: 2px; }
+.resposta-chat:has([data-tabela-copiavel]) .seta-copia { display: inline-flex; }
+.seta-copia .simbolo-svg { width: 10px; height: 10px; }
+.menu-copia { position: fixed; inset: auto; margin: 0; padding: 4px; max-width: min(23rem, calc(100vw - 16px)); max-height: min(16rem, calc(100dvh - 16px)); overflow: auto; border: 1px solid var(--linha); border-radius: 9px; background: #fff; color: var(--texto); box-shadow: 0 4px 16px #24344320; }
+.menu-copia button { display: block; width: 100%; border: 0; border-radius: 5px; padding: 7px 10px; text-align: left; white-space: normal; background: transparent; color: inherit; }
+.menu-copia button:hover, .menu-copia button:focus-visible { background: #eaf1f9; }
 .nota { font-size: 11px; color: #819087; }
 .msg .criterios-linha { font-size: 11px; line-height: 1.9; }
 .resultado > p:first-child { font-size: 12px; color: #3c5846; }

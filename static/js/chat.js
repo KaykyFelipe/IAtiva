@@ -224,7 +224,10 @@
   }
 
   document.addEventListener("scroll", (e) => {
-    if (e.target.matches?.("[data-rolagem]")) atualizarAtalhoFim();
+    if (e.target.matches?.("[data-rolagem]")) {
+      atualizarAtalhoFim();
+      document.querySelector(".menu-copia:popover-open")?.hidePopover();
+    }
   }, true);
   window.addEventListener("resize", atualizarAtalhoFim);
   document.addEventListener("click", (e) => {
@@ -661,8 +664,7 @@
       (el) => el.textContent.trim()).filter(Boolean).join("\n\n");
   }
 
-  async function copiar(botao) {
-    const tabela = botao.closest("[data-tabela-copiavel]")?.querySelector("table");
+  async function copiar(botao, tabela) {
     const texto = tabela ? textoDaTabela(tabela) : textoDaResposta(botao);
     const titulo = botao.getAttribute("aria-label");
     let copiado = false;
@@ -682,9 +684,49 @@
     setTimeout(() => { botao.title = titulo; botao.classList.remove("copiado"); }, 1600);
   }
 
+  function abrirMenuCopia(botao, tabelas) {
+    const menu = botao.parentElement.querySelector("[data-menu-copia]");
+    if (menu.matches(":popover-open")) {
+      menu.hidePopover();
+      return;
+    }
+    const opcoes = [null, ...tabelas].map((tabela, i) => {
+      const opcao = document.createElement("button");
+      const titulo = tabela?.closest(".bloco-setor")?.querySelector(":scope > h3")?.textContent.trim()
+        || (tabela?.closest(".tarefa-conclusao") ? "registros verificados" : tabelas.length > 1 ? `tabela ${i}` : "tabela");
+      opcao.type = "button";
+      opcao.textContent = tabela ? `Copiar ${titulo}` : "Copiar resposta inteira";
+      opcao.addEventListener("click", () => {
+        menu.hidePopover();
+        botao.focus({ preventScroll: true });
+        copiar(botao, tabela);
+      });
+      return opcao;
+    });
+    menu.replaceChildren(...opcoes);
+    menu.ontoggle = () => botao.setAttribute("aria-expanded", String(menu.matches(":popover-open")));
+    menu.onkeydown = (e) => {
+      if (e.key !== "Escape") return;
+      e.preventDefault();
+      e.stopPropagation();
+      menu.hidePopover();
+      botao.focus({ preventScroll: true });
+    };
+    menu.showPopover();
+    const posicao = botao.getBoundingClientRect();
+    const acima = posicao.top - menu.offsetHeight - 5;
+    const topo = acima >= 8 ? acima : Math.min(posicao.bottom + 5, innerHeight - menu.offsetHeight - 8);
+    menu.style.top = Math.max(8, topo) + "px";
+    menu.style.left = Math.max(8, Math.min(posicao.left, innerWidth - menu.offsetWidth - 8)) + "px";
+    opcoes[0].focus({ preventScroll: true });
+  }
+
   document.addEventListener("click", (e) => {
-    const botao = e.target.closest("[data-copiar-resposta], [data-copiar-tabela]");
-    if (botao) copiar(botao);
+    const botao = e.target.closest("[data-copiar-resposta]");
+    if (!botao) return;
+    const tabelas = [...botao.closest(".resposta-chat").querySelectorAll("[data-tabela-copiavel] > table")];
+    if (tabelas.length) abrirMenuCopia(botao, tabelas);
+    else copiar(botao);
   });
 
   // Captura: roda antes do htmx ler o formulário.
