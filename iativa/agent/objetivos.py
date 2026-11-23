@@ -252,7 +252,8 @@ def evidencia(decisao, saida, texto='') -> str:
     if res is not None and (getattr(res, "ok", False) or getattr(res, "consolidado", False)):
         if _comprova_admissoes_e_desligamentos(res, texto):
             return CALCULO  # M117: contagem com os dois intervalos é cálculo (não verificação de vínculo)
-        if getattr(res, 'medida_calculada', ''):
+        if getattr(res, 'medida_calculada', '') or getattr(res, 'agregado', False):
+            # M127: contagem/soma feita no banco é cálculo, venha de preparar_consulta, aprender_tabela ou receita.
             return CALCULO
         calculo = any(k == "agregacao" for k, _ in getattr(decisao, "parametros", ())) or bool(
             getattr(getattr(res, "totais", None), "medidas", None) and len(getattr(res, "linhas", [])) <= 1

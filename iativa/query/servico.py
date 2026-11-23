@@ -104,6 +104,7 @@ class Resultado:
     escopo: dict = field(default_factory=dict)
     periodos: list = field(default_factory=list)  # intervalos derivados, só no backend/snapshot autorizado
     medida_calculada: str = ''
+    agregado: bool = False  # M127: o plano calculou no banco (contagem/soma/média), em qualquer caminho
     memoria_tecnica: dict = field(default_factory=dict)  # M95: {estado, versao, trechos} da busca obrigatória
     curta_salva: str = ''  # M48: resposta curta gravada no snapshot (os totais não são gravados)
 
@@ -666,6 +667,7 @@ def _executar_solicitacao(user, s: RequestContext) -> Resultado:
                  "agregacao": expressao_validada(valores.get(AGREGACAO, ""), cm.spec)}
         receitas.registrar_validacao(cm, prova)
     res.escopo = escopo_do_plano(plano, s.setor_id, filiais)
+    res.agregado = any(c.agregacao for c in plano.colunas)
     if transversais:
         res.escopo["fontes_transversais"] = sorted(transversais)
     if (todas and not truncado and not plano.juncoes and not plano.agrupar and not plano.top

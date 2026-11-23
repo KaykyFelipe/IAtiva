@@ -4,6 +4,15 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **Etapa 7 aprovada em 2026-11-16 por Diego; em andamento.** Feito: roteiro do piloto (`docs/piloto/ROTEIRO.md`) e auditoria de não armazenamento (`manage.py auditar_armazenamento`). Falta: usuários do Financeiro, conferência dos números com relatórios do Protheus, avaliação da interpretação e latência. Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M127 — contagem feita no banco é resposta, por qualquer caminho (2026-11-23)
+
+- "Quantos funcionários ativos temos hoje por filial?" ficou em "Ainda falta…".
+  - A consulta certa rodou (funcionários ativos, contagem por filial), mas veio por aprender_tabela, sem o parâmetro agregacao na decisão, e a evidência foi lida como consulta, não como cálculo.
+  - Na continuação, uma falha passageira do modelo na triagem encerrou o pedido com "Não consegui confirmar o assunto".
+- Agora:
+  - o resultado diz se calculou no banco (`agregado`), e isso basta como evidência de cálculo, em qualquer caminho (consulta, aprender tabela, receita);
+  - na continuação, falha do modelo na triagem é passageira: o pedido segue depois, limitado pelo teto de continuações.
+
 ## Mudança M126 — andamento diz o que está fazendo; mês sem ano é do ano corrente (2026-11-23)
 
 - Andamento: a tela mostrava sempre uma de 9 frases fixas por fase. Agora mostra o passo real do sistema, por exemplo "Consultando o ERP — Matriz" ou "Calculando o total no banco".

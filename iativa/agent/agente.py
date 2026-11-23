@@ -319,7 +319,7 @@ def conversar(user, c, texto: str, provedor=None, mensagem_usuario_id=None, inte
     except FalhaModelo as exc:
         import logging
         logging.getLogger(__name__).warning('planejamento_falhou: %s', exc)
-        if acomp is not None and exc.temporaria:
+        if acomp is not None:  # M127: na continuação, falha do modelo na triagem é passageira: tenta de novo depois
             acomp.anotar('classificacao', 'modelo_falhou')
             return _encerrar_sem_cumprir(acomp, user, c, mensagem_usuario_id, None, None, 'modelo_falhou', [])
         return Saida('Não consegui confirmar o assunto e o acesso deste pedido agora. Tente novamente.',

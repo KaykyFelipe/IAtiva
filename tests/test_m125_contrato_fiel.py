@@ -353,3 +353,14 @@ def test_compoe_tres_consultas_verificadas_sem_nova_decisao(base, erp_sintetico)
     assert combinado.colunas == ["Filial", *[e["descricao"] for e in itens]]
     assert combinado.linhas[-1] == ["Total", "1", "1", "2"]
     assert not Incidente.objects.exists()
+
+
+def test_m127_agregacao_no_banco_e_calculo_mesmo_sem_parametro_na_decisao():
+    """"Quantos funcionários ativos temos hoje por filial?": a consulta veio por aprender_tabela (decisão sem o
+    parâmetro agregacao); o resultado agregado por filial é cálculo e cumpre a entrega."""
+    from types import SimpleNamespace
+    from iativa.agent.objetivos import CALCULO, evidencia
+    res = SimpleNamespace(ok=True, consolidado=False, agregado=True, medida_calculada='', linhas=[["01", 3], ["02", 5]],
+                          colunas=["Filial", "Quantidade"], totais=None, escopo={})
+    d = SimpleNamespace(acao='aprender_tabela', parametros=(), objetivo='')
+    assert evidencia(d, SimpleNamespace(ficha={}, observacao=None, resultado=res), "Quantos ativos por filial?") == CALCULO
