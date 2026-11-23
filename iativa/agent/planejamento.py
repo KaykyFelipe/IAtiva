@@ -272,7 +272,8 @@ def divergencia(item, decisao, ano_civil=""):
     if pedido and usado and '..' in usado:
         def datas(p):
             a, b = p.split('..')
-            return [date(int(x[6:10]), int(x[3:5]), int(x[:2])) for x in (a, b)]
+            return [date.fromisoformat(x) if re.fullmatch(r"\d{4}-\d{2}-\d{2}", x)
+                    else date(int(x[6:10]), int(x[3:5]), int(x[:2])) for x in (a, b)]
         try:
             (pi, pf), (ui, uf) = datas(pedido), datas(usado)
         except (ValueError, IndexError):

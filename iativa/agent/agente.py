@@ -596,6 +596,8 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
         try:
             if len(ac.contrato) > 1:
                 fila_receita, receita_id = aprendizado_receita.composta_para(texto_receita, ac.contrato, objetivos)
+                if not fila_receita and not entrada.planejamento.get("analise", {}).get("fontes_indicadas"):
+                    fila_receita = aprendizado_receita.compor_partes(ac.contrato, objetivos)
             else:
                 receita_d, receita_id = aprendizado_receita.receita_para(texto, objetivos)
         except Exception:
@@ -738,6 +740,8 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
             causa = sem_acao
             break
         assinatura = _assinatura(d)
+        if passo_programado and d.atende and len(ac.contrato) > 1:
+            assinatura += repr(d.atende)
         if assinatura in parametros_recusados and cobertura is None:  # M117: vale para qualquer exigência
             alternativa = admissoes.recuperar_filtro_do_ano(texto, d, objetivos)
             if alternativa is not None and (candidata := _assinatura(alternativa)) not in feitas:
@@ -914,7 +918,8 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
                 observacoes.append(saida.observacao)
             if ac.pendentes() and ev not in (coord.PERGUNTA, coord.BLOQUEIO, coord.DELEGADA):
                 # Sem entrega comprovada, são revisões da mesma tentativa, não novas respostas.
-                if saida.observacao is None or not saida.observacao.recuperavel:
+                if ((saida.observacao is None or not saida.observacao.recuperavel)
+                        and (len(ac.contrato) == 1 or novos_indices)):
                     previa = _juntar(previa, saida) if previa is not None and ac.cumpridas else saida
                 # M67: guarda a causa real (parâmetro inválido, metadado, permissão...), não só "pendente".
                 ac.anotar(d.acao, saida.observacao.situacao if saida.observacao is not None

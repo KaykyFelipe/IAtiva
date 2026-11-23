@@ -4,6 +4,11 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **Etapa 7 aprovada em 2026-11-16 por Diego; em andamento.** Feito: roteiro do piloto (`docs/piloto/ROTEIRO.md`) e auditoria de não armazenamento (`manage.py auditar_armazenamento`). Falta: usuários do Financeiro, conferência dos números com relatórios do Protheus, avaliação da interpretação e latência. Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Composição de pedidos com consultas já conhecidas
+
+- Um pedido com várias entregas tenta reaproveitar a receita completa. Sem ela, combina componentes verificados cuja descrição, métrica e critérios correspondem à entrega. Cada consulta é reexecutada com as permissões atuais.
+- As demais entregas seguem pelo planejamento normal. Resultados de tentativas que ainda não comprovam nenhuma entrega ficam fora da resposta.
+
 ## Reexecução de consultas conhecidas após falha temporária
 
 - O incidente 31 começou com tempo esgotado na consulta de admissões e foi resolvido na versão ativa em novo ensaio. Agora o atendimento retoma a receita no worker quando um passo conhecido encontra falha temporária, antes de seguir para outras ações.

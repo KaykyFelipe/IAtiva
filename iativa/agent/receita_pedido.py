@@ -60,7 +60,7 @@ def guardar(user, texto: str, d, saida, contrato: list, ev: str):
     from .models import EscopoNota, NotaAgente, SituacaoNota, TipoNota
     res = getattr(saida, "resultado", None)
     sig = assinatura(texto)
-    if (sig is None or d.acao not in _ACOES or d.objetivo not in OBJETIVOS or not OBJETIVOS[d.objetivo].modelo_id
+    if (d.acao not in _ACOES or d.objetivo not in OBJETIVOS or not OBJETIVOS[d.objetivo].modelo_id
             or len(contrato or []) > 1 or not getattr(res, "ok", False) or getattr(res, "consolidado", False)):
         return None
     ano = _ano(texto)
@@ -73,19 +73,32 @@ def guardar(user, texto: str, d, saida, contrato: list, ev: str):
                "evidencia": {"tipo": ev, "colunas": [str(c)[:40] for c in getattr(res, "colunas", [])][:12],
                              "revisada": True},
                "versao": os.environ.get("IATIVA_VERSAO", "dev"), "verificada_em": timezone.now().isoformat()}
+    componente = None
+    if contrato:
+        passo = passo_verificado(d, saida, (0,))
+        if passo:
+            componente = _componente(texto, contrato[0], passo)
+    if componente:
+        receita["componentes"] = [componente]
+    if sig is None and componente is None:
+        return None
     chave = _chave(sig)
     for n in _notas():
         r = n.criterios["receita"]
-        if _chave(r.get("assinatura", {})) == chave:
+        mesma_intencao = (_chave(r.get("assinatura", {})) == chave if sig is not None else
+                          not r.get("chave_composta") and componente in r.get("componentes", []))
+        if mesma_intencao:
             if r.get("objetivo") == receita["objetivo"] and r.get("parametros") == parametros:
                 n.criterios = {**n.criterios, "receita": {**r, "versao": receita["versao"],
                                                           "verificada_em": receita["verificada_em"],
                                                           "usos": int(r.get("usos", 0)) + 1}}
+                if componente and componente not in r.get("componentes", []):
+                    n.criterios["receita"]["componentes"] = [*r.get("componentes", []), componente][-12:]
                 n.save(update_fields=["criterios"])
                 return n
             n.ativo, n.situacao = False, SituacaoNota.SUBSTITUIDA
             n.save(update_fields=["ativo", "situacao"])
-    desc = (contrato[0].get("descricao", "") if contrato else "") or " e ".join(sig["eventos"])
+    desc = " e ".join((sig or {}).get("eventos", [])) or "Etapa reutilizável"
     nome = OBJETIVOS[d.objetivo].nome
     texto_nota = (f"Receita verificada: “{desc[:120]}” usa a consulta “{nome[:80]}” "
                   f"({', '.join(k for k, _ in parametros)[:80]}).")
@@ -172,6 +185,12 @@ def guardar_composta(user, texto, contrato, passos):
     periodos = [str(v) for p in passos for k, v in p["parametros"] if k == "periodo-analise"]
     if any(not ano or set(_ANO.findall(periodo)) != {ano} for periodo in periodos):
         return  # datas relativas ou ligadas a mais de um ano precisam ser resolvidas de novo
+    componentes = []
+    for passo in passos:
+        if len(passo["atende"]) == 1:
+            item = contrato[passo["atende"][0]]
+            if componente := _componente(item.get("descricao", ""), item, passo):
+                componentes.append(componente)
     for p in passos:
         p["parametros"] = [[k, str(v).replace(ano, "{ANO}") if ano and k == "periodo-analise" else str(v)]
                            for k, v in p["parametros"]]
@@ -179,6 +198,10 @@ def guardar_composta(user, texto, contrato, passos):
     with transaction.atomic():
         for nota in _notas().select_for_update().filter(criterios__receita__chave_composta=chave):
             if nota.criterios["receita"].get("passos") == passos:
+                receita = nota.criterios["receita"]
+                if componentes and receita.get("componentes") != componentes:
+                    nota.criterios = {"receita": {**receita, "componentes": componentes}}
+                    nota.save(update_fields=["criterios"])
                 return
             nota.ativo = False
             nota.situacao = SituacaoNota.SUBSTITUIDA
@@ -186,7 +209,7 @@ def guardar_composta(user, texto, contrato, passos):
         NotaAgente.objects.create(
             texto="Receita verificada para consulta com várias entregas.", criado_por=user, automatica=True,
             tipo=TipoNota.TERMO, escopo=EscopoNota.EMPRESA, situacao=SituacaoNota.APROVADA,
-            criterios={"receita": {"chave_composta": chave, "passos": passos,
+            criterios={"receita": {"chave_composta": chave, "passos": passos, "componentes": componentes,
                                    "versao": os.environ.get("IATIVA_VERSAO", "dev")}})
 
 
@@ -208,3 +231,69 @@ def composta_para(texto, contrato, objetivos):
                             tuple((k, v.replace("{ANO}", ano)) for k, v in p["parametros"]),
                             "", "", False, (), atende=tuple(p["atende"])))
     return fila, nota.pk
+
+
+def _chave_parte(texto, item):
+    from hashlib import sha256
+
+    t = " ".join(_norm(texto).strip(" .?!").split())
+    t = re.sub(r"^(?:quant[oa]s?|contagem (?:de|dos|das)|conte|some|qual (?:o|a)|mostre|liste) ", "", t)
+    ano = _ano(t)
+    if ano:
+        t = t.replace(ano, "{ANO}")
+    # Uma parte autônoma pode virar consulta. Relações entre partes exigem planejamento.
+    if not t or re.search(r"\b(?:desses|dessas|deles|delas|respectiv\w*|compar\w*|mesm[oa] vinculo)\b", t):
+        return ""
+    return sha256(_chave([item["tipo"], item.get("metrica", ""), t]).encode()).hexdigest()
+
+
+def _componente(texto, item, passo):
+    from iativa.accounts.filiais import NOMES, TODAS
+
+    chave = _chave_parte(texto, item)
+    ano = _ano(texto)
+    if (not chave or item.get("comparacao") or item.get("campo_evento") or item.get("evento_mensal")
+            or item.get("detalhe_contagem") or item.get("campos_pedidos")):
+        return None
+    params = []
+    for k, v in passo["parametros"]:
+        v = str(v)
+        if k == "filial-analise" and v != TODAS:
+            t, nome = _norm(texto), _norm(NOMES.get(v, ""))
+            if not re.search(rf"\b{re.escape(v)}\b", t) and not (nome and re.search(rf"\b{re.escape(nome)}\b", t)):
+                return None  # Uma filial implícita na sessão não é um critério reutilizável.
+        if k == "periodo-analise":
+            if not ano or set(_ANO.findall(v)) != {ano}:
+                return None
+            v = v.replace(ano, "{ANO}")
+        params.append([k, v])
+    return {"chave": chave, "objetivo": passo["objetivo"], "parametros": params}
+
+
+def compor_partes(contrato, objetivos):
+    """Planeja as partes já verificadas, preservando o índice, os filtros e o acesso de cada etapa."""
+    from .decisao import Decisao
+    from .planejamento import divergencia
+
+    permitidos = {o.codigo for o in objetivos}
+    conhecidos = {}
+    for nota in _notas().filter(criterios__receita__has_key="componentes").order_by("-pk"):
+        for p in nota.criterios["receita"]["componentes"]:
+            if p["objetivo"] in permitidos:
+                conhecidos.setdefault(p["chave"], p)
+    fila = []
+    for indice, item in enumerate(contrato):
+        if (item.get("comparacao") or item.get("campo_evento") or item.get("evento_mensal")
+                or item.get("detalhe_contagem") or item.get("campos_pedidos")):
+            continue
+        desc = item["descricao"]
+        parte = conhecidos.get(_chave_parte(desc, item))
+        if not parte:
+            continue
+        ano = _ano(desc)
+        params = tuple((k, v.replace("{ANO}", ano)) for k, v in parte["parametros"])
+        decisao = Decisao("", "preparar_consulta", parte["objetivo"], params, "", "", False, (),
+                         entrega=item["tipo"], atende=(indice,))
+        if not divergencia(item, decisao):
+            fila.append(decisao)
+    return fila

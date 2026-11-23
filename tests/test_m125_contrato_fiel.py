@@ -300,3 +300,56 @@ def test_separadamente_herda_ano_e_entrega_duas_contagens(base, erp_sintetico, p
         assert modelo_worker.chamadas == 0 and tentativas == [(0,), (0,), (1,)]
         assert NotaAgente.objects.filter(pk=nota.pk, ativo=True).exists()
         assert not Incidente.objects.exists()
+
+
+@pytest.mark.django_db
+def test_compoe_tres_consultas_verificadas_sem_nova_decisao(base, erp_sintetico):
+    from django.http import QueryDict
+    from iativa.agent import aprendizado, receita_pedido
+    from iativa.agent.contratos import objetivos_para
+    from iativa.agent.models import NotaAgente
+    from iativa.manutencao.models import Incidente
+
+    _erp(erp_sintetico)
+    u, cm = base["u"], base["cm"]
+    anos = ("2023", "2024", "2025")
+    with sqlite3.connect(erp_sintetico) as conn:
+        conn.executemany("INSERT INTO SRA010 (RA_FILIAL, RA_MAT, RA_ADMISSA, RA_DEMISSA) VALUES (?, ?, ?, ?)",
+                         [("01", f"0000{i + 10}", ano + "0201", ano + "0301") for i, ano in enumerate(anos)])
+
+    q = QueryDict(mutable=True)
+    q.update({"nome": "Admissões", "campo_data": "RA_ADMISSA"})
+    q.setlist("colunas", ["RA_MAT", "RA_ADMISSA"])
+    q.setlist("setores", [str(base["cob"].pk)])
+    admissao = aprendizado.aprovar(u, aprendizado.salvar_proposta(u, "SRA", q))
+
+    def analise(entregas):
+        return {"natureza": "dados", "setores": [base["cob"].codigo], "confianca": 1,
+                "resumo": "", "memorias": [], "entregas": entregas}
+
+    itens = [{"descricao": f"Funcionários {evento} por filial em {ano}", "tipo": "calculo", "metrica": "contagem"}
+             for evento, ano in zip(("desligados", "desligados", "admitidos"), anos)]
+    c = conversas.nova_individual(u)
+    adm_codigo = next(o.codigo for o in objetivos_para(u) if o.modelo_id == admissao.pk)
+    for codigo, item in [(cm.codigo, itens[0]), (adm_codigo, itens[2])]:
+        ano = item["descricao"][-4:]
+        modelo = FakeProvider([_d(acao="preparar_consulta", objetivo=codigo, entrega="calculo", parametros=[
+            {"codigo": "periodo-analise", "valor": f"01/01/{ano}..31/12/{ano}"},
+            {"codigo": "filial-analise", "valor": "TODAS"},
+            {"codigo": "agregacao", "valor": "contagem:*"},
+        ])], analises=[analise([item])])
+        _, simples = conversas.enviar(u, c, f"Quantos {item['descricao'].lower()}?", modelo)
+        assert simples is not None and simples.ok
+    assert NotaAgente.objects.filter(criterios__receita__has_key="componentes").count() == 2
+
+    assert receita_pedido.compor_partes(itens, []) == []
+    contrato_misto = itens[:2] + [{**itens[2], "descricao": itens[2]["descricao"] + " somente da Matriz"}]
+    assert [d.atende for d in receita_pedido.compor_partes(
+        contrato_misto, objetivos_para(u))] == [(0,), (1,)]
+    outro = FakeProvider([], analises=[analise(itens)])
+    _, combinado = conversas.enviar(
+        u, c, "Mostre por filial quantos saíram em 2023, quantos saíram em 2024 e quantos entraram em 2025.", outro)
+    assert outro.chamadas == 0 and combinado is not None and combinado.ok
+    assert combinado.colunas == ["Filial", *[e["descricao"] for e in itens]]
+    assert combinado.linhas[-1] == ["Total", "1", "1", "2"]
+    assert not Incidente.objects.exists()
