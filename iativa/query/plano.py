@@ -305,6 +305,14 @@ def _aplicar_agregacao(plano, spec: dict, texto: str):
             colunas.append(Coluna(f"{NOME_FUNCAO[func]} de {rotulos[campo]}", Campo(apelido(spec, campo), campo), agregacao=func,
                                   tipo=tipo))
     plano.colunas, plano.agrupar, plano.top = colunas, bool(grupo), top
+    # M125: no cálculo, junção que não entra em coluna nem em filtro sai (como em plano_total): não pode inflar
+    # nem cortar a contagem, que fica na unicidade da tabela base (um registro por chave).
+    usados = {c.campo.alias for c in colunas} | {f.campo.alias for f in plano.filtros} | {
+        f.valor.alias for f in plano.filtros if isinstance(f.valor, Campo)}
+    fora = {j.tabela for j in plano.juncoes if j.alias not in usados}
+    plano.juncoes = [j for j in plano.juncoes if j.alias in usados]
+    plano.premissas = [p for p in plano.premissas
+                       if not any(p.startswith(f"Junção com {t} ") for t in fora)]
     plano.categorias = separar_categorias(texto)[1]
     if grupo and ler_por_filial(texto):
         plano.por_filial = True  # cada filial com os seus grupos; o serviço não soma as filiais

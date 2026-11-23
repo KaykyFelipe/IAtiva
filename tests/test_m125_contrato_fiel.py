@@ -104,10 +104,16 @@ def _consulta(base):
 
 
 @pytest.mark.django_db
-def test_pergunta_do_diagnostico_24_entrega_a_intersecao_por_filial(base, erp_sintetico):
+@pytest.mark.parametrize("juncao", [False, True], ids=["sem-juncao", "consulta-com-juncao-de-descricao"])
+def test_pergunta_do_diagnostico_24_entrega_a_intersecao_por_filial(base, erp_sintetico, juncao):
     """Ponta a ponta: a 2ª leitura do modelo tenta 4 entregas; a resposta é uma só, filial e quantidade, com as
-    duas datas no mesmo vínculo (matrícula + filial, sem duplicar)."""
+    duas datas no mesmo vínculo (matrícula + filial, sem duplicar). No servidor, a consulta aprendida tem junção
+    com a tabela de funções (só descrição): no cálculo ela sai, senão a prova da interseção não era registrada."""
     _erp(erp_sintetico)
+    if juncao:
+        base["cm"].spec["juncoes"] = [{"alias": "j1", "tabela": "SA1", "pares": [["A1_COD", "RA_MAT"],
+                                                                               ["A1_LOJA", "RA_FILIAL"]]}]
+        base["cm"].save(update_fields=["spec"])
     provedor = FakeProvider([_consulta(base)], analises=[{
         'natureza': 'dados', 'setores': [base['cob'].codigo], 'confianca': 1, 'resumo': '', 'memorias': [],
         'entregas': [QUATRO[2]]}], releituras=[{'natureza': 'dados', 'entregas': QUATRO}])

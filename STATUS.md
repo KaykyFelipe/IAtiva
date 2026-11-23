@@ -10,6 +10,7 @@
   - Planejamento: a segunda leitura (M118) mandava separar cada evento e juntar a interseção e uma lista nominal. O pedido virou 4 entregas. A resposta certa (interseção por filial) entregava 1, o ciclo repetia a ação e abria incidente (trilha `preparar_consulta:entrega_pendente:calculo` → `acao_repetida`). Reproduzido com dados sintéticos: a versão anterior devolve "Seu pedido tem 4 partes… Ainda falta".
   - Manutenção (23/11, 08:11–09:03): duas tentativas terminaram em "tempo limite" de ~19 min cada (o agente tem só 240 s; o estouro foi em teste, imagem ou ensaio, sem registro de qual). A 3ª passou nos testes, mas o ensaio cobrava o mesmo contrato de 4 partes. O agente editou de fato (contagem.py + 3 testes); não era executor sem ferramentas.
   - Log do executor com buffer: todas as linhas apareciam no journal às 09:03.
+  - Validado no servidor depois da 1ª publicação (teste.ti): o contrato já saía com 1 entrega e os parâmetros estavam certos (dois intervalos, contagem por filial). Mas a consulta aprendida tem junção com a tabela de funções (só descrição), e a prova da interseção só era registrada sem junção. Por isso a entrega nunca contava como cumprida. Reproduzido com dados sintéticos (consulta com junção).
 - Correções:
   - `agent/fidelidade.py`: o contrato fica fiel ao pedido, qualquer que seja a leitura do modelo (na triagem, na continuação e na retomada).
     - "X e Y no mesmo ano/mês", "ambos" ou "os dois" = uma entrega (a interseção).
@@ -19,6 +20,7 @@
     - Tempo limite com o nome da etapa e duração de cada etapa no log; log sem buffer.
     - Falha do executor (login, cota, rede, imagem, ferramenta, agente que não editou) separada da falha da correção. Não gasta tentativa: o incidente volta à fila (`manutencao aguardar`), espera 10 min e é retomado; após 6 falhas seguidas, vai para a TI.
     - Agente que estoura o tempo mas editou tem a edição validada pelos testes.
+  - Plano: no cálculo (agregação), junção que não entra em coluna nem filtro sai, como já valia no total (`plano_total`). A contagem fica na unicidade da tabela base, sem inflar nem cortar.
   - `agent/receita_pedido.py`: resposta conferida grava a receita do tipo de pedido. Contém assinatura, consulta, tabelas, parâmetros com {ANO}, métrica, evidência e versão, sem dados do ERP. Num pedido equivalente, ela é o 1º passo sem chamar o modelo, se a pessoa tiver acesso à consulta. Se for reprovada, é desativada.
   - `agent/tempos.py` + `manage.py tempos_pedido`: tempos por etapa (leitura, decisão, ERP, revisão, total, desde o pedido na continuação/retomada) na ficha da resposta e no log.
   - Tela: "Correção automática (registro nº X)", "Continuação da consulta" e "Correção no ar: refazendo" aparecem com nomes distintos; a espera do executor também aparece.
