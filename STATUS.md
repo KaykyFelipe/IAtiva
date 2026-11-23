@@ -8,7 +8,6 @@
 
 - Andamento: a tela mostrava sempre uma de 9 frases fixas por fase. Agora mostra o passo real do sistema, por exemplo "Consultando o ERP — Matriz" ou "Calculando o total no banco".
   - Continua sem texto livre do modelo e sem nome interno de consulta ou código de tabela.
-  - Quando a mesma ação volta depois de outras, aparece "(tentativa N)" em vez de repetir o mesmo nome.
 - Período: mês citado sem ano ("faturamento de setembro e outubro") é do ano corrente, inclusive mês que ainda não chegou ("dezembro" = dezembro de 2026). "Desde dezembro" em março continua sendo o ano passado, para o intervalo não ficar invertido. A regra também está nas instruções do modelo.
 
 ## Composição de pedidos com consultas já conhecidas

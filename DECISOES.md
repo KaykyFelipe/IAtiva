@@ -247,4 +247,4 @@ M60 (Diego, 2026-11-16, aprovada no chat): implementar os seis ajustes da revis�
 | M123 | 2026-11-19 | Pedido de Diego: ensaio da correção usa o usuário de teste da TI (teste.ti), nunca a conta de quem perguntou; erro do agente registrado no log. |
 | M124 | 2026-11-19 | Pedido de Diego (a correção deve continuar até entregar tudo): cancelamento vale só para o pedido cancelado; bloqueio por recorrência cai em versão nova. |
 | M125 | 2026-11-23 | Pedido de Diego (diagnóstico nº 24): contrato fiel ao pedido (interseção = uma entrega; lista só quando pedida; substitui a regra 1/2 da M118); falha do executor não gasta tentativa e volta à fila com espera; receita verificada do tipo de pedido gravada como nota técnica da empresa e reaproveitada como 1º passo; tempos por etapa na ficha e no log. |
-| M126 | 2026-11-23 | Pedido de Diego: andamento mostra o passo real (sem texto do modelo nem nomes internos) e numera tentativas repetidas; mês sem ano = ano corrente (exceto "desde" mês futuro). |
+| M126 | 2026-11-23 | Pedido de Diego: andamento mostra o passo real (sem texto do modelo nem nomes internos); mês sem ano = ano corrente (exceto "desde" mês futuro). |

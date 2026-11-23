@@ -102,12 +102,9 @@ def ler(usuario_id, pedido) -> dict:
 
 
 def estado_publico(usuario_id, pedido):
-    """O passo atual como ele é. Se a mesma ação volta depois de outras (nova tentativa), diz qual tentativa é,
-    em vez de repetir o mesmo nome de etapa."""
+    """O passo atual como ele é (M126)."""
     estado = ler(usuario_id, pedido)
     passos = [p for p in (_publico(p) for p in estado["passos"]) if p]
     if not passos:
         return {"mensagem": "", "fim": estado["fim"]}
-    atual = passos[-1]
-    vezes = sum(1 for k, p in enumerate(passos) if p == atual and (k == 0 or passos[k - 1] != p))
-    return {"mensagem": atual + (f" (tentativa {vezes})" if vezes > 1 else "") + "…", "fim": estado["fim"]}
+    return {"mensagem": passos[-1] + "…", "fim": estado["fim"]}
