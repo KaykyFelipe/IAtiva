@@ -4,7 +4,7 @@
   --papel: #fdfefe; --texto: #243443; --sutil: #74827a; --linha: #e3e9e5;
   --acento-claro: #edf3f0; --verde-texto: #34784c;
 }
-body { font-family: "Segoe UI Variable Text", "Segoe UI", Arial, sans-serif; font-size: 14px; }
+body { font-family: "Segoe UI Variable Text", "Segoe UI", Arial, sans-serif; font-size: 14px; overflow: hidden; }
 [hidden] { display: none !important; }
 .icones-definicoes { position: absolute; width: 0; height: 0; overflow: hidden; }
 .simbolo-svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; flex: none; }
@@ -70,14 +70,14 @@ body { font-family: "Segoe UI Variable Text", "Segoe UI", Arial, sans-serif; fon
 .lateral-recolhida .abrir-lateral { display: inline-grid; }
 .leitura-ampla .expandir-leitura { background: #edf3f8; color: var(--azul); }
 .conteudo-chat { display: flex; flex-direction: column; flex: 1; min-height: 0; }
-.rolagem { min-height: 0; overflow: auto; overflow-anchor: none; scrollbar-width: thin; scrollbar-color: #dae3dd transparent; }
+.rolagem { min-height: 0; overflow: auto; overflow-anchor: none; overscroll-behavior-y: contain; scrollbar-width: thin; scrollbar-color: #dae3dd transparent; }
 .mensagens { width: 100%; max-width: var(--largura-leitura); padding: 25px 25px 24px; gap: 25px; overflow-wrap: anywhere; }
 .msg { line-height: 1.8; min-width: 0; animation: aparecer-mensagem .18s ease-out; }
 .msg p { margin-bottom: 14px; }
 .msg.usuario { max-width: 85%; padding: 12px 19px; background: #eef3f0; border: 1px solid #e8eeea; border-radius: 19px 19px 5px 19px; color: #30493b; line-height: 1.65; }
 .resposta-chat { min-width: 0; }
 .resposta-chat [data-copiar-conteudo] > .msg.ia:not(.resultado) > p { font-size: 15px; line-height: 1.65; color: var(--texto); }
-.acoes-resposta { display: flex; align-items: center; gap: 3px; margin-top: 6px; }
+.acoes-resposta { position: relative; display: flex; align-items: center; gap: 3px; margin-top: 6px; }
 .acoes-resposta .icone { width: 29px; height: 29px; padding: 0; color: var(--sutil); background: transparent; }
 .acoes-resposta .icone:hover, .acoes-resposta .icone.copiado { color: var(--azul); background: #eaf1f9; }
 .acoes-resposta .simbolo-svg { width: 15px; height: 15px; }
