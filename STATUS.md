@@ -20,6 +20,7 @@
 
 - Colar uma tabela no campo de mensagem preserva o texto inteiro. Se a mensagem ultrapassar o limite de envio, o chat mostra o aviso antes de enviar.
 - Recarregar a conversa abre na última mensagem. Quando uma verificação carrega a tabela depois, o chat mantém quem está no fim junto da última mensagem e preserva a leitura de quem subiu.
+- Ao entrar ou voltar para um chat pela navegação, a conversa abre na última mensagem após estabilizar o conteúdo.
 - Um único botão de cópia no rodapé permite copiar a resposta inteira ou escolher uma tabela pelo nome. A cópia usa texto com colunas separadas por ` | `, incluindo cabeçalhos, campos, linhas e totais disponíveis.
 - A Memória abre na área do chat e organiza preferências pessoais, a fila com propostas completas e as regras e consultas aprovadas por setor.
 - Ao concluir um pedido, o chat ancora a mensagem em leitura. A seta acima do campo aparece quando há mensagens mais abaixo e volta para a mais recente.

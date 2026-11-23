@@ -305,11 +305,18 @@
 
   // M71: trocar de conversa sem recarregar a página (só a área da conversa é trocada).
   function abrirConversa(url, empilhar = true) {
-    if (!window.htmx || !document.getElementById("conversa")) { location.href = url; return; }
+    const anterior = document.getElementById("conversa");
+    if (!window.htmx || !anterior) { location.href = url; return; }
     // A lateral volta junto (título/estado); mantém a rolagem dela onde estava.
     const nav = document.querySelector("#lateral nav");
     const rolagem = nav ? nav.scrollTop : 0;
-    htmx.ajax("GET", url, { target: "#conversa", swap: "outerHTML" }).then(() => {
+    htmx.ajax("GET", url, {
+      target: anterior,
+      swap: "outerHTML scroll:#historico-chat:bottom show:none",
+    }).then(() => {
+      if (document.getElementById("conversa") === anterior) return;
+      // Posiciona também antes da estabilização do fragmento, para as conclusões que carregam logo em seguida.
+      rolarParaFim();
       const nova = document.querySelector("#lateral nav");
       if (nova) { nova.scrollTop = rolagem; requestAnimationFrame(() => { nova.scrollTop = rolagem; }); }
       if (empilhar) history.pushState({ conversa: true }, "", url);
