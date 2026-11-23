@@ -65,13 +65,17 @@ def pedido(texto: str, analise: dict | None = None) -> dict | None:
     spec = _do_modelo((analise or {}).get('tabela'))
     if spec is None:
         t = _norm(texto)
-        if not _CONTA.search(t) or eventos_intersecao(texto):
+        from .contagem import _PEDE_DETALHE
+        if not (_CONTA.search(t) or _PEDE_DETALHE.search(t)) or eventos_intersecao(texto):
             return None
         ev, per = eventos(texto), _periodos(texto)
         if len(per) < 2:
             return None  # reserva sem o modelo: só a grade evento x período (status listados não são eventos)
+        so_nomes = re.search(r'\b(?:apenas|so|somente)\s+(?:os\s+)?nomes\b', t)
         spec = {"eventos": ev, "rotulos": [e.capitalize() for e in ev],
-                "periodos": [(i.isoformat(), f.isoformat(), r) for i, f, r in per], "por_filial": bool(_POR.search(t))}
+                "periodos": [(i.isoformat(), f.isoformat(), r) for i, f, r in per], "por_filial": bool(_POR.search(t)),
+                "contagem": bool(_CONTA.search(t)),
+                "lista": {"pedida": bool(_PEDE_DETALHE.search(t)), "campos": ["nome"] if so_nomes else []}}
     if len(spec["periodos"]) < 2 and len(spec["eventos"]) < 3:
         # Um período só: a composição de contagens separadas (contagem.py, resumo Filial | Evento | Evento com os
         # detalhes dos vínculos) já responde; aqui é a grade evento x período.
@@ -98,9 +102,15 @@ def _do_modelo(t) -> dict | None:
         periodos.append((i.isoformat(), f.isoformat(), rot))
     if not medidas or not periodos:
         return None
+    lista = t.get('lista') if isinstance(t.get('lista'), dict) else {}
+    campos = [" ".join(str(c).split())[:30] for c in (lista.get('campos') or []) if str(c).strip()][:8]
+    contagem = t.get('contagem') is not False
+    if not contagem and not lista.get('pedida'):
+        return None
     return {"eventos": [" ".join(str(m['evento']).split())[:60] for m in medidas],
             "rotulos": [" ".join(str(m.get('rotulo') or m['evento']).split())[:40] for m in medidas],
-            "periodos": periodos, "por_filial": t.get('agrupar_por') == 'filial'}
+            "periodos": periodos, "por_filial": t.get('agrupar_por') == 'filial', "contagem": contagem,
+            "lista": {"pedida": bool(lista.get('pedida')), "campos": campos}}
 
 
 def _coluna(spec, k, rot):
@@ -113,6 +123,9 @@ def planejar(texto: str, analise: dict) -> dict:
     if spec is None:
         return analise
     cols = ', '.join(_coluna(spec, k, r) for k in range(len(spec["eventos"])) for _, _, r in spec["periodos"])
+    if _lista_pedida(spec):
+        cols = ('lista de quem são' + (f' ({", ".join(spec["lista"]["campos"])})' if spec["lista"]["campos"] else '')
+                + (f'; quantidade: {cols}' if spec.get("contagem", True) else ''))
     antes = [e for e in analise.get('entregas', []) if isinstance(e, dict) and not e.get('tabela')]
     return {**analise, 'entregas': [{
         'descricao': f'Tabela{" por filial" if spec["por_filial"] else ""}: {cols}'[:200],
@@ -139,16 +152,16 @@ def _consulta_do_evento(palavra: str, modelos):
     return min(candidatos, key=lambda m: (bool(m.spec.get('filtros_fixos')), m.pk)) if candidatos else None
 
 
+def _lista_pedida(spec) -> bool:
+    return bool((spec.get("lista") or {}).get("pedida"))
+
+
 def executar(user, c, texto, defs, objetivos, interrompido=None, spec=None):
-    """Saida com a tabela montada, ou None se algum evento não tiver consulta que a pessoa possa usar."""
-    from datetime import date
+    """Saida com as tabelas pedidas, ou None se algum evento não tiver consulta que a pessoa possa usar.
 
-    from iativa.query.servico import Resultado, _fmt
-
-    from . import andamento
-    from .agente import Interrompido, Saida, _preparar
-    from .comparacao import _valores
-    from .decisao import Decisao
+    M131: "quantos ... e quais são" pede duas coisas: a lista (quem são) vem PRIMEIRO e a quantidade, tabela
+    menor, por último. "Quais são ... apenas os nomes" entrega só a lista, só com os nomes."""
+    from .agente import Saida
     from .models import ConsultaModelo
     spec = spec if isinstance(spec, dict) else pedido(texto)
     if spec is None:
@@ -158,41 +171,125 @@ def executar(user, c, texto, defs, objetivos, interrompido=None, spec=None):
     consultas = [_consulta_do_evento(e, modelos) for e in spec["eventos"]]
     if any(cm is None for cm in consultas) or len({(cm.tabela, cm.spec['campo_data']) for cm in consultas}) != len(consultas):
         return None
-    agreg = 'contagem:* por filial' if spec["por_filial"] else 'contagem:*'
-    colunas, valores, ultima, escopo = [], [], None, None
+    partes = []
+    if _lista_pedida(spec):
+        lista = _lista(user, c, spec, consultas, defs, interrompido)
+        if lista is None:
+            return None
+        partes.append(("Quem são", lista))
+    if spec.get("contagem", True):
+        cont = _contagens(user, c, spec, consultas, defs, interrompido)
+        if cont is None:
+            return None
+        partes.append(("Quantidade", cont))
+    if not partes:
+        return None
+    ultima = partes[-1][1][1]
+    if len(partes) == 1:
+        res = partes[0][1][0]
+    else:
+        from .diagnostico import Bloco, Diagnostico
+        res = Diagnostico([Bloco(t, r) for t, (r, _) in partes])
+        res.agregado = True
+    res.tabela_pedida = True  # só estas tabelas cumprem a entrega (planejamento.conferir)
+    return Saida('', {'tipo': 'calculo_resultado'}, solicitacao=ultima.solicitacao, resultado=res)
+
+
+def _celulas(user, c, spec, consultas, defs, interrompido, agreg, aviso):
+    """Roda cada consulta (evento) em cada período, pelo caminho autorizado. None se alguma falhar."""
+    from datetime import date
+
+    from . import andamento
+    from .agente import Interrompido, _preparar
+    from .decisao import Decisao
+    out, escopo = [], None
     for k, (palavra, cm) in enumerate(zip(spec["eventos"], consultas)):
         for ini, fim, rot in spec["periodos"]:
             if interrompido is not None and interrompido():
                 raise Interrompido
-            andamento.avisar(f'Contando {palavra} em {rot}')
+            andamento.avisar(f'{aviso} {palavra} em {rot}')
             i, f = date.fromisoformat(ini), date.fromisoformat(fim)
-            d = Decisao('', 'preparar_consulta', cm.codigo, (('filial-analise', 'TODAS'),
-                        ('periodo-analise', f'{i:%d/%m/%Y}..{f:%d/%m/%Y}'), ('agregacao', agreg)), '', '', False, ())
-            s = _preparar(user, c, d, None, defs, {}, texto='')
+            pares = (('filial-analise', 'TODAS'), ('periodo-analise', f'{i:%d/%m/%Y}..{f:%d/%m/%Y}'))
+            if agreg:
+                pares += (('agregacao', agreg),)
+            s = _preparar(user, c, Decisao('', 'preparar_consulta', cm.codigo, pares, '', '', False, ()),
+                          None, defs, {}, texto='')
             r = s.resultado
-            if r is None or not r.ok or r.truncado:
+            if r is None or not r.ok or (agreg and r.truncado):
                 return None  # uma célula falhou: o ciclo normal decide, sem tabela pela metade
             if escopo is not None and r.escopo.get('filiais') != escopo.get('filiais'):
                 return None
-            escopo, ultima = r.escopo, s
-            vals, _, _, _ = _valores(r)
-            colunas.append(_coluna(spec, k, rot))
-            valores.append(vals)
+            escopo = r.escopo
+            out.append((k, rot, s))
+    return out
+
+
+def _contagens(user, c, spec, consultas, defs, interrompido):
+    from iativa.query.servico import Resultado, _fmt
+
+    from .comparacao import _valores
+    agreg = 'contagem:* por filial' if spec["por_filial"] else 'contagem:*'
+    celulas = _celulas(user, c, spec, consultas, defs, interrompido, agreg, 'Contando')
+    if celulas is None:
+        return None
+    colunas, valores = [], []
+    for k, rot, s in celulas:
+        vals, _, _, _ = _valores(s.resultado)
+        colunas.append(_coluna(spec, k, rot))
+        valores.append(vals)
     grupos = sorted({g for v in valores for g in v if g != 'Total'} or {'Total'})
     linhas = [[g, *[_fmt(v.get(g) or 0, 'inteiro') for v in valores]] for g in grupos]
     res = Resultado(True, 'Contagens feitas no banco com as consultas aprovadas de cada evento, pelos mesmos '
                           'critérios em cada período.',
                     colunas=['Filial' if spec["por_filial"] else 'Indicador', *colunas],
-                    tipos=['texto', *['inteiro'] * len(colunas)], linhas=linhas, escopo=escopo,
-                    medida_calculada='contagem')
+                    tipos=['texto', *['inteiro'] * len(colunas)], linhas=linhas,
+                    escopo=celulas[-1][2].resultado.escopo, medida_calculada='contagem')
     res.agregado = True
-    res.tabela_pedida = True  # só esta tabela cumpre a entrega (planejamento.conferir)
+    res.tabela_pedida = True
     if spec["por_filial"] and len(grupos) > 1:
         res.rodape = ['Total', *[_fmt(sum((x or 0) for g, x in v.items() if g != 'Total'), 'inteiro')
                                  for v in valores]]
     res.premissas = [f'{p.capitalize()}: consulta “{cm.nome}”, data {cm.spec["campo_data"]}.'
                      for p, cm in zip(spec["eventos"], consultas)]
-    return Saida('', {'tipo': 'calculo_resultado'}, solicitacao=ultima.solicitacao, resultado=res)
+    return res, celulas[-1][2]
+
+
+def _quer(rotulo: str, campos: list) -> bool:
+    r = _norm(rotulo)
+    return any(_norm(w)[:4] in r for c in campos for w in str(c).split() if len(w) >= 3)
+
+
+def _lista(user, c, spec, consultas, defs, interrompido):
+    """Uma lista só com quem atende cada evento em cada período. Colunas: as pedidas (campos) ou as comuns às
+    consultas; Evento/Período entram quando há mais de um e a pessoa não limitou as colunas."""
+    from iativa.query.servico import Resultado
+    celulas = _celulas(user, c, spec, consultas, defs, interrompido, '', 'Listando')
+    if celulas is None:
+        return None
+    campos = (spec.get("lista") or {}).get("campos") or []
+    primeiro = celulas[0][2].resultado
+    base = [col for col in primeiro.colunas if all(col in s.resultado.colunas for _, _, s in celulas)]
+    if campos:
+        base = [col for col in base if _quer(col, campos)] or base
+    extra = [] if campos else ((['Evento'] if len(spec["eventos"]) > 1 else [])
+                               + (['Período'] if len(spec["periodos"]) > 1 else []))
+    linhas, cortada = [], False
+    for k, rot, s in celulas:
+        r = s.resultado
+        cortada = cortada or bool(r.truncado)
+        idx = [r.colunas.index(col) for col in base]
+        for ln in r.linhas:
+            linhas.append(([spec["rotulos"][k]] if 'Evento' in extra else []) + ([rot] if 'Período' in extra else [])
+                          + [ln[i] for i in idx])
+    if campos and len(base) == 1:
+        linhas = [list(x) for x in dict.fromkeys(tuple(ln) for ln in linhas)]  # "apenas os nomes": sem repetir
+    tipos = ['texto'] * len(extra) + [primeiro.tipos[primeiro.colunas.index(col)] for col in base]
+    res = Resultado(True, f'{len(linhas)} registro(s) das consultas aprovadas de cada evento.',
+                    colunas=extra + base, tipos=tipos, linhas=linhas, escopo=celulas[-1][2].resultado.escopo)
+    res.tabela_pedida = True
+    if cortada:
+        res.premissas = ['Alguma consulta trouxe mais registros que o limite de exibição; a lista mostra os primeiros.']
+    return res, celulas[-1][2]
 
 
 def com_tabela(ac):

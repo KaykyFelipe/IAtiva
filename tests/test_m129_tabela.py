@@ -105,3 +105,60 @@ def test_m130_tabela_com_especificacao_do_modelo_ponta_a_ponta(base, erp_sinteti
     assert r.colunas[0] == "Filial" and r.colunas[1] == "Entraram - 07/2026" and r.colunas[-1] == "Saíram - 09/2026"
     linhas = {l[0]: [int(str(v)) for v in l[1:]] for l in r.linhas}
     assert linhas == {rotulo("01"): [1, 0, 0, 0, 0, 1], rotulo("02"): [0, 1, 0, 0, 0, 0]}
+
+
+
+def _duas_consultas(base, erp_sintetico):
+    q = QueryDict(mutable=True)
+    q.update({"nome": "Funcionarios admitidos", "campo_data": "RA_ADMISSA"})
+    q.setlist("colunas", ["RA_MAT", "RA_NOME", "RA_ADMISSA", "RA_DEMISSA"])
+    q.setlist("setores", [str(base["cob"].pk)])
+    aprendizado.aprovar(base["u"], aprendizado.salvar_proposta(base["u"], "SRA", q))
+    with sqlite3.connect(erp_sintetico) as conn:
+        conn.execute("DELETE FROM SRA010")
+        conn.executemany("INSERT INTO SRA010 (RA_FILIAL, RA_MAT, RA_NOME, RA_ADMISSA, RA_DEMISSA) VALUES (?, ?, ?, ?, ?)", [
+            ("01", "000001", "ANA TESTE", "20260702", "20260915"), ("02", "000001", "BIA TESTE", "20260810", "        ")])
+
+
+def _esp(contagem, lista, campos=()):
+    return {"medidas": [{"evento": "admissão", "rotulo": "Admitidos"}, {"evento": "desligamento", "rotulo": "Desligados"}],
+            "periodos": [{"inicio": "2026-07-01", "fim": "2026-07-31", "rotulo": "07/2026"},
+                         {"inicio": "2026-08-01", "fim": "2026-09-30", "rotulo": "08-09/2026"}],
+            "agrupar_por": "filial", "intersecao": False, "contagem": contagem,
+            "lista": {"pedida": lista, "campos": list(campos)}}
+
+
+def _enviar(base, esp, texto):
+    p = FakeProvider([], analises=[{"natureza": "dados", "setores": [base["cob"].codigo], "confianca": 1, "resumo": "",
+                                    "memorias": [], "tabela": esp, "entregas": [
+                                        {"descricao": "x", "tipo": "calculo", "metrica": "contagem"}]}])
+    msg, r = conversas.enviar(base["u"], conversas.nova_individual(base["u"]), texto, p)
+    assert p.chamadas == 0 and not Incidente.objects.exists(), msg.texto
+    return r
+
+
+@pytest.mark.django_db
+def test_m131_quantos_e_quais_sao_entrega_lista_primeiro_e_quantidade_por_ultimo(base, erp_sintetico):  # noqa: F811
+    _duas_consultas(base, erp_sintetico)
+    r = _enviar(base, _esp(True, True), "Quantos foram admitidos e desligados de julho a setembro, por filial, e quais são?")
+    assert [b.titulo for b in r.blocos] == ["Quem são", "Quantidade"]
+    lista, cont = r.blocos[0].resultado, r.blocos[1].resultado
+    assert lista.colunas[:2] == ["Evento", "Período"] and len(lista.linhas) == 3  # 2 admitidos + 1 desligado
+    assert cont.colunas[0] == "Filial" and cont.colunas[1] == "Admitidos - 07/2026"
+
+
+@pytest.mark.django_db
+def test_m131_quais_sao_apenas_os_nomes_entrega_so_a_lista_de_nomes(base, erp_sintetico):  # noqa: F811
+    _duas_consultas(base, erp_sintetico)
+    r = _enviar(base, _esp(False, True, ["nome"]),
+                "Quais foram os admitidos e desligados de julho a setembro? Me informe apenas os nomes.")
+    assert not hasattr(r, "blocos") or not r.blocos
+    assert len(r.colunas) == 1 and "nome" in r.colunas[0].lower()
+    assert sorted(l[0].strip() for l in r.linhas) == ["ANA TESTE", "BIA TESTE"]  # sem repetir quem está nos dois
+
+
+def test_m131_regras_de_reserva_separam_lista_e_quantidade():
+    a = tabela.pedido("Quantos foram admitidos e desligados em julho e agosto, e quais são?")
+    assert a["contagem"] and a["lista"]["pedida"] and a["lista"]["campos"] == []
+    b = tabela.pedido("Quais foram os admitidos e desligados em julho e agosto? Apenas os nomes.")
+    assert not b["contagem"] and b["lista"] == {"pedida": True, "campos": ["nome"]}

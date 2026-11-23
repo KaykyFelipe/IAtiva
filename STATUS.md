@@ -4,6 +4,15 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **Etapa 7 aprovada em 2026-11-16 por Diego; em andamento.** Feito: roteiro do piloto (`docs/piloto/ROTEIRO.md`) e auditoria de não armazenamento (`manage.py auditar_armazenamento`). Falta: usuários do Financeiro, conferência dos números com relatórios do Protheus, avaliação da interpretação e latência. Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M131 — "quantos" e "quais são" na mesma pergunta viram duas tabelas (2026-11-23)
+
+- A leitura do pedido (analise.tabela) diz também se a pessoa pediu quantidade (`contagem`) e se pediu quem são (`lista.pedida`), com as colunas pedidas (`lista.campos`).
+- Como fica:
+  - "Quantos … e quais são" = duas tabelas: primeiro a lista ("Quem são", com Evento e Período quando há mais de um) e por último a quantidade, que é a tabela menor;
+  - "Quais são … Me informe apenas os nomes" = só a lista, só com os nomes, sem repetir quem aparece em mais de um evento ou período.
+- As duas tabelas usam as mesmas consultas aprovadas e as permissões da pessoa. Lista maior que o limite de exibição mostra os primeiros registros e avisa.
+- Sem a leitura do modelo, as regras do texto ("quais/quem/liste/nomes", "apenas os nomes") servem de reserva.
+
 ## Mudança M130 — a IA entende o jeito da pessoa pedir a tabela (2026-11-23)
 
 - A tabela personalizada (M129) dependia de frases exatas ("por filial", "admitidos e desligados", nomes de mês). Agora a 1ª leitura do pedido (o modelo) devolve `analise.tabela`:

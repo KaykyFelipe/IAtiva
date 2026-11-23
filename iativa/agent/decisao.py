@@ -129,8 +129,13 @@ def esquema(codigos_objetivo, codigos_parametro) -> dict:
                         "rotulo": {"type": "string", "maxLength": 24}},
                         "required": ["inicio", "fim", "rotulo"]}},
                     "agrupar_por": {"type": "string", "enum": ["", "filial"]},
-                    "intersecao": {"type": "boolean"}},
-                    "required": ["medidas", "periodos", "agrupar_por", "intersecao"]}},
+                    "intersecao": {"type": "boolean"},
+                    "contagem": {"type": "boolean"},
+                    "lista": {"type": "object", "properties": {
+                        "pedida": {"type": "boolean"},
+                        "campos": {"type": "array", "maxItems": 8, "items": {"type": "string", "maxLength": 30}}},
+                        "required": ["pedida", "campos"]}},
+                    "required": ["medidas", "periodos", "agrupar_por", "intersecao", "contagem", "lista"]}},
                 "required": ["natureza", "setores", "confianca", "resumo", "titulo", "entregas", "memorias", "tabela"]},
             "resposta": {"type": "string", "description": "Texto ao usuário, em português, tom de conversa."},
             "calculo": {"type": "object", "description": "Ação calcular_resultado: usa o resultado autorizado anterior. "
