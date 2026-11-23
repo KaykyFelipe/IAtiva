@@ -456,7 +456,8 @@ def test_executor_tenta_de_novo_com_o_resultado_da_validacao(tmp_path, monkeypat
     monkeypatch.setattr(mx, "preparar_escrita", lambda wt: None)
     monkeypatch.setattr(mx, "checar_cancelamento", lambda inc: None)
     monkeypatch.setattr(mx, "etapa", lambda *a: None)
-    monkeypatch.setattr(mx, "manage", lambda *a, **k: "ok")  # M122: aviso de tentativa vai ao app
+    monkeypatch.setattr(mx, "manage", lambda *a, **k: "falha: reproduzido" if a[0] == "ensaiar" else "ok")
+    monkeypatch.setattr(mx, "pytest_em", lambda *a, **k: True)  # M122: aviso de tentativa vai ao app
     monkeypatch.setattr(mx, "comando_agente", lambda *a: [])
     monkeypatch.setattr(mx, "rodar_agente", lambda *a: SimpleNamespace(returncode=0))
     atualizadas = []

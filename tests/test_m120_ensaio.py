@@ -96,17 +96,22 @@ def test_m122_tentativa_aparece_no_card(base, client):  # noqa: F811
     assert "Tentativa 2 de 3" in html and "Desligados por filial" in html
 
 
-def test_m123_ensaio_usa_o_usuario_de_teste_da_ti(base, monkeypatch, django_user_model, settings):  # noqa: F811
+def test_ensaio_preserva_o_contexto_e_a_conta_sem_gravar_conversa(base, monkeypatch):
     inc = _incidente_com_pedido(base)
-    settings.IATIVA_ENSAIO_USUARIO = "teste.ensaio"
-    from iativa.accounts.models import UserProfile
-    ti = django_user_model.objects.create_user("teste.ensaio")
-    UserProfile.objects.create(user=ti, department=base["u"].perfil_iativa.department)
+    o = Objetivo.objects.get(incidente=inc)
+    o.mensagem.texto = "Quantos admitidos e desligados?"
+    o.mensagem.save(update_fields=["texto"])
+    o.mensagem = o.conversa.mensagens.create(papel="usuario", texto="Separadamente.", autor=o.usuario)
+    o.save(update_fields=["mensagem"])
+    o.conversa.mensagens.create(papel="ia", texto="Mensagem posterior que não deve aparecer.")
+    total = conversas.ConversationContext.objects.count()
     usados = []
 
     def enviar(user, c, texto, *a, **k):
-        usados.append((user, c.usuario_id))
+        usados.append((user, c.usuario_id, texto, list(c.mensagens.values_list("texto", flat=True))))
         return SimpleNamespace(texto="ok", ficha={}), SimpleNamespace(ok=True)
+
     monkeypatch.setattr(conversas, "enviar", enviar)
     assert ensaiar(inc.pk) == "ok"
-    assert usados == [(ti, ti.pk)]  # nunca na conta de quem perguntou
+    assert usados == [(o.usuario, o.usuario_id, "Separadamente.", ["Quantos admitidos e desligados?"])]
+    assert conversas.ConversationContext.objects.count() == total

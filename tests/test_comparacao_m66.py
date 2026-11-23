@@ -226,7 +226,8 @@ def test_ranking_incompleto_nao_publica_a_tabela_de_um_mes(faturamento, monkeypa
         'Consulta executada.', resultado=Resultado(True, 'Setembro', colunas=['Cliente', 'Total'],
                                                     tipos=['texto', 'dinheiro'], linhas=[['A', '10']])))
     decisao = _d(acao='preparar_consulta', objetivo=cm.codigo, entrega='calculo')
-    p = FakeProvider([decisao, _d(acao='falta_capacidade', capacidade='Comparar e ordenar a queda de faturamento por cliente')])
+    falta = _d(acao='falta_capacidade', capacidade='Comparar e ordenar a queda de faturamento por cliente')
+    p = FakeProvider([decisao, falta, falta])  # tenta descobrir outra fonte antes de abrir manutenção
     _, resultado = conversas.enviar(b['ana'], conversas.nova_individual(b['ana']), RANKING, p)
     assert resultado is None
     assert Incidente.objects.exists()

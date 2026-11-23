@@ -122,3 +122,86 @@ def descartar(nota_id):
     from .models import NotaAgente, SituacaoNota
     if nota_id:
         NotaAgente.objects.filter(pk=nota_id).update(ativo=False, situacao=SituacaoNota.SUBSTITUIDA)
+
+
+def com_contexto(texto, historico):
+    """Vincula uma correção de formato curta ao pedido imediatamente anterior."""
+    if _ano(texto) or not re.fullmatch(r"(?:[\w\s]+)?separadamente[.?!]?", texto.strip(), re.I):
+        return texto
+    anterior = next((m.get("texto", "") for m in reversed(historico or []) if m.get("quem") == "usuario"), "")
+    return anterior + "\n" + texto if _ano(anterior) else texto
+
+
+def _chave_composta(texto, contrato):
+    """O período anual é variável. Outros filtros do texto participam da chave."""
+    from hashlib import sha256
+    ano = _ano(texto)
+    normalizado = ' '.join(_norm(texto).split()).strip(' ?.!')
+    if ano:
+        normalizado = normalizado.replace(ano, "{ANO}")
+    forma = [(e.get("tipo"), e.get("metrica"), e.get("evento_mensal")) for e in contrato]
+    return sha256(_chave([normalizado, forma]).encode()).hexdigest()
+
+
+def passo_verificado(d, saida, indices):
+    from iativa.query.servico import _valores
+    from .contratos import OBJETIVOS
+    s = saida.solicitacao or getattr(saida.resultado, "solicitacao", None)
+    res = saida.resultado
+    if (d.acao not in (*_ACOES, "criar_consulta") or not s or not indices or not getattr(res, "ok", False) or getattr(res, "truncado", False)
+            or getattr(res, "consolidado", False) or not getattr(OBJETIVOS.get(s.objetivo), "modelo_id", None)
+            or (getattr(res, "escopo", {}) or {}).get("fontes_transversais")):
+        return None
+    valores = _valores(s.usuario, s)
+    # Só parâmetros técnicos reutilizáveis. Filtros pessoais e parâmetros não reconhecidos não viram receita.
+    if set(valores) - {"periodo-analise", "agregacao", "filial-analise"}:
+        return None
+    return {"objetivo": s.objetivo, "parametros": sorted(valores.items()), "atende": sorted(indices)}
+
+
+def guardar_composta(user, texto, contrato, passos):
+    from .models import NotaAgente, EscopoNota, SituacaoNota, TipoNota
+    from django.db import transaction
+
+    if not passos or {i for p in passos for i in p["atende"]} != set(range(len(contrato))):
+        return
+    ano = _ano(texto)
+    periodos = [str(v) for p in passos for k, v in p["parametros"] if k == "periodo-analise"]
+    if any(not ano or set(_ANO.findall(periodo)) != {ano} for periodo in periodos):
+        return  # datas relativas ou ligadas a mais de um ano precisam ser resolvidas de novo
+    for p in passos:
+        p["parametros"] = [[k, str(v).replace(ano, "{ANO}") if ano and k == "periodo-analise" else str(v)]
+                           for k, v in p["parametros"]]
+    chave = _chave_composta(texto, contrato)
+    with transaction.atomic():
+        for nota in _notas().select_for_update().filter(criterios__receita__chave_composta=chave):
+            if nota.criterios["receita"].get("passos") == passos:
+                return
+            nota.ativo = False
+            nota.situacao = SituacaoNota.SUBSTITUIDA
+            nota.save(update_fields=["ativo", "situacao"])
+        NotaAgente.objects.create(
+            texto="Receita verificada para consulta com várias entregas.", criado_por=user, automatica=True,
+            tipo=TipoNota.TERMO, escopo=EscopoNota.EMPRESA, situacao=SituacaoNota.APROVADA,
+            criterios={"receita": {"chave_composta": chave, "passos": passos,
+                                   "versao": os.environ.get("IATIVA_VERSAO", "dev")}})
+
+
+def composta_para(texto, contrato, objetivos):
+    from .decisao import Decisao
+    permitidos = {o.codigo for o in objetivos}
+    nota = _notas().filter(criterios__receita__chave_composta=_chave_composta(texto, contrato)).order_by("-pk").first()
+    if not nota:
+        return [], None
+    passos = nota.criterios["receita"]["passos"]
+    if not all(p["objetivo"] in permitidos for p in passos):
+        return [], None
+    ano = _ano(texto)
+    fila = []
+    for p in passos:
+        if not ano and any("{ANO}" in v for _, v in p["parametros"]):
+            return [], None
+        fila.append(Decisao("", "preparar_consulta", p["objetivo"],
+                            tuple((k, v.replace("{ANO}", ano)) for k, v in p["parametros"]),
+                            "", "", False, (), atende=tuple(p["atende"])))
+    return fila, nota.pk

@@ -4,6 +4,12 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **Etapa 7 aprovada em 2026-11-16 por Diego; em andamento.** Feito: roteiro do piloto (`docs/piloto/ROTEIRO.md`) e auditoria de não armazenamento (`manage.py auditar_armazenamento`). Falta: usuários do Financeiro, conferência dos números com relatórios do Protheus, avaliação da interpretação e latência. Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Manutenção com ensaio contextual e receitas com várias entregas
+
+- Antes de editar, o executor ensaia o pedido individual na versão ativa com as permissões do autor e as mensagens anteriores ao pedido. A conversa é descartada pela transação. Uma falha de ambiente interrompe o ciclo de edição e um pedido já atendido volta ao chat sem publicação.
+- O atendimento faz uma busca autorizada de fonte antes de tratar uma capacidade de consulta como ausente. Pode guardar e reaproveitar uma sequência de consultas que comprovou todas as entregas, com conferência de acesso em cada uso.
+- A candidata passa pelo teste novo, pela reprodução e pelo ensaio antes da suíte completa.
+
 ## Mudança M125 — contrato fiel ao pedido, falha do executor diagnosticada, receita verificada e tempos por etapa (2026-11-23)
 
 - Diagnóstico nº 24 ("Quantos funcionários foram admitidos e desligados no mesmo ano, por filial, em 2026?"). Causas comprovadas:

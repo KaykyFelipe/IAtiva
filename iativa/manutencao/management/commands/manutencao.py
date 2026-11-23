@@ -137,54 +137,79 @@ class Command(BaseCommand):
 
 
 def ensaiar(incidente_id: int) -> str:
-    """M120: antes de publicar, a imagem candidata responde ao pedido que abriu o incidente, como a própria
-    pessoa, numa conversa temporária (apagada no fim). Passa pelo mesmo ciclo, revisor incluído. Só "ok" publica."""
+    """Ensaia na sessão original em uma transação descartável, com a configuração e acesso do autor."""
+    import os
+
+    from iativa.agent.models import Objetivo, SituacaoObjetivo
+    from iativa.chat import conversas
+    from iativa.chat.models import Mensagem
+
+    o = (Objetivo.objects.select_related("mensagem", "usuario", "conversa").filter(incidente_id=incidente_id)
+         .order_by("-pk").first())
+    if o is None:
+        return "sem_pedido"
+    if o.mensagem_id is None or not o.usuario.is_active or not conversas.pode_escrever(o.usuario, o.conversa):
+        return "infra: contexto ou acesso original indisponível para o ensaio"
+    anterior = os.environ.get("IATIVA_ENSAIO")
+    os.environ["IATIVA_ENSAIO"] = "1"
+    try:
+        with transaction.atomic():
+            if o.conversa.tipo != "individual":
+                return "infra: ensaio isolado ainda indisponível para conversa compartilhada"
+            from iativa.chat.models import ConversationContext
+            c = ConversationContext.objects.create(tipo="individual", usuario=o.usuario, setor=o.conversa.setor)
+            historico = list(o.conversa.mensagens.filter(pk__lt=o.mensagem_id).order_by("-pk")[:12])
+            Mensagem.objects.bulk_create([
+                Mensagem(conversa=c, papel=m.papel, texto=m.texto, autor_id=m.autor_id) for m in reversed(historico)
+            ])
+            resultado = _ensaiar_na_conversa(o, c)
+            transaction.set_rollback(True)
+            return resultado
+    finally:
+        if anterior is None:
+            os.environ.pop("IATIVA_ENSAIO", None)
+        else:
+            os.environ["IATIVA_ENSAIO"] = anterior
+
+
+def _ensaiar_na_conversa(o, c) -> str:
     from iativa.agent.models import Objetivo, SituacaoObjetivo
     from iativa.chat import conversas
 
-    o = (Objetivo.objects.select_related("mensagem", "usuario").filter(incidente_id=incidente_id)
-         .order_by("-pk").first())
-    if o is None or o.mensagem_id is None or not o.usuario.is_active:
-        return "sem_pedido"
-    # M123: o ensaio roda com o usuário de teste da TI (acesso a todos os setores), nunca na conta de quem
-    # perguntou: a conversa temporária não aparece para a pessoa nem trava o chat dela.
-    from django.conf import settings
-    from django.contrib.auth import get_user_model
-    ator = get_user_model().objects.filter(username=getattr(settings, "IATIVA_ENSAIO_USUARIO", "teste.ti"),
-                                           is_active=True).first() or o.usuario
-    c = conversas.nova_individual(ator)
-    try:
-        msg, res = conversas.enviar(ator, c, o.mensagem.texto)
-        obj = Objetivo.objects.filter(conversa=c).order_by("-pk").first()
-        ficha = getattr(msg, "ficha", None) or {}
-        # M122: no ensaio não há worker: as continuações em segundo plano rodam aqui mesmo, como rodariam para a
-        # pessoa. Antes, "sigo em segundo plano" contava como falha e a correção voltava a ser implementada.
-        from uuid import uuid4
+    ator = o.usuario
+    msg, res = conversas.enviar(ator, c, o.mensagem.texto)
+    obj = Objetivo.objects.filter(conversa=c).order_by("-pk").first()
+    ficha = getattr(msg, "ficha", None) or {}
+    if ficha.get("tipo") in ("falha_modelo", "bloqueada", "esclarecimento_setor"):
+        return "infra: atendimento indisponível no ensaio ou acesso inconclusivo"
+    # M122: no ensaio não há worker: as continuações em segundo plano rodam aqui mesmo, como rodariam para a
+    # pessoa. Antes, "sigo em segundo plano" contava como falha e a correção voltava a ser implementada.
+    from uuid import uuid4
 
-        from iativa.agent import agente
-        continuou = False
-        for _ in range(4):
-            if obj is None or obj.situacao != SituacaoObjetivo.CONTINUAR:
-                break
-            Objetivo.objects.filter(pk=obj.pk).update(execucao=uuid4().hex, lease_ate=None)
-            obj.refresh_from_db()
-            agente.continuar_objetivo(obj)
-            continuou = True
-            obj.refresh_from_db()
-        if continuou:
-            ultima = c.mensagens.filter(papel="ia").order_by("-pk").first()
-            if obj.situacao == SituacaoObjetivo.CUMPRIDO:
-                return "ok"
-            return "falha: " + _motivo_ensaio(obj, getattr(ultima, "texto", ""))
-        if ficha.get("corrigindo") or ficha.get("tipo") == "tarefa":
-            return "falha: " + _motivo_ensaio(obj, msg.texto)
-        if obj is not None and obj.situacao != SituacaoObjetivo.CUMPRIDO:
-            return "falha: " + _motivo_ensaio(obj, msg.texto)
-        if res is None or not (getattr(res, "ok", False) or getattr(res, "consolidado", False)):
-            return "falha: " + " ".join(msg.texto.split())[:300]
-        return "ok"
-    finally:
-        c.delete()
+    from iativa.agent import agente
+    continuou = False
+    for _ in range(4):
+        if obj is None or obj.situacao != SituacaoObjetivo.CONTINUAR:
+            break
+        Objetivo.objects.filter(pk=obj.pk).update(execucao=uuid4().hex, lease_ate=None)
+        obj.refresh_from_db()
+        agente.continuar_objetivo(obj)
+        continuou = True
+        obj.refresh_from_db()
+    if continuou:
+        ultima = c.mensagens.filter(papel="ia").order_by("-pk").first()
+        if obj.situacao == SituacaoObjetivo.CUMPRIDO:
+            return "ok"
+        if (getattr(ultima, "ficha", None) or {}).get("tipo") == "falha_modelo":
+            return "infra: atendimento indisponível durante a continuação do ensaio"
+        return "falha: " + _motivo_ensaio(obj, getattr(ultima, "texto", ""))
+    if ficha.get("corrigindo") or ficha.get("tipo") == "tarefa":
+        return "falha: " + _motivo_ensaio(obj, msg.texto)
+    if obj is not None and obj.situacao != SituacaoObjetivo.CUMPRIDO:
+        return "falha: " + _motivo_ensaio(obj, msg.texto)
+    if res is None or not (getattr(res, "ok", False) or getattr(res, "consolidado", False)):
+        return "falha: " + " ".join(msg.texto.split())[:300]
+    return "ok"
 
 
 def _motivo_ensaio(obj, texto: str) -> str:

@@ -536,17 +536,8 @@ def validar_correcao(wt: Path, base: str, imagem: str, inc: int, cr: "Cronometro
         raise Recusa("sem teste de regressão novo")
     if not cr.etapa("teste_novo", pytest_em, wt, imagem, novos, tempo=600):
         raise Recusa("o cenário da pergunta ainda falha na versão corrigida")
-    # M107: reprodução e suíte em paralelo (são árvores separadas) para caber no prazo de ~5 minutos.
-    from concurrent.futures import ThreadPoolExecutor
-    def paralelo():
-        with ThreadPoolExecutor(2) as ex:
-            f_rep, f_suite = ex.submit(reproduz, wt, base, imagem, novos), ex.submit(pytest_em, wt, imagem)
-            return f_rep.result(), f_suite.result()
-    reproduziu, suite_ok = cr.etapa("reproducao_e_suite", paralelo)
-    if not reproduziu:
+    if not cr.etapa("reproducao", reproduz, wt, base, imagem, novos):
         raise Recusa("o teste novo não falha na versão afetada: defeito não demonstrado")
-    if not suite_ok:
-        raise Recusa("a suíte não passa com a correção")
     return novos
 
 
@@ -562,7 +553,7 @@ def ensaiar_pedido(wt: Path, inc: int, cr: "Cronometro | None" = None) -> str:
     b = cr.etapa("imagem_ensaio", rodar, ["docker", "build", "-q", "--build-arg", "IATIVA_VERSAO=ensaio", "-t", imagem, str(wt)],
               timeout=900, verificar=False)
     if b.returncode != 0:
-        return "a imagem com a correção não foi construída"
+        raise FalhaExecutor("a imagem candidata não pôde ser construída")
     r = cr.etapa("ensaio", rodar, ["docker", "run", "--rm", "--network", f"{PROJETO}_default", "--env-file", str(REPO / ".env"),
                "-e", "IATIVA_DB_HOST=db", "-e", "IATIVA_DB_PORT=5432", "-e", "IATIVA_ENSAIO=1",
                "-e", "IATIVA_SYNTHETIC_ERP_PATH=/app/var/erp_sintetico.sqlite3",
@@ -571,6 +562,8 @@ def ensaiar_pedido(wt: Path, inc: int, cr: "Cronometro | None" = None) -> str:
     rodar(["docker", "image", "rm", "-f", imagem], verificar=False)
     linhas = [l.strip() for l in (r.stdout or "").splitlines() if l.strip()]
     final = linhas[-1] if linhas else ""
+    if r.returncode or final.startswith("infra:"):
+        raise FalhaExecutor("ensaio indisponível: confira o acesso, a conexão e o contexto do atendimento")
     if final in ("ok", "sem_pedido"):
         return ""
     return final.removeprefix("falha:").strip() or f"o ensaio não terminou (código {r.returncode})"
@@ -586,6 +579,20 @@ def corrigir(diag: dict, c: dict) -> str:
         git("worktree", "remove", "--force", str(wt), verificar=False)
     git("worktree", "add", "-B", f"manutencao/inc-{inc}", str(wt), base)
     preparar_escrita(wt)
+    if not agente_de_teste():
+        try:
+            linhas = manage("ensaiar", inc, verificar=False).strip().splitlines()
+        except subprocess.TimeoutExpired:
+            raise FalhaExecutor("tempo limite ao reproduzir o pedido antes de editar") from None
+        sondagem = linhas[-1] if linhas else ""
+        if sondagem not in ("ok", "sem_pedido") and not sondagem.startswith("falha:"):
+            raise FalhaExecutor("não foi possível reproduzir o pedido no ambiente atual")
+        if sondagem == "ok":
+            checar_cancelamento(inc)
+            manage("concluir", inc, "publicado", "--versao", imagem.rsplit(":", 1)[-1],
+                   "--motivo", "O pedido passou no ensaio com a versão atual; nenhuma publicação necessária.")
+            manage("retomar", inc)
+            return "resolvido_na_versao_atual"
     pasta_diag = TRABALHO / f"inc-{inc}-diag"
     pasta_diag.mkdir(exist_ok=True)
     feedback = ""
@@ -618,6 +625,8 @@ def corrigir(diag: dict, c: dict) -> str:
                 # M120: testes passaram, mas o pedido real ainda não sai: não publica; a próxima tentativa recebe
                 # o motivo e continua na mesma cópia.
                 raise Recusa(f"o ensaio com o pedido real não entregou: {motivo}")
+            if not cr.etapa("suite", pytest_em, wt, imagem):
+                raise Recusa("a suíte não passa com a correção")
         except Recusa as exc:
             feedback = str(exc)[:300]
             log(f"incidente #{inc}: tentativa {tentativa}/3 ({feedback}) [tempos: {cr.resumo()}]")

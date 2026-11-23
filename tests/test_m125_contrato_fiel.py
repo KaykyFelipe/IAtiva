@@ -202,3 +202,24 @@ def test_revisor_indisponivel_nao_publica_e_preserva_o_pedido(base, erp_sintetic
     objetivo = conversa.objetivos.latest('pk')
     assert objetivo.situacao == SituacaoObjetivo.CONTINUAR, (objetivo.trilha, msg.texto)
     assert res is None or not getattr(res, 'linhas', None), msg.texto  # nada sem conferência vai ao chat
+
+
+@pytest.mark.django_db
+def test_receita_composta_reusa_dois_passos_e_revalida_o_acesso(django_user_model):
+    from types import SimpleNamespace
+    from iativa.agent import receita_pedido
+
+    u = django_user_model.objects.create_user("receita-composta")
+    texto = "Quantos admitidos e desligados separadamente por filial em 2026?"
+    contrato = [{"tipo": "calculo", "metrica": "contagem"}] * 2
+    passos = [{"objetivo": cod, "parametros": [("periodo-analise", "01/01/2026..31/12/2026"),
+                                               ("agregacao", "contagem:*")], "atende": [i]}
+              for i, cod in enumerate(("admissoes", "desligamentos"))]
+    receita_pedido.guardar_composta(u, texto, contrato, passos)
+    permitidos = [SimpleNamespace(codigo=p["objetivo"]) for p in passos]
+    nova = texto.replace("2026", "2025")
+    fila, nota_id = receita_pedido.composta_para(nova, contrato, permitidos)
+    assert nota_id and [d.atende for d in fila] == [(0,), (1,)]
+    assert [dict(d.parametros)["periodo-analise"] for d in fila] == ["01/01/2025..31/12/2025"] * 2
+    assert receita_pedido.composta_para(nova, contrato, permitidos[:1]) == ([], None)
+    assert receita_pedido.composta_para(nova.replace("separadamente", "no mesmo ano"), contrato, permitidos) == ([], None)

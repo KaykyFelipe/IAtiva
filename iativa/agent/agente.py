@@ -28,7 +28,7 @@ from django.utils import timezone
 from iativa.accounts.filiais import codigo_por_texto, rotulo
 from iativa.accounts.authz import Permissao, PermissaoNegada, filiais_autorizadas, setores_autorizados
 from iativa.audit.servicos import registrar
-from iativa.chat.estados import EM_PREPARACAO
+from iativa.chat.estados import EM_PREPARACAO, TransicaoInvalida
 from iativa.chat.models import EstadoSolicitacao as E
 from iativa.chat.servicos import cancelar, criar_solicitacao
 from iativa.memory.models import TipoValor
@@ -586,9 +586,14 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
     # M125: receita já verificada para este tipo de pedido (e acessível à pessoa) é o 1º passo, sem o modelo.
     from . import receita_pedido as aprendizado_receita
     receita_d, receita_id = (None, None)
-    if not observacoes and not ac.trilha and len(ac.contrato) <= 1:
+    fila_receita, passos_verificados = [], []
+    texto_receita = aprendizado_receita.com_contexto(texto, entrada.historico)
+    if not observacoes and not ac.trilha:
         try:
-            receita_d, receita_id = aprendizado_receita.receita_para(texto, objetivos)
+            if len(ac.contrato) > 1:
+                fila_receita, receita_id = aprendizado_receita.composta_para(texto_receita, ac.contrato, objetivos)
+            else:
+                receita_d, receita_id = aprendizado_receita.receita_para(texto, objetivos)
         except Exception:
             receita_d, receita_id = None, None
     for _ in range(max(1, passos)):
@@ -604,6 +609,9 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
             if fontes and not feitas and entrada.planejamento["analise"]["natureza"] == "dados":
                 d = Decisao("Vou conferir as fontes indicadas para concluir o pedido.", "aprender_tabela", "",
                             (), " ".join(fontes), "", False, ())
+            elif fila_receita:
+                d = fila_receita.pop(0)
+                andamento.avisar("Executando um passo da receita já verificada")
             elif receita_d is not None and not feitas:
                 d = receita_d
                 andamento.avisar("Usando a receita já verificada para este tipo de pedido")
@@ -692,8 +700,8 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
         if d.acao not in ("conversar", "falta_capacidade") and d.resposta.strip():
             andamento.avisar(d.resposta.strip().split("\n")[0])  # M53: o que a IA vai fazer aparece na hora
         if (d.acao == "falta_capacidade" and pode_aprender_sozinho(user)
-                and any(o.situacao == ERRO_METADADOS for o in observacoes)
-                and not any(o.acao == "aprender_tabela" for o in observacoes)):
+                and entrada.planejamento["analise"]["natureza"] == "dados"
+                and not any(p.startswith(("aprender_tabela:", "criar_consulta:")) for p in ac.trilha)):
             d = replace(d, acao="aprender_tabela", alvo=texto, consulta=None)
         if d.acao == "falta_capacidade":
             # M53: o modelo verificou que nenhum caminho existente resolve: a manutenção implementa já.
@@ -873,7 +881,16 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
             parametros_recusados.add(assinatura)
         if ac.contrato:
             from .planejamento import registrar_entregas
+            anteriores = set(ac.cumpridas)
             registrar_entregas(ac, d, saida)
+            novos_indices = set(ac.cumpridas) - anteriores
+            if len(ac.contrato) > 1 and novos_indices:
+                try:
+                    passo = aprendizado_receita.passo_verificado(d, saida, novos_indices)
+                    if passo:
+                        passos_verificados.append(passo)
+                except (KeyError, ValidationError, TransicaoInvalida):
+                    pass
             if saida.observacao and saida.observacao.recuperavel:
                 observacoes.append(saida.observacao)
             if ac.pendentes() and ev not in (coord.PERGUNTA, coord.BLOQUEIO, coord.DELEGADA):
@@ -952,8 +969,10 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
                 causa, saida, previa = "modelo_falhou", None, None
                 break
             if falta_rev:
-                if receita_d is not None and d is receita_d:
-                    aprendizado_receita.descartar(receita_id)  # M125: a receita não serve mais; segue com o modelo
+                if receita_id:
+                    aprendizado_receita.descartar(receita_id)
+                    receita_id, receita_d, fila_receita = None, None, []
+                passos_verificados.clear()
                 ac.revisoes += 1
                 ac.reprovada = falta_rev
                 andamento.avisar("A resposta não atendia ao pedido; tentando de outro jeito")
@@ -972,7 +991,10 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
             ac.reprovada = ""
             if not ac.pendentes():
                 try:  # M125: resposta conferida: a lógica vira receita reutilizável (sem dados do ERP)
-                    aprendizado_receita.guardar(user, texto, d, saida, ac.contrato, ev)
+                    if len(ac.contrato) > 1:
+                        aprendizado_receita.guardar_composta(user, texto_receita, ac.contrato, passos_verificados)
+                    else:
+                        aprendizado_receita.guardar(user, texto, d, saida, ac.contrato, ev)
                 except Exception:
                     import logging
                     logging.getLogger(__name__).warning("receita não gravada", exc_info=True)
