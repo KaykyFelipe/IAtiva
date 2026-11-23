@@ -251,3 +251,4 @@ M60 (Diego, 2026-11-16, aprovada no chat): implementar os seis ajustes da revis�
 | M127 | 2026-11-23 | Pedido de Diego (perguntas que a IA já sabe consultar não vão para manutenção): agregação no banco conta como cálculo em qualquer caminho; falha do modelo na triagem da continuação é passageira. |
 | M128 | 2026-11-23 | Pedido de Diego: contagem de dois meses ('quantos ... em setembro e outubro') sai numa tabela com uma coluna por mês e filial pelo nome. |
 | M129 | 2026-11-23 | Pedido de Diego: quando a IA já sabe consultar cada parte, não vai para manutenção; tabela personalizada (eventos x períodos, por filial) montada em tabela.py. |
+| M130 | 2026-11-23 | Pedido de Diego (a IA entende o jeito da pessoa falar): especificação da tabela vem da leitura do modelo (analise.tabela), validada no backend; falha na tabela volta às entregas originais em vez de ir à manutenção. |

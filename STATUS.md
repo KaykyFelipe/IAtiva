@@ -4,6 +4,19 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **Etapa 7 aprovada em 2026-11-16 por Diego; em andamento.** Feito: roteiro do piloto (`docs/piloto/ROTEIRO.md`) e auditoria de não armazenamento (`manage.py auditar_armazenamento`). Falta: usuários do Financeiro, conferência dos números com relatórios do Protheus, avaliação da interpretação e latência. Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M130 — a IA entende o jeito da pessoa pedir a tabela (2026-11-23)
+
+- A tabela personalizada (M129) dependia de frases exatas ("por filial", "admitidos e desligados", nomes de mês). Agora a 1ª leitura do pedido (o modelo) devolve `analise.tabela`:
+  - medidas: o evento contado e o rótulo da coluna;
+  - períodos: início, fim e rótulo; mês sem ano é do ano corrente;
+  - agrupamento: filial, dito de qualquer jeito ("separado por filial", "em cada unidade", "nas filiais");
+  - se é interseção.
+- O backend só valida (datas, limites) e executa com as consultas aprovadas que a pessoa pode usar. Exemplo: "Quem entrou e quem saiu de julho a setembro, separado por filial?" sai como Filial | Entraram - 07/2026 … | Saíram - 09/2026.
+- Um evento em 3 ou mais meses também vira tabela; 3 ou mais eventos num período, também.
+- Sem a leitura do modelo, as regras do texto servem de reserva, só para a grade evento x período (status listados não viram eventos).
+- Se a tabela não puder ser montada (evento sem consulta, célula com erro), o contrato volta às entregas originais e o ciclo normal responde. A entrega "tabela" não manda mais à manutenção o que a IA já sabe consultar.
+- A tabela já planejada não é substituída pelo replanejamento (comparação de 2 meses, detalhes de contagem).
+
 ## Mudança M129 — tabela personalizada com consultas que a IA já sabe fazer (2026-11-23)
 
 - "Quantos funcionários foram admitidos e desligados em setembro e outubro, por filial?" ia para a manutenção (registro nº 32), embora cada evento já tenha consulta aprovada. Faltava montar a tabela.

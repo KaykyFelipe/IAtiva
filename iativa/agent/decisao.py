@@ -115,8 +115,23 @@ def esquema(codigos_objetivo, codigos_parametro) -> dict:
                     "texto": {"type": "string", "maxLength": 300},
                     "trecho": {"type": "string", "maxLength": 300},
                     "tipo": {"type": "string", "enum": ["preferencia", "termo", "correcao"]}},
-                    "required": ["texto", "trecho", "tipo"]}}},
-                "required": ["natureza", "setores", "confianca", "resumo", "titulo", "entregas", "memorias"]},
+                    "required": ["texto", "trecho", "tipo"]}},
+                "tabela": {"type": "object", "description": "M130: grade pedida (eventos x períodos x agrupamento), "
+                    "do jeito que a pessoa falou; medidas vazio quando o pedido não é uma tabela de contagens.",
+                    "properties": {
+                    "medidas": {"type": "array", "maxItems": 6, "items": {"type": "object", "properties": {
+                        "evento": {"type": "string", "maxLength": 60},
+                        "rotulo": {"type": "string", "maxLength": 40}},
+                        "required": ["evento", "rotulo"]}},
+                    "periodos": {"type": "array", "maxItems": 12, "items": {"type": "object", "properties": {
+                        "inicio": {"type": "string", "maxLength": 10},
+                        "fim": {"type": "string", "maxLength": 10},
+                        "rotulo": {"type": "string", "maxLength": 24}},
+                        "required": ["inicio", "fim", "rotulo"]}},
+                    "agrupar_por": {"type": "string", "enum": ["", "filial"]},
+                    "intersecao": {"type": "boolean"}},
+                    "required": ["medidas", "periodos", "agrupar_por", "intersecao"]}},
+                "required": ["natureza", "setores", "confianca", "resumo", "titulo", "entregas", "memorias", "tabela"]},
             "resposta": {"type": "string", "description": "Texto ao usuário, em português, tom de conversa."},
             "calculo": {"type": "object", "description": "Ação calcular_resultado: usa o resultado autorizado anterior. "
                 "Para estágio, deixe campos vazios: os intervalos são resolvidos pelo backend.", "properties": {

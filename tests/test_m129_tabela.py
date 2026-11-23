@@ -58,3 +58,50 @@ def test_admitidos_e_desligados_de_dois_meses_numa_tabela_sem_modelo(base, erp_s
     linhas = {l[0]: [int(str(v)) for v in l[1:]] for l in r.linhas}
     assert linhas == {rotulo("01"): [1, 1, 0, 1], rotulo("02"): [1, 0, 1, 1]}
     assert r.rodape == ["Total", "2", "1", "1", "2"]
+
+
+def test_m130_especificacao_do_modelo_entende_o_jeito_da_pessoa():
+    """O modelo lê "separado por filial", "quem entrou e quem saiu", "de julho a setembro"; o backend só valida."""
+    analise = {"tabela": {"medidas": [{"evento": "admissão", "rotulo": "Entraram"},
+                                      {"evento": "desligamento", "rotulo": "Saíram"}],
+                          "periodos": [{"inicio": "2026-07-01", "fim": "2026-07-31", "rotulo": "07/2026"},
+                                       {"inicio": "2026-08-01", "fim": "2026-08-31", "rotulo": "08/2026"},
+                                       {"inicio": "2026-09-01", "fim": "2026-09-30", "rotulo": "09/2026"}],
+                          "agrupar_por": "filial", "intersecao": False}}
+    texto = "Quem entrou e quem saiu de julho a setembro, separado por filial?"
+    spec = tabela.pedido(texto, analise)
+    assert spec["eventos"] == ["admissão", "desligamento"] and spec["por_filial"] and len(spec["periodos"]) == 3
+    e = tabela.planejar(texto, {**analise, "entregas": []})["entregas"][0]
+    assert {k: v for k, v in e["tabela"].items() if k != "antes"} == spec and "Entraram - 07/2026" in e["descricao"] and "Saíram - 09/2026" in e["descricao"]
+    # um evento em 3 meses também é tabela (coluna = só o período)
+    um = {"tabela": {**analise["tabela"], "medidas": analise["tabela"]["medidas"][:1]}}
+    assert "Tabela por filial: 07/2026, 08/2026, 09/2026" in tabela.planejar(texto, {**um, "entregas": []})["entregas"][0]["descricao"]
+    # interseção e datas inválidas não viram tabela
+    assert tabela.pedido("x", {"tabela": {**analise["tabela"], "intersecao": True}}) is None
+    ruim = {"tabela": {**analise["tabela"], "periodos": [{"inicio": "2026-13-01", "fim": "x", "rotulo": ""}]}}
+    assert tabela._do_modelo(ruim["tabela"]) is None
+
+
+@pytest.mark.django_db
+def test_m130_tabela_com_especificacao_do_modelo_ponta_a_ponta(base, erp_sintetico):  # noqa: F811
+    q = QueryDict(mutable=True)
+    q.update({"nome": "Funcionarios admitidos", "campo_data": "RA_ADMISSA"})
+    q.setlist("colunas", ["RA_MAT", "RA_NOME", "RA_ADMISSA", "RA_DEMISSA"])
+    q.setlist("setores", [str(base["cob"].pk)])
+    aprendizado.aprovar(base["u"], aprendizado.salvar_proposta(base["u"], "SRA", q))
+    with sqlite3.connect(erp_sintetico) as conn:
+        conn.execute("DELETE FROM SRA010")
+        conn.executemany("INSERT INTO SRA010 (RA_FILIAL, RA_MAT, RA_ADMISSA, RA_DEMISSA) VALUES (?, ?, ?, ?)", [
+            ("01", "000001", "20260702", "20260915"), ("02", "000001", "20260810", "        ")])
+    esp = {"medidas": [{"evento": "admissão", "rotulo": "Entraram"}, {"evento": "desligamento", "rotulo": "Saíram"}],
+           "periodos": [{"inicio": f"2026-0{m}-01", "fim": f"2026-0{m}-{d}", "rotulo": f"0{m}/2026"}
+                        for m, d in ((7, 31), (8, 31), (9, 30))], "agrupar_por": "filial", "intersecao": False}
+    p = FakeProvider([], analises=[{"natureza": "dados", "setores": [base["cob"].codigo], "confianca": 1, "resumo": "",
+                                    "memorias": [], "tabela": esp, "entregas": [
+                                        {"descricao": "Entradas e saídas", "tipo": "calculo", "metrica": "contagem"}]}])
+    msg, r = conversas.enviar(base["u"], conversas.nova_individual(base["u"]),
+                              "Quem entrou e quem saiu de julho a setembro, separado por filial?", p)
+    assert p.chamadas == 0 and not Incidente.objects.exists(), msg.texto
+    assert r.colunas[0] == "Filial" and r.colunas[1] == "Entraram - 07/2026" and r.colunas[-1] == "Saíram - 09/2026"
+    linhas = {l[0]: [int(str(v)) for v in l[1:]] for l in r.linhas}
+    assert linhas == {rotulo("01"): [1, 0, 0, 0, 0, 1], rotulo("02"): [0, 1, 0, 0, 0, 0]}

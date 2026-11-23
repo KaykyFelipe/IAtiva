@@ -52,32 +52,71 @@ def _periodos(texto: str):
     return []
 
 
-def pedido(texto: str) -> dict | None:
-    """{"eventos", "periodos", "por_filial"} quando o pedido é uma tabela de contagens de 2+ eventos; senão None."""
-    from .fidelidade import eventos_intersecao
-    t = _norm(texto)
+def pedido(texto: str, analise: dict | None = None) -> dict | None:
+    """{"eventos", "rotulos", "periodos", "por_filial"} da grade pedida; None quando não é uma tabela.
+
+    M130: vem da leitura do MODELO (analise.tabela), que entende o pedido do jeito que a pessoa falou ("separado por
+    filial", "em cada unidade", "quem entrou e quem saiu", "de julho a outubro"); aqui só se valida. Sem essa
+    leitura (modelo antigo, falha), as regras do texto servem de reserva."""
     from .comparacao import contagens_mensais
-    if not _CONTA.search(t) or eventos_intersecao(texto) or contagens_mensais(texto):
+    from .fidelidade import eventos_intersecao
+    if contagens_mensais(texto):
         return None
-    ev = eventos(texto)
-    per = _periodos(texto)
-    if len(ev) < 2 or len(per) < 2:
-        # Um período só: a composição de contagens separadas (contagem.py, resumo Filial | Evento | Evento
-        # com os detalhes dos vínculos) já responde; aqui é a grade evento x período.
+    spec = _do_modelo((analise or {}).get('tabela'))
+    if spec is None:
+        t = _norm(texto)
+        if not _CONTA.search(t) or eventos_intersecao(texto):
+            return None
+        ev, per = eventos(texto), _periodos(texto)
+        if len(per) < 2:
+            return None  # reserva sem o modelo: só a grade evento x período (status listados não são eventos)
+        spec = {"eventos": ev, "rotulos": [e.capitalize() for e in ev],
+                "periodos": [(i.isoformat(), f.isoformat(), r) for i, f, r in per], "por_filial": bool(_POR.search(t))}
+    if len(spec["periodos"]) < 2 and len(spec["eventos"]) < 3:
+        # Um período só: a composição de contagens separadas (contagem.py, resumo Filial | Evento | Evento com os
+        # detalhes dos vínculos) já responde; aqui é a grade evento x período.
         return None
-    return {"eventos": ev, "periodos": [(i.isoformat(), f.isoformat(), r) for i, f, r in per],
-            "por_filial": bool(_POR.search(t))}
+    if not spec["eventos"] or not spec["periodos"]:
+        return None
+    return spec
+
+
+def _do_modelo(t) -> dict | None:
+    from datetime import date
+    if not isinstance(t, dict) or t.get('intersecao') is True:
+        return None
+    medidas = [m for m in (t.get('medidas') or []) if isinstance(m, dict) and str(m.get('evento', '')).strip()][:6]
+    periodos = []
+    for p in (t.get('periodos') or [])[:12]:
+        try:
+            i, f = date.fromisoformat(str(p.get('inicio'))), date.fromisoformat(str(p.get('fim')))
+        except (TypeError, ValueError, AttributeError):
+            return None
+        if i > f:
+            return None
+        rot = " ".join(str(p.get('rotulo') or '').split())[:24] or f'{i:%m/%Y}'
+        periodos.append((i.isoformat(), f.isoformat(), rot))
+    if not medidas or not periodos:
+        return None
+    return {"eventos": [" ".join(str(m['evento']).split())[:60] for m in medidas],
+            "rotulos": [" ".join(str(m.get('rotulo') or m['evento']).split())[:40] for m in medidas],
+            "periodos": periodos, "por_filial": t.get('agrupar_por') == 'filial'}
+
+
+def _coluna(spec, k, rot):
+    return rot if len(spec["eventos"]) == 1 else f'{spec["rotulos"][k]} - {rot}'
 
 
 def planejar(texto: str, analise: dict) -> dict:
-    """O contrato vira UMA entrega: a tabela com todos os eventos e períodos pedidos."""
-    spec = pedido(texto)
+    """O contrato vira UMA entrega: a tabela com todos os eventos e períodos pedidos (a especificação vai junto)."""
+    spec = pedido(texto, analise)
     if spec is None:
         return analise
-    cols = ', '.join(f'{e.capitalize()} - {r}' for e in spec["eventos"] for _, _, r in spec["periodos"])
+    cols = ', '.join(_coluna(spec, k, r) for k in range(len(spec["eventos"])) for _, _, r in spec["periodos"])
+    antes = [e for e in analise.get('entregas', []) if isinstance(e, dict) and not e.get('tabela')]
     return {**analise, 'entregas': [{
         'descricao': f'Tabela{" por filial" if spec["por_filial"] else ""}: {cols}'[:200],
-        'tipo': 'calculo', 'metrica': 'contagem', 'tabela': True}]}
+        'tipo': 'calculo', 'metrica': 'contagem', 'tabela': {**spec, 'antes': antes}}]}
 
 
 # Palavras do pedido que nomeiam o mesmo evento do campo de data com outra raiz.
@@ -93,12 +132,14 @@ def _raiz(palavra: str) -> str:
 
 def _consulta_do_evento(palavra: str, modelos):
     from .contagem import _detalhavel, _evento
-    candidatos = [m for m in modelos if m.spec.get('campo_data') and _raiz(_evento(m)) == _raiz(palavra)]
+    palavras = [w for w in re.findall(r'[a-z]+', _norm(palavra)) if len(w) >= 4] or [_norm(palavra)]
+    candidatos = [m for m in modelos if m.spec.get('campo_data')
+                  and any(_raiz(w) == _raiz(_evento(m)) for w in palavras)]
     candidatos = [m for m in candidatos if _detalhavel(m)] or candidatos
     return min(candidatos, key=lambda m: (bool(m.spec.get('filtros_fixos')), m.pk)) if candidatos else None
 
 
-def executar(user, c, texto, defs, objetivos, interrompido=None):
+def executar(user, c, texto, defs, objetivos, interrompido=None, spec=None):
     """Saida com a tabela montada, ou None se algum evento não tiver consulta que a pessoa possa usar."""
     from datetime import date
 
@@ -109,7 +150,7 @@ def executar(user, c, texto, defs, objetivos, interrompido=None):
     from .comparacao import _valores
     from .decisao import Decisao
     from .models import ConsultaModelo
-    spec = pedido(texto)
+    spec = spec if isinstance(spec, dict) else pedido(texto)
     if spec is None:
         return None
     permitidas = {o.codigo for o in objetivos if getattr(o, 'modelo_id', None)}
@@ -119,7 +160,7 @@ def executar(user, c, texto, defs, objetivos, interrompido=None):
         return None
     agreg = 'contagem:* por filial' if spec["por_filial"] else 'contagem:*'
     colunas, valores, ultima, escopo = [], [], None, None
-    for palavra, cm in zip(spec["eventos"], consultas):
+    for k, (palavra, cm) in enumerate(zip(spec["eventos"], consultas)):
         for ini, fim, rot in spec["periodos"]:
             if interrompido is not None and interrompido():
                 raise Interrompido
@@ -135,7 +176,7 @@ def executar(user, c, texto, defs, objetivos, interrompido=None):
                 return None
             escopo, ultima = r.escopo, s
             vals, _, _, _ = _valores(r)
-            colunas.append(f'{palavra.capitalize()} - {rot}')
+            colunas.append(_coluna(spec, k, rot))
             valores.append(vals)
     grupos = sorted({g for v in valores for g in v if g != 'Total'} or {'Total'})
     linhas = [[g, *[_fmt(v.get(g) or 0, 'inteiro') for v in valores]] for g in grupos]
@@ -154,6 +195,7 @@ def executar(user, c, texto, defs, objetivos, interrompido=None):
     return Saida('', {'tipo': 'calculo_resultado'}, solicitacao=ultima.solicitacao, resultado=res)
 
 
-def com_tabela(ac) -> bool:
-    return any(e.get('tabela') for e in ac.contrato or [])
+def com_tabela(ac):
+    """Especificação da tabela do contrato (dict), True para contrato antigo sem especificação, ou None."""
+    return next((e['tabela'] for e in ac.contrato or [] if e.get('tabela')), None)
 

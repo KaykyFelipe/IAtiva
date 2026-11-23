@@ -484,14 +484,15 @@ def _ciclo_agente(user, c, texto, provedor, interrompido, entrada, objetivos, co
     ac.contrato = fidelidade.ajustar(texto, anterior, user)
     ac.cumpridas = fidelidade.remapear_cumpridas(anterior, ac.contrato, ac.cumpridas)
     from . import contagem as admissoes
-    if admissoes.assunto_acompanhado(user, texto):
+    if admissoes.assunto_acompanhado(user, texto) and not any(e.get('tabela') for e in ac.contrato):
         anterior = ac.contrato
         ac.contrato = admissoes.planejar(texto, {'entregas': anterior}, user)['entregas']
         ac.cumpridas = [i for i in ac.cumpridas if i < len(anterior) and anterior[i] == ac.contrato[i]]
     from . import entregas, comparacao
     anterior = ac.contrato
     from . import tabela
-    ac.contrato = tabela.planejar(texto, comparacao.planejar(texto, entregas.planejar(texto, {'entregas': anterior})))['entregas']
+    if not any(e.get('tabela') for e in anterior):  # M130: a tabela já planejada (especificação do modelo) fica
+        ac.contrato = tabela.planejar(texto, comparacao.planejar(texto, entregas.planejar(texto, {'entregas': anterior})))['entregas']
     ac.cumpridas = [i for i in ac.cumpridas if i < len(anterior) and i < len(ac.contrato) and anterior[i] == ac.contrato[i]]
     if ac.contrato:
         ac.partes_faltam = 0
@@ -616,11 +617,12 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
         if deterministicas:
             fila_receita, receita_d = deterministicas, None
     from . import tabela
-    if tabela.com_tabela(ac) and not feitas:
+    spec_tab = tabela.com_tabela(ac)
+    if spec_tab and not feitas:
         # M129: tabela de vários eventos/períodos com consultas que a IA já sabe fazer: monta direto, sem modelo
         # nem manutenção. Sem consulta para algum evento (None), o ciclo normal decide.
         try:
-            s_tab = tabela.executar(user, c, texto, defs, objetivos, interrompido)
+            s_tab = tabela.executar(user, c, texto, defs, objetivos, interrompido, spec=spec_tab)
         except ValidationError:
             s_tab = None
         if s_tab is not None:
@@ -628,6 +630,10 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
             ac.cumpridas = [i for i, e in enumerate(ac.contrato) if e.get("tabela")]
             if not ac.pendentes():
                 return _fechar(ac, user, c, mensagem_id, s_tab, coord.CALCULO)
+        elif isinstance(spec_tab, dict) and spec_tab.get('antes'):
+            # M130: sem consulta para algum evento (ou célula falhou): volta às entregas originais e o ciclo normal
+            # responde; a tabela não cumprida não manda à manutenção o que a IA já sabe consultar.
+            ac.contrato, ac.cumpridas = list(spec_tab['antes']), []
     for _ in range(max(1, passos)):
         if prazo.esgotado():
             causa = "prazo"
