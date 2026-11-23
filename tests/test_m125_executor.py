@@ -20,7 +20,8 @@ import manutencao as mx  # noqa: E402
     ("error sending request: could not resolve host", "conexão"),
     ("Unable to find image 'iativa-app:x' locally", "imagem"),
 ])
-def test_diagnostico_especifico_do_executor(erro, causa):
+def test_diagnostico_especifico_do_executor(erro, causa, tmp_path, monkeypatch):
+    monkeypatch.setattr(mx, "TRABALHO", tmp_path)  # o log do executor vai para a pasta de trabalho
     with pytest.raises(mx.FalhaExecutor, match=causa):
         mx.validar_executor(SimpleNamespace(returncode=1, stderr=erro))
 
