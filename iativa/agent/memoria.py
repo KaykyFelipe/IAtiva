@@ -11,6 +11,7 @@ não aprova a própria proposta, salvo com a autoaprovação ligada (mesma chave
 import re
 import unicodedata
 from dataclasses import dataclass
+from datetime import datetime
 
 from django.core.exceptions import ValidationError
 from django.db import transaction
@@ -391,6 +392,8 @@ class Pendencia:
     atual: str = ""     # o que vale hoje, quando a proposta substitui algo (conflito)
     pode_decidir: bool = False
     excecao: bool = False
+    criada_em: datetime | None = None
+    detalhes: str = ""
 
 
 def _autor(u) -> str:
@@ -405,7 +408,7 @@ def _setores_aprovacao(user) -> set[int]:
     return setores_autorizados(user, Permissao.APROVAR_CONHECIMENTO)
 
 
-def pendencias(user) -> list[Pendencia]:
+def pendencias(user, *, com_detalhes=False) -> list[Pendencia]:
     """Propostas que o usuário pode ver na fila: as do nível em que aprova e as que ele mesmo fez."""
     setores = _setores_aprovacao(user)
     empresa = tem_permissao(user, Permissao.APROVAR_CONHECIMENTO) or tem_permissao(user, Permissao.ADMINISTRAR) or user.is_superuser
@@ -420,7 +423,8 @@ def pendencias(user) -> list[Pendencia]:
         if b.excecao_de_id:
             atual = _desc_valor(b.excecao_de)
         out.append(Pendencia(f"valor-{b.pk}", "Valor padrão", _desc_valor(b), _nivel(b.setor), _autor(b.criado_por),
-                             atual, memoria_valores.pode_aprovar_excecao(user, b) if b.excecao_de_id else _pode_decidir(user, b.setor, b.criado_por_id), bool(b.excecao_de_id)))
+                             atual, memoria_valores.pode_aprovar_excecao(user, b) if b.excecao_de_id else _pode_decidir(user, b.setor, b.criado_por_id), bool(b.excecao_de_id),
+                             b.criado_em, b.evidencia if com_detalhes else ""))
     notas = (NotaAgente.objects.filter(situacao=SituacaoNota.PROPOSTA, ativo=True).filter(nivel_q)
              .select_related("setor", "criado_por", "substitui").order_by("id"))
     for n in notas:
@@ -432,12 +436,13 @@ def pendencias(user) -> list[Pendencia]:
             atual = aprendizado.descrever_filtros(n.excecao_consulta)
         out.append(Pendencia(f"nota-{n.pk}", 'Exceção pessoal' if excecao else "Nota", n.texto,
                              'pessoal' if n.escopo == EscopoNota.USUARIO else _nivel(n.setor), _autor(n.criado_por), atual,
-                             pode_decidir_nota(user, n), excecao))
+                             pode_decidir_nota(user, n), excecao, n.criado_em))
     for cm in ConsultaModelo.objects.filter(situacao=SituacaoModelo.PROPOSTA).select_related("criado_por"):
         pode = aprendizado.pode_aprovar(user, cm)
         if pode or cm.criado_por_id == user.pk or empresa or cm.setores.filter(pk__in=setores).exists():
             out.append(Pendencia(f"consulta-{cm.pk}", "Consulta aprendida", f"{cm.nome} ({cm.tabela})",
-                                 ", ".join(s.nome for s in cm.setores.all()) or "—", _autor(cm.criado_por), "", pode))
+                                 ", ".join(s.nome for s in cm.setores.all()) or "—", _autor(cm.criado_por), "", pode,
+                                 criada_em=cm.criado_em, detalhes=cm.descricao if com_detalhes else ""))
     return out
 
 
@@ -482,6 +487,17 @@ def decidir(user, ref: str, aprovar: bool) -> str:
 def setores_visiveis(user):
     ids = setores_autorizados(user, Permissao.CONSULTAR) | setores_autorizados(user, Permissao.LER_MEMORIA)
     return Department.objects.filter(pk__in=ids, ativo=True).order_by("nome")
+
+
+def valores_pessoais(user):
+    agora = timezone.now()
+    valores = (ParameterBinding.objects.filter(escopo=Escopo.USUARIO, usuario=user, situacao=Situacao.APROVADA,
+                                               definicao__ativo=True, definicao__contem_dado_pessoal=False)
+               .filter(Q(valido_ate__isnull=True) | Q(valido_ate__gt=agora))
+               .filter(Q(expira_em__isnull=True) | Q(expira_em__gt=agora))
+               .select_related("definicao").order_by("definicao__nome", "-versao"))
+    return [{"nome": b.definicao.nome, "valor": exibir(b.valor), "excecao": bool(b.excecao_de_id)}
+            for b in valores]
 
 
 def memoria_do_setor(user, setor) -> dict:

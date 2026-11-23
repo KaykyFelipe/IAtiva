@@ -1,0 +1,50 @@
+.memoria-conteudo {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 24px clamp(16px, 4vw, 40px) 44px;
+  color: #243443;
+}
+.memoria-navegacao {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  padding: 6px;
+  margin-bottom: 24px;
+  border-bottom: 1px solid #e2e9ee;
+}
+.memoria-navegacao a {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 9px;
+  border-radius: 6px;
+  color: #15559f;
+  font-weight: 600;
+  text-decoration: none;
+}
+.memoria-navegacao a:hover, .memoria-navegacao a:focus-visible { background: #eef4fa; }
+.memoria-navegacao span { border-radius: 5px; background: #eef4fa; padding: 0 5px; font-size: 12px; }
+.memoria-secao { margin: 0 0 28px; scroll-margin-top: 14px; }
+.memoria-secao h2 { font-size: 19px; line-height: 1.3; margin: 0 0 11px; }
+.memoria-secao h3 { font-size: 14px; margin: 19px 0 7px; }
+.memoria-secao-topo { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.memoria-item { border-top: 1px solid #e2e9ee; padding: 13px 2px; overflow-wrap: anywhere; }
+.memoria-item p { margin: 5px 0; }
+.memoria-item header { display: flex; align-items: center; flex-wrap: wrap; gap: 5px 12px; font-size: 12px; color: #526875; }
+.memoria-texto { font-size: 15px; line-height: 1.55; font-weight: 600; }
+.memoria-meta { color: #526875; font-size: 12px; }
+.memoria-vazia { color: #526875; margin: 0; padding: 9px 0 12px; }
+.memoria-estado { color: #245a41; background: #eaf3ee; padding: 1px 7px; border-radius: 5px; }
+.memoria-estado.aguardando { color: #774d13; background: #fbf1db; }
+.memoria-proposta { border: 1px solid #dbe6ee; border-left: 3px solid #15559f; padding: 14px 16px; border-radius: 8px; margin-bottom: 8px; }
+.memoria-fatos { display: flex; flex-wrap: wrap; gap: 7px 24px; margin: 12px 0; }
+.memoria-fatos dt { color: #526875; font-size: 12px; }
+.memoria-fatos dd { margin: 0; }
+.memoria-regra-atual, .memoria-item blockquote { background: #eef4fa; margin: 9px 0; padding: 8px 11px; border-radius: 5px; }
+.memoria-edicao { margin-top: 8px; }
+.memoria-edicao summary { width: fit-content; cursor: pointer; color: #15559f; font-size: 13px; }
+.memoria-edicao textarea { display: block; width: 100%; max-width: min(70ch,100%); min-height: 70px; margin-top: 7px; padding: 7px 9px; border: 1px solid #dbe6ee; border-radius: 6px; resize: vertical; }
+.memoria-item form .acoes { margin-top: 8px; }
+.memoria-item button, .memoria-secao select, .memoria-secao-topo button { font-size: 13px; }
+.memoria-secao select { max-width: 100%; min-width: 0; }
+.memoria-secao .seletor-setor { display: flex; flex-wrap: wrap; gap: 7px; }

@@ -1,100 +1,150 @@
-{# Etapa 6: memória do setor (o que vale) e fila de aprovação. Nunca dados do ERP. #}
-<div class="conversa-area memoria-area" id="conversa">
+{% load static %}<div class="conversa-area memoria-area" id="conversa">
   <header class="cabecalho">
     {% include "chat/_cabecalho_acoes.html" %}
-    <div class="titulo-conversa">
-      <h1>Memória e aprovações</h1>
-      <span class="escopo">O que o IAtiva usa em cada setor e o que aguarda aprovação</span>
-    </div>
+    <div class="titulo-conversa"><h1>Memória e aprovações</h1></div>
     <button class="icone expandir-leitura" type="button" data-expandir-leitura aria-label="Expandir área de leitura" aria-pressed="false" title="Expandir área de leitura">{% include "chat/_icone.html" with nome="expandir" %}</button>
   </header>
 
-  <div class="rolagem">
-    <div class="mensagens">
+  <div class="rolagem" data-rolagem>
+    <div class="memoria-conteudo">
+      <link rel="stylesheet" href="{% static 'css/chat-memoria.css' %}?v={{ versao_interface }}">
+      <nav class="memoria-navegacao" aria-label="Seções da memória">
+        <a href="#memoria-pessoal">Minhas preferências</a>
+        <a href="#memoria-aprovacoes">Aprovações <span aria-label="{{ pendencias|length }} propostas">{{ pendencias|length }}</span></a>
+        <a href="#memoria-setor">Regras e consultas</a>
+      </nav>
+
       {% if aviso %}<p class="aviso-ok" role="status">{{ aviso }}</p>{% endif %}
       {% if erro %}<p class="erro" role="alert">{{ erro }}</p>{% endif %}
 
-      <section class="painel">
-        <h2>O que a IAtiva sabe sobre mim</h2>
+      <section class="memoria-secao" id="memoria-pessoal">
+        <h2>Minhas preferências</h2>
         {% for n in memorias_pessoais %}
-          <article class="pendencia">
-            <p><strong>{{ n.texto }}</strong></p>
-            <p class="sutil">{{ n.get_tipo_display }} · {{ n.get_situacao_display }} · {{ n.criado_em|date:"d/m/Y H:i" }}</p>
-            {% if n.origem_mensagem %}<p class="sutil">Origem: <a href="{% url 'chat:conversa' n.origem_mensagem.conversa_id %}">conversa que ensinou esta memória</a></p>{% endif %}
-            {% if n.evidencia %}<p class="sutil">Trecho confirmado: {{ n.evidencia }}</p>{% endif %}
-            {% if n.excecao_de_id or n.excecao_consulta_id %}<p class="sutil">Exceção à regra corporativa. A aprovação depende da Diretoria ou TI.</p>{% endif %}
-            <form method="post" action="{% url 'chat:memoria_decidir' %}" class="acoes">
-              {% csrf_token %}<input type="hidden" name="ref" value="nota-{{ n.pk }}">
-              {% if not n.criterios and not n.excecao_de_id and not n.excecao_consulta_id %}
-                <input type="text" name="texto" value="{{ n.texto }}" maxlength="300" aria-label="Editar memória pessoal">
-                <button type="submit" name="acao" value="editar" class="botao secundario">Salvar alteração</button>
-              {% endif %}
-              <button type="submit" name="acao" value="esquecer" class="botao secundario">Esquecer</button>
-              {% if n.tipo == 'preferencia' and n.substitui_id %}<button type="submit" name="acao" value="desfazer" class="botao secundario">Desfazer alteração</button>{% endif %}
-            </form>
+          <article class="memoria-item">
+            <header><span>{{ n.get_tipo_display }}</span><span class="memoria-estado">{{ n.get_situacao_display }}</span></header>
+            <p class="memoria-texto">{{ n.texto|linebreaksbr }}</p>
+            <p class="memoria-meta">
+              Salva em {{ n.criado_em|date:"d/m/Y H:i" }}
+              {% if n.aprovado_por %} · Aprovada por {{ n.aprovado_por.get_full_name|default:n.aprovado_por.get_username }}{% endif %}
+              {% if n.valido_ate %} · Válida até {{ n.valido_ate|date:"d/m/Y" }}{% endif %}
+              {% if n.origem_mensagem %} · <a href="{% url 'chat:conversa' n.origem_mensagem.conversa_id %}" data-abrir-chat>Conversa de origem</a>{% endif %}
+            </p>
+            {% if n.evidencia %}<blockquote>{{ n.evidencia }}</blockquote>{% endif %}
+            {% if n.excecao_de_id or n.excecao_consulta_id %}<p class="memoria-meta">Exceção pessoal que depende de aprovação da Diretoria ou da TI.</p>{% endif %}
+            <details class="memoria-edicao">
+              <summary>Gerenciar preferência</summary>
+              <form method="post" action="{% url 'chat:memoria_decidir' %}" hx-post="{% url 'chat:memoria_decidir' %}"
+                    hx-target="#conversa" hx-swap="outerHTML" hx-disabled-elt="find button">
+                {% csrf_token %}<input type="hidden" name="ref" value="nota-{{ n.pk }}">
+                <input type="hidden" name="setor" value="{{ memoria.setor.pk }}">
+                {% if not n.criterios and not n.excecao_de_id and not n.excecao_consulta_id %}
+                  <label class="sr" for="nota-{{ n.pk }}">Editar preferência</label>
+                  <textarea id="nota-{{ n.pk }}" name="texto" rows="3" maxlength="300">{{ n.texto }}</textarea>
+                {% endif %}
+                <div class="acoes">
+                  {% if not n.criterios and not n.excecao_de_id and not n.excecao_consulta_id %}
+                    <button type="submit" name="acao" value="editar">Salvar alteração</button>
+                  {% endif %}
+                  {% if n.tipo == 'preferencia' and n.substitui_id %}<button type="submit" name="acao" value="desfazer" class="secundario">Desfazer alteração</button>{% endif %}
+                  <button type="submit" name="acao" value="esquecer" class="secundario">Esquecer</button>
+                </div>
+              </form>
+            </details>
           </article>
-        {% empty %}<p class="sutil">Nenhuma memória pessoal salva.</p>{% endfor %}
+        {% endfor %}
+        {% for v in valores_pessoais %}
+          <article class="memoria-item">
+            <header><span>{% if v.excecao %}Exceção pessoal{% else %}Valor padrão pessoal{% endif %}</span><span class="memoria-estado">Aprovado</span></header>
+            <p class="memoria-texto">{{ v.nome }}</p><p>{{ v.valor }}</p>
+          </article>
+        {% endfor %}
+        {% if not memorias_pessoais and not valores_pessoais %}<p class="memoria-vazia">Nenhuma preferência pessoal salva.</p>{% endif %}
       </section>
-      <section class="painel">
-        <h2>Aguardando aprovação</h2>
+
+      <section class="memoria-secao" id="memoria-aprovacoes">
+        <h2>Aprovações</h2>
         {% for p in pendencias %}
-          <div class="pendencia">
-            <p><span class="etiqueta">{{ p.tipo }}</span> <span class="sutil">{{ p.nivel }} · proposto por {{ p.autor }} · {{ p.ref }}</span></p>
-            <p><strong>{{ p.descricao }}</strong></p>
-            {% if p.atual %}<p class="conflito">Hoje vale: {{ p.atual }}. {% if p.excecao %}A regra corporativa continua valendo. Aprovar libera somente esta exceção pessoal.{% else %}Aprovar substitui (o histórico fica guardado).{% endif %}</p>{% endif %}
+          <article class="memoria-item memoria-proposta">
+            <header><span>{{ p.tipo }}</span><span class="memoria-estado aguardando">Aguardando aprovação</span></header>
+            <p class="memoria-texto">{{ p.descricao|linebreaksbr }}</p>
+            {% if p.detalhes %}<p>{{ p.detalhes|linebreaksbr }}</p>{% endif %}
+            <dl class="memoria-fatos">
+              <div><dt>Proposta por</dt><dd>{{ p.autor }}</dd></div>
+              <div><dt>Alcance</dt><dd>{{ p.nivel }}</dd></div>
+              <div><dt>Enviada em</dt><dd>{{ p.criada_em|date:"d/m/Y H:i" }}</dd></div>
+              <div><dt>Referência</dt><dd>{{ p.ref }}</dd></div>
+            </dl>
+            {% if p.atual %}
+              <aside class="memoria-regra-atual">
+                <strong>Regra em vigor</strong>
+                <p>{{ p.atual|linebreaksbr }}</p>
+                {% if p.excecao %}<p class="memoria-meta">A decisão libera somente a exceção pessoal. A regra corporativa segue em vigor.</p>{% endif %}
+              </aside>
+            {% endif %}
             {% if p.pode_decidir %}
-              <form method="post" action="{% url 'chat:memoria_decidir' %}" class="acoes">
+              <form method="post" action="{% url 'chat:memoria_decidir' %}" hx-post="{% url 'chat:memoria_decidir' %}"
+                    hx-target="#conversa" hx-swap="outerHTML" hx-disabled-elt="find button" class="acoes">
                 {% csrf_token %}
                 <input type="hidden" name="ref" value="{{ p.ref }}">
                 <input type="hidden" name="setor" value="{{ memoria.setor.pk }}">
-                <button type="submit" name="acao" value="aprovar" class="botao">Aprovar</button>
-                <button type="submit" name="acao" value="rejeitar" class="botao secundario">Rejeitar</button>
+                <button type="submit" name="acao" value="aprovar">Aprovar</button>
+                <button type="submit" name="acao" value="rejeitar" class="secundario">Rejeitar</button>
               </form>
             {% else %}
-              <p class="sutil">Aguardando quem aprova definições neste nível.</p>
+              <p class="memoria-meta">Aguardando uma pessoa autorizada a decidir.</p>
             {% endif %}
-          </div>
+          </article>
         {% empty %}
-          <p class="sutil">Nenhuma proposta pendente.</p>
+          <p class="memoria-vazia">Nenhuma proposta pendente.</p>
         {% endfor %}
       </section>
 
-      {% if memoria %}
-        <section class="painel">
-          <h2>O que vale no setor {{ memoria.setor.nome }}</h2>
+      <section class="memoria-secao" id="memoria-setor">
+        <div class="memoria-secao-topo">
+          <h2>Regras e consultas{% if memoria %} de {{ memoria.setor.nome }}{% endif %}</h2>
           {% if setores_memoria|length > 1 %}
-            <form method="get" action="{% url 'chat:memoria' %}" class="seletor-setor">
-              <label for="setor-memoria">Setor</label>
+            <form method="get" action="{% url 'chat:memoria' %}" hx-get="{% url 'chat:memoria' %}"
+                  hx-target="#conversa" hx-swap="outerHTML" hx-push-url="true" class="seletor-setor">
+              <label class="sr" for="setor-memoria">Setor</label>
               <select id="setor-memoria" name="setor">
                 {% for s in setores_memoria %}<option value="{{ s.pk }}"{% if s.pk == memoria.setor.pk %} selected{% endif %}>{{ s.nome }}</option>{% endfor %}
               </select>
-              <button type="submit" class="botao secundario">Ver</button>
+              <button type="submit" class="secundario">Ver setor</button>
             </form>
           {% endif %}
-
+        </div>
+        {% if memoria %}
           <h3>Valores padrão e regras</h3>
-          {% if memoria.valores %}
-            <div class="tabela-rolagem"><table>
-              <thead><tr><th>Critério</th><th>Valor</th><th>Nível</th><th>Versão</th><th>Aprovado por</th></tr></thead>
-              <tbody>{% for v in memoria.valores %}
-                <tr><td>{{ v.nome }}{% if v.obrigatoria %} <span class="etiqueta">obrigatória</span>{% endif %}</td><td>{{ v.valor }}</td><td>{{ v.nivel }}</td><td>{{ v.versao }}</td><td>{{ v.aprovado_por }}{% if v.aprovado_em %}, {{ v.aprovado_em|date:"d/m/Y" }}{% endif %}</td></tr>
-              {% endfor %}</tbody>
-            </table></div>
-          {% else %}<p class="sutil">Nenhum valor padrão aprovado.</p>{% endif %}
+          {% for v in memoria.valores %}
+            <article class="memoria-item">
+              <header><span>{{ v.nivel }} · Versão {{ v.versao }}</span>{% if v.obrigatoria %}<span class="memoria-estado">Obrigatória</span>{% endif %}</header>
+              <p class="memoria-texto">{{ v.nome }}</p><p>{{ v.valor }}</p>
+              <p class="memoria-meta">Aprovado por {{ v.aprovado_por }}{% if v.aprovado_em %} · {{ v.aprovado_em|date:"d/m/Y H:i" }}{% endif %}</p>
+            </article>
+          {% empty %}<p class="memoria-vazia">Nenhum valor padrão aprovado.</p>{% endfor %}
 
-          <h3>Notas da memória</h3>
+          <h3>Notas aprovadas</h3>
           {% for n in memoria.notas %}
-            <p class="nota-memoria">{{ n.texto }} <span class="sutil">· {{ n.nivel }} · {{ n.aprovado_por }}</span></p>
-          {% empty %}<p class="sutil">Nenhuma nota.</p>{% endfor %}
+            <article class="memoria-item">
+              <header><span>{{ n.nivel }}</span></header>
+              <p class="memoria-texto">{{ n.texto|linebreaksbr }}</p>
+              <p class="memoria-meta">Aprovada por {{ n.aprovado_por }}{% if n.aprovado_em %} · {{ n.aprovado_em|date:"d/m/Y H:i" }}{% endif %}</p>
+            </article>
+          {% empty %}<p class="memoria-vazia">Nenhuma nota aprovada para este setor.</p>{% endfor %}
 
           <h3>Consultas aprendidas</h3>
           {% for c in memoria.consultas %}
-            <p>{{ c.nome }} <span class="sutil">· {{ c.tabela }} · {{ c.aprovado_por }}</span></p>
-          {% empty %}<p class="sutil">Nenhuma consulta aprendida para este setor.</p>{% endfor %}
-        </section>
-      {% else %}
-        <p class="sutil">Seu usuário não tem setores liberados.</p>
-      {% endif %}
+            <article class="memoria-item">
+              <header><span>Tabela {{ c.tabela }}</span></header>
+              <p class="memoria-texto">{{ c.nome }}</p>
+              <p class="memoria-meta">Aprovada por {{ c.aprovado_por }}{% if c.aprovado_em %} · {{ c.aprovado_em|date:"d/m/Y H:i" }}{% endif %}</p>
+            </article>
+          {% empty %}<p class="memoria-vazia">Nenhuma consulta aprendida para este setor.</p>{% endfor %}
+        {% else %}
+          <p class="memoria-vazia">Nenhum setor disponível para seu usuário.</p>
+        {% endif %}
+      </section>
     </div>
   </div>
 </div>
+{% if oob_lateral %}{% include "chat/_lateral.html" %}{% endif %}

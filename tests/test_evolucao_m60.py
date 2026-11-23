@@ -140,7 +140,7 @@ def test_interface_pessoal_isola_e_permite_esquecer(base, novo_usuario, client):
     memoria.lembrar(outro,'Nota pessoal secreta sintética',alcance='usuario')
     client.force_login(u)
     h=client.get(reverse('chat:memoria')).content.decode()
-    assert 'O que a IAtiva sabe sobre mim' in h and n.texto in h and 'Nota pessoal secreta sintética' not in h
+    assert 'Minhas preferências' in h and n.texto in h and 'Nota pessoal secreta sintética' not in h
     client.post(reverse('chat:memoria_decidir'),{'acao':'esquecer','ref':f'nota-{n.pk}'})
     n.refresh_from_db(); assert not n.ativo
 

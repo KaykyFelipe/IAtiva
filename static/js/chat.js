@@ -167,29 +167,26 @@
     if (!painel) return null;
     const resultados = new Map();
     const topoPainel = painel.getBoundingClientRect().top;
-    let ancora = null;
+    const mensagem = Array.from(painel.querySelectorAll("[data-mensagem-id]")).find((el) =>
+      el.getBoundingClientRect().bottom > topoPainel);
+    const ancora = mensagem ? { id: mensagem.dataset.mensagemId, distancia: mensagem.getBoundingClientRect().top - topoPainel } : null;
     for (const resposta of painel.querySelectorAll("[data-resultado-de]")) {
-      const caixa = resposta.getBoundingClientRect();
-      if (caixa.top <= topoPainel && caixa.bottom > topoPainel) {
-        ancora = { id: resposta.dataset.resultadoDe, distancia: caixa.top - topoPainel };
-      }
       resultados.set(resposta.dataset.resultadoDe, {
         tabelas: Array.from(resposta.querySelectorAll(".tabela-resultado"),
           (el) => ({ topo: el.scrollTop, esquerda: el.scrollLeft, foco: document.activeElement === el })),
         detalhes: Array.from(resposta.querySelectorAll("details"), (el) => el.open),
       });
     }
-    return { conversa: area.dataset.conversaId, topo: painel.scrollTop, resultados, ancora };
+    return { conversa: area.dataset.conversaId, topo: painel.scrollTop, noFim: distanciaAteFim(painel) <= 24, resultados, ancora };
   }
 
   function restaurarLeitura(area, vista) {
     const painel = area?.querySelector("[data-rolagem]");
     if (!painel || !vista || vista.conversa !== area.dataset.conversaId) return false;
-    let ancora = null;
+    const ancora = vista.ancora && painel.querySelector(`[data-mensagem-id="${vista.ancora.id}"]`);
     for (const resposta of painel.querySelectorAll("[data-resultado-de]")) {
       const estado = vista.resultados.get(resposta.dataset.resultadoDe);
       if (!estado) continue;
-      if (vista.ancora?.id === resposta.dataset.resultadoDe) ancora = resposta;
       resposta.querySelectorAll("details").forEach((el, i) => {
         if (i < estado.detalhes.length) el.open = estado.detalhes[i];
       });
@@ -201,16 +198,38 @@
         if (posicao.foco) el.focus({ preventScroll: true });
       });
     }
-    painel.scrollTop = ancora
+    painel.scrollTop = vista.noFim && area.dataset.conversaId ? painel.scrollHeight : ancora
       ? painel.scrollTop + ancora.getBoundingClientRect().top - painel.getBoundingClientRect().top - vista.ancora.distancia
       : vista.topo;
+    atualizarAtalhoFim();
     return true;
   }
 
-  function rolarParaFim() {
-    const r = document.querySelector("[data-rolagem]");
-    if (r) r.scrollTop = r.scrollHeight;
+  function distanciaAteFim(painel) {
+    return painel.scrollHeight - painel.clientHeight - painel.scrollTop;
   }
+
+  function atualizarAtalhoFim() {
+    const painel = document.querySelector("[data-rolagem]");
+    const botao = document.querySelector("[data-ir-ao-fim]");
+    if (painel && botao) botao.hidden = distanciaAteFim(painel) <= 48;
+  }
+
+  function rolarParaFim(behavior = "instant") {
+    const r = document.querySelector("[data-rolagem]");
+    if (r && !r.closest(".memoria-area")) r.scrollTo({ top: r.scrollHeight, behavior });
+    atualizarAtalhoFim();
+  }
+
+  document.addEventListener("scroll", (e) => {
+    if (e.target.matches?.("[data-rolagem]")) atualizarAtalhoFim();
+  }, true);
+  window.addEventListener("resize", atualizarAtalhoFim);
+  document.addEventListener("click", (e) => {
+    if (e.target.closest("[data-ir-ao-fim]")) {
+      rolarParaFim(window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth");
+    }
+  });
 
   function prepararCampo(autofoco = true) {
     const campo = document.querySelector("[data-campo]");
@@ -218,10 +237,11 @@
     campo.dataset.preparado = "1";
     const ajustar = () => {
       const painel = document.querySelector("[data-rolagem]");
-      const noFim = painel && painel.scrollHeight - painel.clientHeight - painel.scrollTop <= 24;
+      const noFim = painel && distanciaAteFim(painel) <= 24;
       campo.style.height = "auto";
       campo.style.height = campo.scrollHeight + "px";
       if (noFim) painel.scrollTop = painel.scrollHeight;
+      atualizarAtalhoFim();
     };
     campo.addEventListener("input", ajustar);
     campo.addEventListener("keydown", (e) => {
@@ -284,18 +304,24 @@
       app.classList.remove("menu-aberto");
     });
   }
-  window.addEventListener("popstate", () => abrirConversa(location.pathname, false));
+  window.addEventListener("popstate", () => abrirConversa(location.pathname + location.search, false));
 
   document.addEventListener("click", (e) => {
     const lixeira = e.target.closest("[data-excluir]");
     if (lixeira) { e.preventDefault(); e.stopPropagation(); excluirConversa(lixeira); return; }
-    const link = e.target.closest("#lateral a.conversa, #lateral a.nova");
-    if (link && !e.target.closest("[data-renomear]") && !e.ctrlKey && !e.metaKey && !e.shiftKey && e.button === 0
-        && !atual && !link.href.includes("/memoria/") && !document.querySelector(".renomeando")) {
+    const link = e.target.closest("#lateral a.conversa, #lateral a.nova, [data-abrir-chat]");
+    if (link && !e.target.closest("[data-renomear]") && !e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey && e.button === 0
+        && !document.querySelector(".renomeando")) {
       e.preventDefault();
       document.querySelectorAll("#lateral a.conversa.ativa").forEach((a) => a.classList.remove("ativa"));
       if (link.classList.contains("conversa")) link.classList.add("ativa");
       abrirConversa(link.href);
+      return;
+    }
+    const secao = e.target.closest(".memoria-navegacao a");
+    if (secao && e.button === 0 && !e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey) {
+      e.preventDefault();
+      document.getElementById(secao.hash.slice(1))?.scrollIntoView({ block: "start" });
       return;
     }
     const lapis = e.target.closest("[data-renomear]");
@@ -377,6 +403,8 @@
   function mostrarPensando(texto) {
     const lista = document.querySelector(".mensagens");
     if (!lista) return [];
+    const painel = lista.closest("[data-rolagem]");
+    const noFim = painel && distanciaAteFim(painel) <= 24;
     const vazio = lista.querySelector(".vazio");
     if (vazio) vazio.hidden = true;
     document.getElementById("conversa").classList.remove("inicio");
@@ -393,7 +421,8 @@
     pensando.setAttribute("aria-live", "polite");
     montarPensando(pensando);
     lista.append(bolha, pensando);
-    rolarParaFim();
+    if (noFim) rolarParaFim();
+    else atualizarAtalhoFim();
     animarProxima = true;
     return [bolha, pensando];
   }
@@ -572,7 +601,7 @@
     }
   }, true);
 
-  function copiarTexto(texto) {
+  function copiarTexto(texto, html) {
     const campo = document.createElement("textarea");
     const foco = document.activeElement;
     campo.value = texto;
@@ -580,27 +609,48 @@
     campo.style.cssText = "position:fixed;left:-9999px;top:0";
     document.body.append(campo);
     campo.select();
+    const escrever = (evento) => {
+      evento.clipboardData.setData("text/plain", texto);
+      evento.clipboardData.setData("text/html", html);
+      evento.preventDefault();
+    };
+    document.addEventListener("copy", escrever, { once: true });
     try { return document.execCommand("copy"); }
-    finally { campo.remove(); foco?.focus({ preventScroll: true }); }
+    finally {
+      document.removeEventListener("copy", escrever);
+      campo.remove();
+      foco?.focus({ preventScroll: true });
+    }
   }
 
   async function copiarResposta(botao) {
     const resposta = botao.closest(".resposta-chat");
     const conteudo = resposta.querySelector("[data-copiar-conteudo]").cloneNode(true);
-    conteudo.querySelectorAll("form, button, link, details, svg").forEach((el) => el.remove());
+    const conclusao = resposta.querySelector(".tarefa-conclusao");
+    if (conclusao && !conclusao.querySelector(".tarefa-carregando")) conteudo.append(conclusao.cloneNode(true));
+    conteudo.querySelectorAll("form, button, link, svg").forEach((el) => el.remove());
+    for (const detalhe of conteudo.querySelectorAll("details")) {
+      const secao = document.createElement("section");
+      secao.append(...detalhe.childNodes);
+      detalhe.replaceWith(secao);
+    }
+    for (const rolagem of conteudo.querySelectorAll(".tabela-rolagem, .conclusao-tabela")) {
+      rolagem.replaceWith(...rolagem.childNodes);
+    }
     const html = conteudo.innerHTML;
+    let totalLinhas = 0;
     for (const tabela of conteudo.querySelectorAll("table")) {
-      const linhas = Array.from(tabela.rows, (linha) =>
-        "| " + Array.from(linha.cells, (c) => c.textContent.trim().replaceAll("|", "\\|")).join(" | ") + " |");
-      if (tabela.tHead && linhas.length > 1) {
-        linhas.splice(1, 0, "| " + Array.from(tabela.rows[0].cells, () => "---").join(" | ") + " |");
-      }
+      totalLinhas += Array.from(tabela.tBodies).reduce((n, corpo) => n + corpo.rows.length, 0);
+      const linhas = Array.from(tabela.rows, (linha) => Array.from(linha.cells, (c) => {
+        const valor = c.textContent.trim();
+        return /[\t\r\n"]/.test(valor) ? '"' + valor.replaceAll('"', '""') + '"' : valor;
+      }).join("\t"));
       const textoTabela = document.createElement("pre");
       textoTabela.textContent = linhas.join("\n");
       tabela.replaceWith(textoTabela);
     }
     conteudo.querySelectorAll("br").forEach((el) => el.replaceWith("\n"));
-    const texto = Array.from(conteudo.querySelectorAll("p,h3,dt,dd,pre"),
+    const texto = Array.from(conteudo.querySelectorAll("p,h1,h2,h3,h4,dt,dd,summary,li,pre"),
       (el) => el.textContent.trim()).filter(Boolean).join("\n\n");
     let copiado = false;
     try {
@@ -611,11 +661,11 @@
         })]);
         copiado = true;
       }
-    } catch (_) { /* HTTP interno e navegadores sem cópia rica usam texto. */ }
+    } catch (_) { /* HTTP interno e navegadores sem ClipboardItem usam o evento de cópia. */ }
     if (!copiado) {
-      try { copiado = copiarTexto(texto); } catch (_) { /* permissão negada */ }
+      try { copiado = copiarTexto(texto, html); } catch (_) { /* permissão negada */ }
     }
-    const feedback = copiado ? "Resposta copiada" : "Cópia indisponível";
+    const feedback = !copiado ? "Cópia indisponível" : totalLinhas ? `Copiadas ${totalLinhas} linhas da tabela` : "Resposta copiada";
     botao.title = feedback;
     botao.classList.toggle("copiado", copiado);
     resposta.querySelector("[data-estado-copia]").textContent = feedback;
@@ -736,6 +786,10 @@
   document.body.addEventListener("htmx:beforeSwap", (e) => {
     const { target, xhr, shouldSwap } = e.detail;
     if (shouldSwap && target?.id === "conversa" && xhr) {
+      if (target !== document.getElementById("conversa")) {
+        e.detail.shouldSwap = false;
+        return;
+      }
       leituraPorRequisicao.set(xhr, capturarLeitura(target));
     }
   });
@@ -757,6 +811,7 @@
     prepararLateral();
     const area = document.getElementById("conversa");
     const vista = leituraPorRequisicao.get(e.detail.xhr);
+    document.title = area.querySelector("h1").textContent + " · IAtiva";
     prepararCampo(vista?.conversa !== area?.dataset.conversaId);
     const campo = area?.querySelector("[data-campo]");
     if (campo && rascunho !== undefined && vista?.conversa === area.dataset.conversaId) {
@@ -765,6 +820,12 @@
     }
     retomarEnvio();
     if (!restaurarLeitura(area, vista)) rolarParaFim();
+  });
+  document.body.addEventListener("htmx:afterSettle", (e) => {
+    const vista = leituraPorRequisicao.get(e.detail?.xhr);
+    if (vista && e.detail.target?.id === "conversa") {
+      restaurarLeitura(document.getElementById("conversa"), vista);
+    }
   });
   setInterval(atualizarSaudacao, 60000);
   document.addEventListener("visibilitychange", () => { if (!document.hidden) atualizarSaudacao(); });
@@ -777,7 +838,8 @@
         document.querySelector(".renomeando") || !app.dataset.syncUrl) return;
     sincronizando = true;
     try {
-      const qs = new URLSearchParams({ conversa: area ? area.dataset.conversaId : "0", versao: versaoRemota });
+      const qs = new URLSearchParams({ conversa: area?.dataset.conversaId || "0", versao: versaoRemota });
+      if (area?.classList.contains("memoria-area")) qs.set("pagina", "memoria");
       const r = await fetch(app.dataset.syncUrl + "?" + qs, { credentials: "same-origin", cache: "no-store" });
       if (!r.ok || r.redirected || atual || area !== document.getElementById("conversa")) return;
       const dados = await r.json();

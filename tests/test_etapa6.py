@@ -182,6 +182,24 @@ def test_tela_memoria_recusa_decisao_sem_permissao(client, ana, gestor):
     assert p.situacao == SituacaoNota.PROPOSTA
 
 
+def test_memoria_carrega_e_decide_por_fragmento_com_o_texto_inteiro(client, ana, gestor, cob):
+    texto = "Em uma consulta por filial, apresentar mês, valores consolidados e indicadores completos."
+    proposta = memoria.lembrar(ana, texto, "setor")
+    memorias = [NotaAgente(texto=f"Apresentação pessoal {i}", escopo=EscopoNota.USUARIO, usuario=gestor,
+                           criado_por=gestor) for i in range(65)]
+    NotaAgente.objects.bulk_create(memorias)
+    client.force_login(gestor)
+    r = client.get(reverse("chat:memoria"), {"setor": cob.pk}, HTTP_HX_REQUEST="true")
+    html = r.content.decode()
+    assert "id=\"conversa\"" in html and "hx-swap-oob=\"true\"" in html and "<html" not in html
+    assert "Apresentação pessoal 0" in html and "Apresentação pessoal 64" in html
+    assert texto in html and "Proposta por" in html and "Enviada em" in html
+    r = client.post(reverse("chat:memoria_decidir"), {"ref": f"nota-{proposta.pk}", "acao": "aprovar",
+                                                    "setor": cob.pk}, HTTP_HX_REQUEST="true")
+    assert "<html" not in r.content.decode() and texto in r.content.decode()
+    assert r.context["memoria"]["setor"] == cob
+
+
 def test_tela_memoria_nao_mostra_setor_alheio(client, ana, dire):
     client.force_login(ana)
     r = client.get(reverse("chat:memoria"), {"setor": dire.pk})

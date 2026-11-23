@@ -18,6 +18,9 @@
 
 ## Leitura dos resultados no chat
 
+- A cópia inclui todas as linhas, cabeçalhos e totais disponíveis na resposta. Tabelas limitadas pelo ERP ainda informam que a consulta ficou parcial.
+- A Memória abre na área do chat e organiza preferências pessoais, a fila com propostas completas e as regras e consultas aprovadas por setor.
+- Ao concluir um pedido, o chat ancora a mensagem em leitura. A seta acima do campo aparece quando há mensagens mais abaixo e volta para a mais recente.
 - A rolagem fica dentro do histórico e das tabelas. O feedback acessível da cópia fica no bloco de ações e já não amplia a altura da página.
 - O chat tem títulos por assunto gerados na primeira triagem, cabeçalho com quebra de linha, grupo “Ontem” pela última mensagem enviada e campo de texto que cresce mantendo a posição de leitura.
 - Respostas têm controles de copiar e refazer abaixo do resultado. A cópia inclui tabelas e totais, e a reexecução de uma resposta com várias consultas volta ao pedido que a originou. As mensagens e o andamento no chat dispensam o mascote e os avisos repetitivos.

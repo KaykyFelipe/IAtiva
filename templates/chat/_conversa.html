@@ -12,7 +12,7 @@
     <button class="icone expandir-leitura" type="button" data-expandir-leitura aria-label="Expandir área de leitura" aria-pressed="false" title="Expandir área de leitura">{% include "chat/_icone.html" with nome="expandir" %}</button>
   </header>
   <div class="conteudo-chat">
-  <div class="rolagem" data-rolagem>
+  <div class="rolagem" id="historico-chat" data-rolagem>
     <div class="mensagens">
       {# A conversa pode ser atualizada sem recarregar os estilos do cabeçalho. #}
       <link rel="stylesheet" href="{% static 'css/chat-resultados.css' %}?v={{ versao_interface }}">
@@ -26,15 +26,15 @@
         {% with m=item.m %}
         {% if m.papel == "usuario" %}
           {% if conversa.tipo == TipoConversa.SETOR and not item.proprio %}
-            <div class="msg pessoa">
+            <div class="msg pessoa" data-mensagem-id="{{ m.pk }}">
               <span class="avatar pequeno" aria-hidden="true">{{ m.autor.get_username|slice:":2"|upper }}</span>
               <div><p class="autor">{{ m.autor.get_full_name|default:m.autor.get_username }}</p><p>{{ m.texto|linebreaksbr }}</p></div>
             </div>
           {% else %}
-            <div class="msg usuario"><p>{{ m.texto|linebreaksbr }}</p></div>
+            <div class="msg usuario" data-mensagem-id="{{ m.pk }}"><p>{{ m.texto|linebreaksbr }}</p></div>
           {% endif %}
         {% else %}
-          <div class="resposta-chat" data-resultado-de="{{ m.pk }}">
+          <div class="resposta-chat" data-resultado-de="{{ m.pk }}" data-mensagem-id="{{ m.pk }}">
           <div data-copiar-conteudo>
             {% include "chat/_resposta.html" with m=m linhas=item.linhas_resposta editavel=item.editavel executavel=item.executavel aprendivel=item.aprendivel aprovavel=item.aprovavel ultima=item.ultima %}
             {% if m.resultado %}
@@ -82,6 +82,12 @@
     </div>
   </div>
 
+  {% if conversa %}
+    <div class="atalho-fim">
+      <button type="button" class="icone ir-ao-fim" data-ir-ao-fim hidden aria-controls="historico-chat"
+              aria-label="Ir ao fim da conversa" title="Ir ao fim da conversa">{% include "chat/_icone.html" with nome="fim" %}</button>
+    </div>
+  {% endif %}
   {% if pode_escrever %}
     <form class="compositor" method="post"
           action="{% if conversa %}{% url 'chat:mensagem' conversa.pk %}{% else %}{% url 'chat:nova' %}{% endif %}"

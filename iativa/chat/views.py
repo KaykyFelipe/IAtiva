@@ -167,6 +167,7 @@ def sincronizar(request):
     """Polling curto entre sessões: só metadados/HTML autorizado, sem executar consultas."""
     cid = request.GET.get("conversa")
     c = _obter(request, cid) if cid and cid.isdecimal() and int(cid) else None
+    pagina_memoria = c is None and request.GET.get("pagina") == "memoria"
     visiveis = ConversationContext.objects.filter(encerrada_em__isnull=True).filter(
         Q(usuario=request.user) | Q(tipo=TipoConversa.SETOR, setor_id__in=conversas.setores_leitura(request.user)))
     if not conversas.pode_mestre(request.user):
@@ -178,11 +179,12 @@ def sincronizar(request):
     from iativa.metadata.models import RestricaoMetadado
     versao = hashlib.sha256(json.dumps([registros, list(politicas_vigentes(request.user).order_by('pk').values()),
         versao_app(), timezone.localdate(), list(RestricaoMetadado.objects.order_by("id", "setores_permitidos__pk").values(
-            "id", "tabela", "campo", "ativo", "setores_permitidos__pk")), cid],
+            "id", "tabela", "campo", "ativo", "setores_permitidos__pk")), cid, pagina_memoria],
         default=str, sort_keys=True).encode()).hexdigest()
     if request.GET.get("versao") == versao:
         return JsonResponse({"versao": versao})
     ctx = _contexto(request, c)
+    ctx["pagina_memoria"] = pagina_memoria
     return JsonResponse({"versao": versao, "lateral": render_to_string("chat/_lateral.html", ctx, request),
                          "conversa": render_to_string("chat/_conversa.html", ctx, request) if c else ""})
 
@@ -385,17 +387,23 @@ def _render_memoria(request, setor_id=None, aviso="", erro=""):
         proprio = setor_do_usuario(request.user)
         escolhido = next((s for s in setores if proprio and s.pk == proprio.pk), setores[0] if setores else None)
     ctx = _contexto(request)
+    memoria_setor = memoria.memoria_do_setor(request.user, escolhido) if escolhido else None
+    if memoria_setor:
+        memoria_setor["notas"] = [n for n in memoria_setor["notas"] if n["nivel"] != "só você"]
     ctx.update({
         'memorias_pessoais': memoria.NotaAgente.objects.filter(usuario=request.user, escopo='usuario', ativo=True)
-            .select_related('origem_mensagem__conversa', 'substitui').order_by('-criado_em')[:60],
+            .select_related('origem_mensagem__conversa', 'substitui', 'aprovado_por').order_by('-criado_em'),
+        "valores_pessoais": memoria.valores_pessoais(request.user),
         "pagina_memoria": True,
         "setores_memoria": setores,
-        "memoria": memoria.memoria_do_setor(request.user, escolhido) if escolhido else None,
-        "pendencias": memoria.pendencias(request.user),
+        "memoria": memoria_setor,
+        "pendencias": memoria.pendencias(request.user, com_detalhes=True),
         "aviso": aviso,
         "erro": erro,
     })
-    return render(request, "chat/index.html", ctx)
+    htmx = request.headers.get("HX-Request") == "true"
+    ctx["oob_lateral"] = htmx
+    return render(request, "chat/_memoria.html" if htmx else "chat/index.html", ctx)
 
 
 @require_GET
@@ -412,7 +420,7 @@ def memoria_decidir(request):
     if acao in ('esquecer', 'editar', 'desfazer') and ref.startswith('nota-') and ref[5:].isdigit():
         n = mem.NotaAgente.objects.filter(pk=int(ref[5:]), usuario=request.user, escopo='usuario', ativo=True).first()
         if n is None:
-            return _render_memoria(request, erro='Memória pessoal indisponível.')
+            return _render_memoria(request, request.POST.get("setor"), erro='Memória pessoal indisponível.')
         try:
             if acao == 'esquecer':
                 mem.desativar(request.user, n)
@@ -433,9 +441,9 @@ def memoria_decidir(request):
                 nova.save(update_fields=['substitui'])
                 if nova.situacao == 'aprovada':
                     mem.desativar(request.user, n)
-            return _render_memoria(request, aviso='Memória pessoal atualizada.')
+            return _render_memoria(request, request.POST.get("setor"), aviso='Memória pessoal atualizada.')
         except (ValidationError, PermissaoNegada) as exc:
-            return _render_memoria(request, erro=' '.join(getattr(exc, 'messages', [str(exc)])))
+            return _render_memoria(request, request.POST.get("setor"), erro=' '.join(getattr(exc, 'messages', [str(exc)])))
     if acao not in ("aprovar", "rejeitar") or ref not in {p.ref for p in mem.pendencias(request.user)}:
         return _render_memoria(request, request.POST.get("setor"), erro="Proposta indisponível.")
     try:

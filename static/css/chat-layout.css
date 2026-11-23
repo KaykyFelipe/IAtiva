@@ -71,6 +71,9 @@ body { font-family: "Segoe UI Variable Text", "Segoe UI", Arial, sans-serif; fon
 .leitura-ampla .expandir-leitura { background: #edf3f8; color: var(--azul); }
 .conteudo-chat { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 .rolagem { min-height: 0; overflow: auto; overflow-anchor: none; overscroll-behavior-y: contain; scrollbar-width: thin; scrollbar-color: #dae3dd transparent; }
+.atalho-fim { position: relative; display: grid; justify-items: center; height: 0; z-index: 2; }
+.ir-ao-fim { position: absolute; bottom: 9px; width: 35px; height: 35px; border: 1px solid #d9e4eb; border-radius: 50%; background: #fff; color: var(--azul-escuro); box-shadow: 0 2px 8px #18223a18; }
+.ir-ao-fim:hover { background: #edf4fa; }
 .mensagens { width: 100%; max-width: var(--largura-leitura); padding: 25px 25px 24px; gap: 25px; overflow-wrap: anywhere; }
 .msg { line-height: 1.8; min-width: 0; animation: aparecer-mensagem .18s ease-out; }
 .msg p { margin-bottom: 14px; }
