@@ -18,7 +18,7 @@
 
 ## Leitura dos resultados no chat
 
-- A cópia inclui todas as linhas, cabeçalhos e totais disponíveis na resposta. Tabelas limitadas pelo ERP ainda informam que a consulta ficou parcial.
+- Cada tabela tem sua própria ação de cópia. Tanto a cópia da tabela quanto a da resposta escrevem texto com colunas separadas por ` | `, incluindo cabeçalhos, nomes, todos os campos apresentados e totais. Tabelas limitadas pelo ERP informam que a consulta ficou parcial.
 - A Memória abre na área do chat e organiza preferências pessoais, a fila com propostas completas e as regras e consultas aprovadas por setor.
 - Ao concluir um pedido, o chat ancora a mensagem em leitura. A seta acima do campo aparece quando há mensagens mais abaixo e volta para a mais recente.
 - A rolagem fica dentro do histórico e das tabelas. O feedback acessível da cópia fica no bloco de ações e já não amplia a altura da página.

@@ -601,7 +601,7 @@
     }
   }, true);
 
-  function copiarTexto(texto, html) {
+  function copiarTexto(texto) {
     const campo = document.createElement("textarea");
     const foco = document.activeElement;
     campo.value = texto;
@@ -609,26 +609,31 @@
     campo.style.cssText = "position:fixed;left:-9999px;top:0";
     document.body.append(campo);
     campo.select();
-    const escrever = (evento) => {
-      evento.clipboardData.setData("text/plain", texto);
-      evento.clipboardData.setData("text/html", html);
-      evento.preventDefault();
-    };
-    document.addEventListener("copy", escrever, { once: true });
     try { return document.execCommand("copy"); }
     finally {
-      document.removeEventListener("copy", escrever);
       campo.remove();
       foco?.focus({ preventScroll: true });
     }
   }
 
-  async function copiarResposta(botao) {
+  function textoDaTabela(tabela) {
+    return Array.from(tabela.rows, (linha) =>
+      Array.from(linha.cells, (celula) =>
+        celula.textContent.replace(/\s+/g, " ").trim().replaceAll("|", "\\|")
+      ).join(" | ")
+    ).join("\n");
+  }
+
+  function quantidadeDeLinhas(tabela) {
+    return Array.from(tabela.tBodies).reduce((total, corpo) => total + corpo.rows.length, 0);
+  }
+
+  function textoDaResposta(botao) {
     const resposta = botao.closest(".resposta-chat");
     const conteudo = resposta.querySelector("[data-copiar-conteudo]").cloneNode(true);
     const conclusao = resposta.querySelector(".tarefa-conclusao");
     if (conclusao && !conclusao.querySelector(".tarefa-carregando")) conteudo.append(conclusao.cloneNode(true));
-    conteudo.querySelectorAll("form, button, link, svg").forEach((el) => el.remove());
+    conteudo.querySelectorAll("form, button, link, svg, [data-estado-copia]").forEach((el) => el.remove());
     for (const detalhe of conteudo.querySelectorAll("details")) {
       const secao = document.createElement("section");
       secao.append(...detalhe.childNodes);
@@ -637,44 +642,40 @@
     for (const rolagem of conteudo.querySelectorAll(".tabela-rolagem, .conclusao-tabela")) {
       rolagem.replaceWith(...rolagem.childNodes);
     }
-    const html = conteudo.innerHTML;
-    let totalLinhas = 0;
     for (const tabela of conteudo.querySelectorAll("table")) {
-      totalLinhas += Array.from(tabela.tBodies).reduce((n, corpo) => n + corpo.rows.length, 0);
-      const linhas = Array.from(tabela.rows, (linha) => Array.from(linha.cells, (c) => {
-        const valor = c.textContent.trim();
-        return /[\t\r\n"]/.test(valor) ? '"' + valor.replaceAll('"', '""') + '"' : valor;
-      }).join("\t"));
       const textoTabela = document.createElement("pre");
-      textoTabela.textContent = linhas.join("\n");
+      textoTabela.textContent = textoDaTabela(tabela);
       tabela.replaceWith(textoTabela);
     }
     conteudo.querySelectorAll("br").forEach((el) => el.replaceWith("\n"));
-    const texto = Array.from(conteudo.querySelectorAll("p,h1,h2,h3,h4,dt,dd,summary,li,pre"),
+    return Array.from(conteudo.querySelectorAll("p,h1,h2,h3,h4,dt,dd,summary,li,pre"),
       (el) => el.textContent.trim()).filter(Boolean).join("\n\n");
+  }
+
+  async function copiar(botao) {
+    const tabela = botao.closest("[data-tabela-copiavel]")?.querySelector("table");
+    const texto = tabela ? textoDaTabela(tabela) : textoDaResposta(botao);
+    const titulo = botao.getAttribute("aria-label");
     let copiado = false;
     try {
-      if (navigator.clipboard && window.ClipboardItem) {
-        await navigator.clipboard.write([new ClipboardItem({
-          "text/html": new Blob([html], { type: "text/html" }),
-          "text/plain": new Blob([texto], { type: "text/plain" }),
-        })]);
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(texto);
         copiado = true;
       }
-    } catch (_) { /* HTTP interno e navegadores sem ClipboardItem usam o evento de cópia. */ }
+    } catch (_) { /* HTTP interno e navegadores sem acesso à área de transferência usam a seleção. */ }
     if (!copiado) {
-      try { copiado = copiarTexto(texto, html); } catch (_) { /* permissão negada */ }
+      try { copiado = copiarTexto(texto); } catch (_) { /* permissão negada */ }
     }
-    const feedback = !copiado ? "Cópia indisponível" : totalLinhas ? `Copiadas ${totalLinhas} linhas da tabela` : "Resposta copiada";
+    const feedback = !copiado ? "Cópia indisponível" : tabela ? `Tabela copiada (${quantidadeDeLinhas(tabela)} linhas de dados)` : "Resposta copiada";
     botao.title = feedback;
     botao.classList.toggle("copiado", copiado);
-    resposta.querySelector("[data-estado-copia]").textContent = feedback;
-    setTimeout(() => { botao.title = "Copiar resposta"; botao.classList.remove("copiado"); }, 1600);
+    botao.closest(".acoes-resposta").querySelector("[data-estado-copia]").textContent = feedback;
+    setTimeout(() => { botao.title = titulo; botao.classList.remove("copiado"); }, 1600);
   }
 
   document.addEventListener("click", (e) => {
-    const botao = e.target.closest("[data-copiar-resposta]");
-    if (botao) copiarResposta(botao);
+    const botao = e.target.closest("[data-copiar-resposta], [data-copiar-tabela]");
+    if (botao) copiar(botao);
   });
 
   // Captura: roda antes do htmx ler o formulário.
