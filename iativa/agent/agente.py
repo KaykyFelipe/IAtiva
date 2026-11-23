@@ -590,7 +590,9 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
     receita_d, receita_id = (None, None)
     fila_receita, passos_verificados = [], []
     texto_receita = aprendizado_receita.com_contexto(texto, entrada.historico)
-    if not observacoes and not ac.trilha:
+    retomada_transitoria = (ac.registro is not None
+                            and ac.registro.motivo in {f"continua: {situacao}" for situacao in TRANSITORIAS})
+    if (not observacoes or retomada_transitoria) and not ac.trilha:
         try:
             if len(ac.contrato) > 1:
                 fila_receita, receita_id = aprendizado_receita.composta_para(texto_receita, ac.contrato, objetivos)
@@ -612,14 +614,17 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
         fontes = entrada.planejamento.get("analise", {}).get("fontes_indicadas", [])
         andamento.avisar("Decidindo o que fazer" if not observacoes else
                          "Ajustando o caminho: " + observacoes[-1].detalhe[:110])
+        passo_programado = False
         try:
             if fontes and not feitas and entrada.planejamento["analise"]["natureza"] == "dados":
                 d = Decisao("Vou conferir as fontes indicadas para concluir o pedido.", "aprender_tabela", "",
                             (), " ".join(fontes), "", False, ())
             elif fila_receita:
+                passo_programado = True
                 d = fila_receita.pop(0)
                 andamento.avisar("Executando um passo da receita já verificada")
             elif receita_d is not None and not feitas:
+                passo_programado = True
                 d = receita_d
                 andamento.avisar("Usando a receita já verificada para este tipo de pedido")
             else:
@@ -790,7 +795,14 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
             # M96: o tempo total acabou DENTRO da ação (ex.: aprendendo uma tabela nova). Antes virava erro 500 e a
             # mensagem sumia; agora segue o caminho do prazo: continua em segundo plano e responde no chat.
             ac.anotar(d.acao, TEMPO_ESGOTADO)
-            causa = "prazo"
+            causa = TEMPO_ESGOTADO if passo_programado else "prazo"
+            break
+        if passo_programado and saida.observacao and saida.observacao.situacao in TRANSITORIAS:
+            # Reexecuta o plano conhecido no worker. Um passo posterior bem-sucedido não deve ocultar a falha.
+            causa = saida.observacao.situacao
+            ac.anotar(d.acao, causa)
+            observacoes.append(saida.observacao)
+            andamento.avisar("A consulta conhecida encontrou uma falha temporária; vou retomá-la")
             break
         outra = None if (reduz or comparada) else _busca_na_descricao(d)
         if outra is not None and getattr(saida.resultado, 'ok', False) and not getattr(saida.resultado, 'linhas', None):
@@ -1024,6 +1036,9 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
                     if resumo is not None:
                         detalhes = detalhe_eventos_separados(user, c, separadas, objetivos, defs, resumo.escopo)
                         n_adm, n_des = resumo.linhas[-1][1:]
+                        mostrar_filiais = separadas[0]["detalhar_filiais"]
+                        if not mostrar_filiais:
+                            resumo.linhas = resumo.linhas[-1:]
                         introducao = (f"Em {separadas[0]['ano_evento']}, foram {n_adm} admissões e "
                                       f"{n_des} desligamentos nas filiais consultadas.")
                         saida.texto = ""
@@ -1031,7 +1046,7 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
                         if detalhes is None:
                             introducao += " Os detalhes nominais ficaram indisponíveis para esta consulta."
                         resumo.premissas = ["Admissões pela data de admissão. Desligamentos pela data de desligamento."]
-                        blocos.append(Bloco("Resumo por filial", resumo))
+                        blocos.append(Bloco("Resumo por filial" if mostrar_filiais else "Resumo do período", resumo))
                         saida.resultado = Diagnostico(blocos, resumo=introducao)
                         saida.ficha["tipo"] = "calculo_resultado"
                         saida.solicitacao = None  # repetir um único evento não refaz os dois

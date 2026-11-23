@@ -4,6 +4,11 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **Etapa 7 aprovada em 2026-11-16 por Diego; em andamento.** Feito: roteiro do piloto (`docs/piloto/ROTEIRO.md`) e auditoria de não armazenamento (`manage.py auditar_armazenamento`). Falta: usuários do Financeiro, conferência dos números com relatórios do Protheus, avaliação da interpretação e latência. Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Reexecução de consultas conhecidas após falha temporária
+
+- O incidente 31 começou com tempo esgotado na consulta de admissões e foi resolvido na versão ativa em novo ensaio. Agora o atendimento retoma a receita no worker quando um passo conhecido encontra falha temporária, antes de seguir para outras ações.
+- Variações da pergunta anual de RH com “demitidas”, “desligadas” e “pessoas” compõem as duas contagens pelas datas de cada evento com as consultas já aprovadas.
+
 ## Leitura dos resultados no chat
 
 - Tabelas de consulta têm altura máxima, cabeçalho fixo e rolagem própria. Ao atualizar a conversa em uso, o chat preserva a posição de leitura, a rolagem das tabelas e os detalhes abertos. O estilo acompanha a atualização da conversa para alcançar abas já abertas.

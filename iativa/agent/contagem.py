@@ -300,20 +300,31 @@ def _trocar_assunto(conversa, texto):
 
 
 _SEPARADAS = re.compile(
-    r"quantos funcionarios foram admitidos e desligados separadamente,? por filial,? em ([12]\d{3})[.?!]?")
+    r"quantos funcionarios foram admitidos e desligados separadamente"
+    r"(?P<filiais>, por filial)?, em (?P<ano>[12]\d{3})[.?!]?")
 _EVENTOS_SEPARADOS = (("RA_ADMISSA", "Admitidos"), ("RA_DEMISSA", "Desligados"))
 
-
-_ANUAL_RH = re.compile(r"quantos funcionarios foram admitidos e desligados no mesmo ano,? por filial,? em "
-                        r"([12]\d{3})[.?!]?")
+_PEDIDO_RH = re.compile(
+    r"quant[oa]s (?:funcionari[oa]s|pessoas|colaborador(?:es|as)) (?:foram )?"
+    r"admitid[oa]s e (?:desligad|demitid)[oa]s(?: (?:no mesmo ano|separadamente))?"
+    r"(?P<antes>,? por filia(?:l|is))?,? em (?P<ano>[12]\d{3})(?P<depois>,? por filia(?:l|is))?[.?!]?")
 _SO_EVENTO = re.compile(r"(?:quero )?(?:so|somente|apenas) (?:o )?(?:valor|total|numero|quantidade) "
                        r"(?:dos |de )?(admitidos|desligados|demitidos)[.?!]?")
 
 
+def _pedido_rh(texto):
+    m = _PEDIDO_RH.fullmatch(_norm(texto).strip())
+    if not m:
+        return "", ""
+    filial = ", por filial" if m["antes"] or m["depois"] else ""
+    return f"Quantos funcionários foram admitidos e desligados separadamente{filial}, em {m['ano']}?", m["ano"]
+
+
 def contextualizar_separadas(conversa, user, texto, mensagem_id=None):
     atual = _norm(texto).strip()
-    if _ANUAL_RH.fullmatch(atual):
-        return re.sub("no mesmo ano", "separadamente", texto, flags=re.I)
+    normalizado, _ = _pedido_rh(texto)
+    if normalizado:
+        return normalizado
     so_evento = _SO_EVENTO.fullmatch(atual)
     curta = r"admitidos e desligados separadamente[.?!]?"
     if not so_evento and not re.fullmatch(curta, atual):
@@ -326,12 +337,11 @@ def contextualizar_separadas(conversa, user, texto, mensagem_id=None):
         normalizado = _norm(anterior).strip()
         if re.fullmatch(curta, normalizado) or _SO_EVENTO.fullmatch(normalizado):
             continue
-        fonte = _ANUAL_RH.fullmatch(normalizado) or _SEPARADAS.fullmatch(normalizado)
-        if fonte and so_evento:
-            return f"Somente o total de {so_evento[1]} em {fonte[1]} (filiais autorizadas)"
-        if fonte:
-            return (re.sub("no mesmo ano", "separadamente", anterior, flags=re.I)
-                    if _ANUAL_RH.fullmatch(normalizado) else anterior)
+        pedido, ano = _pedido_rh(anterior)
+        if pedido and so_evento:
+            return f"Somente o total de {so_evento[1]} em {ano} (filiais autorizadas)"
+        if pedido:
+            return pedido
         break
     return texto
 
@@ -342,12 +352,12 @@ def entregas_separadas(texto):
                          r"\(filiais autorizadas\)", _norm(texto).strip())
     if not m and not unico:
         return []
-    ano = m[1] if m else unico[2]
+    ano = m["ano"] if m else unico[2]
     eventos = _EVENTOS_SEPARADOS if m else (_EVENTOS_SEPARADOS[0 if unico[1] == "admitidos" else 1],)
     periodo = f"01/01/{ano}..31/12/{ano}"
     return [{"descricao": f"{nome} por filial em {ano}",
              "tipo": "calculo", "metrica": "contagem", "campo_evento": campo, "periodo_evento": periodo,
-             "ano_evento": ano}
+             "ano_evento": ano, "detalhar_filiais": bool(m and m["filiais"])}
             for campo, nome in eventos]
 
 

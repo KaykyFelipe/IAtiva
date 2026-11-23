@@ -227,8 +227,9 @@ def test_receita_composta_reusa_dois_passos_e_revalida_o_acesso(django_user_mode
 
 
 @pytest.mark.django_db
-@pytest.mark.parametrize("pedido", [PEDIDO, "Admitidos e desligados separadamente"])
-def test_separadamente_herda_ano_e_entrega_duas_contagens(base, erp_sintetico, pedido):
+@pytest.mark.parametrize("pedido", [PEDIDO, "Admitidos e desligados separadamente",
+                                         "Quantas pessoas foram admitidas e demitidas em 2026?"])
+def test_separadamente_herda_ano_e_entrega_duas_contagens(base, erp_sintetico, pedido, settings, monkeypatch):
     from django.http import QueryDict
     from iativa.agent import aprendizado
 
@@ -248,7 +249,9 @@ def test_separadamente_herda_ano_e_entrega_duas_contagens(base, erp_sintetico, p
                                    'resumo': '', 'memorias': [], 'entregas': QUATRO}])
     msg, res = conversas.enviar(u, c, pedido, p)
     assert p.chamadas == 0 and res is not None and res.consolidado, msg.texto
-    assert [b.titulo for b in res.blocos] == ["Detalhes dos vínculos", "Resumo por filial"]
+    por_filial = not pedido.startswith("Quantas")
+    titulo = "Resumo por filial" if por_filial else "Resumo do período"
+    assert [b.titulo for b in res.blocos] == ["Detalhes dos vínculos", titulo]
     detalhes, resumo = [b.resultado for b in res.blocos]
     assert detalhes.colunas == ["Nome", "Filial", "Função", "Data de admissão", "Data de desligamento"]
     assert len(detalhes.linhas) == 6  # os vínculos que estão nas duas consultas aparecem uma vez
@@ -257,8 +260,11 @@ def test_separadamente_herda_ano_e_entrega_duas_contagens(base, erp_sintetico, p
     assert restaurar(u, msg.resultado).blocos[1].resultado.linhas[-1] == ["Total", "5", "4"]
     assert resumo.colunas == ["Filial", "Admitidos", "Desligados"]
     assert resumo.linhas[-1] == ["Total", "5", "4"]
-    assert [rotulo('01'), "3", "3"] in resumo.linhas
-    assert [rotulo('02'), "2", "1"] in resumo.linhas
+    if por_filial:
+        assert [rotulo('01'), "3", "3"] in resumo.linhas
+        assert [rotulo('02'), "2", "1"] in resumo.linhas
+    else:
+        assert resumo.linhas == [["Total", "5", "4"]]
     msg_direta, direta = conversas.enviar(u, c, "Quero apenas o valor dos admitidos", FakeProvider([]))
     assert msg_direta.ficha["formato"] == "direto" and direta.curta == "5 admitidos"
     assert not c.objetivos.filter(situacao=SituacaoObjetivo.MANUTENCAO).exists()
@@ -266,3 +272,31 @@ def test_separadamente_herda_ano_e_entrega_duas_contagens(base, erp_sintetico, p
     nota = NotaAgente.objects.get(criterios__receita__chave_composta__isnull=False)
     assert all(["periodo-analise", "{ANO}-01-01..{ANO}-12-31"] in passo["parametros"]
                for passo in nota.criterios["receita"]["passos"])
+    if pedido == PEDIDO:
+        from iativa.agent import agente, objetivos
+        from iativa.manutencao.models import Incidente
+
+        settings.IATIVA_AGENTE_CICLO = {"passos": 5, "continuacoes": 2, "espera_s": 0}
+        original = agente._agir
+        tentativas = []
+
+        def agir(*args, **kwargs):
+            decisao = args[2]
+            tentativas.append(decisao.atende)
+            if len(tentativas) == 1:
+                return agente.Saida("", observacao=agente.Observacao(
+                    decisao.acao, agente.TEMPO_ESGOTADO, "tempo limite sintético"))
+            return original(*args, **kwargs)
+
+        monkeypatch.setattr(agente, "_agir", agir)
+        modelo_web = FakeProvider([])
+        _, pendente = conversas.enviar(u, c, PEDIDO, modelo_web)
+        assert pendente is None and modelo_web.chamadas == 0
+        assert c.objetivos.latest("pk").situacao == SituacaoObjetivo.CONTINUAR
+        modelo_worker = FakeProvider([])
+        monkeypatch.setattr(agente, "obter_provedor", lambda **_: modelo_worker)
+        assert objetivos.continuar_proximo()
+        assert c.objetivos.latest("pk").situacao == SituacaoObjetivo.CUMPRIDO
+        assert modelo_worker.chamadas == 0 and tentativas == [(0,), (0,), (1,)]
+        assert NotaAgente.objects.filter(pk=nota.pk, ativo=True).exists()
+        assert not Incidente.objects.exists()
