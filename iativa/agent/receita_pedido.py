@@ -149,13 +149,16 @@ def passo_verificado(d, saida, indices):
     s = saida.solicitacao or getattr(saida.resultado, "solicitacao", None)
     res = saida.resultado
     if (d.acao not in (*_ACOES, "criar_consulta") or not s or not indices or not getattr(res, "ok", False) or getattr(res, "truncado", False)
-            or getattr(res, "consolidado", False) or not getattr(OBJETIVOS.get(s.objetivo), "modelo_id", None)
+            or getattr(res, "consolidado", False) or not OBJETIVOS[s.objetivo].modelo_id
             or (getattr(res, "escopo", {}) or {}).get("fontes_transversais")):
         return None
     valores = _valores(s.usuario, s)
     # Só parâmetros técnicos reutilizáveis. Filtros pessoais e parâmetros não reconhecidos não viram receita.
     if set(valores) - {"periodo-analise", "agregacao", "filial-analise"}:
         return None
+    periodo = valores.get("periodo-analise")
+    if isinstance(periodo, dict):
+        valores["periodo-analise"] = f"{periodo['inicio']}..{periodo['fim']}"
     return {"objetivo": s.objetivo, "parametros": sorted(valores.items()), "atende": sorted(indices)}
 
 

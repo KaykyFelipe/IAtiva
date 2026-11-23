@@ -223,3 +223,31 @@ def test_receita_composta_reusa_dois_passos_e_revalida_o_acesso(django_user_mode
     assert [dict(d.parametros)["periodo-analise"] for d in fila] == ["01/01/2025..31/12/2025"] * 2
     assert receita_pedido.composta_para(nova, contrato, permitidos[:1]) == ([], None)
     assert receita_pedido.composta_para(nova.replace("separadamente", "no mesmo ano"), contrato, permitidos) == ([], None)
+
+
+@pytest.mark.django_db
+def test_separadamente_herda_ano_e_entrega_duas_contagens(base, erp_sintetico):
+    from django.http import QueryDict
+    from iativa.agent import aprendizado
+
+    _erp(erp_sintetico)
+    u = base["u"]
+    q = QueryDict(mutable=True)
+    q.update({"nome": "Admissões sem excluir desligados", "campo_data": "RA_ADMISSA"})
+    q.setlist("colunas", ["RA_MAT", "RA_ADMISSA", "RA_DEMISSA"])
+    q.setlist("setores", [str(base["cob"].pk)])
+    aprendizado.aprovar(u, aprendizado.salvar_proposta(u, "SRA", q))
+    c = conversas.nova_individual(u)
+    c.mensagens.create(papel="usuario", texto=PEDIDO, autor=u)
+    p = FakeProvider([], analises=[{'natureza': 'dados', 'setores': [base['cob'].codigo], 'confianca': 1,
+                                   'resumo': '', 'memorias': [], 'entregas': QUATRO}])
+    msg, res = conversas.enviar(u, c, "Admitidos e desligados separadamente", p)
+    assert p.chamadas == 0 and res is not None and res.consolidado, msg.texto
+    assert [b.titulo for b in res.blocos] == ["Admitidos por filial em 2026", "Desligados por filial em 2026"]
+    contagens = [{f: int(q) for f, q in b.resultado.linhas} for b in res.blocos]
+    assert contagens == [{rotulo('01'): 3, rotulo('02'): 2}, {rotulo('01'): 3, rotulo('02'): 1}]
+    assert not c.objetivos.filter(situacao=SituacaoObjetivo.MANUTENCAO).exists()
+    from iativa.agent.models import NotaAgente
+    nota = NotaAgente.objects.get(criterios__receita__chave_composta__isnull=False)
+    assert all(["periodo-analise", "{ANO}-01-01..{ANO}-12-31"] in passo["parametros"]
+               for passo in nota.criterios["receita"]["passos"])

@@ -297,14 +297,16 @@ def conversar(user, c, texto: str, provedor=None, mensagem_usuario_id=None, inte
         return Saida("Seu usuário ainda não tem acesso a consultas. Fale com o administrador.")
 
     from . import planejamento
-    from .contagem import contextualizar
+    from .contagem import contextualizar, contextualizar_separadas
     texto, fontes = _pedido_com_fontes(user, c, texto, mensagem_usuario_id)
     if not fontes:
         from .comparacao import contextualizar_ano
         com_ano = contextualizar_ano(c, texto, mensagem_usuario_id)
         if acomp is not None and com_ano != texto:
             acomp.texto = com_ano
-        texto = contextualizar(user, c, com_ano)
+        texto = contextualizar(user, c, contextualizar_separadas(c, user, com_ano, mensagem_usuario_id))
+        if acomp is not None:
+            acomp.texto = texto
     try:
         provedor = provedor or obter_provedor(usuario=user)
         analise = planejamento.preparar(user, c, texto, provedor, _historico(c, mensagem_usuario_id))
@@ -596,6 +598,9 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
                 receita_d, receita_id = aprendizado_receita.receita_para(texto, objetivos)
         except Exception:
             receita_d, receita_id = None, None
+    from .contagem import consultas_separadas
+    if not fila_receita and not ac.trilha:
+        fila_receita = consultas_separadas(texto, objetivos)
     for _ in range(max(1, passos)):
         if prazo.esgotado():
             causa = "prazo"
@@ -962,7 +967,12 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
                 and (ac.entregue or ac.cumprido(ev))):
             # M109: a resposta está montada, mas ainda não foi enviada: a própria IA confere se atende ao pedido.
             from . import revisao
-            falta_rev = revisao.revisar(user, provedor, texto, ac.contrato, saida)
+            from .contagem import entregas_separadas
+            separadas = entregas_separadas(texto)
+            titulos = [getattr(r, 'titulo_entrega', '') for r in _blocos(saida.resultado)]
+            comprovadas = (separadas and ac.contrato == separadas and not ac.pendentes()
+                           and sorted(titulos) == sorted(e['descricao'] for e in separadas))
+            falta_rev = "" if comprovadas else revisao.revisar(user, provedor, texto, ac.contrato, saida)
             if falta_rev == revisao.INDISPONIVEL:
                 ac.anotar("revisao", "modelo_falhou")
                 ac.reprovada = ""

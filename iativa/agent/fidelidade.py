@@ -61,6 +61,9 @@ def _e_contagem(e: dict) -> bool:
 
 def ajustar(texto: str, entregas: list, user=None) -> list:
     """Contrato fiel ao pedido (regras no topo do módulo). Devolve uma lista nova; não altera a recebida."""
+    from .contagem import entregas_separadas
+    if separadas := entregas_separadas(texto):
+        return separadas
     itens = [dict(e) for e in entregas or [] if isinstance(e, dict)]
     if not itens:
         return itens

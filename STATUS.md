@@ -4,6 +4,10 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **Etapa 7 aprovada em 2026-11-16 por Diego; em andamento.** Feito: roteiro do piloto (`docs/piloto/ROTEIRO.md`) e auditoria de não armazenamento (`manage.py auditar_armazenamento`). Falta: usuários do Financeiro, conferência dos números com relatórios do Protheus, avaliação da interpretação e latência. Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Admissões e desligamentos em separado
+
+- Uma resposta curta de separação conserva o ano e a divisão por filial do pedido de interseção no mesmo chat. Com duas consultas aprovadas, o atendimento computa cada evento com a sua data de referência e verifica as duas entregas antes de publicar.
+
 ## Manutenção com ensaio contextual e receitas com várias entregas
 
 - Antes de editar, o executor ensaia o pedido individual na versão ativa com as permissões do autor e as mensagens anteriores ao pedido. A conversa é descartada pela transação. Uma falha de ambiente interrompe o ciclo de edição e um pedido já atendido volta ao chat sem publicação.

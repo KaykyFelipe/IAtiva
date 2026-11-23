@@ -215,6 +215,11 @@ def conferir(analise, decisao, saida, texto=""):
     res = saida.resultado
     faltantes = []
     for item in analise.get('entregas', []):
+        if item.get('campo_evento'):
+            from .contagem import comprova_separada
+            if not comprova_separada(item, saida):
+                faltantes.append(item['descricao'])
+            continue
         if item.get('evento_mensal'):
             from .comparacao import comprova_evento_mensal
             if not comprova_evento_mensal(item, saida):
@@ -249,7 +254,7 @@ def divergencia(item, decisao, ano_civil=""):
     """M74 (etapa 2): a entrega pede um período ou uma filial; o passo usou outro? Devolve o motivo ou ''.
     Vale para qualquer consulta: "admitidos em agosto" não é cumprida por uma consulta de julho, nem
     "faturamento de Cuiabá" por todas as filiais. A comparação tem os próprios períodos (não entra aqui)."""
-    if item.get('comparacao'):
+    if item.get('comparacao') or item.get('campo_evento'):
         return ''
     from datetime import date
 

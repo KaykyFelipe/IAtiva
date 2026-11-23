@@ -299,6 +299,79 @@ def _trocar_assunto(conversa, texto):
     return re.sub(rf'\b{re.escape(alvo)}\b', original, anterior, count=1)
 
 
+_SEPARADAS = re.compile(
+    r"quantos funcionarios foram admitidos e desligados separadamente,? por filial,? em ([12]\d{3})[.?!]?")
+_EVENTOS_SEPARADOS = (("RA_ADMISSA", "Admitidos"), ("RA_DEMISSA", "Desligados"))
+
+
+def contextualizar_separadas(conversa, user, texto, mensagem_id=None):
+    if not re.fullmatch(r"admitidos e desligados separadamente[.?!]?", _norm(texto).strip()):
+        return texto
+    msgs = conversa.mensagens.filter(papel="usuario", autor=user)
+    if mensagem_id is not None:
+        msgs = msgs.filter(pk__lt=mensagem_id)
+    anterior = msgs.order_by("-pk").values_list("texto", flat=True).first() or ""
+    # Neste esclarecimento, o usuário só alterou a combinação dos dois eventos.
+    if re.fullmatch(r"quantos funcionarios foram admitidos e desligados no mesmo ano,? por filial,? em "
+                    r"[12]\d{3}[.?!]?", _norm(anterior).strip()):
+        return re.sub("no mesmo ano", "separadamente", anterior, flags=re.I)
+    return texto
+
+
+def entregas_separadas(texto):
+    m = _SEPARADAS.fullmatch(_norm(texto).strip())
+    if not m:
+        return []
+    periodo = f"01/01/{m[1]}..31/12/{m[1]}"
+    return [{"descricao": f"{nome} por filial em {m[1]}",
+             "tipo": "calculo", "metrica": "contagem", "campo_evento": campo, "periodo_evento": periodo,
+             "ano_evento": m[1]}
+            for campo, nome in _EVENTOS_SEPARADOS]
+
+
+def consultas_separadas(texto, objetivos):
+    from .decisao import Decisao
+    from .models import ConsultaModelo
+    itens = entregas_separadas(texto)
+    if not itens:
+        return []
+    permitidos = [o.modelo_id for o in objetivos if o.modelo_id and o.tabelas == ("SRA",)]
+    modelos = list(ConsultaModelo.objects.filter(pk__in=permitidos, situacao="aprovada").order_by("pk"))
+    saida = []
+    for i, item in enumerate(itens):
+        alvo = next((m for m in modelos if m.spec.get("campo_data") == item["campo_evento"]
+                     and not m.spec.get("filtros_fixos")), None)
+        if alvo is None:
+            return []
+        params = (("filial-analise", "TODAS"), ("periodo-analise", item["periodo_evento"]), ("agregacao", "contagem:*"))
+        saida.append(Decisao("", "preparar_consulta", alvo.codigo, params, "", "", False, (),
+                            entrega="calculo", atende=(i,)))
+    return saida
+
+
+def comprova_separada(item, saida):
+    from iativa.query.servico import _valores
+    from iativa.chat.estados import TransicaoInvalida
+    from .models import ConsultaModelo
+
+    r = saida.resultado
+    s = saida.solicitacao or getattr(r, "solicitacao", None)
+    if not s or not getattr(r, "ok", False) or r.truncado or r.situacao not in ("sucesso", "vazio"):
+        return False
+    cm = ConsultaModelo.objects.filter(codigo=s.objetivo, tabela="SRA", situacao="aprovada").first()
+    if not cm or cm.spec.get("campo_data") != item["campo_evento"] or cm.spec.get("filtros_fixos"):
+        return False
+    try:
+        valores = _valores(s.usuario, s)
+    except (KeyError, TransicaoInvalida):
+        return False
+    ano = item["ano_evento"]
+    return (set(valores) == {"filial-analise", "periodo-analise", "agregacao"}
+            and valores["filial-analise"] == "TODAS" and valores["agregacao"] == "contagem:*"
+            and valores["periodo-analise"] == {"inicio": f"{ano}-01-01", "fim": f"{ano}-12-31"}
+            and any(m.funcao == "COUNT" for m in getattr(r.totais, "medidas", [])))
+
+
 def contextualizar(user, conversa, texto):
     """"E no mês passado?" depois de uma contagem: a mesma contagem, no novo período.
     "E demitidos?" depois de "Quantos funcionários foram admitidos em agosto?": a mesma pergunta, com o
