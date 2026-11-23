@@ -4,6 +4,11 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **Etapa 7 aprovada em 2026-11-16 por Diego; em andamento.** Feito: roteiro do piloto (`docs/piloto/ROTEIRO.md`) e auditoria de não armazenamento (`manage.py auditar_armazenamento`). Falta: usuários do Financeiro, conferência dos números com relatórios do Protheus, avaliação da interpretação e latência. Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M128 — contagem de dois meses na mesma tabela (2026-11-23)
+
+- "Quantos funcionários foram desligados em setembro e outubro, por filial?" voltava um total único dos dois meses juntos, sem dizer de qual mês era cada valor. A tabela de dois meses (só faturamento/total) não reconhecia perguntas que começam com "quantos/quantas".
+- Agora a contagem usa a mesma consulta nos dois meses e mostra uma tabela com a filial (pelo nome, não pelo código) e uma coluna por mês, com o total de cada mês no rodapé.
+
 ## Mudança M127 — contagem feita no banco é resposta, por qualquer caminho (2026-11-23)
 
 - "Quantos funcionários ativos temos hoje por filial?" ficou em "Ainda falta…".
