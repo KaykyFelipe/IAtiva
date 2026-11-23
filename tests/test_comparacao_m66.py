@@ -34,6 +34,38 @@ def test_periodos_gerais_sem_exigir_faturamento():
     assert [x for _, _, x in comparacao.periodos('compare as admissões de julho e agosto de 2026')] == ['07/2026', '08/2026']
     assert [x for _, _, x in comparacao.periodos('variação de 2025 versus 2026')] == ['2025', '2026']
     assert comparacao.periodos('quanto faturamos em julho?') == []
+    assert comparacao.periodos('Qual o faturamento e a quantidade de notas de setembro e outubro?') == []
+    assert comparacao.periodos('Qual o faturamento de setembro e outubro e liste os desligados?') == []
+
+
+@pytest.mark.parametrize('agrupamento', ['', ' por filial'])
+def test_faturamento_de_dois_meses_entrega_uma_tabela_com_os_meses_do_pedido(faturamento, agrupamento):
+    b = faturamento
+    with sqlite3.connect(b['erp']) as conn:
+        conn.executemany('INSERT INTO SD2010 VALUES (?,?,?,?,?,?,?)', [
+            ('01', '20260801', '501', '5102', 9000, 1, ' '),
+            ('01', '20261001', '501', '5102', 2500, 1, ' '),
+        ])
+    cm = _consulta_sd2(b, ['D2_EMISSAO', 'D2_TOTAL'])
+    p = FakeProvider([_d(acao='preparar_consulta', objetivo=cm.codigo, entrega='calculo', parametros=[
+        {'codigo': 'filial-analise', 'valor': '01'},
+        {'codigo': 'periodo-analise', 'valor': '01/08/2026..31/08/2026'},
+        {'codigo': 'agregacao', 'valor': 'soma:D2_TOTAL' + agrupamento},
+    ])], analises=[{'natureza': 'dados', 'setores': [b['cob'].codigo], 'confianca': 1,
+                   'resumo': '', 'memorias': [], 'entregas': [
+                       {'descricao': 'Faturamento de agosto de 2026', 'tipo': 'calculo', 'metrica': 'soma'},
+                       {'descricao': 'Faturamento de setembro de 2026', 'tipo': 'calculo', 'metrica': 'soma'},
+                   ]}])
+    msg, r = conversas.enviar(b['ana'], conversas.nova_individual(b['ana']),
+                             'Qual o faturamento de setembro e outubro de 2026' + agrupamento + '?', p)
+    assert r is not None and r.ok and r.colunas[1:] == ['09/2026', '10/2026'], msg.texto
+    assert r.linhas[0][1:] == ['R$ 8.431,27', 'R$ 2.500,00']
+    if agrupamento:
+        assert r.colunas[0] == 'Filial' and r.linhas[-1] == ['Total', *r.linhas[0][1:]]
+    assert p.chamadas == 1 and not Incidente.objects.exists()
+    from iativa.chat.resultados import restaurar
+    salvo = restaurar(b['ana'], msg.resultado)
+    assert salvo.colunas == r.colunas and salvo.linhas == r.linhas
 
 
 def test_compara_por_outro_agrupamento_sem_forcar_filial(faturamento):

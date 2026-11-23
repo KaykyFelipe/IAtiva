@@ -22,6 +22,16 @@ from .periodo import MESES, _norm
 
 _COMPARA = re.compile(r'\b(compar\w*|variac\w*|versus|vs\.?|em relacao a|frente a|contra)\b')
 
+_MES_NOME = r'\b(' + '|'.join(MESES) + r')\b(?:\s+(?:de\s+)?(20\d\d))?'
+_MES_PEDIDO = r'(?:' + '|'.join(MESES) + r')\b(?:\s+(?:de\s+)?20\d\d)?'
+_SERIE_MENSAL = re.compile(
+    r'^(?:(?:qual(?: foi| e)? |quais(?: foram| sao)? |(?:me )?(?:mostre|diga|traga)\s+)?'
+    r'(?:o |os |a |as )?(?:faturamento|receita|vendas|total|quantidade|soma|media|contagem)\b'
+    r'(?:(?!\se\s)[^,;?!])*?\s+(?:de|em|nos meses de) |quanto (?:faturamos|vendemos|recebemos) (?:em|de) )'
+    + _MES_PEDIDO + r'\s+e\s+(?:(?:de|em) )?' + _MES_PEDIDO
+    + r'(?:,?\s+(?:por [\w.-]+|(?:em|de|das|considerando) todas as filiais))?\s*[?!.]?$'
+)
+
 
 _RANKING = re.compile(r'\b(\d{1,3})\s+clientes?\b[^?;]*?\b(?:cairam|queda|reduziram|diminuiram)\b')
 _MESES_RANKING = re.compile(r'\b(?:de\s+)?(' + '|'.join(MESES) + r')\b[^?;]*?\b(?:para|a)\s+(' + '|'.join(MESES) + r')\b')
@@ -66,7 +76,7 @@ def _oracao(texto):
         return re.split(r'[;?]', t, maxsplit=1)[0]
     m = _COMPARA.search(t)
     if not m:
-        return ''
+        return t.strip() if _SERIE_MENSAL.fullmatch(t.strip()) else ''
     return re.split(r'\s+e\s+(?=(?:me\s+)?(?:liste|listar|mostre|mostrar|quais|quem|quantos|quantas|traga|diga)\b)'
                     r'|[.;?]', t[m.start():])[0]
 
@@ -87,7 +97,7 @@ def periodos(texto):
     if not t:
         return []
     hoje = timezone.localdate()
-    meses = list(re.finditer(r'\b(' + '|'.join(MESES) + r')\b(?:\s+de)?(?:\s+(20\d\d))?', t))
+    meses = list(re.finditer(_MES_NOME, t))
     if len(meses) == 2:
         ano_padrao = next((int(m.group(2)) for m in meses if m.group(2)), hoje.year)
         return [_mes(int(m.group(2) or ano_padrao), MESES[m.group(1)]) for m in meses]
@@ -207,7 +217,8 @@ def comprova_evento_mensal(item, resposta):
 def planejar(texto, analise):
     if contagens := contagens_mensais(texto):
         return {**analise, 'entregas': contagens}
-    if not periodos(texto):
+    datas = periodos(texto)
+    if not datas:
         return analise
     # Troca só a entrega de cálculo/comparação; as outras perguntas da mensagem continuam (M63).
     # M68: "Faturamento de julho por filial" e "... de agosto" são partes da própria comparação, não entregas
@@ -216,8 +227,13 @@ def planejar(texto, analise):
         return {**analise, 'entregas': [{
             'descricao': 'Ranking de clientes pela maior queda percentual de faturamento entre os dois meses',
             'tipo': 'calculo', 'metrica': 'comparacao', 'comparacao': True}]}
+    if _SERIE_MENSAL.fullmatch(_norm(texto).strip()):
+        primeiro, segundo = (rotulo for _, _, rotulo in datas)
+        return {**analise, 'entregas': [{
+            'descricao': f'Apurar {primeiro} e {segundo} pela mesma consulta e apresentar os valores na mesma tabela',
+            'tipo': 'calculo', 'metrica': 'comparacao', 'comparacao': True}]}
     alvo = assunto(texto)
-    meses = {_norm(r) for _, _, r in periodos(texto)} | {m for m in MESES if re.search(rf'\b{m}\b', _oracao(texto))}
+    meses = {_norm(r) for _, _, r in datas} | {m for m in MESES if re.search(rf'\b{m}\b', _oracao(texto))}
 
     def parte(e):
         d = _norm(e.get('descricao', ''))
@@ -299,6 +315,7 @@ def executar(user, c, d, defs, objetivos, texto, interrompido=None):
     from iativa.query.servico import Resultado, _fmt
 
     datas = periodos(texto)
+    serie = bool(_SERIE_MENSAL.fullmatch(_norm(texto).strip()))
     obj = OBJETIVOS[d.objetivo] if d.objetivo in OBJETIVOS else None
     if len(datas) != 2 or obj is None or not obj.modelo_id or d.objetivo not in {o.codigo for o in objetivos}:
         return None
@@ -360,6 +377,9 @@ def executar(user, c, d, defs, objetivos, texto, interrompido=None):
         y = valor(vb.get(grupo), vazio[1] or grupo not in vb)
         cx = _fmt(x, tipo) if x is not None else 'Sem valor'
         cy = _fmt(y, tipo) if y is not None else 'Sem valor'
+        if serie:
+            linhas.append([grupo, cx, cy])
+            continue
         if x is None or y is None:
             linhas.append([grupo, cx, cy, 'Não calculável', 'Não calculável'])
             continue
@@ -380,6 +400,15 @@ def executar(user, c, d, defs, objetivos, texto, interrompido=None):
                   colunas=[titulo, nomes[0], nomes[1], 'Diferença', 'Variação percentual'],
                   tipos=['texto', tipo, tipo, tipo, 'texto'], linhas=linhas, escopo=a.escopo,
                   medida_calculada='comparacao', premissas=premissas)
+    if serie:
+        r.mensagem = 'Valores apurados com a mesma consulta e os mesmos critérios nos dois meses.'
+        r.colunas = ['Indicador' if titulo == 'Período' else titulo, *nomes]
+        r.tipos = r.tipos[:3]
+        if agreg.lower().startswith(('soma:', 'contagem:')) and titulo != 'Período' and ' por ' in agreg:
+            r.linhas.append(['Total', *[
+                _fmt(sum(valores.values(), Decimal(0)), tipo) if all(v is not None for v in valores.values())
+                else 'Sem valor' for valores in (va, vb)
+            ]])
     if limite:
         r.mensagem = (f'{len(linhas)} cliente(s) com queda, em ordem de maior queda percentual, '
                       f'entre {nomes[0]} e {nomes[1]}.')
