@@ -1,0 +1,9 @@
+.tabela-resultado {
+  max-height: 23rem;
+  max-height: min(23rem, 46vh);
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.tabela-resultado table { border-collapse: separate; border-spacing: 0; }
+.tabela-resultado thead th { position: sticky; top: 0; z-index: 1; }
+.tabela-resultado:focus-visible { outline: 2px solid var(--azul); outline-offset: 2px; }

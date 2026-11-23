@@ -80,14 +80,6 @@ body { font-family: "Segoe UI Variable Text", "Segoe UI", Arial, sans-serif; fon
 .msg .criterios-linha { font-size: 11px; line-height: 1.9; }
 .resultado > p:first-child { font-size: 12px; color: #3c5846; }
 .tabela-rolagem { margin: 13px 0 15px; border-radius: 11px; }
-.tabela-resultado {
-  max-height: min(23rem, 46vh);
-  overflow: auto;
-  overscroll-behavior: contain;
-}
-.tabela-resultado table { border-collapse: separate; border-spacing: 0; }
-.tabela-resultado thead th { position: sticky; top: 0; z-index: 1; }
-.tabela-resultado:focus-visible { outline: 2px solid var(--azul); outline-offset: 2px; }
 table { font-size: 12px; }
 th { font-size: 10px; color: #7e9184; background: #f8faf9; font-weight: 550; }
 th, td { padding: 12px 15px; border-bottom-color: #eaf0ec; }

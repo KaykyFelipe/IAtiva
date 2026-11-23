@@ -181,3 +181,20 @@ def test_migracao_permite_insercao_da_versao_anterior():
     from iativa.core.management.commands.verificar_migracoes import avaliar_operacao
     m = import_module('iativa.chat.migrations.0005_conversationcontext_preservar_historico_and_more')
     assert all(not avaliar_operacao(m, op) for op in m.Migration.operations)
+
+
+def test_sync_renova_estilo_da_tabela_em_aba_aberta(client, funcional, monkeypatch):
+    c = conversas.nova_individual(funcional['u'])
+    _historico(funcional, c)
+    client.force_login(funcional['u'])
+    url = reverse('chat:sincronizar')
+    monkeypatch.setenv('IATIVA_VERSAO', 'versao-antiga')
+    antes = client.get(url, {'conversa': c.pk}).json()
+    monkeypatch.setenv('IATIVA_VERSAO', 'versao-nova')
+    depois = client.get(url, {'conversa': c.pk, 'versao': antes['versao']}).json()
+    assert depois['versao'] != antes['versao']
+    assert 'chat-resultados.css?v=versao-nova' in depois['conversa']
+    assert 'tabela-rolagem tabela-resultado' in depois['conversa']
+    from re import search
+    padrao = r'data-historico-versao="([^"]+)"'
+    assert search(padrao, depois['conversa'])[1] != search(padrao, antes['conversa'])[1]

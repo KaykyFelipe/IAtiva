@@ -1,4 +1,4 @@
-<div class="conversa-area{% if not conversa and not aprendizado %} inicio{% endif %}" id="conversa" data-conversa-id="{{ conversa.pk|default:0 }}" data-historico-versao="{{ historico_versao }}" data-falha="{% if mascote_falha %}1{% else %}0{% endif %}">
+{% load static %}<div class="conversa-area{% if not conversa and not aprendizado %} inicio{% endif %}" id="conversa" data-conversa-id="{{ conversa.pk|default:0 }}" data-historico-versao="{{ historico_versao }}" data-falha="{% if mascote_falha %}1{% else %}0{% endif %}">
   <header class="cabecalho">
     <div class="agente-capsula" aria-label="Assistente IAtiva">{% include "chat/_mascote.html" %}<div><strong>IAtiva</strong><small data-mascote-status>Pronta para ajudar</small></div></div>
     {% include "chat/_cabecalho_acoes.html" %}
@@ -15,6 +15,8 @@
   <div class="conteudo-chat">
   <div class="rolagem" data-rolagem>
     <div class="mensagens">
+      {# A conversa pode ser atualizada sem recarregar os estilos do cabeçalho. #}
+      <link rel="stylesheet" href="{% static 'css/chat-resultados.css' %}?v={{ versao_interface }}">
       {% if conversa.tipo == TipoConversa.SETOR %}
         <p class="aviso-escopo">Todos com acesso ao setor leem esta conversa. Padrões propostos só valem depois de aprovados.</p>
       {% elif conversa.tipo == TipoConversa.MESTRE %}

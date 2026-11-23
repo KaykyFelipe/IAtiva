@@ -6,7 +6,7 @@
 
 ## Leitura dos resultados no chat
 
-- Tabelas de consulta têm altura máxima, cabeçalho fixo e rolagem própria. Ao atualizar a conversa em uso, o chat preserva a posição de leitura, a rolagem das tabelas e os detalhes abertos.
+- Tabelas de consulta têm altura máxima, cabeçalho fixo e rolagem própria. Ao atualizar a conversa em uso, o chat preserva a posição de leitura, a rolagem das tabelas e os detalhes abertos. O estilo acompanha a atualização da conversa para alcançar abas já abertas.
 
 ## Respostas com detalhes e resumo lado a lado
 

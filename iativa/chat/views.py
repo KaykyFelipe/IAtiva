@@ -17,6 +17,7 @@ from django.views.decorators.http import require_GET, require_POST
 
 from iativa.accounts.authz import PermissaoNegada, setor_do_usuario
 from iativa.agent.agente import Interrompido
+from iativa.core.saude import versao as versao_app
 from iativa.memory.models import ParameterDefinition, TipoValor
 
 from . import conversas
@@ -81,17 +82,18 @@ def _contexto(request, c=None, form=None, erro="", resultado=None, resultado_msg
     msgs = conversas.mensagens_com_interacao(request.user, c) if c else []
     ultimo_tipo = msgs[-1]['m'].ficha.get('tipo') if msgs else ''
     # A versão representa o histórico autorizado, não o progresso dos cartões que
-    # já possuem polling próprio. Assim uma atualização da lateral não remonta tabelas.
-    historico_versao = hashlib.sha256(json.dumps([
+    # já possuem polling próprio. Inclui a versão para atualizar os estilos de abas abertas.
+    historico_versao = hashlib.sha256(json.dumps([versao_app(), [
         {**{k: v for k, v in item.items() if k not in ('m', 'tarefa')},
          'mensagem': [item['m'].pk, item['m'].texto, item['m'].ficha]}
         for item in msgs
-    ], default=str, sort_keys=True).encode()).hexdigest()
+    ]], default=str, sort_keys=True).encode()).hexdigest()
     return {
         "lateral": conversas.lateral(request.user),
         "conversa": c,
         "mensagens": msgs,
         "historico_versao": historico_versao,
+        "versao_interface": versao_app(),
         # M79: pedido desta pessoa ainda em andamento (página recarregada ou reaberta): mostra o "trabalhando".
         "envio_pendente": _pendente(request.user, c),
         "mascote_falha": bool(erro or (form is not None and form.errors) or getattr(resultado, 'ok', None) is False or ultimo_tipo in (
@@ -177,7 +179,7 @@ def sincronizar(request):
     from iativa.accounts.authz import politicas_vigentes
     from iativa.metadata.models import RestricaoMetadado
     versao = hashlib.sha256(json.dumps([registros, list(politicas_vigentes(request.user).order_by('pk').values()),
-        list(RestricaoMetadado.objects.order_by("id", "setores_permitidos__pk").values(
+        versao_app(), list(RestricaoMetadado.objects.order_by("id", "setores_permitidos__pk").values(
             "id", "tabela", "campo", "ativo", "setores_permitidos__pk")), cid],
         default=str, sort_keys=True).encode()).hexdigest()
     if request.GET.get("versao") == versao:
