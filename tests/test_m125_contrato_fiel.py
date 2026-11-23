@@ -364,3 +364,28 @@ def test_m127_agregacao_no_banco_e_calculo_mesmo_sem_parametro_na_decisao():
                           colunas=["Filial", "Quantidade"], totais=None, escopo={})
     d = SimpleNamespace(acao='aprender_tabela', parametros=(), objetivo='')
     assert evidencia(d, SimpleNamespace(ficha={}, observacao=None, resultado=res), "Quantos ativos por filial?") == CALCULO
+
+
+@pytest.mark.django_db
+def test_m128_desligados_de_dois_meses_por_filial_na_mesma_tabela(base, erp_sintetico):
+    """"Quantos funcionários foram desligados em setembro e outubro, por filial?": uma tabela com a filial e uma
+    coluna por mês, não um total único do período inteiro."""
+    with sqlite3.connect(erp_sintetico) as conn:
+        conn.execute("DELETE FROM SRA010")
+        conn.executemany("INSERT INTO SRA010 (RA_FILIAL, RA_MAT, RA_ADMISSA, RA_DEMISSA) VALUES (?, ?, ?, ?)",
+                         [("01", "000001", "20200101", "20260905"), ("01", "000002", "20200101", "20261010"),
+                          ("01", "000003", "20200101", "20261020"), ("02", "000001", "20200101", "20260915"),
+                          ("02", "000002", "20200101", "20260815")])
+    p = FakeProvider([_d(acao="preparar_consulta", objetivo=base["cm"].codigo, entrega="calculo", parametros=[
+        {"codigo": "filial-analise", "valor": "TODAS"},
+        {"codigo": "periodo-analise", "valor": "01/09/2026..31/10/2026"},
+        {"codigo": "agregacao", "valor": "contagem:* por filial"},
+    ])], analises=[{'natureza': 'dados', 'setores': [base['cob'].codigo], 'confianca': 1, 'resumo': '',
+                    'memorias': [], 'entregas': [{'descricao': 'Desligados por filial', 'tipo': 'calculo',
+                                                  'metrica': 'contagem'}]}])
+    msg, r = conversas.enviar(base["u"], conversas.nova_individual(base["u"]),
+                              "Quantos funcionários foram desligados em setembro e outubro, por filial?", p)
+    assert r is not None and r.ok and r.colunas[1:] == ["09/2026", "10/2026"], (msg.texto, getattr(r, "colunas", None))
+    linhas = {l[0]: [int(str(v)) for v in l[1:]] for l in r.linhas}
+    assert linhas == {rotulo("01"): [1, 2], rotulo("02"): [1, 0]}
+    assert [int(str(v)) for v in r.rodape[1:]] == [2, 2] and r.rodape[0] == "Total"

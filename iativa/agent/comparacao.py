@@ -27,7 +27,9 @@ _MES_PEDIDO = r'(?:' + '|'.join(MESES) + r')\b(?:\s+(?:de\s+)?20\d\d)?'
 _SERIE_MENSAL = re.compile(
     r'^(?:(?:qual(?: foi| e)? |quais(?: foram| sao)? |(?:me )?(?:mostre|diga|traga)\s+)?'
     r'(?:o |os |a |as )?(?:faturamento|receita|vendas|total|quantidade|soma|media|contagem)\b'
-    r'(?:(?!\se\s)[^,;?!])*?\s+(?:de|em|nos meses de) |quanto (?:faturamos|vendemos|recebemos) (?:em|de) )'
+    r'(?:(?!\se\s)[^,;?!])*?\s+(?:de|em|nos meses de) |quanto (?:faturamos|vendemos|recebemos) (?:em|de) '
+    # M128: contagem de registros por mês ("quantos funcionários foram desligados em setembro e outubro").
+    r'|quant[oa]s\s+(?:(?!\se\s)[^,;?!])*?\s+(?:de|em|nos meses de) )'
     + _MES_PEDIDO + r'\s+e\s+(?:(?:de|em) )?' + _MES_PEDIDO
     + r'(?:,?\s+(?:por [\w.-]+|(?:em|de|das|considerando) todas as filiais))?\s*[?!.]?$'
 )
@@ -287,6 +289,9 @@ def _valores(r):
         out[grupo] = _numero(bruto) if bruto else None
     titulo = (r.colunas[chaves[0]] if len(chaves) == 1 else 'Grupo' if chaves
               else 'Filial' if len(filiais) == 1 else 'Período')
+    if titulo == 'Filial':
+        from iativa.accounts.filiais import NOMES, rotulo
+        out = {(rotulo(g) if g in NOMES else g): v for g, v in out.items()}  # M128: nome da filial, não o código
     return out, r.colunas[i], r.tipos[i], titulo
 
 
