@@ -321,8 +321,10 @@ def executar_solicitacao(user, s: RequestContext) -> Resultado:
     """M95: antes de preparar a consulta do ERP, a memória técnica é consultada (etapa obrigatória, em todos os
     caminhos: chat, reexecução, continuação e worker). O estado real vai no resultado e nas premissas; se o índice
     estiver indisponível, a consulta segue só com o dicionário local e diz isso."""
-    memoria = memoria_tecnica_da_solicitacao(s)
-    r = _executar_solicitacao(user, s)
+    from iativa.agent import tempos
+    with tempos.medir("erp"):  # M125: memória técnica + consulta ao ERP
+        memoria = memoria_tecnica_da_solicitacao(s)
+        r = _executar_solicitacao(user, s)
     r.memoria_tecnica = memoria
     if memoria.get("estado") == "ok":
         r.premissas = list(r.premissas) + [f"Memória técnica {memoria['versao']} consultada ({memoria['trechos']} trecho(s)); "

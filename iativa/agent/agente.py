@@ -189,8 +189,8 @@ def _notas(user, texto: str) -> list[str]:
         notas.append(
             "[regra do sistema] Conte vínculos com as duas datas no ano civil pedido na mesma consulta. "
             "Use filtro-campo com intervalos para admissão e desligamento, o ano completo em periodo-analise "
-            "se exigido, agregacao contagem:* por filial e filial-analise TODAS. Isso é só a interseção: entregue "
-            "também as outras entregas do contrato (contagem de cada evento e a lista de quem foi contado).")
+            "se exigido, agregacao contagem:* por filial e filial-analise TODAS. A entrega é só essa interseção "
+            "(filial e quantidade); totais separados de cada evento e listas nominais não foram pedidos.")
     from .comparacao import contagens_mensais
     if contagens_mensais(texto):
         notas.append(
@@ -232,7 +232,10 @@ def _catalogo(user, objetivos, defs) -> list[dict]:
 def _interpretar(provedor, entrada, codigos_obj, codigos_par):
     for _ in range(TENTATIVAS):
         try:
-            return validar(provedor.decidir(entrada), codigos_obj, codigos_par)
+            from . import tempos
+            with tempos.medir("decisao"):
+                bruta = provedor.decidir(entrada)
+            return validar(bruta, codigos_obj, codigos_par)
         except FalhaModelo as exc:
             if exc.temporaria:
                 raise  # o provedor já esperou e tentou outros modelos
@@ -466,6 +469,11 @@ def _ciclo_agente(user, c, texto, provedor, interrompido, entrada, objetivos, co
     ac = acomp or coord.Acompanhamento(texto)
     if not ac.contrato:
         ac.contrato = entrada.planejamento.get('analise', {}).get('entregas', [])
+    from . import fidelidade
+    anterior = ac.contrato
+    # M125: também na continuação e na retomada após correção (contrato gravado por uma versão anterior).
+    ac.contrato = fidelidade.ajustar(texto, anterior, user)
+    ac.cumpridas = fidelidade.remapear_cumpridas(anterior, ac.contrato, ac.cumpridas)
     from . import contagem as admissoes
     if admissoes.assunto_acompanhado(user, texto):
         anterior = ac.contrato
@@ -575,6 +583,14 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
     # M121: pedido com várias entregas ganha passos proporcionais (cerca de 2 por entrega, até 14), em vez de
     # empurrar quase tudo para o segundo plano.
     passos = min(14, max(int(cfg["passos"]), 2 * len(ac.contrato) + 1))
+    # M125: receita já verificada para este tipo de pedido (e acessível à pessoa) é o 1º passo, sem o modelo.
+    from . import receita_pedido as aprendizado_receita
+    receita_d, receita_id = (None, None)
+    if not observacoes and not ac.trilha and len(ac.contrato) <= 1:
+        try:
+            receita_d, receita_id = aprendizado_receita.receita_para(texto, objetivos)
+        except Exception:
+            receita_d, receita_id = None, None
     for _ in range(max(1, passos)):
         if prazo.esgotado():
             causa = "prazo"
@@ -588,6 +604,9 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
             if fontes and not feitas and entrada.planejamento["analise"]["natureza"] == "dados":
                 d = Decisao("Vou conferir as fontes indicadas para concluir o pedido.", "aprender_tabela", "",
                             (), " ".join(fontes), "", False, ())
+            elif receita_d is not None and not feitas:
+                d = receita_d
+                andamento.avisar("Usando a receita já verificada para este tipo de pedido")
             else:
                 d = _interpretar(provedor, entrada_passo, [o.codigo for o in objetivos], codigos_par)
         except prazo.PrazoEsgotado:
@@ -933,6 +952,8 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
                 causa, saida, previa = "modelo_falhou", None, None
                 break
             if falta_rev:
+                if receita_d is not None and d is receita_d:
+                    aprendizado_receita.descartar(receita_id)  # M125: a receita não serve mais; segue com o modelo
                 ac.revisoes += 1
                 ac.reprovada = falta_rev
                 andamento.avisar("A resposta não atendia ao pedido; tentando de outro jeito")
@@ -949,6 +970,12 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
             if ac.reprovada:
                 _aprender_revisao(user, texto, ac.reprovada)
             ac.reprovada = ""
+            if not ac.pendentes():
+                try:  # M125: resposta conferida: a lógica vira receita reutilizável (sem dados do ERP)
+                    aprendizado_receita.guardar(user, texto, d, saida, ac.contrato, ev)
+                except Exception:
+                    import logging
+                    logging.getLogger(__name__).warning("receita não gravada", exc_info=True)
         if ac.entregue and ev and ev not in (coord.PERGUNTA, coord.BLOQUEIO, coord.DELEGADA, coord.ACAO):
             return _fechar(ac, user, c, mensagem_id, saida, ac.entregue)
         if ac.cumprido(ev) or ev in (coord.PERGUNTA, coord.BLOQUEIO, coord.DELEGADA):
@@ -1215,9 +1242,15 @@ def continuar_objetivo(o):
         obs = [Observacao("continuacao", "continuacao",
                           f"Continuação automática do MESMO pedido (a pessoa não mandou nova mensagem). Já tentado "
                           f"(ação:situação:evidência): {feito}. {coord.FALTA.get(o.exigencia, '')}: {coord.COMO.get(o.exigencia, '')}.")]
+        from . import tempos
         try:
-            saida = conversar(user, c, o.mensagem.texto, mensagem_usuario_id=o.mensagem_id, acomp=ac,
-                              observacoes=obs, interrompido=interrompido)
+            with tempos.pedido("retomada" if o.retomado else "continuacao") as t:
+                saida = conversar(user, c, o.mensagem.texto, mensagem_usuario_id=o.mensagem_id, acomp=ac,
+                                  observacoes=obs, interrompido=interrompido)
+            # M125: tempo desta continuação e o total desde a mensagem da pessoa (fila, manutenção e refazer).
+            from django.utils import timezone
+            saida.ficha = {**(saida.ficha or {}), "tempos_ms": {
+                **t, "desde_o_pedido": int((timezone.now() - o.mensagem.criado_em).total_seconds() * 1000)}}
         except Interrompido:
             if superado():
                 descartar()

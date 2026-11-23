@@ -4,8 +4,11 @@
   {% if objetivo.situacao == "manutencao" %}
     {% include "chat/_mascote.html" with estado="thinking" %}
     <div class="atividade-corpo">
-      <span class="atividade-texto">Corrigindo e testando em segundo plano. Quando a correção estiver no ar, o pedido será refeito aqui.</span>
+      <span class="atividade-texto"><strong>Correção automática{% if objetivo.incidente %} (registro nº {{ objetivo.incidente.pk }}){% endif %}:</strong> o sistema ainda não sabia fazer esta parte. Corrigindo e testando em segundo plano; quando a correção estiver no ar, o pedido é refeito aqui.</span>
       {% if objetivo.incidente %}
+      {% if objetivo.incidente.situacao == "aberto" and objetivo.incidente.condicoes.executor_falha %}
+      <div class="manutencao-tentativa">Aguardando o ambiente de correção voltar ({{ objetivo.incidente.condicoes.executor_falha }}). A correção é retomada sozinha, sem perder a tentativa.</div>
+      {% endif %}
       {% with tempo=objetivo.incidente.tempo_restante_estimado %}
         {% if tempo %}<div>Tempo restante estimado: {{ tempo }}</div>
         {% elif objetivo.incidente.situacao == "em_correcao" %}<div>Está levando mais que o previsto; continuo trabalhando nisso.</div>
@@ -23,6 +26,6 @@
     </div>
   {% else %}
     {% include "chat/_mascote.html" with estado="thinking" %}
-    <span class="atividade-texto">{% if objetivo.retomado %}Refazendo o pedido original e conferindo a resposta…{% else %}Tentando concluir a consulta em segundo plano. A resposta aparece aqui.{% endif %}</span>
+    <span class="atividade-texto">{% if objetivo.retomado %}<strong>Correção no ar:</strong> refazendo o pedido original com a nova versão e conferindo a resposta antes de mostrar…{% else %}<strong>Continuação da consulta:</strong> ainda dá para avançar com as ferramentas que já existem; tentando outra abordagem em segundo plano. A resposta aparece aqui depois de conferida.{% endif %}</span>
   {% endif %}
 </div>

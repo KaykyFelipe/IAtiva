@@ -238,14 +238,16 @@ def enviar(user, c: ConversationContext, texto: str, provedor=None, pedido=None)
             # Trava o chat durante a resposta (o worker e outra aba não entram); espera a 1ª etapa soltar.
             list(ConversationContext.objects.select_for_update(no_key=True).filter(pk=c.pk))
             with andamento.acompanhar(user.pk, pedido):
-                from iativa.agent import prazo as _prazo
-                try:
-                    saida = agente.conversar(user, c, texto, provedor=provedor, mensagem_usuario_id=m.pk,
-                                             interrompido=_verificador(user, pedido))
-                except _prazo.PrazoEsgotado:
-                    # M96: rede de segurança: tempo esgotado fora do ciclo (ex.: na triagem) não vira erro 500.
-                    saida = agente.Saida(agente.SEM_TEMPO + " A IA demorou para responder. Tente de novo; se repetir, "
-                                         "pergunte de forma mais direta.", ficha={"tipo": "falha_modelo"})
+                from iativa.agent import prazo as _prazo, tempos
+                with tempos.pedido() as t:
+                    try:
+                        saida = agente.conversar(user, c, texto, provedor=provedor, mensagem_usuario_id=m.pk,
+                                                 interrompido=_verificador(user, pedido))
+                    except _prazo.PrazoEsgotado:
+                        # M96: rede de segurança: tempo esgotado fora do ciclo (ex.: na triagem) não vira erro 500.
+                        saida = agente.Saida(agente.SEM_TEMPO + " A IA demorou para responder. Tente de novo; se "
+                                             "repetir, pergunte de forma mais direta.", ficha={"tipo": "falha_modelo"})
+                saida.ficha = {**(saida.ficha or {}), "tempos_ms": dict(t)}  # M125: onde o prazo foi gasto
                 parado = _verificador(user, pedido)
                 if parado is not None and parado():
                     raise agente.Interrompido  # M94: parou enquanto esperava o ERP: a resposta é descartada

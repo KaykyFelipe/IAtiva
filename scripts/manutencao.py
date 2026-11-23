@@ -76,7 +76,12 @@ class Cancelada(Exception):
     """M114: a pessoa clicou em parar; a correção para e nada fica no ar."""
 
 
-class FerramentasIndisponiveis(Exception):
+class FalhaExecutor(Exception):
+    """M125: o ambiente de correção falhou (agente não rodou, login, cota, rede, ferramentas), não a correção.
+    Não gasta tentativa: o incidente volta à fila e é retomado quando o executor estiver operacional."""
+
+
+class FerramentasIndisponiveis(FalhaExecutor):
     """O modelo não pode desenvolver no container. Repetir a mesma execução não resolve."""
 
 
@@ -111,7 +116,27 @@ def log(texto: str):
     TRABALHO.mkdir(parents=True, exist_ok=True)
     with open(TRABALHO / "manutencao.log", "a") as f:
         f.write(f"{time.strftime('%Y-%m-%dT%H:%M:%S%z')} {texto}\n")
-    print(texto)
+    print(texto, flush=True)  # M125: sem buffer, o journal mostra a hora real de cada etapa
+
+
+class Cronometro:
+    """M125: duração de cada etapa da tentativa (vai para o log) e tempo limite com o nome da etapa, para
+    saber onde o prazo foi consumido em vez de um "tempo limite" genérico."""
+
+    def __init__(self):
+        self.tempos = {}
+
+    def etapa(self, nome: str, fn, *args, **kw):
+        inicio = time.monotonic()
+        try:
+            return fn(*args, **kw)
+        except subprocess.TimeoutExpired as exc:
+            raise Recusa(f"tempo limite na etapa {nome} ({int(exc.timeout or 0)}s)") from None
+        finally:
+            self.tempos[nome] = self.tempos.get(nome, 0) + int(time.monotonic() - inicio)
+
+    def resumo(self) -> str:
+        return ", ".join(f"{k} {v}s" for k, v in self.tempos.items())
 
 
 # --- diagnóstico: só estrutura sanitizada ------------------------------------------------------
@@ -475,10 +500,33 @@ def validar_executor(saida):
                                        'code mode is unavailable')):
         raise FerramentasIndisponiveis('Ferramentas de edição e testes indisponíveis no executor ChatGPT.')
     if saida.returncode:
-        raise Recusa(f"executor do modelo encerrou com código {saida.returncode}")
+        raise FalhaExecutor(diagnostico_executor(saida.returncode, erros))
 
 
-def validar_correcao(wt: Path, base: str, imagem: str, inc: int) -> list[str]:
+_CAUSAS_EXECUTOR = (
+    (("not logged in", "login", "unauthorized", "401", "auth", "credential"), "login do agente de manutenção expirado ou ausente"),
+    (("rate limit", "429", "quota", "usage limit", "insufficient", "overloaded", "529"), "provedor sem cota ou sobrecarregado"),
+    (("could not resolve", "connection", "network", "timed out", "econn", "dns"), "sem conexão com o provedor"),
+    (("no such image", "unable to find image", "pull access", "manifest unknown"), "imagem do executor ausente"),
+    (("no such file", "not found", "executable file"), "ferramenta do executor ausente na imagem"),
+    (("model", "not supported", "does not exist"), "modelo configurado indisponível"),
+)
+
+
+def diagnostico_executor(codigo: int, erros: str) -> str:
+    """M125: causa específica da falha do executor (a partir da saída de erro dele), sem conteúdo do código."""
+    for termos, causa in _CAUSAS_EXECUTOR:
+        if any(t in erros for t in termos):
+            return f"executor: {causa} (código {codigo})"
+    return f"executor do modelo encerrou com código {codigo}"
+
+
+def alterou(wt: Path) -> bool:
+    return bool(git("status", "--porcelain", cwd=wt, verificar=False).stdout.strip())
+
+
+def validar_correcao(wt: Path, base: str, imagem: str, inc: int, cr: "Cronometro | None" = None) -> list[str]:
+    cr = cr or Cronometro()
     for doc in ("STATUS.md", "DECISOES.md", "PLANO.md"):
         git("checkout", "--", doc, cwd=wt, verificar=False)
     etapa(inc, "testando")
@@ -486,13 +534,15 @@ def validar_correcao(wt: Path, base: str, imagem: str, inc: int) -> list[str]:
     novos = testes_novos(wt, base)
     if not novos:
         raise Recusa("sem teste de regressão novo")
-    if not pytest_em(wt, imagem, novos, tempo=600):
+    if not cr.etapa("teste_novo", pytest_em, wt, imagem, novos, tempo=600):
         raise Recusa("o cenário da pergunta ainda falha na versão corrigida")
     # M107: reprodução e suíte em paralelo (são árvores separadas) para caber no prazo de ~5 minutos.
     from concurrent.futures import ThreadPoolExecutor
-    with ThreadPoolExecutor(2) as ex:
-        f_rep, f_suite = ex.submit(reproduz, wt, base, imagem, novos), ex.submit(pytest_em, wt, imagem)
-        reproduziu, suite_ok = f_rep.result(), f_suite.result()
+    def paralelo():
+        with ThreadPoolExecutor(2) as ex:
+            f_rep, f_suite = ex.submit(reproduz, wt, base, imagem, novos), ex.submit(pytest_em, wt, imagem)
+            return f_rep.result(), f_suite.result()
+    reproduziu, suite_ok = cr.etapa("reproducao_e_suite", paralelo)
     if not reproduziu:
         raise Recusa("o teste novo não falha na versão afetada: defeito não demonstrado")
     if not suite_ok:
@@ -500,19 +550,20 @@ def validar_correcao(wt: Path, base: str, imagem: str, inc: int) -> list[str]:
     return novos
 
 
-def ensaiar_pedido(wt: Path, inc: int) -> str:
+def ensaiar_pedido(wt: Path, inc: int, cr: "Cronometro | None" = None) -> str:
     """M120: antes de publicar, constrói a imagem candidata a partir da cópia corrigida e refaz o pedido real do
     incidente nela (conversa temporária, como a própria pessoa, revisor incluído, IATIVA_ENSAIO=1 não abre
     incidente). Devolve "" se entregou (ou se o incidente não veio de um pedido); senão, o motivo."""
     if agente_de_teste():
         return ""
+    cr = cr or Cronometro()
     etapa(inc, "ensaiando")
     imagem = f"iativa-app:ensaio-inc-{int(inc)}"
-    b = rodar(["docker", "build", "-q", "--build-arg", "IATIVA_VERSAO=ensaio", "-t", imagem, str(wt)],
+    b = cr.etapa("imagem_ensaio", rodar, ["docker", "build", "-q", "--build-arg", "IATIVA_VERSAO=ensaio", "-t", imagem, str(wt)],
               timeout=900, verificar=False)
     if b.returncode != 0:
         return "a imagem com a correção não foi construída"
-    r = rodar(["docker", "run", "--rm", "--network", f"{PROJETO}_default", "--env-file", str(REPO / ".env"),
+    r = cr.etapa("ensaio", rodar, ["docker", "run", "--rm", "--network", f"{PROJETO}_default", "--env-file", str(REPO / ".env"),
                "-e", "IATIVA_DB_HOST=db", "-e", "IATIVA_DB_PORT=5432", "-e", "IATIVA_ENSAIO=1",
                "-e", "IATIVA_SYNTHETIC_ERP_PATH=/app/var/erp_sintetico.sqlite3",
                "-v", f"{PROJETO}_iativa_var:/app/var", "--cpus", "2", "--memory", "3g",
@@ -543,26 +594,39 @@ def corrigir(diag: dict, c: dict) -> str:
         (pasta_diag / "diagnostico.json").write_text(json.dumps(
             {**diag, "tentativa": tentativa, "validacao_anterior": feedback}, ensure_ascii=False), encoding="utf-8")
         etapa(inc, "implementando")
+        cr = Cronometro()
         try:
-            saida = rodar_agente(comando_agente(wt, pasta_diag, imagem, c, diag), inc,
+            try:
+                saida = cr.etapa("agente", rodar_agente, comando_agente(wt, pasta_diag, imagem, c, diag), inc,
                                  int(c["MANUTENCAO_TEMPO_S"]))
+            except Recusa as exc:
+                # M125: o agente estourou o tempo. Se já editou, valida o que fez (os testes decidem); se não
+                # editou nada, é o executor que não trabalhou, não a correção que falhou.
+                if not alterou(wt):
+                    raise FalhaExecutor(f"o agente não alterou nada até o {exc}") from None
+                log(f"incidente #{inc}: agente parou no tempo limite; validando o que ele editou")
+                saida = None
             checar_cancelamento(inc)
-            validar_executor(saida)
-            novos = validar_correcao(wt, base, imagem, inc)
+            if saida is not None and saida.returncode and alterou(wt):
+                log(f"incidente #{inc}: executor saiu com código {saida.returncode}, mas editou; validando")
+            elif saida is not None:
+                validar_executor(saida)
+            novos = validar_correcao(wt, base, imagem, inc, cr)
             checar_cancelamento(inc)
-            motivo = ensaiar_pedido(wt, inc)
+            motivo = ensaiar_pedido(wt, inc, cr)
             if motivo:
                 # M120: testes passaram, mas o pedido real ainda não sai: não publica; a próxima tentativa recebe
                 # o motivo e continua na mesma cópia.
                 raise Recusa(f"o ensaio com o pedido real não entregou: {motivo}")
-        except (Recusa, subprocess.TimeoutExpired) as exc:
-            feedback = str(exc)[:300] if isinstance(exc, Recusa) else "tempo limite"
-            log(f"incidente #{inc}: tentativa {tentativa}/3 ({feedback})")
+        except Recusa as exc:
+            feedback = str(exc)[:300]
+            log(f"incidente #{inc}: tentativa {tentativa}/3 ({feedback}) [tempos: {cr.resumo()}]")
             if tentativa < 3:
                 manage("tentativa", inc, tentativa + 1, "--motivo", feedback, verificar=False)  # M122: aparece no chat
             if tentativa == 3:
                 raise
         else:
+            log(f"incidente #{inc}: tentativa {tentativa}/3 validada [tempos: {cr.resumo()}]")
             break
     checar_cancelamento(inc)
     git("-c", "user.name=IAtiva Manutenção", "-c", "user.email=manutencao@iativa.invalid", "commit", "-q", "-m",
@@ -744,7 +808,12 @@ def principal(argv) -> int:
         if wt.exists():
             git("worktree", "remove", "--force", str(wt), verificar=False)
         (pasta_cancelar() / str(inc)).unlink(missing_ok=True)
-    except (FerramentasIndisponiveis, Recusa, subprocess.TimeoutExpired) as exc:
+    except FalhaExecutor as exc:
+        # M125: falha do ambiente, não da correção: o incidente volta à fila sem gastar tentativa e é retomado
+        # quando o executor voltar (backoff em incidentes.elegivel); o chat mostra o diagnóstico.
+        manage("aguardar", inc, "--motivo", str(exc)[:300], verificar=False)
+        log(f"incidente #{inc}: aguardando o executor ({exc})")
+    except (Recusa, subprocess.TimeoutExpired) as exc:
         motivo = "tempo limite" if isinstance(exc, subprocess.TimeoutExpired) else str(exc)
         manage("concluir", inc, "falhou_correcao", "--motivo", motivo, verificar=False)
         log(f"incidente #{inc}: não publicado ({motivo})")

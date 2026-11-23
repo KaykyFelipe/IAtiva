@@ -93,8 +93,10 @@ def revisar(user, provedor, texto: str, contrato: list, saida) -> str:
         planejamento={"modo": MODO, "pedido": texto[:1000],
                       "contrato": [str(e.get("descricao", ""))[:300] for e in (contrato or []) if isinstance(e, dict)],
                       "resposta_montada": blocos})
+    from . import tempos
     try:
-        a = provedor.planejar(entrada)
+        with tempos.medir("revisao"):
+            a = provedor.planejar(entrada)
     except Exception:
         return INDISPONIVEL
     if not isinstance(a, dict):

@@ -24,7 +24,7 @@ class Command(BaseCommand):
     help = "Incidentes técnicos para o executor de manutenção (sem dados do ERP)."
 
     def add_arguments(self, parser):
-        parser.add_argument("acao", choices=["listar", "exportar", "iniciar", "concluir", "retomar", "etapa", "cancelado", "ensaiar", "tentativa"])
+        parser.add_argument("acao", choices=["listar", "exportar", "iniciar", "concluir", "retomar", "etapa", "cancelado", "ensaiar", "tentativa", "aguardar"])
         parser.add_argument("id", nargs="?", type=int)
         parser.add_argument("situacao", nargs="?")
         parser.add_argument("--commit", default="")
@@ -79,6 +79,29 @@ class Command(BaseCommand):
                 i.condicoes = {**(i.condicoes or {}), "tentativa_atual": n,
                                "tentativa_motivo": mascarar_pergunta(o["motivo"], 300)}
                 i.save(update_fields=["condicoes"])
+            self.stdout.write("ok")
+            return
+        if acao == "aguardar":
+            # M125: o executor (não a correção) falhou: volta à fila sem gastar tentativa; elegivel() espera o
+            # intervalo de recuperação antes de tentar de novo. Muitas falhas seguidas: vai para a TI.
+            from iativa.manutencao.incidentes import EXECUTOR_MAX_FALHAS, mascarar_pergunta
+            with transaction.atomic():
+                i = Incidente.objects.select_for_update().get(pk=o["id"])
+                n = int((i.condicoes or {}).get("executor_falhas", 0)) + 1
+                motivo = mascarar_pergunta(o["motivo"], 300)
+                cond = {**{k: v for k, v in (i.condicoes or {}).items() if k not in ("tentativa_atual", "tentativa_motivo")},
+                        "executor_falha": motivo, "executor_falha_em": timezone.now().timestamp(), "executor_falhas": n}
+                if n >= EXECUTOR_MAX_FALHAS:
+                    Incidente.objects.filter(pk=i.pk).update(
+                        situacao=SituacaoIncidente.BLOQUEADO, etapa="", condicoes=cond,
+                        motivo=f"Ambiente de correção indisponível ({n} vezes seguidas): {motivo}"[:300])
+                else:
+                    Incidente.objects.filter(pk=i.pk).update(
+                        situacao=SituacaoIncidente.ABERTO, etapa="", condicoes=cond,
+                        tentativas=max(0, i.tentativas - 1))
+            if n >= EXECUTOR_MAX_FALHAS:
+                from iativa.agent import objetivos
+                objetivos.encerrar_por_incidente(o["id"], f"Ambiente de correção indisponível: {motivo}")
             self.stdout.write("ok")
             return
         if acao == "ensaiar":

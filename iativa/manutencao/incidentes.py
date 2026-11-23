@@ -28,6 +28,8 @@ CONDICOES_PERMITIDAS = {"etapa", "tipo_tarefa", "situacao", "acao", "objetivo_ti
 TRILHA_ITEM = re.compile(r"^[a-z_-]{1,40}:[a-z_-]{1,40}:[a-z_-]{1,40}$")
 VALOR_SEGURO = re.compile(r"^[a-z0-9_./:-]{1,60}$")
 MAX_TENTATIVAS = 2
+EXECUTOR_ESPERA_S = 600  # M125: intervalo antes de retomar após falha do executor
+EXECUTOR_MAX_FALHAS = 6
 MAX_REABERTURAS = 1
 
 
@@ -240,6 +242,13 @@ def elegivel(inc: Incidente) -> bool:
         return False
     if inc.situacao != SituacaoIncidente.ABERTO or inc.tentativas >= MAX_TENTATIVAS:
         return False
+    falha = (inc.condicoes or {}).get("executor_falha_em")
+    if isinstance(falha, (int, float)):
+        # M125: o executor falhou há pouco: espera ele se recuperar antes de repetir (não repete a mesma
+        # execução sem ferramentas em sequência).
+        from django.utils import timezone
+        if timezone.now().timestamp() - falha < EXECUTOR_ESPERA_S:
+            return False
     if inc.categoria == Categoria.ERRO_TECNICO:
         return bool(inc.rastreamento)
     return inc.categoria == Categoria.CAPACIDADE and bool((inc.condicoes or {}).get("trilha"))

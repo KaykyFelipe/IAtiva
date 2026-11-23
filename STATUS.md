@@ -1,8 +1,30 @@
 # STATUS — IAtiva
 
-**Atualizado em:** 2026-11-18
+**Atualizado em:** 2026-11-23
 **Etapa atual:** 7 — Piloto local
 **Situação:** **Etapa 7 aprovada em 2026-11-16 por Diego; em andamento.** Feito: roteiro do piloto (`docs/piloto/ROTEIRO.md`) e auditoria de não armazenamento (`manage.py auditar_armazenamento`). Falta: usuários do Financeiro, conferência dos números com relatórios do Protheus, avaliação da interpretação e latência. Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
+
+## Mudança M125 — contrato fiel ao pedido, falha do executor diagnosticada, receita verificada e tempos por etapa (2026-11-23)
+
+- Diagnóstico nº 24 ("Quantos funcionários foram admitidos e desligados no mesmo ano, por filial, em 2026?"). Causas comprovadas:
+  - Planejamento: a segunda leitura (M118) mandava separar cada evento e juntar a interseção e uma lista nominal. O pedido virou 4 entregas. A resposta certa (interseção por filial) entregava 1, o ciclo repetia a ação e abria incidente (trilha `preparar_consulta:entrega_pendente:calculo` → `acao_repetida`). Reproduzido com dados sintéticos: a versão anterior devolve "Seu pedido tem 4 partes… Ainda falta".
+  - Manutenção (23/11, 08:11–09:03): duas tentativas terminaram em "tempo limite" de ~19 min cada (o agente tem só 240 s; o estouro foi em teste, imagem ou ensaio, sem registro de qual). A 3ª passou nos testes, mas o ensaio cobrava o mesmo contrato de 4 partes. O agente editou de fato (contagem.py + 3 testes); não era executor sem ferramentas.
+  - Log do executor com buffer: todas as linhas apareciam no journal às 09:03.
+- Correções:
+  - `agent/fidelidade.py`: o contrato fica fiel ao pedido, qualquer que seja a leitura do modelo (na triagem, na continuação e na retomada).
+    - "X e Y no mesmo ano/mês", "ambos" ou "os dois" = uma entrega (a interseção).
+    - Lista só quando pedida. Preferência guardada vale só para contagem simples, não para agregado por filial nem interseção.
+    - Prompt da 2ª leitura e nota do sistema alinhados.
+  - Executor:
+    - Tempo limite com o nome da etapa e duração de cada etapa no log; log sem buffer.
+    - Falha do executor (login, cota, rede, imagem, ferramenta, agente que não editou) separada da falha da correção. Não gasta tentativa: o incidente volta à fila (`manutencao aguardar`), espera 10 min e é retomado; após 6 falhas seguidas, vai para a TI.
+    - Agente que estoura o tempo mas editou tem a edição validada pelos testes.
+  - `agent/receita_pedido.py`: resposta conferida grava a receita do tipo de pedido. Contém assinatura, consulta, tabelas, parâmetros com {ANO}, métrica, evidência e versão, sem dados do ERP. Num pedido equivalente, ela é o 1º passo sem chamar o modelo, se a pessoa tiver acesso à consulta. Se for reprovada, é desativada.
+  - `agent/tempos.py` + `manage.py tempos_pedido`: tempos por etapa (leitura, decisão, ERP, revisão, total, desde o pedido na continuação/retomada) na ficha da resposta e no log.
+  - Tela: "Correção automática (registro nº X)", "Continuação da consulta" e "Correção no ar: refazendo" aparecem com nomes distintos; a espera do executor também aparece.
+- Testes: `tests/test_m125_contrato_fiel.py` e `tests/test_m125_executor.py`.
+  - Cobrem: 4 entregas viram 1; lista pedida continua; ponta a ponta com filial/quantidade; receita reaproveitada sem o modelo e de outro ano; receita fora do acesso; revisor fora não publica.
+  - Executor: diagnóstico específico, tempo por etapa, fila de espera.
 
 ## Mudança M124 — registro cancelado ou bloqueado não trava o mesmo pedido para sempre (2026-11-19)
 

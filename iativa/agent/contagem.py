@@ -57,6 +57,11 @@ def assunto_acompanhado(user, texto) -> bool:
         return False
     if _PEDE_DETALHE.search(_norm(texto)):
         return True
+    return preferencia_detalhe(user, texto)
+
+
+def preferencia_detalhe(user, texto) -> bool:
+    """Preferência da pessoa, guardada na memória, de ver os registros ao contar este mesmo assunto."""
     if user is None:
         return False
     from .memoria import notas_relevantes

@@ -461,7 +461,7 @@ def test_executor_tenta_de_novo_com_o_resultado_da_validacao(tmp_path, monkeypat
     monkeypatch.setattr(mx, "rodar_agente", lambda *a: SimpleNamespace(returncode=0))
     atualizadas = []
 
-    def validar(wt, base, imagem, inc):
+    def validar(wt, base, imagem, inc, *a):
         atualizadas.append(json.loads((tmp_path / "inc-17-diag" / "diagnostico.json").read_text(encoding="utf8")))
         if len(atualizadas) == 1:
             raise mx.Recusa("o cenário da pergunta ainda falha")

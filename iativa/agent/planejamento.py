@@ -98,9 +98,11 @@ def preparar(user, conversa, texto, provedor, historico):
     entrada = EntradaAgente(texto, timezone.localdate().isoformat(), historico, [], None,
         planejamento={'modo': 'classificar', 'setores_disponiveis': setores, 'autorizados': permitidos,
                       'contextos_recuperados': contextos(user, conversa, texto)})
+    from . import tempos
     try:
-        analise = (provedor.planejar(entrada) if hasattr(provedor, 'planejar')
-                   else provedor.decidir(entrada).get('analise'))
+        with tempos.medir('leitura'):
+            analise = (provedor.planejar(entrada) if hasattr(provedor, 'planejar')
+                       else provedor.decidir(entrada).get('analise'))
     except (AttributeError, TypeError, ValueError, IndexError) as exc:
         raise FalhaModelo('Não foi possível classificar o pedido com segurança.') from exc
     if not isinstance(analise, dict) or analise.get('natureza') not in ('dados', 'geral', 'fora', 'ambigua'):
@@ -142,6 +144,9 @@ def preparar(user, conversa, texto, provedor, historico):
         raise FalhaModelo('Entregas inválidas.')
     if analise.get('natureza') == 'dados':
         analise = _segunda_leitura(provedor, texto, historico, analise, tipos, metricas)
+        # M125: o contrato fica fiel ao pedido (interseção = uma entrega; lista só quando pedida).
+        from .fidelidade import ajustar
+        analise = {**analise, 'entregas': ajustar(texto, analise.get('entregas', []), user)}
     from . import contagem as admissoes, entregas, comparacao
     return comparacao.planejar(texto, entregas.planejar(texto, admissoes.planejar(texto, {**analise, 'setores': sorted(set(alvos)), 'contextos': entrada.planejamento['contextos_recuperados']}, user)))
 
@@ -153,8 +158,10 @@ def _segunda_leitura(provedor, texto, historico, analise, tipos, metricas):
     primeira = [dict(e) for e in analise.get('entregas', [])]
     entrada = EntradaAgente(texto, timezone.localdate().isoformat(), historico, [], None,
                             planejamento={'modo': 'reler_pedido', 'pedido': texto[:1000], 'primeira_leitura': primeira})
+    from . import tempos
     try:
-        a = provedor.planejar(entrada)
+        with tempos.medir('leitura'):
+            a = provedor.planejar(entrada)
     except Exception:
         return analise
     novas = a.get('entregas') if isinstance(a, dict) else None
