@@ -6,7 +6,7 @@
 {% else %}
 <div class="msg ia resultado">
   {% if formato != "direto" and resultado.mensagem %}<p><strong>{{ resultado.mensagem }}</strong></p>{% endif %}
-  {% if resultado.linhas %}
+  {% if resultado.linhas or resultado.rodape %}
     <div class="tabela-rolagem tabela-resultado" tabindex="0" role="region" aria-label="Tabela do resultado">
       <table>
         <thead><tr>{% for c, cls in resultado.cabecalho %}<th class="{{ cls }}">{{ c }}</th>{% endfor %}</tr></thead>
@@ -15,6 +15,11 @@
             <tr>{% for v, cls in linha %}<td class="{{ cls }}">{{ v }}</td>{% endfor %}</tr>
           {% endfor %}
         </tbody>
+        {% if resultado.rodape %}
+          <tfoot><tr>{% for v, cls in resultado.rodape_tela %}
+            {% if forloop.first %}<th scope="row">{{ v }}</th>{% else %}<td class="{{ cls }}"><strong>{{ v }}</strong></td>{% endif %}
+          {% endfor %}</tr></tfoot>
+        {% endif %}
       </table>
     </div>
   {% endif %}

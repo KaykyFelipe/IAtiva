@@ -75,6 +75,14 @@ class Totais:
             return None
         return next((m.valor for m in self.medidas if m.funcao == "SUM" and m.tipo == "dinheiro"), None)
 
+    def valor_aditivo(self, rotulo):
+        if len(self.moedas) > 1:
+            return None
+        medida = next((m for m in self.medidas if m.rotulo == rotulo and m.funcao in ("SUM", "COUNT")), None)
+        if medida is None:
+            return None
+        return 0 if self.registros == 0 else medida.valor
+
 
 @dataclass
 class Resultado:
@@ -102,6 +110,7 @@ class Resultado:
     fonte_inconclusiva: str = ""
     legenda_pendente: str = ""
     filtros_contagem_por_filial: tuple[Filtro, ...] = ()
+    rodape: list[str] = field(default_factory=list)
 
     @property
     def cabecalho(self):
@@ -146,6 +155,10 @@ class Resultado:
     def linhas_tela(self):
         classes = ["num" if t in ("dinheiro", "inteiro", "valor", "numero") else "" for t in self.tipos]
         return [list(zip(linha, classes)) for linha in self.linhas]
+
+    @property
+    def rodape_tela(self):
+        return [(v, cls) for v, (_, cls) in zip(self.rodape, self.cabecalho)]
 
 
 def _cfg():
@@ -628,6 +641,10 @@ def _executar_solicitacao(user, s: RequestContext) -> Resultado:
     res.ok, res.colunas, res.tipos, res.linhas = True, colunas, tipos, formatadas
     res.premissas, res.truncado, res.total, res.total_valor = plano.premissas, truncado, total, total_valor
     res.totais, res.subtotal = totais, subtotal
+    if formatadas and colunas[0] == "Filial" and totais and any(c.agregacao for c in plano.colunas):
+        valores_totais = [_fmt(totais.valor_aditivo(c), t) for c, t in zip(colunas[1:], tipos[1:])]
+        if any(valores_totais):
+            res.rodape = ["Total", *valores_totais]
     if categorias:
         res.medida_calculada = "contagem"
     if s.objetivo.startswith(PREFIXO_APRENDIDO) and not truncado and totais_ok and not legenda_pendente and not cm.spec.get("operacao_validada"):

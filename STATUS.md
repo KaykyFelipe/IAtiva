@@ -6,6 +6,7 @@
 
 ## Composição de pedidos com consultas já conhecidas
 
+- Tabelas de valores agregados por filial mostram no rodapé os totais aditivos conferidos no banco. Em comparações, cada período tem seu total e a variação geral é calculada a partir desses totais.
 - Pedidos de um indicador em dois meses nomeados, como o faturamento de setembro e outubro, usam os meses da mensagem e mostram os valores lado a lado na mesma tabela. A definição da consulta e os filtros valem igualmente para os dois meses.
 - Um pedido com várias entregas tenta reaproveitar a receita completa. Sem ela, combina componentes verificados cuja descrição, métrica e critérios correspondem à entrega. Cada consulta é reexecutada com as permissões atuais.
 - As demais entregas seguem pelo planejamento normal. Resultados de tentativas que ainda não comprovam nenhuma entrega ficam fora da resposta.

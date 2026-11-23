@@ -27,6 +27,7 @@ def empacotar(res):
     return {"versao": 2, "unidades": ['BRL' if t == 'dinheiro' else 'numero' if t in ('numero', 'valor', 'inteiro') else t for t in res.tipos],
             "mensagem": _texto(res.mensagem), "colunas": [_texto(c) for c in res.colunas], "tipos": res.tipos,
             "linhas": [[_texto(v) if v is not None else "" for v in l] for l in res.linhas],
+            "rodape": [_texto(v) for v in res.rodape],
             "premissas": [_texto(p) for p in res.premissas], "escopo": res.escopo,
             "periodos": [{k: _texto(v) if isinstance(v, str) else v for k, v in p.items()} for p in res.periodos],
             "truncado": res.truncado, "moedas": res.totais.moedas if res.totais else [],
@@ -86,4 +87,5 @@ def restaurar(user, dados):
     return Resultado(True, dados["mensagem"], colunas=dados["colunas"], tipos=dados["tipos"], totais=totais,
                      linhas=dados["linhas"], premissas=dados["premissas"], escopo=dados['escopo'],
                      truncado=dados.get('truncado', False), periodos=dados.get('periodos', []),
-                     medida_calculada=dados.get('medida_calculada', ''), curta_salva=dados.get('curta', ''))
+                     medida_calculada=dados.get('medida_calculada', ''), curta_salva=dados.get('curta', ''),
+                     rodape=dados.get('rodape', []))

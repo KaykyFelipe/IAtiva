@@ -404,11 +404,17 @@ def executar(user, c, d, defs, objetivos, texto, interrompido=None):
         r.mensagem = 'Valores apurados com a mesma consulta e os mesmos critérios nos dois meses.'
         r.colunas = ['Indicador' if titulo == 'Período' else titulo, *nomes]
         r.tipos = r.tipos[:3]
-        if agreg.lower().startswith(('soma:', 'contagem:')) and titulo != 'Período' and ' por ' in agreg:
-            r.linhas.append(['Total', *[
-                _fmt(sum(valores.values(), Decimal(0)), tipo) if all(v is not None for v in valores.values())
-                else 'Sem valor' for valores in (va, vb)
-            ]])
+    por_filial = a.colunas[0] == 'Filial' or (titulo == 'Filial' and ' por ' in agreg)
+    if por_filial and not limite:
+        x, y = [res.totais.valor_aditivo(rotulo) if res.totais else None for res in (a, b)]
+        if x is not None or y is not None:
+            r.rodape = ['Total', *[_fmt(v, tipo) if v is not None else 'Sem valor' for v in (x, y)]]
+            if not serie:
+                if x is None or y is None:
+                    r.rodape.extend(('Não calculável', 'Não calculável'))
+                else:
+                    pct = _fmt((y - x) / x * 100, 'valor') + '%' if x else 'Indefinido (base zero)'
+                    r.rodape.extend((_fmt(y - x, tipo), pct))
     if limite:
         r.mensagem = (f'{len(linhas)} cliente(s) com queda, em ordem de maior queda percentual, '
                       f'entre {nomes[0]} e {nomes[1]}.')
