@@ -239,6 +239,7 @@ def test_separadamente_herda_ano_e_entrega_duas_contagens(base, erp_sintetico):
     aprendizado.aprovar(u, aprendizado.salvar_proposta(u, "SRA", q))
     c = conversas.nova_individual(u)
     c.mensagens.create(papel="usuario", texto=PEDIDO, autor=u)
+    c.mensagens.create(papel="usuario", texto="Admitidos e desligados separadamente", autor=u)
     p = FakeProvider([], analises=[{'natureza': 'dados', 'setores': [base['cob'].codigo], 'confianca': 1,
                                    'resumo': '', 'memorias': [], 'entregas': QUATRO}])
     msg, res = conversas.enviar(u, c, "Admitidos e desligados separadamente", p)

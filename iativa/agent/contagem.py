@@ -310,7 +310,9 @@ def contextualizar_separadas(conversa, user, texto, mensagem_id=None):
     msgs = conversa.mensagens.filter(papel="usuario", autor=user)
     if mensagem_id is not None:
         msgs = msgs.filter(pk__lt=mensagem_id)
-    anterior = msgs.order_by("-pk").values_list("texto", flat=True).first() or ""
+    recentes = msgs.order_by("-pk").values_list("texto", flat=True)[:8]
+    anterior = next((t for t in recentes if not re.fullmatch(
+        r"admitidos e desligados separadamente[.?!]?", _norm(t).strip())), "")
     # Neste esclarecimento, o usuário só alterou a combinação dos dois eventos.
     if re.fullmatch(r"quantos funcionarios foram admitidos e desligados no mesmo ano,? por filial,? em "
                     r"[12]\d{3}[.?!]?", _norm(anterior).strip()):
