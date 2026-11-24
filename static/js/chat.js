@@ -823,7 +823,46 @@
   function animarResposta(msg) {
     if (!msg || msg.dataset.animada || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     msg.dataset.animada = "1";
-    msg.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 180 });
+    // M132: estilo ChatGPT. O texto aparece aos poucos com um cursor. Tabelas, botões e o resto da resposta
+    // surgem quando o texto termina. A resposta inteira leva no máximo ~1,6 s.
+    const alvo = msg.closest(".resposta-chat") || msg;
+    const fora = "table, .tabela, .resultado, .acoes-resposta, form, details, button, script, style, [data-tabela-copiavel]";
+    const textos = [];
+    const andar = document.createTreeWalker(alvo, NodeFilter.SHOW_TEXT, {
+      acceptNode: (n) => (n.nodeValue.trim() && !n.parentElement.closest(fora) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT),
+    });
+    while (andar.nextNode()) textos.push({ no: andar.currentNode, cheio: andar.currentNode.nodeValue });
+    const depois = [...alvo.querySelectorAll(fora)].filter((el) => !el.parentElement.closest(fora));
+    const total = textos.reduce((s, t) => s + t.cheio.length, 0);
+    if (!total) { alvo.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 180 }); return; }
+    depois.forEach((el) => { el.style.visibility = "hidden"; });
+    textos.forEach((t) => { t.no.nodeValue = ""; });
+    const cursor = document.createElement("span");
+    cursor.className = "cursor-digitando";
+    cursor.setAttribute("aria-hidden", "true");
+    const passo = Math.max(2, Math.ceil(total / 95));
+    let i = 0, pos = 0;
+    const revelar = () => {
+      if (!alvo.isConnected) return;
+      let resta = passo;
+      while (resta > 0 && i < textos.length) {
+        const t = textos[i];
+        const n = Math.min(resta, t.cheio.length - pos);
+        pos += n; resta -= n;
+        t.no.nodeValue = t.cheio.slice(0, pos);
+        t.no.after(cursor);
+        if (pos >= t.cheio.length) { i += 1; pos = 0; }
+      }
+      const painel = document.querySelector("[data-rolagem]");
+      if (painel && distanciaAteFim(painel) < 160) rolarParaFim();
+      if (i < textos.length) { requestAnimationFrame(revelar); return; }
+      cursor.remove();
+      depois.forEach((el) => {
+        el.style.visibility = "";
+        el.animate([{ opacity: 0, transform: "translateY(4px)" }, { opacity: 1, transform: "none" }], { duration: 260, easing: "ease-out" });
+      });
+    };
+    requestAnimationFrame(revelar);
   }
   let animarProxima = false;
 

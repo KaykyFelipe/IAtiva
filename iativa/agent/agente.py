@@ -1684,6 +1684,10 @@ def _preparar(user, c, d, atual, defs, ficha, texto="") -> Saida:
         lido = f"01/01/{ano}..31/12/{ano}" if ano else periodo_da_mensagem(texto, timezone.localdate())
         if lido:
             pares.append(("periodo-analise", lido))
+        elif getattr(OBJETIVOS[objetivo], "modelo_id", None):
+            # M132: consulta aprendida e a pessoa não citou período ("pedidos em aberto", "ativos hoje"): a situação
+            # atual é todo o histórico até hoje (como em entregas). A IA entrega em vez de parar perguntando.
+            pares.append(("periodo-analise", f"01/01/1900..{timezone.localdate():%d/%m/%Y}"))
     erros = orq._aplicar_parametros(user, atual, pares, defs)
     atual.refresh_from_db()
     return _avaliar_e_executar(user, atual, d.resposta, erros, ficha)
@@ -1722,7 +1726,9 @@ def _avaliar_e_executar(user, s, resposta_modelo, erros, ficha) -> Saida:
     if r.tipo == "pergunta":
         if not ficha["opcoes"] and len(r.perguntas) == 1 and r.perguntas[0].opcoes:
             ficha["opcoes"] = r.perguntas[0].opcoes[:12]  # M96: 8 filiais + "Todas as filiais" (antes cortava em 6)
-        texto = resposta_modelo or _frase_pendencias(r)
+        # M132: o texto do modelo ("vou montar…") não pode esconder o que falta: sem pergunta, vai a frase do sistema.
+        texto = (resposta_modelo if resposta_modelo and resposta_modelo.rstrip().endswith("?")
+                 else _frase_pendencias(r) or resposta_modelo)
         # Falta uma decisão da pessoa: pergunta. Só há o que corrigir sozinha se um valor foi recusado.
         obs = _obs_erros(texto_erros) if texto_erros else None
         return Saida(" ".join(x for x in (texto_erros, texto) if x), ficha, s, observacao=obs)

@@ -253,3 +253,4 @@ M60 (Diego, 2026-11-16, aprovada no chat): implementar os seis ajustes da revis�
 | M129 | 2026-11-23 | Pedido de Diego: quando a IA já sabe consultar cada parte, não vai para manutenção; tabela personalizada (eventos x períodos, por filial) montada em tabela.py. |
 | M130 | 2026-11-23 | Pedido de Diego (a IA entende o jeito da pessoa falar): especificação da tabela vem da leitura do modelo (analise.tabela), validada no backend; falha na tabela volta às entregas originais em vez de ir à manutenção. |
 | M131 | 2026-11-23 | Pedido de Diego: 'quantos' + 'quais são' = duas tabelas (lista primeiro, quantidade por último); 'apenas os nomes' = só a lista de nomes. |
+| M132 | 2026-11-24 | Pedido de Diego: se aprendeu a consultar, termina a tarefa e entrega (consulta aprendida sem período = todo o histórico até hoje); resposta aparece digitando, estilo ChatGPT. |

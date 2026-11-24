@@ -4,6 +4,14 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **Etapa 7 aprovada em 2026-11-16 por Diego; em andamento.** Feito: roteiro do piloto (`docs/piloto/ROTEIRO.md`) e auditoria de não armazenamento (`manage.py auditar_armazenamento`). Falta: usuários do Financeiro, conferência dos números com relatórios do Protheus, avaliação da interpretação e latência. Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M132 — aprendeu a consulta e já entrega; resposta aparece digitando (2026-11-24)
+
+- "Quantos pedidos de compra estão em aberto, por filial?": a IA aprendia a consulta (SC7) mas parava. A consulta aprendida tem data e a pessoa não citou período; a pergunta do sistema ficava escondida pelo texto do modelo ("vou montar…").
+- Agora:
+  - consulta aprendida sem período na mensagem roda com todo o histórico até hoje (mesma regra de entregas) e a resposta chega na hora;
+  - quando falta mesmo um dado da pessoa, aparece a pergunta do sistema, nunca só o texto do modelo.
+- Interface: a resposta da IA aparece aos poucos, com cursor, no estilo ChatGPT. Tabelas e botões surgem quando o texto termina. Sem animação para quem pede movimento reduzido.
+
 ## Mudança M131 — "quantos" e "quais são" na mesma pergunta viram duas tabelas (2026-11-23)
 
 - A leitura do pedido (analise.tabela) diz também se a pessoa pediu quantidade (`contagem`) e se pediu quem são (`lista.pedida`), com as colunas pedidas (`lista.campos`).
