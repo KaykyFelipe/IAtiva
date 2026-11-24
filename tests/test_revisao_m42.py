@@ -119,11 +119,25 @@ def test_ranking_incompleto_nao_afirma_lider_geral(ana, settings, politica):
 
     politica(ana, Department.objects.get(codigo="financeiro-cobranca"), consultar=True, filiais=["02"])
     politica(ana, __import__("iativa.accounts.models", fromlist=["Department"]).Department.objects.get(codigo="ti"), administrar=True)  # M81: a IA só aprova fonte nova para a TI
-    settings.IATIVA_CONSULTA = {**settings.IATIVA_CONSULTA, "limite_linhas": 1}
+    settings.IATIVA_CONSULTA = {**settings.IATIVA_CONSULTA, "limite_linhas": 1, "limite_grupos": 1}
     msg, res = ranking(ana, "soma:E1_VALOR por E1_CLIENTE top 1")
     assert res is None or not res.ok
     assert "ranking geral" in msg.texto.lower() and "não foi validado" in msg.texto
     assert "O maior é" not in msg.texto
+
+
+def test_m139_ranking_geral_nao_usa_o_limite_de_exibicao(ana, settings, politica):
+    """Mais grupos por filial que o limite de exibição: o ranking geral lê os totais agregados com o teto próprio
+    ("10 fornecedores com mais pedidos" era recusado com 500 fornecedores numa filial)."""
+    from .test_ranking_filiais import _rodar as ranking
+    from iativa.accounts.models import Department
+
+    politica(ana, Department.objects.get(codigo="financeiro-cobranca"), consultar=True, filiais=["02"])
+    politica(ana, Department.objects.get(codigo="ti"), administrar=True)
+    settings.IATIVA_CONSULTA = {**settings.IATIVA_CONSULTA, "limite_linhas": 1}
+    msg, res = ranking(ana, "soma:E1_VALOR por E1_CLIENTE top 1")
+    assert res is not None and res.ok, msg.texto
+    assert len(res.linhas) == 1 and "não foi validado" not in msg.texto
 
 
 def test_resposta_e_memoria_nao_encerram_antes_da_segunda_pergunta(ana):

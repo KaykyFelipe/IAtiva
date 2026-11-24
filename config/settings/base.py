@@ -143,7 +143,7 @@ IATIVA_ERP_SUFIXO = "010"
 IATIVA_APRENDIZADO_AUTOAPROVACAO = False
 
 # Etapa 5 — execução somente leitura: linhas e tempo máximos por consulta.
-IATIVA_CONSULTA = {"limite_linhas": 500, "timeout_s": 30}
+IATIVA_CONSULTA = {"limite_linhas": 500, "timeout_s": 30, "limite_grupos": 20000}  # M139: grupos do ranking geral
 
 # M25 — tarefas longas (worker): prazo total, chamadas ao modelo, consultas, tentativas por etapa,
 # registros por consulta, tamanho do lote da busca e validade do lease de execução.

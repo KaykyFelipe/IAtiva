@@ -4,6 +4,14 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **Etapa 7 aprovada em 2026-11-16 por Diego; em andamento.** Feito: roteiro do piloto (`docs/piloto/ROTEIRO.md`) e auditoria de não armazenamento (`manage.py auditar_armazenamento`). Falta: usuários do Financeiro, conferência dos números com relatórios do Protheus, avaliação da interpretação e latência. Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M139 — ranking geral de todas as filiais sem o teto de exibição (2026-11-24)
+
+- Depois da M138 a IA criou a consulta de "10 fornecedores com mais pedidos de compra em 2026", mas o ranking foi recusado com "o número de grupos ultrapassou o limite de leitura".
+- Causa: no ranking geral cada filial devolve todos os seus grupos (fornecedores) para somar entre filiais antes do top N. Essa leitura usava o teto de exibição de tabela (500 linhas); com mais de 500 fornecedores numa filial, o ranking era recusado.
+- Agora a leitura agregada dos grupos usa um teto próprio (IATIVA_CONSULTA["limite_grupos"] = 20000). São só totais por grupo, não registros.
+- Sem top N, a tela mostra os primeiros 500 grupos do ranking e avisa. Acima de 20000 grupos por filial a recusa continua.
+- Vale para qualquer ranking "por X" de todas as filiais (clientes, produtos, fornecedores, vendedores).
+
 ## Mudança M138 — a IA monta a consulta nova em vez de travar (2026-11-24)
 
 - Causa (log da M137) de "10 fornecedores com mais pedidos de compra em 2026" sem resposta:

@@ -493,9 +493,13 @@ def _executar_solicitacao(user, s: RequestContext) -> Resultado:
                 mesclar = todas and len(filiais) > 1 and _pode_mesclar(plano)
                 # O líder geral pode não ser top N em nenhuma filial. Somar todos os grupos
                 # autorizados antes do ranking, mantendo o teto de leitura de cada consulta.
-                comp = compilar(replace(plano, top=0) if mesclar else plano, cat, limite)
+                # M139: no ranking geral cada filial devolve TODOS os seus grupos (só totais agregados, não registros)
+                # para somar entre filiais antes do top N. O teto de exibição (500) recusava rankings como
+                # "10 fornecedores com mais pedidos"; a leitura agregada tem o próprio teto, bem maior.
+                lim = max(limite, int(cfg.get("limite_grupos", 20000))) if mesclar else limite
+                comp = compilar(replace(plano, top=0) if mesclar else plano, cat, lim)
                 permitidas = {t.fisica for t in cat.tabelas([plano.base] + [j.tabela for j in plano.juncoes]).values()}
-                validar(comp.sql, permitidas, limite + 1)
+                validar(comp.sql, permitidas, lim + 1)
                 if plano.juncoes:
                     andamento.avisar("Conferindo se as junções não duplicam registros")
                 if plano.juncoes and not _juncoes_sem_duplicar(cat, plano, cfg, permitidas):
@@ -504,8 +508,8 @@ def _executar_solicitacao(user, s: RequestContext) -> Resultado:
                                      "resultado não foi validado. A consulta precisa ser refeita sem essa junção.",
                                      ERRO_METADADOS)
                 parte, cortou = executar(
-                    cat, comp.sql, comp.params, limite, cfg["timeout_s"],
-                    validar_final=lambda sql, p=permitidas: validar(sql, p, limite + 1),
+                    cat, comp.sql, comp.params, lim, cfg["timeout_s"],
+                    validar_final=lambda sql, p=permitidas, n=lim: validar(sql, p, n + 1),
                 )
                 if mesclar and cortou:
                     return _encerrar(user, s, E.NAO_VALIDADA, inicio, 0,
@@ -565,6 +569,8 @@ def _executar_solicitacao(user, s: RequestContext) -> Resultado:
     if todas and len(filiais) > 1 and plano.agrupar and linhas and not getattr(plano, "por_filial", False):
         linhas, mesclou = _mesclar_filiais(plano, comp, linhas)
         if mesclou:
+            if len(linhas) > limite:  # M139: sem top N, a tela mostra os primeiros grupos do ranking e avisa
+                linhas, truncado = linhas[:limite], True
             origem = [None] * len(linhas)
     sem_grupos = not linhas
     if plano.categorias:
