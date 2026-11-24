@@ -350,7 +350,7 @@ def test_compoe_tres_consultas_verificadas_sem_nova_decisao(base, erp_sintetico)
     _, combinado = conversas.enviar(
         u, c, "Mostre por filial quantos saíram em 2023, quantos saíram em 2024 e quantos entraram em 2025.", outro)
     assert outro.chamadas == 0 and combinado is not None and combinado.ok
-    assert combinado.colunas == ["Filial", *[e["descricao"] for e in itens]]
+    assert combinado.colunas == ["Filial", "Desligados - 2023", "Desligados - 2024", "Admitidos - 2025"]  # M141
     assert combinado.linhas[-1] == ["Total", "1", "1", "2"]
     assert not Incidente.objects.exists()
 

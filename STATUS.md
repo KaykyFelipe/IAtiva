@@ -4,6 +4,13 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **Etapa 7 aprovada em 2026-11-16 por Diego; em andamento.** Feito: roteiro do piloto (`docs/piloto/ROTEIRO.md`) e auditoria de não armazenamento (`manage.py auditar_armazenamento`). Falta: usuários do Financeiro, conferência dos números com relatórios do Protheus, avaliação da interpretação e latência. Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M141 — colunas curtas no resumo de contagens lado a lado (2026-11-24)
+
+- "Quantos funcionários foram desligados e admitidos em setembro, por filial" mostrava colunas com o título inteiro de cada contagem ("Contagem de funcionários admitidos em setembro/2026, por filial").
+- Agora cada coluna mostra só o que a diferencia das outras. O que é igual em todas (contagem, funcionários, o mês, por filial) já está na pergunta e sai: "Admitidos" e "Desligados".
+- Mês ou ano diferente entre as colunas fica depois do evento: "Admitidos - Setembro", "Desligados - 2024".
+- Se não houver diferença clara, os títulos ficam como estavam.
+
 ## Mudança M140 — código sempre acompanhado do nome do cadastro (2026-11-24)
 
 - Pedido de Diego: o ranking de fornecedores mostrava só o código (C7_FORNECE). Toda resposta com um código que tem nome deve trazer também o nome, ao lado.

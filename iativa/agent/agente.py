@@ -1095,9 +1095,10 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
                         saida.solicitacao = None  # repetir um único evento não refaz os dois
             elif (len(ac.contrato) > 1 and not ac.pendentes() and all(
                     e.get("metrica") == "contagem" and e.get("tipo") == coord.CALCULO for e in ac.contrato)):
-                from .contagem import resumo_lado_a_lado
+                from .contagem import resumo_lado_a_lado, rotulos_curtos
                 blocos = _blocos(saida.resultado)
-                resumo = resumo_lado_a_lado(blocos, [getattr(r, "titulo_entrega", "") for r in blocos])
+                titulos = [getattr(r, "titulo_entrega", "") for r in blocos]
+                resumo = resumo_lado_a_lado(blocos, rotulos_curtos(titulos) if all(titulos) else titulos)
                 if resumo is not None and len(blocos) == len(ac.contrato):
                     saida.resultado = resumo
                     saida.texto = ""

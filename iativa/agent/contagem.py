@@ -417,6 +417,37 @@ def _escopo_comum(resultados):
     return {**base, "campos": {alias: sorted(nomes) for alias, nomes in campos.items()}}
 
 
+_MESES = ("janeiro", "fevereiro", "marco", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro",
+          "novembro", "dezembro")
+_LIGACAO = {"de", "do", "da", "dos", "das", "em", "no", "na", "nos", "nas", "por", "e", "o", "a", "os", "as"}
+
+
+def rotulos_curtos(titulos):
+    """M141: "Contagem de funcionários admitidos em setembro/2026, por filial" e "... desligados em setembro/2026,
+    por filial" viram "Admitidos" e "Desligados". O que é igual em todos os títulos já está na pergunta e sai. Mês
+    ou ano diferente entre as colunas fica depois do evento: "Admitidos - Setembro". Sem diferença clara, mantém os
+    títulos."""
+    def palavras(t):
+        return [p for p in re.split(r"[\s/,;:.()]+", str(t or "")) if p]
+    listas = [palavras(t) for t in titulos]
+    if len(listas) < 2 or not all(listas):
+        return list(titulos)
+    comuns = set.intersection(*({_norm(p) for p in ps} for ps in listas))
+    out = []
+    for ps in listas:
+        resto = [p for p in ps if _norm(p) not in comuns and _norm(p) not in _LIGACAO]
+        periodo = [p for p in resto if _norm(p) in _MESES or re.fullmatch(r"\d{4}", p)]
+        evento = [p for p in resto if p not in periodo]
+        rot = " ".join(evento).capitalize()
+        if periodo:
+            per = " ".join(periodo).capitalize()
+            rot = f"{rot} - {per}" if rot else per
+        out.append(rot)
+    if not all(out) or len(set(out)) != len(out):
+        return list(titulos)
+    return out
+
+
 def resumo_lado_a_lado(resultados, rotulos):
     from iativa.accounts.filiais import rotulo
     from iativa.query.servico import Resultado
