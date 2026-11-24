@@ -259,3 +259,4 @@ M60 (Diego, 2026-11-16, aprovada no chat): implementar os seis ajustes da revis�
 | M135 | 2026-11-24 | Pedido de Diego: avaliação como botão no estilo do copiar (menu Sim/Não; Não abre janela com Enviar para a T.I). |
 | M136 | 2026-11-24 | Pedido de Diego: respostas marcadas como incorretas chegam ao T.I numa seção própria de "Memória e aprovações" (quem, motivo, pergunta, consulta, tabela, critérios). |
 | M137 | 2026-11-24 | Diagnóstico: motivo de cada tentativa de aprender_tabela sem consulta vai para o log, para achar a causa da pergunta dos fornecedores. |
+| M138 | 2026-11-24 | Pedido de Diego: nenhuma pergunta pode parar porque o modelo errou o passo ou o formato; segunda chance com instrução explícita, motivo da recusa devolvido ao modelo, validação tolerante só no que não muda o sentido. |

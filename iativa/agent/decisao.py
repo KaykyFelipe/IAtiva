@@ -240,9 +240,14 @@ def esquema(codigos_objetivo, codigos_parametro) -> dict:
     }
 
 
-def _texto(v, limite, campo) -> str:
-    if not isinstance(v, str) or len(v) > limite:
+def _texto(v, limite, campo, cortar=False) -> str:
+    """M138: texto livre (resposta, nome, descrição) longo demais é cortado; código (tabela, campo) longo é inválido."""
+    if not isinstance(v, str):
         raise DecisaoInvalida(campo)
+    if len(v) > limite:
+        if not cortar:
+            raise DecisaoInvalida(campo)
+        v = v[:limite]
     return v.strip()
 
 
@@ -253,7 +258,7 @@ def validar(saida, codigos_objetivo, codigos_parametro) -> Decisao:
                            "alcance", "consulta", "tipo_nota", "regra", "validade", "investigacao", "entrega",
                            "ajuste", "calculo", "formato", "capacidade", "analise", "atende"}
     if extras:
-        raise DecisaoInvalida("campos extras")
+        raise DecisaoInvalida("campos extras: " + ", ".join(sorted(map(str, extras)))[:80])
     acao = saida.get("acao")
     if acao not in ACOES:
         raise DecisaoInvalida("acao")
@@ -261,8 +266,9 @@ def validar(saida, codigos_objetivo, codigos_parametro) -> Decisao:
     if objetivo and objetivo not in codigos_objetivo:
         raise DecisaoInvalida("objetivo")
     params = saida.get("parametros") or []
-    if not isinstance(params, list) or len(params) > MAX_PARAMETROS:
+    if not isinstance(params, list):
         raise DecisaoInvalida("parametros")
+    params = params[:MAX_PARAMETROS]
     pares = []
     for p in params:
         if not isinstance(p, dict) or p.get("codigo") not in codigos_parametro:
@@ -272,8 +278,9 @@ def validar(saida, codigos_objetivo, codigos_parametro) -> Decisao:
     if alcance not in ALCANCES:
         raise DecisaoInvalida("alcance")
     opcoes = saida.get("opcoes") or []
-    if not isinstance(opcoes, list) or len(opcoes) > MAX_OPCOES:
+    if not isinstance(opcoes, list):
         raise DecisaoInvalida("opcoes")
+    opcoes = opcoes[:MAX_OPCOES]
     consulta = saida.get("consulta") or None
     if consulta is not None:
         consulta = _consulta(consulta)
@@ -323,7 +330,7 @@ def validar(saida, codigos_objetivo, codigos_parametro) -> Decisao:
     formato = saida.get("formato") or ""
     if formato not in FORMATOS:
         raise DecisaoInvalida("formato")
-    capacidade = _texto(saida.get("capacidade") or "", 300, "capacidade")
+    capacidade = _texto(saida.get("capacidade") or "", 300, "capacidade", cortar=True)
     if acao == "falta_capacidade" and not capacidade.strip():
         raise DecisaoInvalida("capacidade")
     return Decisao(
@@ -336,14 +343,14 @@ def validar(saida, codigos_objetivo, codigos_parametro) -> Decisao:
         investigacao=investigacao,
         tipo_nota=tipo_nota, regra=regra, validade=_texto(saida.get("validade", "") or "", 10, "validade"),
         consulta=consulta,
-        resposta=_texto(saida.get("resposta", ""), MAX_RESPOSTA, "resposta"),
+        resposta=_texto(saida.get("resposta", "") or "", MAX_RESPOSTA, "resposta", cortar=True),
         acao=acao,
         objetivo=objetivo,
         parametros=tuple(pares),
-        alvo=_texto(saida.get("alvo", ""), 200, "alvo"),
-        nota=_texto(saida.get("nota", ""), MAX_NOTA, "nota"),
+        alvo=_texto(saida.get("alvo", "") or "", 200, "alvo", cortar=True),
+        nota=_texto(saida.get("nota", "") or "", MAX_NOTA, "nota", cortar=True),
         confirmado=bool(saida.get("confirmado", False)),
-        opcoes=tuple(_texto(o, 120, "opcao") for o in opcoes),
+        opcoes=tuple(_texto(o, 120, "opcao", cortar=True) for o in opcoes),
         alcance=alcance,
     )
 
@@ -354,6 +361,11 @@ def _atende(v):
     if not isinstance(v, list) or len(v) > 6 or any(type(i) is not int or not 0 <= i <= 5 for i in v):
         raise DecisaoInvalida('atende')
     return sorted(set(v))
+
+
+OPERADORES_FILTRO = {"igual": "igual", "=": "igual", "==": "igual", "igual a": "igual", "eq": "igual",
+                     "diferente": "diferente", "<>": "diferente", "!=": "diferente", "diferente de": "diferente",
+                     "ne": "diferente"}
 
 
 def _ajuste(a) -> dict | None:
@@ -369,28 +381,29 @@ def _ajuste(a) -> dict | None:
         raise DecisaoInvalida("ajuste")
     out = []
     for f in filtros:
-        if not isinstance(f, dict) or f.get("operador") not in ("igual", "diferente"):
+        # M138: sinônimos do operador ("=", "<>") valem; outro operador continua inválido (mudaria o sentido).
+        op = OPERADORES_FILTRO.get(str(f.get("operador", "")).strip().lower()) if isinstance(f, dict) else None
+        if op is None:
             raise DecisaoInvalida("ajuste.filtro")
-        out.append({"campo": _texto(f.get("campo", ""), 20, "campo").upper(), "operador": f["operador"],
+        out.append({"campo": _texto(f.get("campo", ""), 20, "campo").upper(), "operador": op,
                     "valor": _texto(f.get("valor", ""), 40, "valor")})
     rem = [_texto(c, 20, "remover").upper() for c in remover]
     return {"filtros": out, "remover": rem, "alcance": alcance} if out or rem or alcance else None
 
 
 def _consulta(c) -> dict:
-    if not isinstance(c, dict) or set(c) - {"tabela", "nome", "descricao", "colunas", "campo_data", "campo_busca",
-                                             "filtraveis", "juncoes", "filtros"}:
+    if not isinstance(c, dict):
         raise DecisaoInvalida("consulta")
     def lista(chave, maximo):
         v = c.get(chave) or []
-        if not isinstance(v, list) or len(v) > maximo:
+        if not isinstance(v, list):
             raise DecisaoInvalida(chave)
-        return [_texto(x, 20, chave).upper() for x in v]
+        return [_texto(x, 20, chave).upper() for x in v[:maximo]]  # M138: lista longa é cortada
 
     return {
         "tabela": _texto(c.get("tabela", ""), 6, "tabela").upper(),
-        "nome": _texto(c.get("nome", ""), 120, "nome"),
-        "descricao": _texto(c.get("descricao", "") or "", 300, "descricao"),
+        "nome": _texto(c.get("nome", "") or "", 120, "nome", cortar=True),
+        "descricao": _texto(c.get("descricao", "") or "", 300, "descricao", cortar=True),
         "colunas": lista("colunas", 20),
         "campo_data": _texto(c.get("campo_data", "") or "", 20, "campo_data"),
         "campo_busca": _texto(c.get("campo_busca", "") or "", 20, "campo_busca"),
@@ -401,12 +414,12 @@ def _consulta(c) -> dict:
 
 
 def _juncoes(v) -> list[dict]:
-    if not isinstance(v, list) or len(v) > 2:
+    if not isinstance(v, list):
         raise DecisaoInvalida("juncoes")
     out = []
-    for j in v:
-        if not isinstance(j, dict) or not isinstance(j.get("colunas") or [], list) or len(j.get("colunas") or []) > 5:
+    for j in v[:2]:
+        if not isinstance(j, dict) or not isinstance(j.get("colunas") or [], list):
             raise DecisaoInvalida("juncao")
         out.append({"tabela": _texto(j.get("tabela", ""), 6, "tabela").upper(),
-                    "colunas": [_texto(x, 20, "coluna").upper() for x in j.get("colunas") or []]})
+                    "colunas": [_texto(x, 20, "coluna").upper() for x in (j.get("colunas") or [])[:5]]})
     return out

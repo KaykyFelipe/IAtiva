@@ -231,6 +231,9 @@ def _catalogo(user, objetivos, defs) -> list[dict]:
 
 
 def _interpretar(provedor, entrada, codigos_obj, codigos_par):
+    """M138: resposta do modelo fora do formato volta para ele com o motivo (antes repetia a mesma entrada às cegas
+    e, depois de 3 recusas iguais, o pedido parava como "a IA não respondeu a tempo")."""
+    import logging
     for _ in range(TENTATIVAS):
         try:
             from . import tempos
@@ -240,7 +243,15 @@ def _interpretar(provedor, entrada, codigos_obj, codigos_par):
         except FalhaModelo as exc:
             if exc.temporaria:
                 raise  # o provedor já esperou e tentou outros modelos
-        except DecisaoInvalida:
+        except DecisaoInvalida as exc:
+            motivo = str(exc)[:120]
+            acao = str(bruta.get("acao", ""))[:40] if isinstance(bruta, dict) else ""
+            logging.getLogger(__name__).warning("decisao_invalida: campo=%s acao=%s", motivo, acao)
+            entrada = replace(entrada, observacoes=list(getattr(entrada, "observacoes", None) or []) + [{
+                "acao": "formato_da_resposta", "situacao": "decisao_invalida",
+                "motivo": (f"Sua resposta anterior foi recusada no campo '{motivo}'. Responda de novo no formato do "
+                           "esquema: só os campos previstos, códigos de objetivo e de parâmetro da lista, filtros com "
+                           "operador 'igual' ou 'diferente', tabela com 3 letras e campos com o nome técnico.")}])
             continue
     raise FalhaModelo("sem decisão válida")
 
@@ -1960,6 +1971,16 @@ def _aprender_sozinho(user, c, d, texto, ficha, provedor, entrada, atual, motivo
         codigos_par = sorted({p["codigo"] for o in entrada.objetivos for p in o.get("parametros", [])}
                              | set(PARAMETROS_APRENDIDOS))
         d2 = _interpretar(provedor, entrada2, [o["codigo"] for o in entrada.objetivos], codigos_par)
+        if d2.acao != "criar_consulta" and not (d2.acao == "conversar" and d2.resposta.strip().endswith("?")):
+            # M138: com as tabelas e os campos em mãos, o passo é montar a consulta. O modelo às vezes pede de novo
+            # "aprender_tabela" (o ciclo repetia até o limite): uma segunda chance com a instrução explícita.
+            entrada3 = replace(entrada2, observacoes=list(getattr(entrada2, "observacoes", None) or []) + [{
+                "acao": d2.acao or "aprender_tabela", "situacao": "etapa_errada",
+                "motivo": ("As tabelas e os campos já estão em tabelas_para_aprender. Agora responda acao "
+                           "'criar_consulta' com a tabela que responde a pergunta (" + ", ".join(t["tabela"] for t in tabelas)
+                           + "), as colunas, o campo_data, as juncoes para trazer nomes e a agregacao pedida "
+                           "(ex.: contagem_distinta:CAMPO por CAMPO_GRUPO, com top N se pedido). Não peça a tabela de novo.")}])
+            d2 = _interpretar(provedor, entrada3, [o["codigo"] for o in entrada.objetivos], codigos_par)
         if d2.acao == "conversar" and d2.resposta.strip().endswith("?") and not d2.opcoes:
             return Saida(d2.resposta, ficha)
         if d2.acao != "criar_consulta" or d2.consulta is None:

@@ -4,6 +4,17 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **Etapa 7 aprovada em 2026-11-16 por Diego; em andamento.** Feito: roteiro do piloto (`docs/piloto/ROTEIRO.md`) e auditoria de não armazenamento (`manage.py auditar_armazenamento`). Falta: usuários do Financeiro, conferência dos números com relatórios do Protheus, avaliação da interpretação e latência. Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M138 — a IA monta a consulta nova em vez de travar (2026-11-24)
+
+- Causa (log da M137) de "10 fornecedores com mais pedidos de compra em 2026" sem resposta:
+  1. A IA achou as tabelas certas (SC7, SCY, SC1) e mandou os campos ao modelo. O modelo pediu "aprender_tabela" de novo em vez de montar a consulta, e o ciclo repetia até o limite.
+  2. Uma resposta do modelo fora do formato era repetida 3 vezes com a mesma entrada, sem dizer o que estava errado, e o pedido parava como "a IA não respondeu a tempo".
+- Correções gerais (qualquer pergunta, qualquer setor):
+  - com as tabelas em mãos, se o modelo não montar a consulta, recebe uma segunda chance com a instrução explícita de criar a consulta com uma delas;
+  - resposta recusada volta ao modelo com o campo recusado e as regras do formato, e o log registra o campo;
+  - validação tolerante no que não muda o sentido: texto livre longo e listas longas (colunas, filtráveis, colunas da junção, opções, parâmetros) são cortados, e operador "=" e "<>" vale como igual/diferente;
+  - continua recusado o que mudaria o sentido ou a segurança: campo extra (ex.: SQL), operador de filtro desconhecido, código de objetivo ou parâmetro fora da lista.
+
 ## Mudança M137 — motivo de "aprender_tabela" sem consulta vai para o log (2026-11-24)
 
 - "Quais são os 10 fornecedores com mais pedidos de compra em 2026?" parou depois de 4 tentativas de criar consulta, sem dizer onde. O motivo de cada tentativa só ia para o modelo.
