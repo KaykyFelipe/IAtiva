@@ -63,6 +63,7 @@
                   {% csrf_token %}<button class="icone" type="submit" aria-label="Executar de novo" title="Executar de novo">{% include "chat/_icone.html" with nome="repetir" %}</button>
                 </form>
               {% endif %}
+              {% if item.avaliavel %}{% include "chat/_avaliacao.html" with avaliacao=item.avaliacao %}{% endif %}
               <span class="sr" data-estado-copia aria-live="polite"></span>
             </div>
           {% endif %}

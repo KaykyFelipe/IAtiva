@@ -8,6 +8,7 @@ urlpatterns = [
     path("nova/", views.nova, name="nova"),
     path("c/<int:conversa_id>/", views.conversa, name="conversa"),
     path("c/<int:conversa_id>/renomear/", views.renomear, name="renomear"),
+    path("c/<int:conversa_id>/avaliar/<int:mensagem_id>/", views.avaliar, name="avaliar"),
     path("c/<int:conversa_id>/excluir/", views.excluir, name="excluir"),
     path("c/<int:conversa_id>/mensagem/", views.mensagem, name="mensagem"),
     path("c/<int:conversa_id>/parametro/", views.parametro, name="parametro"),

@@ -280,3 +280,15 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 .cursor-digitando { display: inline-block; width: .55em; height: .55em; margin-left: 3px; border-radius: 50%; background: var(--texto); vertical-align: middle; animation: piscar-cursor .9s ease-in-out infinite; }
 @keyframes piscar-cursor { 0%, 100% { opacity: 1; } 50% { opacity: .25; } }
 @media (prefers-reduced-motion: reduce) { .cursor-digitando { animation: none; } }
+
+/* M134: "Esta informação está correta?" ao lado do copiar. */
+.avaliacao { display: inline-flex; align-items: center; margin-left: 6px; position: relative; }
+.avaliacao-pergunta > summary { list-style: none; cursor: pointer; font-size: 12.5px; color: var(--sutil); padding: 4px 10px; border: 1px solid var(--borda); border-radius: 999px; }
+.avaliacao-pergunta > summary::-webkit-details-marker { display: none; }
+.avaliacao-pergunta > summary:hover, .avaliacao-pergunta[open] > summary { color: var(--texto); }
+.avaliacao-opcoes { position: absolute; left: 0; top: calc(100% + 6px); z-index: 20; width: min(340px, 80vw); display: flex; flex-direction: column; gap: 8px; padding: 10px; background: var(--papel, #fff); border: 1px solid var(--linha, var(--borda)); border-radius: 10px; box-shadow: 0 6px 20px rgba(0,0,0,.08); }
+.avaliacao-opcoes form { display: flex; flex-direction: column; gap: 6px; }
+.avaliacao-opcoes textarea { font: inherit; font-size: 13px; padding: 6px 8px; border: 1px solid var(--borda); border-radius: 6px; resize: vertical; }
+.avaliacao-opcoes button { font: inherit; font-size: 13px; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--borda); background: transparent; color: var(--texto); cursor: pointer; text-align: left; }
+.avaliacao-opcoes button:hover { background: var(--hover, rgba(0,0,0,.04)); }
+.avaliacao-feita { font-size: 12.5px; color: var(--sutil); }

@@ -1,0 +1,23 @@
+{# M134: "Esta informação está correta?" ao lado do copiar. "Não" vai para a TI verificar o motivo. #}
+<div class="avaliacao" data-avaliacao>
+  {% if avaliacao %}
+    <span class="avaliacao-feita{% if not avaliacao.correta %} negativa{% endif %}">
+      {% if avaliacao.correta %}Você confirmou que está correta{% else %}Enviado para a TI verificar{% endif %}
+    </span>
+  {% else %}
+    <details class="avaliacao-pergunta">
+      <summary title="Esta informação está correta?">Esta informação está correta?</summary>
+      <div class="avaliacao-opcoes">
+        <form hx-post="{% url 'chat:avaliar' conversa.pk m.pk %}" hx-target="closest [data-avaliacao]" hx-swap="outerHTML">
+          {% csrf_token %}<input type="hidden" name="correta" value="1">
+          <button type="submit" class="avaliacao-sim">Sim, está correta</button>
+        </form>
+        <form hx-post="{% url 'chat:avaliar' conversa.pk m.pk %}" hx-target="closest [data-avaliacao]" hx-swap="outerHTML">
+          {% csrf_token %}<input type="hidden" name="correta" value="0">
+          <textarea name="comentario" rows="2" maxlength="1000" placeholder="O que está errado? Ex.: era só uma filial, faltou um filtro (opcional). Não envie CPF ou CNPJ."></textarea>
+          <button type="submit" class="avaliacao-nao">Não, enviar para a TI verificar</button>
+        </form>
+      </div>
+    </details>
+  {% endif %}
+</div>

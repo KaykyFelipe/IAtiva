@@ -594,3 +594,16 @@ def objetivo(request, objetivo_id):
         # aqui perderia rascunho/rolagem e remontaria as tabelas do histórico.
         return HttpResponse(status=200)
     return render(request, "chat/_objetivo.html", {"objetivo": o})
+
+
+@_so_post
+def avaliar(request, conversa_id, mensagem_id):
+    """M134: botão "Esta informação está correta?" (Sim / Não, com o que está errado para a TI)."""
+    try:
+        a = conversas.avaliar(request.user, conversa_id, mensagem_id, request.POST.get("correta") == "1",
+                              request.POST.get("comentario", ""))
+    except PermissaoNegada:
+        raise Http404 from None
+    except ValidationError as exc:
+        return HttpResponse(exc.messages[0], status=400)
+    return render(request, "chat/_avaliacao.html", {"m": a.mensagem, "avaliacao": a, "conversa": a.mensagem.conversa})

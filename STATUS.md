@@ -4,6 +4,15 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **Etapa 7 aprovada em 2026-11-16 por Diego; em andamento.** Feito: roteiro do piloto (`docs/piloto/ROTEIRO.md`) e auditoria de não armazenamento (`manage.py auditar_armazenamento`). Falta: usuários do Financeiro, conferência dos números com relatórios do Protheus, avaliação da interpretação e latência. Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M134 — "Esta informação está correta?" ao lado do copiar (2026-11-24)
+
+- Nova opção em toda resposta com tabela: "Esta informação está correta?".
+  - "Sim, está correta" registra a confirmação.
+  - "Não, enviar para a TI verificar" registra a resposta, com um comentário opcional (ex.: filtro geral, faltou critério).
+- A TI vê as avaliações no admin ("Avaliações de respostas"), com a pergunta, o comentário e o filtro por correta/verificada, e marca como verificada depois de achar o motivo.
+- Guarda só o voto e o comentário; nenhum dado do ERP.
+- Conferência de "pedidos de compra em aberto, por filial": a consulta aprendida (SC7) exclui pedidos encerrados e com resíduo eliminado e conta pedidos distintos por filial. A contagem direta no banco bateu com cada filial exibida. Exigir quantidade entregue menor que a pedida não muda o resultado nesta base. Ficaram de fora as filiais do grupo 002, fora das filiais da pessoa.
+
 ## Mudança M133 — manutenção desligada; a IA entrega na hora; animação corrigida (2026-11-24)
 
 - Pedido de Diego: nada vai para a manutenção nem fica trabalhando em segundo plano. A IA acha a tabela do Protheus e entrega.

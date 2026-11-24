@@ -488,6 +488,8 @@ def mensagens_com_interacao(user, c: ConversationContext) -> list[dict]:
     for m in msgs:
         if m.solicitacao_id and m.ficha:
             ultima_por_solicitacao[m.solicitacao_id] = m.pk
+    from .models import AvaliacaoResposta
+    avaliacoes = {a.mensagem_id: a for a in AvaliacaoResposta.objects.filter(usuario=user, mensagem__in=msgs)}
     out = []
     anterior = None
     por_id = {m.pk: m for m in msgs if m.papel == Papel.USUARIO}
@@ -514,6 +516,8 @@ def mensagens_com_interacao(user, c: ConversationContext) -> list[dict]:
             "aprendivel": administrador and m.ficha.get("tipo") == "aprendizado" and m.pk == msgs[-1].pk,
             "ultima": m.pk == msgs[-1].pk,
             "tarefa": tarefas.get(m.ficha.get("tarefa")) if m.ficha.get("tipo") == "tarefa" else None,
+            "avaliavel": m.papel == Papel.IA and resultado is not None,
+            "avaliacao": avaliacoes.get(m.pk),
             "aprovavel": bool(m.ficha.get("modelo") and ultima_modelo.get(m.ficha["modelo"]) == m.pk
                               and m.ficha["modelo"] in modelos and pode_aprovar(user, modelos[m.ficha["modelo"]])),
         })
@@ -541,3 +545,19 @@ def refazer(user, c, resposta_id, pedido=None):
     origem = c.mensagens.get(pk=item["refazer"], autor=user, papel=Papel.USUARIO)
     return enviar(user, c, origem.texto, pedido=pedido, origem=origem)
 
+
+
+def avaliar(user, conversa_id, mensagem_id, correta: bool, comentario: str = ""):
+    """M134: "Esta informação está correta?". Só quem vê a conversa avalia, e só respostas da IA com resultado.
+    Uma avaliação por pessoa e resposta; votar de novo troca a anterior. "Não" fica para a TI verificar."""
+    from .models import AvaliacaoResposta
+
+    c = obter(user, conversa_id)
+    m = c.mensagens.filter(pk=mensagem_id, papel=Papel.IA).first()
+    if m is None or not m.resultado:
+        raise ValidationError("Só respostas com resultado podem ser avaliadas.")
+    a, _ = AvaliacaoResposta.objects.update_or_create(
+        mensagem=m, usuario=user,
+        defaults={"correta": bool(correta), "comentario": "" if correta else " ".join((comentario or "").split())[:1000],
+                  "verificada": False})
+    return a

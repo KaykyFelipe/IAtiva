@@ -136,3 +136,21 @@ class PedidoInterrompido(models.Model):
 class PreferenciaChat(models.Model):
     usuario = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="preferencia_chat")
     layout = models.JSONField(default=dict)
+
+
+class AvaliacaoResposta(models.Model):
+    """M134: "Esta informação está correta?" ao lado do copiar. "Não" fica para a TI verificar o motivo
+    (filtro geral, tabela errada, critério faltando). Guarda só o voto e o comentário da pessoa, nunca dados do ERP."""
+
+    mensagem = models.ForeignKey(Mensagem, on_delete=models.CASCADE, related_name="avaliacoes")
+    usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="+")
+    correta = models.BooleanField()
+    comentario = models.TextField(max_length=1000, blank=True)
+    verificada = models.BooleanField(default=False, help_text="A TI já verificou o motivo.")
+    criado_em = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-criado_em"]
+        verbose_name = "avaliação de resposta"
+        verbose_name_plural = "avaliações de respostas"
+        constraints = [models.UniqueConstraint(fields=["mensagem", "usuario"], name="avaliacao_unica")]
