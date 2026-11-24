@@ -4,6 +4,14 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **Etapa 7 aprovada em 2026-11-16 por Diego; em andamento.** Feito: roteiro do piloto (`docs/piloto/ROTEIRO.md`) e auditoria de não armazenamento (`manage.py auditar_armazenamento`). Falta: usuários do Financeiro, conferência dos números com relatórios do Protheus, avaliação da interpretação e latência. Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M140 — código sempre acompanhado do nome do cadastro (2026-11-24)
+
+- Pedido de Diego: o ranking de fornecedores mostrava só o código (C7_FORNECE). Toda resposta com um código que tem nome deve trazer também o nome, ao lado.
+- Regra geral (qualquer tabela, qualquer setor): cada coluna de código ligada a um cadastro pelo dicionário (SX9) ganha a coluna "Nome (<rótulo>)" ao lado. Exemplos: C7_FORNECE→SA2 (A2_NOME), E1_CLIENTE→SA1 (A1_NOME), produto→SB1 (descrição).
+- O nome é buscado depois da consulta principal, só para os códigos exibidos, numa leitura do cadastro pelo mesmo compilador e validador. A consulta principal não muda, então contagens, somas e o ranking continuam iguais.
+- O nome segue a visibilidade do setor. O destaque da resposta diz "código - nome". Se a busca falhar, a resposta sai só com o código.
+- Não repete: consulta que já traz um campo de nome (ex.: RA_NOME) ou já junta o cadastro fica como está.
+
 ## Mudança M139 — ranking geral de todas as filiais sem o teto de exibição (2026-11-24)
 
 - Depois da M138 a IA criou a consulta de "10 fornecedores com mais pedidos de compra em 2026", mas o ranking foi recusado com "o número de grupos ultrapassou o limite de leitura".

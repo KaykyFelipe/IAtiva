@@ -154,4 +154,4 @@ def test_nomes_depois_de_contar_volta_a_listar(base):
     listar = FakeProvider([_d(acao="preparar_consulta", objetivo=cm.codigo)])
     msg, res = conversas.enviar(ana, c, "quais são? me diga os clientes", listar)
     assert res is not None and res.ok, msg.texto
-    assert res.colunas == ["Filial", "No. Título", "Cliente", "Vlr.Título"] and len(res.linhas) > 2
+    assert res.colunas == ["Filial", "No. Título", "Cliente", "Nome (Cliente)", "Vlr.Título"] and len(res.linhas) > 2

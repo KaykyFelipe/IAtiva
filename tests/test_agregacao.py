@@ -75,7 +75,7 @@ def test_soma_por_cliente_top(admin):
     cm = _consulta(admin)
     msg, res = _pedir(admin, cm, "soma:E1_VALOR, contagem:* por E1_CLIENTE top 2")
     assert res is not None and res.ok, msg.texto
-    assert res.colunas == [res.colunas[0], "Soma de Vlr.Título", "Quantidade"] and 0 < len(res.linhas) <= 2
+    assert res.colunas == [res.colunas[0], "Nome (Cliente)", "Soma de Vlr.Título", "Quantidade"] and 0 < len(res.linhas) <= 2
 
 
 def test_por_mes(admin):

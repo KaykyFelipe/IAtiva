@@ -126,7 +126,7 @@ def test_consulta_aprendida_executa_e_respeita_setor(admin_ti, aprovador, ti, no
     assert r.tipo == "pronta", (r.tipo, r.mensagem, [p.codigo for p in r.perguntas])
     res = servico.executar_solicitacao(admin_ti, r.solicitacao)
     assert res.ok and res.colunas == ["Número" if False else c for c in res.colunas]
-    assert len(res.colunas) == 4 and "E1_SALDO" not in " ".join(res.colunas)
+    assert len(res.colunas) == 5 and "Nome (Cliente)" in res.colunas and "E1_SALDO" not in " ".join(res.colunas)
     # Outro setor não vê a consulta.
     cob = Department.objects.get(codigo="financeiro-cobranca")
     outro = novo_usuario("ze", cob)

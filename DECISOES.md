@@ -261,3 +261,4 @@ M60 (Diego, 2026-11-16, aprovada no chat): implementar os seis ajustes da revis�
 | M137 | 2026-11-24 | Diagnóstico: motivo de cada tentativa de aprender_tabela sem consulta vai para o log, para achar a causa da pergunta dos fornecedores. |
 | M138 | 2026-11-24 | Pedido de Diego: nenhuma pergunta pode parar porque o modelo errou o passo ou o formato; segunda chance com instrução explícita, motivo da recusa devolvido ao modelo, validação tolerante só no que não muda o sentido. |
 | M139 | 2026-11-24 | Ranking geral entre filiais lê os grupos agregados com teto próprio (20000), separado do teto de exibição (500). |
+| M140 | 2026-11-24 | Pedido de Diego: todo código com cadastro (fornecedor, cliente, produto...) vem com o nome ao lado, pela relação do SX9, buscado só para os códigos exibidos, sem alterar a consulta principal. |

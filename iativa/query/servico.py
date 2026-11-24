@@ -596,6 +596,9 @@ def _executar_solicitacao(user, s: RequestContext) -> Resultado:
             plano.premissas.append("Há códigos sem correspondência no dicionário, fora das categorias apresentadas.")
     tipos = list(comp.tipos)
     formatadas = [[_fmt(v, t) for v, t in zip(l, tipos)] for l in linhas]
+    nomes = []
+    if linhas and not categorias and not legenda_grupo and not legenda_pendente:
+        nomes = _nomes_dos_codigos(s, plano, comp, linhas, origem, filiais, cfg)
     totais = acumulador.totais() if (acumulador is not None and totais_ok) else None
     total_valor = totais.soma_dinheiro() if totais else None
     total = _fmt(total_valor, "dinheiro") if total_valor is not None else ""
@@ -627,7 +630,19 @@ def _executar_solicitacao(user, s: RequestContext) -> Resultado:
         plano.premissas.append("Filiais consultadas: " + ", ".join(rotulo(f) for f in filiais) + ".")
     mensagem = _resposta_final(s.objetivo, plano, len(linhas), truncado, totais, total, subtotal,
                                bool(valores.get(AGREGACAO)), len(filiais))
-    destaque = _destaque(plano, comp, colunas, formatadas, linhas, tipos)
+    desloc = 1 if colunas and colunas[0] == "Filial" and comp.rotulos[:1] != ("Filial",) else 0
+    com_nome = [list(f) for f in formatadas]
+    for pos, _, por_linha, _, _ in nomes:  # M140: o destaque diz "000269 - NOME DO FORNECEDOR"
+        for n, nome in por_linha.items():
+            com_nome[n][desloc + pos] = f"{com_nome[n][desloc + pos]} - {nome}"
+    destaque = _destaque(plano, comp, colunas, com_nome, linhas, tipos)
+    for pos, rot, por_linha, mestre, campo_nome in sorted(nomes, key=lambda x: -x[0]):
+        colunas.insert(desloc + pos + 1, rot)
+        tipos.insert(desloc + pos + 1, "texto")
+        for n, linha in enumerate(formatadas):
+            linha.insert(desloc + pos + 1, por_linha.get(n, ""))
+    for _, rot, _, mestre, campo_nome in nomes:
+        plano.premissas.append(f"{rot}: buscado no cadastro {mestre} ({campo_nome}) pelo código.")
     if destaque and not categorias:
         mensagem = destaque + " " + mensagem
     if legenda_pendente and not plano.categorias:
@@ -673,6 +688,8 @@ def _executar_solicitacao(user, s: RequestContext) -> Resultado:
                  "agregacao": expressao_validada(valores.get(AGREGACAO, ""), cm.spec)}
         receitas.registrar_validacao(cm, prova)
     res.escopo = escopo_do_plano(plano, s.setor_id, filiais)
+    for _, _, _, mestre, campo_nome in nomes:
+        res.escopo["campos"][mestre] = sorted(set(res.escopo["campos"].get(mestre, [])) | {campo_nome})
     res.agregado = any(c.agregacao for c in plano.colunas)
     res.funcoes = sorted({c.agregacao for c in plano.colunas if c.agregacao})  # M133: comprova contagem/soma/média
     if transversais:
@@ -682,6 +699,35 @@ def _executar_solicitacao(user, s: RequestContext) -> Resultado:
             and plano.colunas[0].campo == plano.filtros[0].campo and plano.filtros[0].campo.nome.endswith("_FILIAL")):
         res.filtros_contagem_por_filial = tuple(plano.filtros[1:])
     return res
+
+
+def _nomes_dos_codigos(s, plano, comp, linhas, origem, filiais, cfg):
+    """M140: nome do cadastro ao lado de cada código exibido (fornecedor, cliente, produto...). Ver `nomes`."""
+    from functools import lru_cache
+
+    from iativa.agent import andamento
+    from iativa.metadata.descoberta import _Visibilidade
+    from .nomes import acrescentar_nomes
+
+    from iativa.agent import prazo
+
+    if prazo.esgotado() or not any(not c.agregacao and not c.transformacao and c.tipo == "texto"
+                                   and not c.campo.nome.endswith("_FILIAL") for c in plano.colunas):
+        return []
+
+    @lru_cache(maxsize=None)
+    def _vis(alias):
+        return _Visibilidade({s.setor_id}, [alias])
+
+    try:
+        with abrir_catalogo() as cat:
+            andamento.avisar("Buscando os nomes dos códigos no cadastro")
+            return acrescentar_nomes(cat, plano, list(comp.rotulos), linhas, origem, filiais,
+                                     lambda a, c: _vis(a).campo(a, c), cfg["timeout_s"])
+    except Exception as exc:  # sem nome a resposta continua válida
+        import logging
+        logging.getLogger(__name__).warning("nomes dos códigos não buscados (%s)", type(exc).__name__)
+        return []
 
 
 def escopo_do_plano(plano, setor_id, filiais):
