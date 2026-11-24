@@ -49,6 +49,10 @@ def test_fonte_reclassificada_nao_barra_leitura_transversal(ti_total, monkeypatc
     assert r.tipo == "pronta", (r.tipo, r.mensagem)
     outro = "operacoes" if r.solicitacao.setor.codigo != "operacoes" else "ti"
     monkeypatch.setattr(planejamento, "autorizar_fonte", lambda *a, **k: {outro})  # fonte agora é de outro setor
+    if not transversal:  # M147: sem acesso total (falta um setor), a regra do setor da fonte continua valendo
+        from iativa.accounts.models import AccessPolicy
+        AccessPolicy.objects.filter(user=ti_total).exclude(
+            department__codigo__in=[r.solicitacao.setor.codigo, outro]).exclude(department__isnull=True).first().delete()
     res = servico.executar_solicitacao(ti_total, r.solicitacao)
     if transversal:
         assert res.ok, res.mensagem

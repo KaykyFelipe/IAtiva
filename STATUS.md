@@ -4,6 +4,15 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **Etapa 7 aprovada em 2026-11-16 por Diego; em andamento.** Feito: roteiro do piloto (`docs/piloto/ROTEIRO.md`) e auditoria de não armazenamento (`manage.py auditar_armazenamento`). Falta: usuários do Financeiro, conferência dos números com relatórios do Protheus, avaliação da interpretação e latência. Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M147 — T.I com acesso total não é barrado pelo setor da pergunta (2026-11-24)
+
+- Causa de “quantos veículos tem a empresa?” voltar “Sem permissão de consulta ou sem filiais autorizadas neste setor.”: a pergunta foi classificada como do setor “operacoes” e `limitar_consulta` restringiu o pedido a esse setor. O pedido da consulta de veículos (já aberto antes no setor TI) foi reaproveitado e, fora do escopo, a permissão da TI deixou de valer. Nada mudou no dicionário: a fonte DA3 passou a ser classificada como “operacoes” quando a consulta nova foi criada.
+- Regra de Diego: quem tem o cargo T.I não deve ser barrado em consulta. Correção geral:
+  - `authz.acesso_total` (perfil T.I/Diretoria com consulta e as mesmas filiais em todos os setores ativos);
+  - com acesso total, `limitar_consulta` não restringe o pedido ao setor classificado;
+  - a execução de consulta aprendida não exige que o setor do pedido conste na classificação da fonte.
+- Os demais usuários continuam limitados como antes. Testes: `tests/test_m147_ti_sem_barreira.py`.
+
 ## Mudança M146 — leitura transversal não barra por reclassificação da fonte (2026-11-24)
 
 - Causa de “quantos veículos tem a empresa?” responder “A fonte não é autorizada para o setor desta solicitação.”: a consulta aprendida da DA3 foi criada como leitura transversal (classificação inconclusiva; quem pediu lê todos os setores) e liberada para todos os setores. O pedido abriu na TI. Logo depois a fonte foi reclassificada só para “operacoes” (a assinatura da classificação muda quando surge uma receita nova que usa a tabela), e a execução exigia que o setor do pedido estivesse na classificação da fonte.

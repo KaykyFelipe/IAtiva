@@ -19,7 +19,9 @@ _escopo_consulta = ContextVar('iativa_escopo_consulta', default=None)
 
 @contextmanager
 def limitar_consulta(user, setores):
-    token = _escopo_consulta.set((user.pk, frozenset(setores)))
+    # M147: quem tem acesso total (perfil T.I/Diretoria com as mesmas filiais em todos os setores) não fica preso ao
+    # setor em que o modelo classificou a pergunta: qualquer setor já é autorizado a essa pessoa.
+    token = _escopo_consulta.set(None if acesso_total(user) else (user.pk, frozenset(setores)))
     try:
         yield
     finally:
@@ -130,6 +132,11 @@ def leitura_de_todos_os_setores(user, aliases):
             "department_id", "filiais"):
         escopos[setor].update(filiais)
     return bool(escopos) and all(escopos.values()) and len({frozenset(fs) for fs in escopos.values()}) == 1
+
+
+def acesso_total(user) -> bool:
+    """M147: perfil T.I/Diretoria com consulta e as mesmas filiais em todos os setores ativos."""
+    return leitura_de_todos_os_setores(user, [])
 
 
 def exigir(user, permissao: Permissao, setor: Department | None = None, agora=None) -> None:

@@ -19,7 +19,7 @@ from decimal import Decimal
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 
-from iativa.accounts.authz import PermissaoNegada, filiais_autorizadas
+from iativa.accounts.authz import PermissaoNegada, acesso_total, filiais_autorizadas
 from iativa.agent import orquestrador
 from iativa.agent.contratos import AGREGACAO, OBJETIVOS, PREFIXO_APRENDIDO
 from iativa.audit.servicos import registrar
@@ -408,7 +408,7 @@ def _executar_solicitacao(user, s: RequestContext) -> Resultado:
                 setores = autorizar_fonte(user, None, alias, conversa=s.conversa, transversais=transversais)
                 # M146: leitura transversal já conferiu acesso vigente em todos os setores (acima). A fonte pode ser
                 # reclassificada depois (ex.: DA3 → só "operacoes") sem mudar o direito de quem lê todos os setores.
-                if s.setor.codigo not in setores and not cm.spec.get("leitura_transversal"):
+                if s.setor.codigo not in setores and not cm.spec.get("leitura_transversal") and not acesso_total(user):
                     raise PermissaoNegada("A fonte não é autorizada para o setor desta solicitação.")
         except FonteInconclusiva as exc:
             return Resultado(False, str(exc), fonte_inconclusiva=alias,
