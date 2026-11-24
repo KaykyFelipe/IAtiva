@@ -820,12 +820,28 @@
     if (!e.persisted) rolarParaFim();
   });
   // Anima apenas a opacidade, mantendo a altura da resposta durante a leitura.
+  // M133: ids das respostas na tela e das que ainda estão "digitando" (a sincronização troca a lista no meio
+  // da digitação; a resposta nova volta a digitar em vez de aparecer inteira).
+  const digitando = new Set();
+  function idsRespostas(lista) {
+    return new Set([...(lista?.querySelectorAll(".resposta-chat[data-mensagem-id]") || [])].map((el) => el.dataset.mensagemId));
+  }
+  function animarNovas(lista, antes, retomar) {
+    (lista?.querySelectorAll(".resposta-chat[data-mensagem-id]") || []).forEach((el) => {
+      const id = el.dataset.mensagemId;
+      if (!antes.has(id) || (retomar && digitando.has(id))) animarResposta(el);
+    });
+  }
   function animarResposta(msg) {
-    if (!msg || msg.dataset.animada || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    // M133: sem checar prefers-reduced-motion (Windows com efeitos desligados o ativa e a resposta nunca
+    // "digitava"); a digitação é curta e só o piscar do cursor respeita a preferência (CSS).
+    if (!msg || msg.dataset.animada) return;
     msg.dataset.animada = "1";
     // M132: estilo ChatGPT. O texto aparece aos poucos com um cursor. Tabelas, botões e o resto da resposta
     // surgem quando o texto termina. A resposta inteira leva no máximo ~1,6 s.
     const alvo = msg.closest(".resposta-chat") || msg;
+    const id = alvo.dataset.mensagemId;
+    if (id) digitando.add(id);
     const fora = "table, .tabela, .resultado, .acoes-resposta, form, details, button, script, style, [data-tabela-copiavel]";
     const textos = [];
     const andar = document.createTreeWalker(alvo, NodeFilter.SHOW_TEXT, {
@@ -834,7 +850,7 @@
     while (andar.nextNode()) textos.push({ no: andar.currentNode, cheio: andar.currentNode.nodeValue });
     const depois = [...alvo.querySelectorAll(fora)].filter((el) => !el.parentElement.closest(fora));
     const total = textos.reduce((s, t) => s + t.cheio.length, 0);
-    if (!total) { alvo.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 180 }); return; }
+    if (!total) { digitando.delete(id); alvo.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 180 }); return; }
     depois.forEach((el) => { el.style.visibility = "hidden"; });
     textos.forEach((t) => { t.no.nodeValue = ""; });
     const cursor = document.createElement("span");
@@ -857,6 +873,7 @@
       if (painel && distanciaAteFim(painel) < 160) rolarParaFim();
       if (i < textos.length) { requestAnimationFrame(revelar); return; }
       cursor.remove();
+      digitando.delete(id);
       depois.forEach((el) => {
         el.style.visibility = "";
         el.animate([{ opacity: 0, transform: "translateY(4px)" }, { opacity: 1, transform: "none" }], { duration: 260, easing: "ease-out" });
@@ -877,7 +894,8 @@
     }
     const parte = target?.closest(".tarefa-card, .atividade-fixa");
     if (target === area || (parte && area?.contains(parte))) {
-      leituraPorRequisicao.set(xhr, { vista: capturarLeitura(area), area, fragmento: target !== area });
+      leituraPorRequisicao.set(xhr, { vista: capturarLeitura(area), area, fragmento: target !== area,
+                                      ids: idsRespostas(area?.querySelector(".mensagens")) });
     }
   });
 
@@ -889,11 +907,11 @@
       return;
     }
     if (e.detail?.target?.id !== "conversa") return;
-    if (animarProxima) {
-      animarProxima = false;
-      const ias = document.querySelectorAll(".mensagens .msg.ia:not(.pensando)");
-      animarResposta(ias[ias.length - 1]);
-    }
+    // M133: anima toda resposta que não estava na tela (mesma conversa ou logo depois de enviar). Abrir outra
+    // conversa não anima o histórico dela.
+    const mesma = leitura?.vista?.conversa === document.getElementById("conversa")?.dataset.conversaId;
+    if (animarProxima || mesma) animarNovas(document.querySelector(".mensagens"), leitura?.ids || new Set(), mesma);
+    animarProxima = false;
     const rascunho = atual?.rascunho;
     if (atual && !atual.form.isConnected) { atual = null; pararAcompanhamento(); }
     atualizarBotaoTarefa();
@@ -961,10 +979,9 @@
         const vista = capturarLeitura(area);
         const mudou = !recebida.dataset.historicoVersao || recebida.dataset.historicoVersao !== area.dataset.historicoVersao;
         if (mudou && mensagens && novas) {
-          const antes = mensagens.querySelectorAll(".msg.ia:not(.pensando)").length;
+          const antes = idsRespostas(mensagens);
           mensagens.replaceWith(novas);
-          const ias = novas.querySelectorAll(".msg.ia:not(.pensando)");
-          if (ias.length > antes) animarResposta(ias[ias.length - 1]); // resposta do segundo plano
+          animarNovas(novas, antes, true); // resposta do segundo plano (ou a que ainda estava digitando)
           if (!document.querySelector("[data-envio-pendente]")) pararAcompanhamento();
           retomarEnvio();
           area.dataset.historicoVersao = recebida.dataset.historicoVersao || "";

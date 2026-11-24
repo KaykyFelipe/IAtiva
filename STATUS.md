@@ -4,6 +4,18 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **Etapa 7 aprovada em 2026-11-16 por Diego; em andamento.** Feito: roteiro do piloto (`docs/piloto/ROTEIRO.md`) e auditoria de não armazenamento (`manage.py auditar_armazenamento`). Falta: usuários do Financeiro, conferência dos números com relatórios do Protheus, avaliação da interpretação e latência. Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M133 — manutenção desligada; a IA entrega na hora; animação corrigida (2026-11-24)
+
+- Pedido de Diego: nada vai para a manutenção nem fica trabalhando em segundo plano. A IA acha a tabela do Protheus e entrega.
+- Servidor:
+  - manutenção automática desligada (MANUTENCAO_ATIVA, MANUTENCAO_PUBLICAR e IATIVA_MANUTENCAO_AUTOMATICA = 0);
+  - disparo e varredura da manutenção desativados no systemd;
+  - continuação em segundo plano desligada (IATIVA_AGENTE_CONTINUACOES=0);
+  - o ciclo em primeiro plano ganhou mais passos e tempo (8 passos, 180 s). Backup do .env anterior no servidor.
+- Código: com a manutenção desligada não se abre registro de correção nem se pede para avisar a TI. A IA entrega ou diz o que tentou.
+- Causa de "pedidos de compra em aberto, por filial" não ser entregue: a contagem distinta por filial rodava no banco, mas a conferência recusava porque só olhava a medida da contagem simples. Agora vale a função que o banco calculou (contagem, contagem distinta, soma, média).
+- Animação: a sincronização trocava a lista de mensagens no meio da digitação, e o Windows com efeitos desligados desativava a animação. Agora toda resposta nova digita, e a que estava digitando retoma.
+
 ## Mudança M132 — aprendeu a consulta e já entrega; resposta aparece digitando (2026-11-24)
 
 - "Quantos pedidos de compra estão em aberto, por filial?": a IA aprendia a consulta (SC7) mas parava. A consulta aprendida tem data e a pessoa não citou período; a pergunta do sistema ficava escondida pelo texto do modelo ("vou montar…").

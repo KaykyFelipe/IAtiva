@@ -668,6 +668,7 @@ def _executar_solicitacao(user, s: RequestContext) -> Resultado:
         receitas.registrar_validacao(cm, prova)
     res.escopo = escopo_do_plano(plano, s.setor_id, filiais)
     res.agregado = any(c.agregacao for c in plano.colunas)
+    res.funcoes = sorted({c.agregacao for c in plano.colunas if c.agregacao})  # M133: comprova contagem/soma/média
     if transversais:
         res.escopo["fontes_transversais"] = sorted(transversais)
     if (todas and not truncado and not plano.juncoes and not plano.agrupar and not plano.top

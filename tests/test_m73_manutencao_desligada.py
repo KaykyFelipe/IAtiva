@@ -16,14 +16,13 @@ pytestmark = pytest.mark.django_db
 
 
 @override_settings(IATIVA_MANUTENCAO_AUTOMATICA=False)
-def test_sem_manutencao_pede_para_avisar_a_ti(base):
+def test_sem_manutencao_nao_abre_registro_nem_pede_a_ti(base):
+    # M133 (Diego): manutenção desligada = nenhum registro de correção; a IA entrega ou explica o que tentou.
     msg, res, p, c = _pedido_que_nao_avanca(base)
-    o, inc = Objetivo.objects.get(), Incidente.objects.get()
+    o = Objetivo.objects.get()
     assert o.situacao == SO.IMPEDIDO  # não fica "aguardando correção"
-    assert f"Comunique alguém da TI, informando o registro nº {inc.pk}" in msg.texto
-    assert "corrigindo" not in msg.texto.lower()
-    from iativa.manutencao.incidentes import elegivel
-    assert not elegivel(inc)
+    assert not Incidente.objects.exists()
+    assert "Comunique" not in msg.texto and "corrigindo" not in msg.texto.lower()
 
 
 def test_chat_com_agente_trabalhando_nao_e_pego_por_outro(base):

@@ -252,7 +252,13 @@ def conferir(analise, decisao, saida, texto=""):
             # Agregações no banco já comprovam soma/média, mas não dias ou projeção.
             mapa = {'soma': 'SUM', 'media': 'AVG', 'contagem': 'COUNT'}
             medidas = getattr(getattr(res, 'totais', None), 'medidas', [])
-            if item['metrica'] not in mapa or not any(m.funcao == mapa[item['metrica']] for m in medidas):
+            # M133: contagem agrupada (por filial) ou distinta não preenche medida_calculada nem totais.medidas:
+            # vale a função que o banco calculou.
+            funcoes = getattr(res, 'funcoes', None) or []
+            calculou = item['metrica'] in mapa and any(
+                f == mapa[item['metrica']] or (item['metrica'] == 'contagem' and f == 'COUNT_DISTINCT') for f in funcoes)
+            if not calculou and (item['metrica'] not in mapa
+                                 or not any(m.funcao == mapa[item['metrica']] for m in medidas)):
                 faltantes.append(item['descricao'])
     return faltantes
 

@@ -1268,7 +1268,9 @@ def _encerrar_sem_cumprir(ac, user, c, mensagem_id, saida, previa, causa, observ
             tabela = OBJETIVOS[ultima.objetivo].tabelas[0]
         esgotou_correcoes = registro is not None and (
             coord.correcoes_publicadas(registro) >= coord.MAX_CORRECOES_POR_PEDIDO)
-        inc = None if esgotou_correcoes else coord.encaminhar_manutencao(ac, causa, tabela)
+        from iativa.manutencao.incidentes import automatica
+        # M133: manutenção desligada (pedido de Diego) = nenhum registro de correção; a IA entrega ou explica.
+        inc = None if esgotou_correcoes or not automatica() else coord.encaminhar_manutencao(ac, causa, tabela)
         retomado = registro is not None and registro.retomado
         # M61: só espera a manutenção se ela vai mesmo atuar agora; incidente bloqueado ou esgotado não deixa o
         # pedido parado "na fila" para sempre.
@@ -1297,7 +1299,7 @@ def _encerrar_sem_cumprir(ac, user, c, mensagem_id, saida, previa, causa, observ
                           "a correção entrar no ar, refaço o pedido e respondo aqui, sem você precisar perguntar de "
                           "novo. Você acompanha cada etapa aqui.", ficha)
         else:
-            from iativa.manutencao.incidentes import AVISAR_TI, automatica
+            from iativa.manutencao.incidentes import AVISAR_TI
             aviso = (" Isso já tinha sido encaminhado à manutenção e voltou a acontecer; ficou para análise de uma "
                      "pessoa da TI." if retomado else
                      " " + AVISAR_TI.format(n=inc.pk) if inc is not None and not automatica() else "")
