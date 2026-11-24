@@ -257,3 +257,4 @@ M60 (Diego, 2026-11-16, aprovada no chat): implementar os seis ajustes da revis�
 | M133 | 2026-11-24 | Pedido de Diego: desativar o agente de manutenção e o trabalho em segundo plano; a IA acha a tabela e entrega na hora (mais passos no ciclo). Religar: variáveis no .env e unidades iativa-manutencao no systemd. |
 | M134 | 2026-11-24 | Pedido de Diego: botão "Esta informação está correta?" nas respostas com tabela; "Não" fica para a TI verificar o motivo (admin). |
 | M135 | 2026-11-24 | Pedido de Diego: avaliação como botão no estilo do copiar (menu Sim/Não; Não abre janela com Enviar para a T.I). |
+| M136 | 2026-11-24 | Pedido de Diego: respostas marcadas como incorretas chegam ao T.I numa seção própria de "Memória e aprovações" (quem, motivo, pergunta, consulta, tabela, critérios). |

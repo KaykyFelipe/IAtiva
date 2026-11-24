@@ -48,3 +48,37 @@ def test_botao_aparece_ao_lado_do_copiar(base, client, monkeypatch):  # noqa: F8
     client.force_login(base["u"])
     html = client.get(reverse("chat:conversa", args=[c.pk])).content.decode()
     assert html.index("data-copiar-resposta") < html.index("data-avaliar") and "icone-avaliar" in html
+
+
+def _ti(base):  # noqa: F811
+    from django.contrib.auth import get_user_model
+
+    from iativa.accounts.models import AccessPolicy, Department
+    ti = get_user_model().objects.create_user("teste.ti", password="x")
+    dep, _ = Department.objects.get_or_create(codigo="ti", defaults={"nome": "TI"})
+    AccessPolicy.objects.create(user=ti, department=dep, pode_administrar=True)
+    return ti
+
+
+def test_m136_nao_chega_ao_ti_em_memoria_e_aprovacoes(base, client):  # noqa: F811
+    c, m = _resposta(base)
+    conversas.avaliar(base["u"], c.pk, m.pk, False, "era só a filial Cuiabá")
+    ti = _ti(base)
+    client.force_login(ti)
+    html = client.get(reverse("chat:memoria")).content.decode()
+    assert "Respostas para verificar" in html and "era só a filial Cuiabá" in html and "Quantos pedidos em aberto?" in html
+    a = AvaliacaoResposta.objects.get()
+    client.post(reverse("chat:avaliacao_verificar", args=[a.pk]))
+    a.refresh_from_db()
+    assert a.verificada
+
+
+def test_m136_quem_nao_e_ti_nao_ve(base, client):  # noqa: F811
+    c, m = _resposta(base)
+    conversas.avaliar(base["u"], c.pk, m.pk, False, "x")
+    from django.contrib.auth import get_user_model
+    outro = get_user_model().objects.create_user("sem.ti", password="x")
+    assert conversas.avaliacoes_para_ti(outro) == []
+    client.force_login(outro)
+    client.post(reverse("chat:avaliacao_verificar", args=[AvaliacaoResposta.objects.get().pk]))
+    assert not AvaliacaoResposta.objects.get().verificada

@@ -25,6 +25,7 @@ urlpatterns = [
     path("sincronizar/", views.sincronizar, name="sincronizar"),
     path("parar/", views.parar, name="parar"),
     path("memoria/decidir/", views.memoria_decidir, name="memoria_decidir"),
+    path("memoria/avaliacao/<int:avaliacao_id>/verificada/", views.avaliacao_verificar, name="avaliacao_verificar"),
     path("tarefa/<int:tarefa_id>/", views.tarefa, name="tarefa"),
     path("andamento/<uuid:pedido>/", views.andamento, name="andamento"),
     path("objetivo/<int:objetivo_id>/", views.objetivo, name="objetivo"),

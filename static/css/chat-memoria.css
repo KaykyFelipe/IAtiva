@@ -48,3 +48,16 @@
 .memoria-item button, .memoria-secao select, .memoria-secao-topo button { font-size: 13px; }
 .memoria-secao select { max-width: 100%; min-width: 0; }
 .memoria-secao .seletor-setor { display: flex; flex-wrap: wrap; gap: 7px; }
+
+/* M136: respostas para o T.I verificar. */
+.memoria-ajuda { margin: -4px 0 10px; font-size: 13px; color: #526875; }
+.avaliacao-ti { border: 1px solid #e2e9ee; border-left: 3px solid #A86B12; border-radius: 10px; padding: 14px 16px; margin: 10px 0; background: #fff; }
+.avaliacao-ti.verificada { border-left-color: #48AE3E; opacity: .8; }
+.avaliacao-ti-quem { display: inline-flex; align-items: center; gap: 7px; font-weight: 600; color: #1d2330; font-size: 13px; }
+.avaliacao-ti .rotulo { display: block; font-size: 11px; letter-spacing: .03em; text-transform: uppercase; color: #526875; margin-bottom: 2px; }
+.avaliacao-ti-pergunta { margin: 12px 0 8px; }
+.avaliacao-ti-pergunta p { margin: 0; font-size: 15px; }
+.avaliacao-ti-motivo { border-left: 3px solid #b3392c33; background: #fdf3f1 !important; }
+.avaliacao-ti code { font-size: 13px; background: #eef4fa; padding: 1px 6px; border-radius: 4px; }
+.avaliacao-ti-acoes { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.avaliacao-ti-acoes form { margin: 0; }

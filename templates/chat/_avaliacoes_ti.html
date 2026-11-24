@@ -1,0 +1,41 @@
+{# M136: respostas que a pessoa disse não estarem corretas, para o T.I verificar o motivo. #}
+<section class="memoria-secao" id="memoria-verificar">
+  <h2>Respostas para verificar</h2>
+  <p class="memoria-ajuda">Quando alguém marca "Não" em "Esta informação está correta?", a resposta chega aqui com o motivo.</p>
+  {% for i in avaliacoes_ti %}
+    <article class="memoria-item avaliacao-ti{% if i.a.verificada %} verificada{% endif %}">
+      <header>
+        <span class="avaliacao-ti-quem"><span class="avatar pequeno" aria-hidden="true">{{ i.quem|slice:":2"|upper }}</span>{{ i.quem }}</span>
+        {% if i.setor %}<span>{{ i.setor }}</span>{% endif %}
+        <span>{{ i.a.criado_em|date:"d/m/Y H:i" }}</span>
+        {% if i.a.verificada %}<span class="memoria-estado">Verificada</span>{% else %}<span class="memoria-estado aguardando">Aguardando o T.I</span>{% endif %}
+      </header>
+      <div class="avaliacao-ti-pergunta">
+        <span class="rotulo">Pergunta</span>
+        <p>{{ i.pergunta|default:"(pergunta não encontrada)" }}</p>
+      </div>
+      <blockquote class="avaliacao-ti-motivo">
+        <span class="rotulo">Motivo informado</span>
+        {{ i.a.comentario|default:"(sem explicação)"|linebreaksbr }}
+      </blockquote>
+      <dl class="memoria-fatos">
+        {% if i.consulta %}<div><dt>Consulta usada</dt><dd>{{ i.consulta }}</dd></div>{% endif %}
+        {% if i.tabela %}<div><dt>Tabela</dt><dd><code>{{ i.tabela }}</code></dd></div>{% endif %}
+        {% for c in i.criterios %}<div><dt>{{ c.nome }}</dt><dd>{{ c.valor }}</dd></div>{% endfor %}
+        {% if i.colunas %}<div><dt>Colunas da resposta</dt><dd>{{ i.colunas|join:", " }}</dd></div>{% endif %}
+      </dl>
+      <div class="acoes avaliacao-ti-acoes">
+        {% if i.conversa_id %}<a href="{% url 'chat:conversa' i.conversa_id %}" data-abrir-chat>Abrir a conversa</a>{% endif %}
+        {% if not i.a.verificada %}
+          <form method="post" action="{% url 'chat:avaliacao_verificar' i.a.pk %}" hx-post="{% url 'chat:avaliacao_verificar' i.a.pk %}"
+                hx-target="#conversa" hx-swap="outerHTML" hx-disabled-elt="find button">
+            {% csrf_token %}<input type="hidden" name="setor" value="{{ memoria.setor.pk }}">
+            <button type="submit">Marcar como verificada</button>
+          </form>
+        {% endif %}
+      </div>
+    </article>
+  {% empty %}
+    <p class="memoria-vazia">Nenhuma resposta marcada como incorreta.</p>
+  {% endfor %}
+</section>

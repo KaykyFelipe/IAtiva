@@ -3,7 +3,7 @@
       data-url="{% url 'chat:avaliar' conversa.pk m.pk %}">
   <button class="icone botao-avaliar" type="button" data-avaliar aria-haspopup="menu" aria-expanded="false"
           aria-label="Esta informação está correta?"
-          title="{% if not avaliacao %}Esta informação está correta?{% elif avaliacao.correta %}Você confirmou que está correta{% else %}Enviado para a T.I verificar{% endif %}">
+          title="{% if not avaliacao %}Esta informação está correta?{% elif avaliacao.correta %}Você confirmou que está correta{% else %}Enviado para o T.I verificar{% endif %}">
     {% include "chat/_icone.html" with nome="avaliar" %}
   </button>
   <div class="menu-copia menu-avaliar" popover data-menu-avaliar></div>

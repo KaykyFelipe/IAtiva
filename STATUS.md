@@ -4,6 +4,17 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **Etapa 7 aprovada em 2026-11-16 por Diego; em andamento.** Feito: roteiro do piloto (`docs/piloto/ROTEIRO.md`) e auditoria de não armazenamento (`manage.py auditar_armazenamento`). Falta: usuários do Financeiro, conferência dos números com relatórios do Protheus, avaliação da interpretação e latência. Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M136 — respostas incorretas chegam ao T.I em "Memória e aprovações" (2026-11-24)
+
+- Nova seção "Respostas para verificar" em "Memória e aprovações", visível só para o T.I (quem administra), com contador no menu.
+- Cada cartão mostra:
+  - quem enviou, o setor e quando;
+  - a pergunta feita e o motivo informado;
+  - a consulta usada, a tabela, os critérios (filial, período, cálculo) e as colunas da resposta;
+  - o link para abrir a conversa, quando o T.I pode vê-la.
+- Botão "Marcar como verificada"; as verificadas ficam abaixo, em verde.
+- Menu da avaliação: "Sim" e "Não" ficam ao lado do ✓ e do ✕. Os textos agora dizem "o T.I".
+
 ## Mudança M135 — avaliação da resposta no estilo do botão de copiar (2026-11-24)
 
 - "Esta informação está correta?" virou um botão-ícone ao lado do copiar, como o de copiar.

@@ -711,7 +711,7 @@
     opcoes[0].focus({ preventScroll: true });
   }
 
-  // M135: "Esta informação está correta?" no estilo do copiar: menu Sim/Não; "Não" abre a janela para a T.I.
+  // M135: "Esta informação está correta?" no estilo do copiar: menu Sim/Não; "Não" abre a janela para o T.I.
   async function enviarAvaliacao(caixa, correta, comentario) {
     const dados = new FormData();
     dados.append("csrfmiddlewaretoken", csrf());
@@ -723,7 +723,7 @@
     const nova = new DOMParser().parseFromString(html, "text/html").querySelector("[data-avaliacao]");
     if (nova) caixa.replaceWith(nova);
     const estado = (nova || caixa).closest(".acoes-resposta")?.querySelector("[data-estado-copia]");
-    if (estado) estado.textContent = correta ? "Obrigado pela confirmação" : "Enviado para a T.I verificar";
+    if (estado) estado.textContent = correta ? "Obrigado pela confirmação" : "Enviado para o T.I verificar";
     return nova;
   }
 
@@ -732,11 +732,11 @@
     fundo.className = "confirmar-fundo";
     fundo.innerHTML = '<form class="confirmar-caixa avaliar-caixa" role="dialog" aria-modal="true" aria-labelledby="avaliar-titulo">' +
       '<h2 id="avaliar-titulo">O que não está correto?</h2>' +
-      '<p>Explique o que esperava ver. A T.I vai verificar o motivo (ex.: filtro geral, filial errada, faltou um critério).</p>' +
+      '<p>Explique o que esperava ver. O T.I vai verificar o motivo (ex.: filtro geral, filial errada, faltou um critério).</p>' +
       '<textarea name="comentario" maxlength="1000" required placeholder="Ex.: pedi só os pedidos da filial Cuiabá, mas veio de todas."></textarea>' +
       '<p class="aviso">Não envie CPF ou CNPJ.</p><p class="erro-envio" hidden></p>' +
       '<div class="confirmar-acoes"><button type="button" data-cancelar>Cancelar</button>' +
-      '<button type="submit" class="primario" data-ok>Enviar para a T.I</button></div></form>';
+      '<button type="submit" class="primario" data-ok>Enviar para o T.I</button></div></form>';
     const form = fundo.querySelector("form");
     const campo = form.querySelector("textarea");
     const ok = form.querySelector("[data-ok]");
@@ -758,7 +758,7 @@
       } catch (_) {
         erro.textContent = "Não consegui enviar agora. Tente de novo.";
         erro.hidden = false;
-        ok.textContent = "Enviar para a T.I";
+        ok.textContent = "Enviar para o T.I";
         atualizar();
       }
     });

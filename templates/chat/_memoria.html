@@ -12,6 +12,7 @@
         <a href="#memoria-pessoal">Minhas preferências</a>
         <a href="#memoria-aprovacoes">Aprovações <span aria-label="{{ pendencias|length }} propostas">{{ pendencias|length }}</span></a>
         <a href="#memoria-setor">Regras e consultas</a>
+        {% if pode_ver_avaliacoes %}<a href="#memoria-verificar">Respostas para verificar <span aria-label="{{ avaliacoes_pendentes }} aguardando">{{ avaliacoes_pendentes }}</span></a>{% endif %}
       </nav>
 
       {% if aviso %}<p class="aviso-ok" role="status">{{ aviso }}</p>{% endif %}
@@ -98,6 +99,8 @@
           <p class="memoria-vazia">Nenhuma proposta pendente.</p>
         {% endfor %}
       </section>
+
+      {% if pode_ver_avaliacoes %}{% include "chat/_avaliacoes_ti.html" %}{% endif %}
 
       <section class="memoria-secao" id="memoria-setor">
         <div class="memoria-secao-topo">

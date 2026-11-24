@@ -386,6 +386,8 @@ def _render_memoria(request, setor_id=None, aviso="", erro=""):
     if escolhido is None:
         proprio = setor_do_usuario(request.user)
         escolhido = next((s for s in setores if proprio and s.pk == proprio.pk), setores[0] if setores else None)
+    from iativa.agent.aprendizado import pode_aprender
+    avaliacoes_ti = conversas.avaliacoes_para_ti(request.user)
     ctx = _contexto(request)
     memoria_setor = memoria.memoria_do_setor(request.user, escolhido) if escolhido else None
     if memoria_setor:
@@ -398,6 +400,9 @@ def _render_memoria(request, setor_id=None, aviso="", erro=""):
         "setores_memoria": setores,
         "memoria": memoria_setor,
         "pendencias": memoria.pendencias(request.user, com_detalhes=True),
+        "avaliacoes_ti": avaliacoes_ti,
+        "avaliacoes_pendentes": sum(1 for i in avaliacoes_ti if not i["a"].verificada),
+        "pode_ver_avaliacoes": pode_aprender(request.user),
         "aviso": aviso,
         "erro": erro,
     })
@@ -607,3 +612,13 @@ def avaliar(request, conversa_id, mensagem_id):
     except ValidationError as exc:
         return HttpResponse(exc.messages[0], status=400)
     return render(request, "chat/_avaliacao.html", {"m": a.mensagem, "avaliacao": a, "conversa": a.mensagem.conversa})
+
+
+@_so_post
+def avaliacao_verificar(request, avaliacao_id):
+    """M136: o T.I marca como verificada uma resposta que a pessoa disse não estar correta."""
+    try:
+        conversas.verificar_avaliacao(request.user, avaliacao_id)
+    except (PermissaoNegada, ValidationError) as exc:
+        return _render_memoria(request, request.POST.get("setor"), erro=" ".join(getattr(exc, "messages", [str(exc)])))
+    return _render_memoria(request, request.POST.get("setor"), aviso="Marcada como verificada.")

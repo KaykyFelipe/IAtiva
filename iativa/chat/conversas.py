@@ -561,3 +561,48 @@ def avaliar(user, conversa_id, mensagem_id, correta: bool, comentario: str = "")
         defaults={"correta": bool(correta), "comentario": "" if correta else " ".join((comentario or "").split())[:1000],
                   "verificada": False})
     return a
+
+
+def avaliacoes_para_ti(user, limite: int = 50) -> list[dict]:
+    """M136: respostas marcadas como "não está correta", para o T.I verificar em "Memória e aprovações".
+    Só quem administra (T.I) vê. Mostra quem enviou, o motivo, a pergunta, a consulta/tabela e os critérios."""
+    from iativa.agent.aprendizado import pode_aprender
+    from iativa.agent.models import ConsultaModelo
+
+    from .models import AvaliacaoResposta
+
+    if not pode_aprender(user):
+        return []
+    itens = []
+    qs = (AvaliacaoResposta.objects.filter(correta=False)
+          .select_related("usuario", "mensagem__conversa__setor", "mensagem__solicitacao").order_by("verificada", "-criado_em"))
+    for a in qs[:limite]:
+        m = a.mensagem
+        pergunta = (m.conversa.mensagens.filter(papel=Papel.USUARIO, pk__lt=m.pk).order_by("-pk").first())
+        s = m.solicitacao
+        cm = ConsultaModelo.objects.filter(codigo=s.objetivo).first() if s else None
+        r = m.resultado or {}
+        itens.append({
+            "a": a,
+            "quem": a.usuario.get_full_name() or a.usuario.get_username(),
+            "setor": getattr(m.conversa.setor, "nome", ""),
+            "pergunta": pergunta.texto if pergunta else "",
+            "consulta": cm.nome if cm else (s.objetivo if s else ""),
+            "tabela": cm.tabela if cm else "",
+            "criterios": [c for c in (m.ficha or {}).get("criterios", []) if isinstance(c, dict)],
+            "colunas": [str(c) for c in (r.get("colunas") or [])][:8],
+            "conversa_id": m.conversa_id if pode_ver(user, m.conversa) else None,
+        })
+    return itens
+
+
+def verificar_avaliacao(user, avaliacao_id: int):
+    from iativa.agent.aprendizado import pode_aprender
+
+    from .models import AvaliacaoResposta
+
+    if not pode_aprender(user):
+        raise PermissaoNegada("Só o T.I marca avaliações como verificadas.")
+    n = AvaliacaoResposta.objects.filter(pk=avaliacao_id, correta=False).update(verificada=True)
+    if not n:
+        raise ValidationError("Avaliação indisponível.")

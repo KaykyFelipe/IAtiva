@@ -287,7 +287,7 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 .acoes-resposta .avaliada-nao .botao-avaliar { color: var(--pendente); }
 .menu-avaliar { min-width: 12rem; }
 .menu-avaliar .menu-titulo { padding: 6px 10px 4px; font-size: 12px; color: var(--sutil); }
-.menu-avaliar button { display: flex; align-items: center; gap: 8px; }
+.menu-copia.menu-avaliar button { display: flex; align-items: center; gap: 8px; }
 .menu-avaliar button .marca { width: 16px; text-align: center; font-size: 13px; }
 .menu-avaliar button[data-sim] .marca { color: var(--verde); }
 .menu-avaliar button[data-nao] .marca { color: #b3392c; }
