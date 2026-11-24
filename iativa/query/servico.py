@@ -741,8 +741,9 @@ def escopo_do_plano(plano, setor_id, filiais):
     usados = [c.campo for c in plano.colunas] + [f.campo for f in plano.filtros]
     usados.extend(f.valor for f in plano.filtros if isinstance(f.valor, Campo))
     for j in plano.juncoes:
+        origem = getattr(j, "origem_alias", "e1") or "e1"
         for a, b in j.pares:
-            usados.extend([Campo(j.alias, a), Campo("e1", b)])
+            usados.extend([Campo(j.alias, a), Campo(origem, b)])
     for campo in usados:
         campos.setdefault(aliases[campo.alias], set()).add(campo.nome)
     return {"setor": setor_id, "filiais": list(filiais), "campos": {a: sorted(ns) for a, ns in campos.items()}}

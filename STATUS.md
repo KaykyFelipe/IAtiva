@@ -1,8 +1,21 @@
 # STATUS — IAtiva
 
-**Atualizado em:** 2026-11-23
+**Atualizado em:** 2026-11-24
 **Etapa atual:** 7 — Piloto local
 **Situação:** **Etapa 7 aprovada em 2026-11-16 por Diego; em andamento.** Feito: roteiro do piloto (`docs/piloto/ROTEIRO.md`) e auditoria de não armazenamento (`manage.py auditar_armazenamento`). Falta: usuários do Financeiro, conferência dos números com relatórios do Protheus, avaliação da interpretação e latência. Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
+
+## Mudança M143 — motor geral: junções em 2 saltos, agrupamento multi-dimensão, lotes VPN e cache de catálogo (2026-11-24)
+
+- Causa de "Quanto cada vendedor vendeu em outubro, por filial?" terminar em "O ERP ou a IA não responderam a tempo":
+  1. O modelo enviou `agregacao = "soma:D2_TOTAL por F2_VEND1"` com `filial-analise = TODAS` sem `"por filial"`, seguindo uma instrução ambígua do prompt; o backend somou todas as filiais juntas e tirou a coluna `Filial`.
+  2. `query/nomes.py` (`_LOTE = 200`) enviou 96 códigos de vendedores num único `IN (...)`, ultrapassando o MTU efetivo (~1400 bytes em UTF-16LE TDS) do túnel VPN `tun0` e travando 30 s (`HYT00`) em cada tentativa, sem trazer os nomes da `SA3`.
+  3. O revisor reprovou a 1ª tentativa (faltavam filial e nome); na 2ª tentativa, `juncoes_possiveis` só enxergava 1 salto (`SD2 → SF2`), sem alcançar 2 saltos (`SD2 → SF2 → SA3`), e o prazo de 180 s esgotou dentro da 2ª revisão, descartando o resultado.
+- Correções gerais (qualquer tabela e setor, sem regras específicas por pergunta):
+  - **Junções SX9 em até 2 saltos:** `aprendizado.py`, `plano.py`, `compilador.py` e `servico.py` suportam junções encadeadas (`origem_alias` / `via`, ex.: item → cabeçalho → cadastro) com fechamento transitivo e validação AST intacta.
+  - **Agrupamento multi-dimensão e preservação de "por filial":** `ler_grupos_agregacao` aceita até 3 dimensões (`por CAMPO1, CAMPO2`, `por mes`, `por filial`, separados por `por`, `,` ou `e`), instruções do agente alinhadas e `_calculo_implicito` preserva `por filial` quando pedido junto de outra dimensão.
+  - **Filtros dinâmicos em tabelas ligadas e desigualdade:** `filtro-campo` aceita `!=`/`<>` além de `=`, `~` e `@`, e amplia automaticamente campos de tabelas ligadas pelo `SX9` (1 e 2 saltos).
+  - **Desempenho e rede VPN:** `_LOTE = 30` em `query/nomes.py` (evita descarte de pacotes grandes no túnel VPN) e cache por sessão em `metadata/catalogo.py` (elimina releituras repetidas de `SX2/SX3/SIX` e `INFORMATION_SCHEMA` entre filiais).
+  - **Resiliência no fim do prazo:** quando restam menos de 10 s (ou esgota na revisão com continuações desligadas), `revisao.py` entrega o resultado já validado pelo contrato em vez de descartá-lo.
 
 ## Mudança M142 — agrupar por campo de tabela ligada; sem a lista "Ainda falta" (2026-11-24)
 

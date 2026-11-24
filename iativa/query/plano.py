@@ -41,7 +41,8 @@ class Coluna:
 class Juncao:
     alias: str
     tabela: str
-    pares: tuple[tuple[str, str], ...]  # (campo da junção, campo de e1)
+    pares: tuple[tuple[str, str], ...]  # (campo da junção, campo da tabela de origem)
+    origem_alias: str = "e1"
 
 
 @dataclass
@@ -108,9 +109,9 @@ VALOR_CONTEM_RE = re.compile(r"^[0-9A-Za-zÀ-ÿ][0-9A-Za-zÀ-ÿ .,/-]{0,59}$")
 
 
 def ler_filtros(texto: str, permitidos, datas=()) -> list[tuple[str, str, str]]:
-    """"R7_MAT=000123; C1_DESCRI~carregador apple" → [(campo, valor, op)]. "=" é valor exato; "~" (M91) é
-    "contém" em texto. "@" é um intervalo inclusivo de datas. Campo fora da lista ou valor fora do formato seguro é
-    recusado (ValueError), nunca ignorado em silêncio."""
+    """"R7_MAT=000123; C7_ENCER<>E; C1_DESCRI~carregador apple" → [(campo, valor, op)]. "=" é valor exato, "<>" / "!="
+    é diferente, "~" (M91) é "contém" em texto e "@" é um intervalo inclusivo de datas. Campo fora da lista ou valor
+    fora do formato seguro é recusado (ValueError), nunca ignorado em silêncio."""
     out = []
     for parte in (texto or "").split(";"):
         if not parte.strip():
@@ -127,14 +128,24 @@ def ler_filtros(texto: str, permitidos, datas=()) -> list[tuple[str, str, str]]:
                 raise ValueError(f"intervalo inválido para {campo}") from None
             out.append((campo, f"{inicio}..{fim}", "@"))
             continue
-        contem = "~" in parte and ("=" not in parte or parte.index("~") < parte.index("="))
-        campo, sep, valor = parte.partition("~" if contem else "=")
+        contem = "~" in parte and all(op not in parte or parte.index("~") < parte.index(op) for op in ("!=", "<>", "="))
+        diferente = not contem and ("!=" in parte or "<>" in parte)
+        if contem:
+            campo, sep, valor = parte.partition("~")
+            op_final = "~"
+        elif diferente:
+            sep_dif = "!=" if "!=" in parte and ("<>" not in parte or parte.index("!=") < parte.index("<>")) else "<>"
+            campo, sep, valor = parte.partition(sep_dif)
+            op_final = "<>"
+        else:
+            campo, sep, valor = parte.partition("=")
+            op_final = "="
         campo, valor = campo.strip().upper(), valor.strip()
         if not sep or campo not in permitidos:
             raise ValueError(f"campo não filtrável: {campo or parte.strip()}")
         if not (VALOR_CONTEM_RE if contem else VALOR_FILTRO_RE).match(valor):
             raise ValueError(f"valor inválido para {campo}")
-        out.append((campo, valor, "~" if contem else "="))
+        out.append((campo, valor, op_final))
     if len(out) > 6 and any(op == "@" for _, _, op in out):
         raise ValueError("informe até seis filtros por campo")
     return out[:6]
@@ -160,22 +171,25 @@ def separar_categorias(texto: str):
     return medida, codigos
 
 
-def ler_agregacao(texto: str, spec: dict):
-    """"soma:F2_VALBRUT, media:F2_VALBRUT por F2_CLIENTE top 10" -> ([(SUM, campo)...], grupo, top).
-    Grupo: campo da consulta, "MES"/"ANO" (do campo de data) ou vazio. Fora disso: ValueError."""
-    medida, categorias = separar_categorias(texto)
+_FILIAL_GRUPO_RE = re.compile(r"^(filial|filiais|[a-z0-9]{1,3}_filial)$")
+
+
+def _partes_agregacao(texto: str):
+    medida, categorias = separar_categorias(texto or "")
     t = _sem_acento(medida).strip()
     top = 0
     if m := re.search(r"\btop\s*(\d{1,3})\b", t):
         top = max(1, min(100, int(m.group(1))))
         t = (t[:m.start()] + t[m.end():]).strip()
-    metricas_txt, _, grupo = t.partition(" por ")
-    # M100: "por CAMPO por filial" (ou "por filial por CAMPO"): o grupo fica separado por filial; a filial não é
-    # coluna da consulta (cada filial roda à parte) e é tratada pelo serviço (`ler_por_filial`).
-    partes = [g.strip() for g in re.split(r"\s+por\s+", grupo) if g.strip()]
-    if len(partes) > 1:
-        outros = [g for g in partes if not re.fullmatch(r"(filial|filiais|[a-z0-9]{1,3}_filial)", g)]
-        grupo = outros[0] if outros else ""
+    metricas_txt, sep, resto = t.partition(" por ")
+    tokens = [g.strip() for g in re.split(r"\s+por\s+|\s*,\s*|\s+e\s+", resto) if g.strip()] if sep else []
+    return metricas_txt, tokens, top, categorias
+
+
+def ler_grupos_agregacao(texto: str, spec: dict):
+    """M143: aceita de 1 a 3 dimensões de agrupamento ("soma:D2_TOTAL por F2_VEND1, A3_NOME por filial",
+    "soma:D2_TOTAL por F2_VEND1 por mes") além de filial."""
+    metricas_txt, tokens, top, categorias = _partes_agregacao(texto)
     tipos = {c["campo"]: c["tipo"] for c in spec.get("colunas", [])}
     metricas = []
     for parte in metricas_txt.split(","):
@@ -195,32 +209,38 @@ def ler_agregacao(texto: str, spec: dict):
         metricas.append((FUNCOES[func], campo))
     if not metricas or len(metricas) > 4:
         raise ValueError("informe de 1 a 4 cálculos (ex.: soma:CAMPO)")
-    grupo = grupo.strip().upper()
-    if grupo in ('FILIAL', 'FILIAIS') or re.fullmatch(r'[A-Z0-9]{1,3}_FILIAL', grupo):
-        # M67: "por D2_FILIAL" (o modelo usa o campo) é o mesmo pedido que "por filial".
-        # Cada filial autorizada já é executada separadamente pelo serviço. Não é nome de
-        # coluna nem motivo para ampliar o escopo: TODAS/filial continua sendo parâmetro próprio.
-        grupo = ''
-    if grupo in ("MES", "ANO"):
-        if not spec.get("campo_data"):
-            raise ValueError("a consulta não tem campo de data para agrupar por mês/ano")
-    elif grupo and grupo not in tipos:
-        raise ValueError(f"agrupamento por campo fora da consulta: {grupo}")
-    if categorias and (grupo not in tipos or len(metricas) != 1 or metricas[0][0] not in ("COUNT", "COUNT_DISTINCT")
-                       or top or len(partes) != 1):
+    tem_filial = any(_FILIAL_GRUPO_RE.fullmatch(g) for g in tokens)
+    grupos = list(dict.fromkeys(g.upper() for g in tokens if not _FILIAL_GRUPO_RE.fullmatch(g)))
+    if len(grupos) > 3:
+        raise ValueError("agrupe por até 3 campos")
+    for g in grupos:
+        if g in ("MES", "ANO"):
+            if not spec.get("campo_data"):
+                raise ValueError("a consulta não tem campo de data para agrupar por mês/ano")
+        elif g not in tipos:
+            raise ValueError(f"agrupamento por campo fora da consulta: {g}")
+    if categorias and (len(grupos) != 1 or grupos[0] not in tipos or len(metricas) != 1
+                       or metricas[0][0] not in ("COUNT", "COUNT_DISTINCT") or top or tem_filial):
         raise ValueError("Categorias requerem contagem completa agrupada por um único campo.")
-    return metricas, grupo, top
+    return metricas, grupos, top
+
+
+def ler_agregacao(texto: str, spec: dict):
+    """"soma:F2_VALBRUT, media:F2_VALBRUT por F2_CLIENTE top 10" -> ([(SUM, campo)...], grupo, top).
+    Grupo: primeiro campo do agrupamento, "MES"/"ANO" (do campo de data) ou vazio. Fora disso: ValueError."""
+    metricas, grupos, top = ler_grupos_agregacao(texto, spec)
+    return metricas, (grupos[0] if grupos else ""), top
 
 
 def expressao_validada(texto, spec):
     """Serializa apenas operadores, campos e códigos validados, sem guardar a entrada livre do modelo."""
     if not texto:
         return ""
-    medidas, grupo, top = ler_agregacao(texto, spec)
+    medidas, grupos, top = ler_grupos_agregacao(texto, spec)
     nomes = {v: k for k, v in FUNCOES.items()}
     valor = ",".join(f"{nomes[func]}:{campo}" for func, campo in medidas)
-    if grupo:
-        valor += f" por {grupo}"
+    if grupos:
+        valor += " por " + ", ".join(grupos)
     if ler_por_filial(texto):
         valor += " por filial"
     if top:
@@ -230,10 +250,11 @@ def expressao_validada(texto, spec):
 
 
 def ler_por_filial(texto: str) -> bool:
-    """M100: agregação pedida também por filial junto de outro grupo ("contagem:* por T9_CODESTO por filial")."""
-    grupos = [g.strip() for g in re.split(r"\s+por\s+", _sem_acento(texto or "")) [1:]]
-    filiais = [g for g in grupos if re.fullmatch(r"(filial|filiais|[a-z0-9]{1,3}_filial)(\s+top\s*\d+)?", g)]
-    return bool(filiais) and len(grupos) > len(filiais)
+    """M100/M143: agregação pedida também por filial junto de outro grupo ("soma:D2_TOTAL por F2_VEND1 por filial",
+    "por filial, F2_VEND1" ou "por F2_VEND1 e filial")."""
+    _, tokens, _, _ = _partes_agregacao(texto or "")
+    filiais = [g for g in tokens if _FILIAL_GRUPO_RE.fullmatch(g)]
+    return bool(filiais) and len(tokens) > len(filiais)
 
 
 def ler_top(texto: str) -> int:
@@ -276,9 +297,23 @@ def apelido(spec: dict, campo: str) -> str:
     return next((c.get("alias", "e1") for c in spec.get("colunas", []) if c["campo"] == campo), "e1")
 
 
+def _juncoes_usadas(juncoes: list[Juncao], usados: set[str]) -> list[Juncao]:
+    """Mantém só junções usadas em colunas/filtros e, transitivamente, as junções intermediárias (`origem_alias`)."""
+    ativos = set(usados)
+    mudou = True
+    while mudou:
+        mudou = False
+        for j in juncoes:
+            origem = getattr(j, "origem_alias", "e1") or "e1"
+            if j.alias in ativos and origem not in ativos:
+                ativos.add(origem)
+                mudou = True
+    return [j for j in juncoes if j.alias in ativos]
+
+
 def _aplicar_agregacao(plano, spec: dict, texto: str):
     try:
-        metricas, grupo, top = ler_agregacao(texto, spec)
+        metricas, grupos, top = ler_grupos_agregacao(texto, spec)
     except ValueError as exc:
         from .compilador import PlanoInvalido
 
@@ -287,11 +322,12 @@ def _aplicar_agregacao(plano, spec: dict, texto: str):
     rotulos = {c["campo"]: c["rotulo"] for c in spec["colunas"]}
     tipos = {c["campo"]: c["tipo"] for c in spec["colunas"]}
     colunas = []
-    if grupo in ("MES", "ANO"):
-        colunas.append(Coluna("Mês" if grupo == "MES" else "Ano", Campo(e1, spec["campo_data"]),
-                              tipo=grupo.lower(), transformacao=grupo))
-    elif grupo:
-        colunas.append(Coluna(rotulos[grupo], Campo(apelido(spec, grupo), grupo), tipo=tipos[grupo]))
+    for g in grupos:
+        if g in ("MES", "ANO"):
+            colunas.append(Coluna("Mês" if g == "MES" else "Ano", Campo(e1, spec["campo_data"]),
+                                  tipo=g.lower(), transformacao=g))
+        else:
+            colunas.append(Coluna(rotulos[g], Campo(apelido(spec, g), g), tipo=tipos[g]))
     filial = next(f.campo for f in plano.filtros if f.campo.nome.endswith("_FILIAL"))
     for func, campo in metricas:
         if campo == "*":
@@ -304,28 +340,29 @@ def _aplicar_agregacao(plano, spec: dict, texto: str):
             tipo = "valor" if tipos[campo] == "numero" else tipos[campo]
             colunas.append(Coluna(f"{NOME_FUNCAO[func]} de {rotulos[campo]}", Campo(apelido(spec, campo), campo), agregacao=func,
                                   tipo=tipo))
-    plano.colunas, plano.agrupar, plano.top = colunas, bool(grupo), top
-    # M125: no cálculo, junção que não entra em coluna nem em filtro sai (como em plano_total): não pode inflar
-    # nem cortar a contagem, que fica na unicidade da tabela base (um registro por chave).
+    plano.colunas, plano.agrupar, plano.top = colunas, bool(grupos), top
+    # M125/M143: no cálculo, junção que não entra em coluna nem em filtro (nem alimenta outra junção usada) sai.
     usados = {c.campo.alias for c in colunas} | {f.campo.alias for f in plano.filtros} | {
         f.valor.alias for f in plano.filtros if isinstance(f.valor, Campo)}
-    fora = {j.tabela for j in plano.juncoes if j.alias not in usados}
-    plano.juncoes = [j for j in plano.juncoes if j.alias in usados]
+    mantidas = _juncoes_usadas(plano.juncoes, usados)
+    fora = {j.tabela for j in plano.juncoes if j not in mantidas}
+    plano.juncoes = mantidas
     plano.premissas = [p for p in plano.premissas
                        if not any(p.startswith(f"Junção com {t} ") for t in fora)]
     plano.categorias = separar_categorias(texto)[1]
-    if grupo and ler_por_filial(texto):
+    if grupos and ler_por_filial(texto):
         plano.por_filial = True  # cada filial com os seus grupos; o serviço não soma as filiais
-    primeira_metrica = colunas[1 if grupo else 0].rotulo
+    primeira_metrica = colunas[len(grupos)].rotulo
     if top:
         plano.ordenar = [(primeira_metrica, True)]
-    elif grupo:
-        plano.ordenar = [(colunas[0].rotulo, False)]
+    elif grupos:
+        plano.ordenar = [(colunas[i].rotulo, False) for i in range(len(grupos))]
     else:
         plano.ordenar = []
+    nomes_grupos = ", ".join(colunas[i].rotulo for i in range(len(grupos)))
     plano.premissas.append("Cálculo: " + ", ".join(c.rotulo for c in colunas if c.agregacao)
-                           + (f", por {colunas[0].rotulo}" if grupo else "")
-                           + (" e por filial" if plano.por_filial and grupo else "") + (f", top {top}" if top else "") + ".")
+                           + (f", por {nomes_grupos}" if grupos else "")
+                           + (" e por filial" if plano.por_filial and grupos else "") + (f", top {top}" if top else "") + ".")
 
 
 FILTROS_USUARIO = "_filtros_usuario"  # M42: camada de filtros da pessoa (FiltroUsuario.camada)
@@ -352,7 +389,7 @@ def plano_total(plano, medidas, campo_filial: str, moeda=None) -> "Plano":
         if isinstance(f.valor, Campo):
             usados.add(f.valor.alias)
     total = Plano(objetivo=plano.objetivo, base=plano.base, filial=plano.filial, filtros=list(plano.filtros),
-                  juncoes=[j for j in plano.juncoes if j.alias in usados])
+                  juncoes=_juncoes_usadas(plano.juncoes, usados))
     colunas = [Coluna("moeda", moeda)] if moeda else []
     colunas.append(Coluna("registros", Campo("e1", campo_filial), "COUNT", "inteiro"))
     for i, (_, func, tipo, campo) in enumerate(medidas):
@@ -399,7 +436,7 @@ def montar_modelo(tabela: str, spec: dict, valores: dict, codigo: str) -> Plano:
     filial_campo = f"{tabela[1:]}_FILIAL" if tabela.startswith("S") else f"{tabela}_FILIAL"
     plano = Plano(objetivo=codigo, base=tabela, filial=valores["filial-analise"])
     for j in spec.get("juncoes", []):
-        plano.juncoes.append(Juncao(j["alias"], j["tabela"], tuple((a, b) for a, b in j["pares"])))
+        plano.juncoes.append(Juncao(j["alias"], j["tabela"], tuple((a, b) for a, b in j["pares"]), j.get("de") or "e1"))
         plano.premissas.append(f"Junção com {j['tabela']} pela chave do dicionário (SX9), sem duplicar linhas.")
     plano.filtros.append(Filtro(Campo(e1, filial_campo), "=", valores["filial-analise"]))
     camada = valores.get(FILTROS_USUARIO) or {}  # M42: filtros que a pessoa criou só para si
@@ -411,7 +448,7 @@ def montar_modelo(tabela: str, spec: dict, valores: dict, codigo: str) -> Plano:
         # M40: o filtro pode ser de uma tabela juntada (alias da junção) e pode ser "diferente".
         plano.filtros.append(Filtro(Campo(f.get("alias") or e1, f["campo"]), f.get("op") or "=", f["valor"]))
     for j in camada.get("juncoes", []):
-        plano.juncoes.append(Juncao(j["alias"], j["tabela"], tuple((a, b) for a, b in j["pares"])))
+        plano.juncoes.append(Juncao(j["alias"], j["tabela"], tuple((a, b) for a, b in j["pares"]), j.get("de") or "e1"))
     for f in camada.get("filtros", []):
         plano.filtros.append(Filtro(Campo(f.get("alias") or e1, f["campo"]), f.get("op") or "=", f["valor"]))
         plano.premissas.append(f"Seu filtro (só para você): {f['campo']} {f.get('op') or '='} {f['valor']}.")
@@ -465,6 +502,9 @@ def montar_modelo(tabela: str, spec: dict, valores: dict, codigo: str) -> Plano:
             elif op == "~":
                 plano.filtros.append(Filtro(Campo(apelido(spec, campo), campo), "LIKE", padrao_busca(valor)))
                 plano.premissas.append(f"Filtro: {campo} contém “{valor}”.")
+            elif op == "<>":
+                plano.filtros.append(Filtro(Campo(apelido(spec, campo), campo), "<>", valor))
+                plano.premissas.append(f"Filtro: {campo} diferente de {valor}.")
             else:
                 plano.filtros.append(Filtro(Campo(apelido(spec, campo), campo), "=", valor))
                 plano.premissas.append(f"Filtro: {campo} = {valor}.")

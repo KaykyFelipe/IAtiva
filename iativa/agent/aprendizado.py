@@ -193,48 +193,87 @@ def _tipo(campo) -> str:
     return 'numero'
 
 
-MAX_JUNCOES = 2
+MAX_JUNCOES = 3
 MAX_COLUNAS_JUNCAO = 5
 
 
-def juncoes_possiveis(user, alias: str) -> list[dict]:
-    """Tabelas que a base `alias` referencia pelo dicionário (SX9) e que dá para juntar sem duplicar:
-    os campos do outro lado cobrem a chave única dele (SIX ordem 1, sem a filial). Ex.: SF2 -> SA1
-    por F2_CLIENTE+F2_LOJA = A1_COD+A1_LOJA, para trazer o nome do cliente."""
-    restritas = _restritas(user)
-    out, vistos = [], set()
-    with abrir_catalogo() as cat:
-        # Duas ligações para a mesma tabela (ex.: SF2 -> SA1 pelo cliente da nota e pelo remetente):
-        # vale primeiro a que usa campos da chave da própria base, que é a ligação principal.
-        base = cat.tabelas([alias], com_campos=True).get(alias)
-        chave_base = set(base.chave) if base is not None and base.chave else set()
+def _relacionados_seguros(cat, alias: str, restritas: set[str], vistos: set[str]) -> list[dict]:
+    out = []
+    # Duas ligações para a mesma tabela (ex.: SF2 -> SA1 pelo cliente da nota e pelo remetente):
+    # vale primeiro a que usa campos da chave da própria base, que é a ligação principal.
+    base = cat.tabelas([alias], com_campos=True).get(alias)
+    chave_base = set(base.chave) if base is not None and base.chave else set()
 
-        def principal(r):
-            campos = [b for b in r.campos_destino if not b.endswith("_FILIAL")]
-            return 0 if campos and set(campos) <= chave_base else 1
+    def principal(r):
+        campos = [b for b in r.campos_destino if not b.endswith("_FILIAL")]
+        return 0 if campos and set(campos) <= chave_base else 1
 
-        for r in sorted(cat.relacionados(alias), key=principal):
-            dom = r.origem  # tabela referenciada (X9_DOM)
-            if dom in vistos or not ALIAS_RE.match(dom) or dom.startswith(SISTEMA) or dom in restritas:
-                continue
-            t = cat.tabelas([dom], com_campos=True).get(dom)
-            if t is None or not t.chave:
-                continue
-            pares = [(a, b) for a, b in zip(r.campos_origem, r.campos_destino)
-                     if not a.endswith("_FILIAL") and not b.endswith("_FILIAL")]
-            chave = [c for c in t.chave if not c.endswith("_FILIAL")]
-            ligados = {a for a, _ in pares}
-            # M142: a ligação precisa começar pela chave do outro lado e cobrir a maior parte dela. Ex.: nota (SD2)
-            # → cabeçalho (SF2) por DOC+SERIE+CLIENTE+LOJA, sem FORMUL e TIPO. Antes só valia a chave inteira, e o
-            # vendedor do cabeçalho ficava fora. A execução confere no banco se a ligação repete registros
-            # (`_juncoes_sem_duplicar`) e recusa a consulta se repetir; a soma nunca sai inflada.
-            if (not pares or not chave or chave[0] not in ligados
-                    or len([c for c in chave if c in ligados]) * 2 < len(chave)):
-                continue  # não liga pela chave única: poderia duplicar linhas e somas
-            vistos.add(dom)
-            campos = [c for c in t.campos if c.consultavel and not c.nome.endswith("_FILIAL") and not sensivel(c)]
-            out.append({"tabela": dom, "nome": t.nome, "pares": [list(p) for p in pares], "campos": campos})
+    for r in sorted(cat.relacionados(alias), key=principal):
+        dom = r.origem  # tabela referenciada (X9_DOM)
+        if dom in vistos or not ALIAS_RE.match(dom) or dom.startswith(SISTEMA) or dom in restritas:
+            continue
+        t = cat.tabelas([dom], com_campos=True).get(dom)
+        if t is None or not t.chave:
+            continue
+        pares = [(a, b) for a, b in zip(r.campos_origem, r.campos_destino)
+                 if not a.endswith("_FILIAL") and not b.endswith("_FILIAL")]
+        chave = [c for c in t.chave if not c.endswith("_FILIAL")]
+        ligados = {a for a, _ in pares}
+        # M142: a ligação precisa começar pela chave do outro lado e cobrir a maior parte dela. Ex.: nota (SD2)
+        # → cabeçalho (SF2) por DOC+SERIE+CLIENTE+LOJA, sem FORMUL e TIPO. A execução confere no banco se a
+        # ligação repete registros (`_juncoes_sem_duplicar`) e recusa a consulta se repetir.
+        if (not pares or not chave or chave[0] not in ligados
+                or len([c for c in chave if c in ligados]) * 2 < len(chave)):
+            continue
+        vistos.add(dom)
+        campos = [c for c in t.campos if c.consultavel and not c.nome.endswith("_FILIAL") and not sensivel(c)]
+        out.append({"tabela": dom, "nome": t.nome, "pares": [list(p) for p in pares], "campos": campos})
     return out
+
+
+def juncoes_possiveis(user, alias: str, profundidade: int = 1) -> list[dict]:
+    """Tabelas que a base `alias` referencia pelo dicionário (SX9) sem duplicar linhas.
+    Com `profundidade=2` (M143), inclui também o 2º salto a partir das ligações principais (ex.: SD2 → SF2 → SA3)."""
+    restritas = _restritas(user)
+    vistos = {alias}
+    with abrir_catalogo() as cat:
+        diretas = _relacionados_seguros(cat, alias, restritas, vistos)
+        if profundidade < 2:
+            return diretas
+        encadeadas = []
+        for j1 in sorted(diretas, key=lambda j: -len(j["pares"]))[:4]:
+            for j2 in _relacionados_seguros(cat, j1["tabela"], restritas, vistos):
+                encadeadas.append({**j2, "via": j1["tabela"], "via_pares": j1["pares"]})
+    return diretas + encadeadas
+
+
+def _garantir_juncao(juncoes: list[dict], j: dict, prefixo: str = "j", limite: int = 4, existentes=()) -> str | None:
+    """Garante a junção `j` (e, em 2 saltos, a intermediária `via` antes dela) e devolve o alias SQL."""
+    todas = list(existentes) + juncoes
+    atual = next((x for x in todas if x["tabela"] == j["tabela"]), None)
+    if atual is not None:
+        return atual["alias"]
+    de = ""
+    if j.get("via"):
+        inter = next((x for x in todas if x["tabela"] == j["via"]), None)
+        if inter is None:
+            if len({x["tabela"] for x in todas}) >= limite:
+                return None
+            usados = {x["alias"] for x in todas}
+            ap_via = next(f"{prefixo}{k}" for k in range(1, 20) if f"{prefixo}{k}" not in usados)
+            inter = {"tabela": j["via"], "alias": ap_via, "pares": j["via_pares"]}
+            juncoes.append(inter)
+            todas = list(existentes) + juncoes
+        de = inter["alias"]
+    if len({x["tabela"] for x in todas}) >= limite:
+        return None
+    usados = {x["alias"] for x in todas}
+    apelido = next(f"{prefixo}{k}" for k in range(1, 20) if f"{prefixo}{k}" not in usados)
+    item = {"tabela": j["tabela"], "alias": apelido, "pares": j["pares"]}
+    if de:
+        item["de"] = de
+    juncoes.append(item)
+    return apelido
 
 
 _PESSOA = re.compile(r"SOLICIT|_NOME$|_NOMCLI|_NOMFOR|_NREDUZ|_RAZAO|_USER|_NOMUSR", re.I)
@@ -313,9 +352,9 @@ def criar_automatico(user, consulta: dict, setores_confirmados=None, leitura_tra
         cm.save(update_fields=["spec"])
     pedidas = consulta.get("juncoes") or []
     if pedidas:
-        possiveis = {j["tabela"]: j for j in juncoes_possiveis(user, alias)}
+        possiveis = {j["tabela"]: j for j in juncoes_possiveis(user, alias, profundidade=2)}
         juncoes, extras = [], []
-        for n, pedida in enumerate(pedidas[:MAX_JUNCOES], start=1):
+        for pedida in pedidas[:MAX_JUNCOES]:
             j = possiveis.get(pedida.get("tabela", ""))
             if j is None:
                 continue  # sem relacionamento seguro: ignora em vez de arriscar duplicar
@@ -323,8 +362,9 @@ def criar_automatico(user, consulta: dict, setores_confirmados=None, leitura_tra
             cols = [c for c in dict.fromkeys(pedida.get("colunas", [])) if c in por_nome_j][:MAX_COLUNAS_JUNCAO]
             if not cols:
                 continue
-            apelido = f"j{n}"
-            juncoes.append({"tabela": j["tabela"], "alias": apelido, "pares": j["pares"]})
+            apelido = _garantir_juncao(juncoes, j, "j", MAX_JUNCOES_AUTO)
+            if apelido is None:
+                continue
             extras += [{"campo": c, "rotulo": por_nome_j[c].titulo or c, "tipo": _tipo(por_nome_j[c]),
                         "alias": apelido} for c in cols]
         if juncoes:
@@ -419,10 +459,11 @@ def salvar_proposta(user, alias: str, dados, automatico: bool = False) -> Consul
     return cm
 
 
-MAX_JUNCOES_AUTO = 3
+MAX_JUNCOES_AUTO = 4
 _CAMPO_RE = re.compile(r"\b[A-Z][A-Z0-9]{1,2}_[A-Z0-9_]{1,10}\b")
 _DIMENSAO = re.compile(r"VEND|CLIENT|FORNE|PROD|GRUPO|TIPO|NATUR|CENTRO|C\.? ?CUSTO|COND|TRANSP|REGI|SEGM|ESTADO|"
-                       r"UF\b|MUNIC|CIDADE|COMPRAD|ARMAZ|LOCAL|FUNC|DEPART|CARGO|SETOR|BANCO|CONTA|MOEDA|STATUS|SITUA",
+                       r"UF\b|MUNIC|CIDADE|COMPRAD|ARMAZ|LOCAL|FUNC|DEPART|CARGO|SETOR|BANCO|CONTA|MOEDA|STATUS|SITUA|"
+                       r"_NOME$|_DESC",
                        re.I)
 
 
@@ -431,10 +472,9 @@ def campos_citados(texto: str) -> list[str]:
 
 
 def ampliar_para_campos(user, cm, campos) -> bool:
-    """M142: "soma:D2_TOTAL por F2_VEND1" numa consulta da SD2. O campo é de uma tabela ligada pelo dicionário
-    (SX9): a consulta ganha sozinha a junção e a coluna, em vez de recusar o cálculo. Vale para qualquer tabela e
-    dimensão (vendedor do cabeçalho, grupo do produto, natureza do título...). Só ligações seguras
-    (`juncoes_possiveis`). A duplicação é conferida no banco a cada execução. False = não deu para ampliar."""
+    """M142/M143: campo de tabela ligada pelo dicionário (SX9 em 1 ou 2 saltos, ex.: F2_VEND1 do cabeçalho SF2 ou
+    A3_NOME do vendedor SA3 a partir da SD2): a consulta ganha sozinha a junção (e a intermediária, se houver) e a
+    coluna, em vez de recusar o cálculo ou filtro. A duplicação é conferida no banco a cada execução."""
     spec = dict(cm.spec or {})
     tem = {c["campo"] for c in spec.get("colunas", [])}
     faltam = [c for c in dict.fromkeys(campos) if c and c != "*" and c not in tem]
@@ -442,22 +482,17 @@ def ampliar_para_campos(user, cm, campos) -> bool:
         return False
     juncoes = [dict(j) for j in spec.get("juncoes", [])]
     extras = []
-    possiveis = juncoes_possiveis(user, cm.tabela)
+    possiveis = juncoes_possiveis(user, cm.tabela, profundidade=2)
     for campo in faltam:
         j = next((j for j in possiveis if any(c.nome == campo for c in j["campos"])), None)
         if j is None:
             return False
-        atual = next((x for x in juncoes if x["tabela"] == j["tabela"]), None)
-        if atual is None:
-            if len(juncoes) >= MAX_JUNCOES_AUTO:
-                return False
-            usados = {x["alias"] for x in juncoes}
-            atual = {"tabela": j["tabela"], "alias": next(f"j{k}" for k in range(1, 10) if f"j{k}" not in usados),
-                     "pares": j["pares"]}
-            juncoes.append(atual)
+        ap = _garantir_juncao(juncoes, j, "j", MAX_JUNCOES_AUTO)
+        if ap is None:
+            return False
         info = next(c for c in j["campos"] if c.nome == campo)
         extras.append({"campo": campo, "rotulo": (info.titulo or campo).strip(), "tipo": _tipo(info),
-                       "alias": atual["alias"]})
+                       "alias": ap})
     antigo = cm.spec
     cm.spec = {**spec, "juncoes": juncoes, "colunas": spec.get("colunas", []) + extras}
     try:
@@ -471,16 +506,16 @@ def ampliar_para_campos(user, cm, campos) -> bool:
 
 
 def campos_ligados_texto(user, alias: str, limite: int = 30) -> str:
-    """M142: campos de dimensão das tabelas ligadas à consulta, para o modelo saber o que pode usar em "por CAMPO"
-    (ex.: "SF2: F2_VEND1 (Vendedor 1)"). Só estrutura do dicionário, nenhum dado."""
+    """M142/M143: campos de dimensão das tabelas ligadas à consulta (1 e 2 saltos), para o modelo saber o que pode usar
+    em "por CAMPO" ou "filtro-campo" (ex.: "SF2: F2_VEND1 (Vendedor 1); SA3: A3_NOME (Nome)")."""
     partes, n = [], 0
     try:
-        possiveis = juncoes_possiveis(user, alias)
+        possiveis = juncoes_possiveis(user, alias, profundidade=2)
     except Exception:
         return ""
-    # Ligação mais forte primeiro (cabeçalho do documento liga por vários campos), e nela as dimensões mais pedidas.
-    principais = re.compile(r"VEND|CLIENT|FORNE|PROD|GRUPO|NATUR|COMPRAD", re.I)
-    for j in sorted(possiveis, key=lambda j: -len(j["pares"])):
+    # Ligação direta mais forte primeiro (cabeçalho do documento), depois 2º salto (cadastros do cabeçalho).
+    principais = re.compile(r"VEND|CLIENT|FORNE|PROD|GRUPO|NATUR|COMPRAD|_NOME$", re.I)
+    for j in sorted(possiveis, key=lambda j: (bool(j.get("via")), -len(j["pares"]))):
         campos = [c for c in j["campos"] if c.tipo == "C" and _DIMENSAO.search(f"{c.nome} {c.titulo}")]
         campos = sorted(campos, key=lambda c: 0 if principais.search(f"{c.nome} {c.titulo}") else 1)[:8]
         if not campos or n >= limite:
@@ -705,7 +740,14 @@ def _ajustar_do_usuario(user, cm, filtros, remover, aprovacao=None) -> ConsultaM
     for campo in atuais:
         if campo in fixos and campo not in desligados:
             desligados.append(campo)  # o critério da pessoa substitui o do T.I no mesmo campo
-    usados = {f.get("alias") for f in atuais.values()}
+    usados = {f.get("alias") for f in atuais.values() if f.get("alias")}
+    mudou_u = True
+    while mudou_u:
+        mudou_u = False
+        for j in juncoes:
+            if j["alias"] in usados and j.get("de") and j["de"] not in usados:
+                usados.add(j["de"])
+                mudou_u = True
     juncoes = [j for j in juncoes if j["alias"] in usados]
     anteriores = list(camada.get("anteriores", []))
     anteriores.append({k: camada.get(k, []) for k in ("filtros", "juncoes", "desligados")})
@@ -736,21 +778,15 @@ def _novos_filtros(user, cm, atuais: dict, juncoes: list, filtros: list[dict], p
             atuais[campo] = {"campo": campo, "op": op, "valor": valor}
             continue
         if possiveis is None:
-            possiveis = juncoes_possiveis(user, cm.tabela)
+            possiveis = juncoes_possiveis(user, cm.tabela, profundidade=2)
         j = next((j for j in possiveis if any(c.nome == campo for c in j["campos"])), None)
         if j is None:
             raise ValidationError(f"O campo {campo} não está em {cm.tabela} nem numa tabela ligada a ela pelo dicionário.")
-        candidatas = (list(juncoes_base) if reutilizar_base else []) + juncoes
-        existente = next((x for x in candidatas if x["tabela"] == j["tabela"]), None)
-        if existente is None:
-            tabelas = {x["tabela"] for x in list(juncoes_base) + juncoes}
-            if j["tabela"] not in tabelas and len(tabelas) >= MAX_JUNCOES + 1:
-                raise ValidationError("A consulta já tem o máximo de tabelas ligadas.")
-            usados = {x["alias"] for x in juncoes}
-            apelido = next(f"{prefixo}{n}" for n in range(1, 10) if f"{prefixo}{n}" not in usados)
-            existente = {"tabela": j["tabela"], "alias": apelido, "pares": j["pares"]}
-            juncoes.append(existente)
-        atuais[campo] = {"campo": campo, "op": op, "valor": valor, "alias": existente["alias"]}
+        ap = _garantir_juncao(juncoes, j, prefixo, MAX_JUNCOES + 1,
+                              existentes=list(juncoes_base) if reutilizar_base else ())
+        if ap is None:
+            raise ValidationError("A consulta já tem o máximo de tabelas ligadas.")
+        atuais[campo] = {"campo": campo, "op": op, "valor": valor, "alias": ap}
 
 
 @transaction.atomic

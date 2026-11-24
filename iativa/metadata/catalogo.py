@@ -35,6 +35,11 @@ class Catalogo:
         self.fisico = fisico
         self.conn = conn  # mesma conexão somente leitura, usada pela execução (Etapa 5)
         self.dialeto = dialeto
+        self._sem_campos: dict[str, Tabela] = {}
+        self._com_campos: dict[str, Tabela] = {}
+        self._ausentes: set[str] = set()
+        self._relacionados: dict[str, list[Relacionamento]] = {}
+        self._dominios: dict[str, tuple[dict, dict]] = {}
 
     def vazia(self, fisica: str) -> bool | None:
         """M104: a tabela física não tem nenhum registro nesta instalação? (None = não deu para saber).
@@ -54,23 +59,41 @@ class Catalogo:
             return None
 
     def tabelas(self, aliases: list[str], com_campos: bool = False) -> dict[str, Tabela]:
-        out = {}
-        for alias, td in self.dicionario.tabelas([validar_alias(a) for a in aliases]).items():
-            colunas = self.fisico.colunas(td.fisica)
-            if not colunas:
-                continue  # tabela do dicionário sem tabela física: não é oferecida
-            filial = f"{alias[1:]}_FILIAL" if alias.startswith("S") else f"{alias}_FILIAL"
-            out[alias] = Tabela(
-                alias=alias,
-                fisica=td.fisica,
-                nome=td.nome,
-                compartilhamento=nivel_compartilhamento(td),
-                exclusao_logica="D_E_L_E_T_" in colunas,
-                campo_filial=filial if filial in colunas else None,
-                chave=self.dicionario.chave_primaria(alias),
-                campos=self._campos(alias, colunas) if com_campos else (),
-            )
-        return out
+        validados = list(dict.fromkeys(validar_alias(a) for a in aliases))
+        alvo = self._com_campos if com_campos else self._sem_campos
+        faltam = [a for a in validados if a not in alvo and a not in self._ausentes]
+        if faltam:
+            encontradas = self.dicionario.tabelas(faltam)
+            for alias in faltam:
+                td = encontradas.get(alias)
+                if td is None:
+                    self._ausentes.add(alias)
+                    continue
+                if not com_campos and alias in self._com_campos:
+                    c = self._com_campos[alias]
+                    self._sem_campos[alias] = Tabela(
+                        alias=c.alias, fisica=c.fisica, nome=c.nome, compartilhamento=c.compartilhamento,
+                        exclusao_logica=c.exclusao_logica, campo_filial=c.campo_filial, chave=c.chave, campos=(),
+                    )
+                    continue
+                colunas = self.fisico.colunas(td.fisica)
+                if not colunas:
+                    self._ausentes.add(alias)
+                    continue  # tabela do dicionário sem tabela física: não é oferecida
+                filial = f"{alias[1:]}_FILIAL" if alias.startswith("S") else f"{alias}_FILIAL"
+                base = dict(
+                    alias=alias,
+                    fisica=td.fisica,
+                    nome=td.nome,
+                    compartilhamento=nivel_compartilhamento(td),
+                    exclusao_logica="D_E_L_E_T_" in colunas,
+                    campo_filial=filial if filial in colunas else None,
+                    chave=self.dicionario.chave_primaria(alias),
+                )
+                self._sem_campos.setdefault(alias, Tabela(**base, campos=()))
+                if com_campos:
+                    self._com_campos[alias] = Tabela(**base, campos=self._campos(alias, colunas))
+        return {a: alvo[a] for a in validados if a in alvo}
 
     def _campos(self, alias, colunas) -> tuple[Campo, ...]:
         campos, vistos = [], set()
@@ -99,10 +122,15 @@ class Catalogo:
         return self.dominios_campos(alias)[0]
 
     def dominios_campos(self, alias):
-        if "X3_CBOX" not in self.fisico.colunas(self.dicionario.sx3):
-            opcoes, dinamicos = {}, {}
-        else:
-            opcoes, dinamicos = self.dicionario.dominios_campos(alias)
+        validar_alias(alias)
+        if alias not in self._dominios:
+            if "X3_CBOX" not in self.fisico.colunas(self.dicionario.sx3):
+                opcoes, dinamicos = {}, {}
+            else:
+                opcoes, dinamicos = self.dicionario.dominios_campos(alias)
+            self._dominios[alias] = (opcoes, dinamicos)
+        opcoes, dinamicos = self._dominios[alias]
+        opcoes, dinamicos = dict(opcoes), dict(dinamicos)
         # M106: legenda ensinada pela empresa vale no lugar da rotina dinâmica do Protheus.
         from iativa.agent.legendas import legendas_aprendidas
         try:
@@ -118,7 +146,10 @@ class Catalogo:
         return self.dicionario.relacionamentos(aliases)
 
     def relacionados(self, alias: str) -> list[Relacionamento]:
-        return self.dicionario.relacionados(alias)
+        validar_alias(alias)
+        if alias not in self._relacionados:
+            self._relacionados[alias] = self.dicionario.relacionados(alias)
+        return list(self._relacionados[alias])
 
 
 FONTES = ("sintetico", "protheus")

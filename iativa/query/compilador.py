@@ -140,7 +140,8 @@ class _Montador:
             if t.campo_filial:
                 params.append(xfilial(t, p.filial))
                 conds.append(f"{j.alias}.{t.campo_filial} = ?")
-            conds += [f"{self.ref(Campo(j.alias, a))} = {self.ref(Campo('e1', b))}" for a, b in j.pares]
+            origem = getattr(j, "origem_alias", "e1") or "e1"
+            conds += [f"{self.ref(Campo(j.alias, a))} = {self.ref(Campo(origem, b))}" for a, b in j.pares]
             if t.exclusao_logica:
                 conds.append(f"{j.alias}.D_E_L_E_T_ = ' '")
             juncoes.append(f"LEFT JOIN {t.fisica} AS {j.alias} ON " + " AND ".join(conds))

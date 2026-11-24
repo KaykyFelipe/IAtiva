@@ -156,7 +156,21 @@ def _registrar_parametro(user, s: RequestContext, definicao, texto: str):
         try:
             valor = "; ".join(f"{c}{op}{v}" for c, v, op in ler_filtros(valor, permitidos, datas))
         except ValueError as exc:
-            raise ValidationError(f"{exc}. Campos aceitos: {', '.join(sorted(permitidos)) or 'nenhum'}.") from None
+            ampliou = False
+            if obj.modelo_id and "não filtrável" in str(exc):
+                from .aprendizado import ampliar_para_campos, campos_citados
+                cm = ConsultaModelo.objects.get(pk=obj.modelo_id)
+                try:
+                    ampliou = ampliar_para_campos(user, cm, campos_citados(valor))
+                    if ampliou:
+                        obj = OBJETIVOS[s.objetivo]
+                        permitidos = {c for c, _ in obj.filtraveis}
+                        datas = campos_periodo(cm.spec)
+                        valor = "; ".join(f"{c}{op}{v}" for c, v, op in ler_filtros(valor, permitidos, datas))
+                except ValueError as exc2:
+                    exc, ampliou = exc2, False
+            if not ampliou:
+                raise ValidationError(f"{exc}. Campos aceitos: {', '.join(sorted(permitidos)) or 'nenhum'}.") from None
     if definicao.codigo == "agregacao":
         from iativa.agent.models import ConsultaModelo
         from iativa.query.plano import ler_agregacao

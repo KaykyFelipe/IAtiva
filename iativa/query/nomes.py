@@ -22,7 +22,8 @@ log = logging.getLogger(__name__)
 # Campo de nome do cadastro, do mais típico ao menos (A2_NOME, B1_DESC, ED_DESCRIC, A1_NREDUZ...).
 _NOMES = (r"_NOME$", r"_DESC$", r"_DESCRI$", r"_DESCRIC$", r"_RAZAO$", r"_NREDUZ$", r"_NOM[A-Z]{0,4}$",
           r"_DESC[A-Z]{0,4}$")
-_LOTE = 200
+# M143: lotes curtos (~30 códigos < 1 KB em UTF-16LE TDS) evitam descarte de pacote por MTU em túneis VPN.
+_LOTE = 30
 
 
 def _campo_nome(tabela, codigo: str, visivel) -> str:
@@ -61,6 +62,8 @@ def _relacao(cat, tabela: str, campo: str, exibidos: set, visivel):
 
 def _buscar(cat, mestre, pares, campo_nome, chaves, filiais, timeout_s) -> dict:
     """{chave: nome} das `chaves` (tuplas na ordem de `pares`), lendo o cadastro de cada filial distinta."""
+    from iativa.agent import prazo
+
     nomes, vistos = {}, set()
     permitidas = {mestre.fisica}
     for filial in filiais:
@@ -70,6 +73,9 @@ def _buscar(cat, mestre, pares, campo_nome, chaves, filiais, timeout_s) -> dict:
         vistos.add(xf)
         faltam = sorted({k[0] for k in chaves if k not in nomes})
         for i in range(0, len(faltam), _LOTE):
+            if prazo.esgotado():
+                return nomes
+            tempo_lote = prazo.limitar(timeout_s)
             lote = faltam[i:i + _LOTE]
             p = Plano(objetivo="nomes-do-cadastro", base=mestre.alias, filial=filial)
             if mestre.campo_filial:
@@ -81,7 +87,7 @@ def _buscar(cat, mestre, pares, campo_nome, chaves, filiais, timeout_s) -> dict:
             limite = len(lote) * 50  # código com várias lojas: várias linhas por código
             comp = compilar(p, cat, limite)
             validar(comp.sql, permitidas, limite + 1)
-            linhas, _ = executar(cat, comp.sql, comp.params, limite, timeout_s,
+            linhas, _ = executar(cat, comp.sql, comp.params, limite, tempo_lote,
                                  validar_final=lambda sql, n=limite: validar(sql, permitidas, n + 1))
             for linha in linhas:
                 chave = tuple(str(v).strip() for v in linha[:-1])
@@ -100,15 +106,14 @@ def acrescentar_nomes(cat, plano, rotulos, linhas, origem, filiais, visivel, tim
         return []
     aliases = {"e1": plano.base, **{j.alias: j.tabela for j in plano.juncoes}}
     juntadas = {j.tabela for j in plano.juncoes}
-    campos_exibidos = [c.campo.nome for c in plano.colunas]
-    if any(_eh_nome(n) for n in campos_exibidos):
-        return []  # a consulta já traz um nome (ex.: E1_NOMCLI, RA_NOME): não repete
     feitos, out = set(), []
     for i, c in enumerate(plano.colunas):
         if c.agregacao or c.transformacao or c.tipo != "texto" or i in feitos:
             continue
         if c.campo.nome.endswith("_FILIAL"):
             continue
+        if any(_eh_nome(x.campo.nome) for x in plano.colunas if x.campo.alias == c.campo.alias):
+            continue  # a própria tabela já exibe coluna de nome/descrição (ex.: E1_NOMCLI, RA_NOME): não repete
         tabela = aliases.get(c.campo.alias)
         exibidos = {x.campo.nome: k for k, x in enumerate(plano.colunas)
                     if x.campo.alias == c.campo.alias and not x.agregacao and not x.transformacao}

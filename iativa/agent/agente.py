@@ -557,23 +557,38 @@ def _atributo_da_lista(user, c, d, texto: str):
 
 
 _FIXAS_COM_TOTAL = ("titulos-em-atraso", "titulos-a-vencer")
+_PEDE_POR_FILIAL_RE = re.compile(
+    r"\b(?:por|em cada|de cada|separad\w*\s+por)\s+filia(?:l|is)\b|\bfilial\s+a\s+filial\b"
+)
 
 
 def _calculo_implicito(d, texto: str):
-    """M54: nas consultas fixas de contas a receber, "por filial" e "quanto…" (sem pedir lista) não dependem de o
-    modelo lembrar o parâmetro: o backend completa a agregação pela própria pergunta."""
-    if d.acao != "preparar_consulta" or d.objetivo not in _FIXAS_COM_TOTAL:
-        return d
-    if any(c == "agregacao" for c, _ in d.parametros):
-        return d
+    """M54/M143: nas consultas fixas e aprendidas, garante 'por filial' quando pedido explicitamente na pergunta."""
     t = " ".join((texto or "").lower().split())
-    if re.search(r"\b(por|em cada|de cada) filia(l|is)\b", t):
-        calc = "por filial"
-    elif (re.match(r"^(e\s+)?quanto\b", t) and not re.search(r"\b(quais|quem|lista|liste|mostre|detalh|cliente)", t)):
-        calc = "total"
-    else:
-        return d
-    return replace(d, parametros=d.parametros + (("agregacao", calc),))
+    if d.acao == "preparar_consulta" and d.objetivo in _FIXAS_COM_TOTAL:
+        if any(c == "agregacao" for c, _ in d.parametros):
+            return d
+        if _PEDE_POR_FILIAL_RE.search(t):
+            calc = "por filial"
+        elif (re.match(r"^(e\s+)?quanto\b", t) and not re.search(r"\b(quais|quem|lista|liste|mostre|detalh|cliente)", t)):
+            calc = "total"
+        else:
+            return d
+        return replace(d, parametros=d.parametros + (("agregacao", calc),))
+    if d.acao in ("preparar_consulta", "criar_consulta") and _PEDE_POR_FILIAL_RE.search(t):
+        # M143: quando a pessoa pede "por filial" junto de outra dimensão ("quanto cada vendedor vendeu por filial")
+        # e o modelo manda só "soma:D2_TOTAL por F2_VEND1", sem "por filial" o serviço somaria as filiais.
+        novos, mudou = [], False
+        for k, v in d.parametros:
+            if k == "agregacao" and " por " in str(v).lower() and "filial" not in str(v).lower() and not re.search(r"\btop\s*\d", str(v), re.I):
+                v = f"{str(v).strip()} por filial"
+                mudou = True
+            novos.append((k, v))
+        if mudou:
+            if not any(k == "filial-analise" for k, _ in novos):
+                novos.append(("filial-analise", "TODAS"))
+            return replace(d, parametros=tuple(novos))
+    return d
 
 
 def _sem_narracao(texto: str) -> str:
@@ -1850,8 +1865,9 @@ def _campos_para_modelo(user, alias, pedido=""):
               for f in info["campos"] if not aprendizado.sensivel(f)]
     try:
         juncoes = [{"tabela": j["tabela"], "nome": j["nome"],
+                    **({"via": j["via"]} if j.get("via") else {}),
                     "campos": [{"campo": f.nome, "titulo": f.titulo} for f in j["campos"]][:40]}
-                   for j in aprendizado.juncoes_possiveis(user, alias)][:6]
+                   for j in aprendizado.juncoes_possiveis(user, alias, profundidade=2)][:8]
     except Exception:
         juncoes = []
     # M95: poucos trechos técnicos da memória (só desta tabela autorizada; nunca dados do ERP). Campo da referência
@@ -1992,7 +2008,15 @@ def _aprender_sozinho(user, c, d, texto, ficha, provedor, entrada, atual, motivo
         from .planejamento import FonteInconclusiva, autorizar_fonte
         setores = None
         transversais = set()
-        for alias in dict.fromkeys([consulta['tabela']] + [j['tabela'] for j in consulta.get('juncoes', [])]):
+        pedidas_nomes = [j["tabela"] for j in consulta.get("juncoes", [])]
+        vias = []
+        if pedidas_nomes:
+            try:
+                mapa_j = {j["tabela"]: j for j in aprendizado.juncoes_possiveis(user, consulta["tabela"], profundidade=2)}
+                vias = [mapa_j[t]["via"] for t in pedidas_nomes if t in mapa_j and mapa_j[t].get("via")]
+            except Exception:
+                vias = []
+        for alias in dict.fromkeys([consulta["tabela"], *vias, *pedidas_nomes]):
             autorizados = autorizar_fonte(user, provedor, alias, conversa=c, transversais=transversais)
             setores = autorizados if setores is None else setores & autorizados
         cm = aprendizado.criar_automatico(user, consulta, setores_confirmados=setores,

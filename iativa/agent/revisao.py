@@ -84,9 +84,12 @@ def revisar(user, provedor, texto: str, contrato: list, saida) -> str:
     det = deterministico(blocos)
     if det:
         return det
-    from . import andamento
+    from . import andamento, prazo
     from .decisao import EntradaAgente
 
+    resta = prazo.restante()
+    if resta is not None and resta < 10:
+        return ""  # M143: sem folga no prazo, preserva o resultado já validado pelo contrato em vez de descartá-lo
     andamento.avisar("Conferindo se a resposta atende ao que você pediu")
     entrada = EntradaAgente(
         "Confira se a resposta montada atende ao pedido.", timezone.localdate().isoformat(), [], [], None,
@@ -97,6 +100,9 @@ def revisar(user, provedor, texto: str, contrato: list, saida) -> str:
     try:
         with tempos.medir("revisao"):
             a = provedor.planejar(entrada)
+    except prazo.PrazoEsgotado:
+        from . import objetivos as coord
+        return "" if int(coord.cfg().get("continuacoes", 0)) <= 0 else INDISPONIVEL
     except Exception:
         return INDISPONIVEL
     if not isinstance(a, dict):
