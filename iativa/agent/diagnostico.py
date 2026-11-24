@@ -111,7 +111,8 @@ class Auditor:
         usados = [c.campo for c in plano.colunas] + [f.campo for f in plano.filtros]
         usados += [f.valor for f in plano.filtros if isinstance(f.valor, Campo)]
         for j in plano.juncoes:
-            usados += [Campo(j.alias, a) for a, _ in j.pares] + [Campo('e1', b) for _, b in j.pares]
+            origem = getattr(j, 'origem_alias', 'e1') or 'e1'  # M145: junção em 2 saltos parte da intermediária
+            usados += [Campo(j.alias, a) for a, _ in j.pares] + [Campo(origem, b) for _, b in j.pares]
         if any(c.nome not in campos.get(c.alias, ()) for c in usados):
             raise PermissaoNegada('Um campo da investigação não está autorizado.')
         self.n += 1

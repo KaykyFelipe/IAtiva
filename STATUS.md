@@ -4,6 +4,11 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **Etapa 7 aprovada em 2026-11-16 por Diego; em andamento.** Feito: roteiro do piloto (`docs/piloto/ROTEIRO.md`) e auditoria de não armazenamento (`manage.py auditar_armazenamento`). Falta: usuários do Financeiro, conferência dos números com relatórios do Protheus, avaliação da interpretação e latência. Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M145 — investigação aceita junções em 2 saltos (2026-11-24)
+
+- Causa: `agent/diagnostico.py` (Auditor.ler) conferia os campos de ligação de toda junção na tabela base (`e1`). Com junção encadeada da M143 (ex.: SD2 → SF2 → SA3), o campo F2_VEND1 era procurado na SD2 e a investigação recusava com “Um campo da investigação não está autorizado”, sem motivo real.
+- Correção: a conferência usa a tabela de origem da junção (`origem_alias`), como o compilador e o serviço. Teste: `tests/test_m145_diagnostico_dois_saltos.py`.
+
 ## Mudança M144 — listas nominais com colunas juntadas de título genérico e pedidos mistos contagem + lista (2026-11-24)
 
 - Causa de "me informe agora com os nomes das pessoas" e "Quantos funcionários temos ativos hoje, em cada filial, me diga os nomes das pessoas e a função" terminarem em "Não terminei esta resposta":
