@@ -835,6 +835,9 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
         registrar("interpretacao", "agente", usuario=user, estado_novo=d.acao, entidade_id=atual.pk if atual else None,
                   linhas=len(d.parametros))
         reduz = _reduz_escopo(d, cobertura)
+        if (not reduz and ac.contrato and d.acao in ("preparar_consulta", "executar_consulta")
+                and not any(k == "agregacao" for k, _ in d.parametros)):
+            _ampliar_colunas_pedidas(user, c, d, atual, ac)
         comparada = None
         try:
             if comparacao.periodos(texto) and d.acao == 'preparar_consulta' and comparacao.deste_passo(ac, d) and not reduz:
@@ -978,9 +981,11 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
                 ac.anotar(d.acao, saida.observacao.situacao if saida.observacao is not None
                           and saida.observacao.situacao != SUCESSO else 'entrega_pendente', ev)
                 diverg = [f"{k} ({v})" for k, v in ac.divergencias.items() if k in ac.pendentes()]
+                dica_passo = _dica_entregas_pendentes(ac, ev, saida)
                 observacoes.append(Observacao(d.acao, coord.ETAPA, 'Ainda faltam entregas verificadas: ' + '; '.join(ac.pendentes())
                     + (('. Critério diferente do pedido, refaça com o período/filial da entrega: ' + '; '.join(diverg))
-                       if diverg else '')))
+                       if diverg else '')
+                    + (f'. {dica_passo}' if dica_passo else '')))
                 if ac.exig in (coord.VERIFICACAO, coord.CALCULO) and len(ac.contrato) == 1 and ev == coord.CONSULTA:
                     observacoes.append(Observacao(d.acao, coord.ETAPA, ac.falta_obs(_consulta_recente(user, c))))
                 if diverg:
@@ -1000,7 +1005,9 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
             if ac.entregue and ac.memoria_feita and ac.partes_faltam <= 0 and ev == coord.ACAO:
                 ev = ac.entregue  # a resposta trouxe dados, então ainda precisa da revisão abaixo
         if ac.cumprido(ev) and d.acao != "lembrar":
-            if ac.partes_faltam < 0:
+            if ac.contrato and not ac.pendentes() and len(ac.contrato) >= coord.partes(texto):
+                ac.partes_faltam = 0
+            elif ac.partes_faltam < 0:
                 ac.partes_faltam = coord.partes(texto) - 1
             elif ac.partes_faltam > 0 and ac.entregue:
                 ac.partes_faltam -= 1
@@ -1489,6 +1496,52 @@ def _lista_vista(user, c):
     """Última lista concluída nesta conversa (a que a pessoa está vendo)."""
     s = c.solicitacoes.filter(usuario=user, estado=E.CONCLUIDA).exclude(objetivo="").order_by("-id").first()
     return s if s is not None and s.objetivo in OBJETIVOS and OBJETIVOS[s.objetivo].modelo_id else None
+
+
+def _ampliar_colunas_pedidas(user, c, d, atual, ac) -> None:
+    """M144: antes de executar uma lista de consulta aprendida, garante na consulta as colunas pedidas no contrato."""
+    pedidos = []
+    for i, item in enumerate(ac.contrato):
+        if i not in ac.cumpridas and item.get("tipo") == "consulta" and item.get("campos_pedidos"):
+            pedidos.extend(item["campos_pedidos"])
+    if not pedidos:
+        return
+    anterior = _ultima(user, c) if atual is None else None
+    objetivo = d.objetivo or (atual.objetivo if atual else (anterior.objetivo if anterior else ""))
+    if not objetivo or objetivo not in OBJETIVOS or not getattr(OBJETIVOS[objetivo], "modelo_id", None):
+        return
+    from . import entregas
+    from .models import ConsultaModelo, SituacaoModelo
+
+    cm = ConsultaModelo.objects.filter(codigo=objetivo, situacao=SituacaoModelo.APROVADA).first()
+    if cm is not None:
+        entregas.garantir_campos(user, cm, pedidos)
+
+
+def _dica_entregas_pendentes(ac, ev: str, saida) -> str:
+    """M144: orienta o próximo passo quando parte do contrato de entregas já foi cumprida ou faltou coluna."""
+    from . import entregas
+    from . import objetivos as coord
+
+    res = getattr(saida, "resultado", None)
+    pendentes_itens = [item for i, item in enumerate(ac.contrato) if i not in ac.cumpridas]
+    if ev == coord.CONSULTA and res is not None and getattr(res, "ok", False):
+        cols = getattr(res, "colunas_meta", None) or getattr(res, "colunas", [])
+        faltam_cols = []
+        for item in pendentes_itens:
+            if item.get("tipo") == coord.CONSULTA and item.get("campos_pedidos"):
+                faltam_cols.extend(entregas.faltam(cols, item["campos_pedidos"]))
+        if faltam_cols:
+            nomes = ", ".join(dict.fromkeys(faltam_cols))
+            return (f"Faltam colunas pedidas na lista ({nomes}); use aprender_tabela/criar_consulta com junção "
+                    "para incluir esses campos, sem repetir a mesma consulta")
+        if any(item.get("tipo") == coord.CALCULO for item in pendentes_itens):
+            return ("A lista já foi obtida e guardada; execute agora preparar_consulta com o parâmetro agregacao "
+                    "(ex.: contagem:* ou soma:CAMPO, mantendo filial-analise e filtros) para cumprir o cálculo pendente")
+    if ev == coord.CALCULO and any(item.get("tipo") == coord.CONSULTA for item in pendentes_itens):
+        return ("O cálculo já foi obtido e guardado; execute agora preparar_consulta sem o parâmetro agregacao "
+                "para trazer a lista nominal pendente")
+    return ""
 
 
 def _reduz_escopo(d, cobertura) -> "Saida | None":

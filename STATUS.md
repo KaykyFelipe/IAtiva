@@ -4,6 +4,17 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **Etapa 7 aprovada em 2026-11-16 por Diego; em andamento.** Feito: roteiro do piloto (`docs/piloto/ROTEIRO.md`) e auditoria de não armazenamento (`manage.py auditar_armazenamento`). Falta: usuários do Financeiro, conferência dos números com relatórios do Protheus, avaliação da interpretação e latência. Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M144 — listas nominais com colunas juntadas de título genérico e pedidos mistos contagem + lista (2026-11-24)
+
+- Causa de "me informe agora com os nomes das pessoas" e "Quantos funcionários temos ativos hoje, em cada filial, me diga os nomes das pessoas e a função" terminarem em "Não terminei esta resposta":
+  1. No dicionário do Protheus (`SX3`), campos descritivos de tabelas auxiliares juntadas usam título genérico (`SRJ.RJ_DESC` e `SQ3.Q3_DESCSUM` têm título `"Descricao"`). `planejamento.conferir` passava somente os rótulos exibidos (`res.colunas`) para `entregas.faltam`, sem os nomes técnicos dos campos do dicionário, então `"Descricao"` não era reconhecida como a coluna de função pedida no contrato (`campos_pedidos = ["nome", "funcao", "filial"]`), mesmo com a consulta já trazendo os nomes e as funções de todas as filiais.
+  2. Em pedidos compostos que pedem contagem e lista nominal na mesma mensagem, quando o modelo omitia `atende` (ou apontava índice trocado), `registrar_entregas` não marcava a etapa concluída nem orientava o passo seguinte entre lista (sem `agregacao`) e contagem (`agregacao = contagem:*`).
+- Correções gerais (qualquer tabela e setor):
+  - **Metadados técnicos das colunas no resultado (`colunas_meta`):** `query/servico.py` registra `{campo, rotulo}` para todas as colunas (base, junções, filial e nomes resolvidos de cadastros), e `planejamento.conferir` + `entregas.py` validam `campos_pedidos` também pelo campo técnico do dicionário (`CAMPOS_POSITIVOS`), sem aceitar códigos puros (`RA_CODFUNC`) no lugar da descrição.
+  - **Rótulos claros em tabelas juntadas:** títulos genéricos (`"Descricao"`, ou `"Nome"` repetido entre tabelas) recebem o nome da tabela juntada do dicionário (ex.: `"Descricao (Funções)"`), evitando ambiguidade na tela e no revisor.
+  - **Ampliação automática de colunas pedidas (`garantir_campos`):** se uma consulta aprendida ainda não traz uma coluna nominal/descritiva pedida no contrato (ex.: função ou cliente), o sistema acrescenta sozinho o campo da própria tabela ou da tabela ligada pelo `SX9` (1 ou 2 saltos) antes da execução.
+  - **Coordenação de pedidos mistos (contagem + lista):** `registrar_entregas` reconhece automaticamente a entrega quando há uma única pendente compatível (sem nunca marcar duas perguntas distintas pela mesma tabela), ajusta `partes_faltam` quando o contrato já cobriu todas as partes e orienta explicitamente o próximo passo entre cálculo e lista nominal.
+
 ## Mudança M143 — motor geral: junções em 2 saltos, agrupamento multi-dimensão, lotes VPN e cache de catálogo (2026-11-24)
 
 - Causa de "Quanto cada vendedor vendeu em outubro, por filial?" terminar em "O ERP ou a IA não responderam a tempo":

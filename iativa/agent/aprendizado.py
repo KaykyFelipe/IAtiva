@@ -365,8 +365,8 @@ def criar_automatico(user, consulta: dict, setores_confirmados=None, leitura_tra
             apelido = _garantir_juncao(juncoes, j, "j", MAX_JUNCOES_AUTO)
             if apelido is None:
                 continue
-            extras += [{"campo": c, "rotulo": por_nome_j[c].titulo or c, "tipo": _tipo(por_nome_j[c]),
-                        "alias": apelido} for c in cols]
+            extras += [{"campo": c, "rotulo": _rotulo_juncao(por_nome_j[c].titulo, j.get("nome", ""), c),
+                        "tipo": _tipo(por_nome_j[c]), "alias": apelido} for c in cols]
         if juncoes:
             spec = dict(cm.spec)
             spec["juncoes"] = juncoes
@@ -471,6 +471,15 @@ def campos_citados(texto: str) -> list[str]:
     return list(dict.fromkeys(_CAMPO_RE.findall(str(texto or "").upper())))
 
 
+def _rotulo_juncao(titulo: str, nome_tabela: str, campo: str) -> str:
+    """M144: títulos genéricos de tabelas juntadas ('Descricao' em SRJ/Funções) ganham o contexto da tabela."""
+    base = (titulo or campo).strip()
+    norm = base.lower().replace("ç", "c").replace("ã", "a").rstrip(".")
+    if norm in ("descricao", "desc") and nome_tabela and "(" not in base:
+        return f"{base} ({nome_tabela.strip()})"
+    return base
+
+
 def ampliar_para_campos(user, cm, campos) -> bool:
     """M142/M143: campo de tabela ligada pelo dicionário (SX9 em 1 ou 2 saltos, ex.: F2_VEND1 do cabeçalho SF2 ou
     A3_NOME do vendedor SA3 a partir da SD2): a consulta ganha sozinha a junção (e a intermediária, se houver) e a
@@ -491,8 +500,8 @@ def ampliar_para_campos(user, cm, campos) -> bool:
         if ap is None:
             return False
         info = next(c for c in j["campos"] if c.nome == campo)
-        extras.append({"campo": campo, "rotulo": (info.titulo or campo).strip(), "tipo": _tipo(info),
-                       "alias": ap})
+        extras.append({"campo": campo, "rotulo": _rotulo_juncao(info.titulo, j.get("nome", ""), campo),
+                       "tipo": _tipo(info), "alias": ap})
     antigo = cm.spec
     cm.spec = {**spec, "juncoes": juncoes, "colunas": spec.get("colunas", []) + extras}
     try:

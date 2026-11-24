@@ -9,7 +9,14 @@ PADROES = {'nome': r'nome', 'funcao': r'fun[cç][aã]o|cargo', 'admissao': r'adm
 # M63 (auditoria 17/11): rótulo parecido não prova o dado. "Valor original" não é saldo em aberto;
 # "Nome abreviado"/"Fantasia" não é nome completo. O campo do dicionário, quando conhecido, decide.
 CAMPOS_EXATOS = {'saldo': r'_SALDO$', 'nome_completo': r'_NOMECMP$|^A1_NOME$|^A2_NOME$',
-                 'nome': r'_NOME$|_NOMECMP$', 'admissao': r'_ADMISSA$'}
+                 'nome': r'_NOME$|_NOMECMP$|_NOMCLI$|_NOMFOR$|_NOMVEND$', 'admissao': r'_ADMISSA$'}
+# M144: no dicionário Protheus, tabelas auxiliares usam título genérico ("Descricao" em SRJ.RJ_DESC/SQ3.Q3_DESCSUM).
+# Quando o campo técnico comprova a função/cliente/vencimento/filial, vale mesmo com título genérico; campos
+# personalizados continuam podendo casar pelo rótulo (abaixo).
+CAMPOS_POSITIVOS = {'funcao': r'^RJ_DESC$|^Q3_DESC\w*$|^R7_DESCFUN$|_DESCFUN$|_DESCCAR$',
+                    'cliente': r'^A1_NOME$|_NOMCLI$|_CLIENTE$', 'vencimento': r'_VENCTO$|_VENCREA$',
+                    'filial': r'_FILIAL$'}
+CAMPOS_CODIGO = {'funcao': r'^RJ_FUNCAO$|^RA_CODFUNC$|^Q3_CARGO$|^RA_CARGO$'}
 NAO_E = {'nome': r'abrev|reduz|fantasia|apelido', 'nome_completo': r'abrev|reduz|fantasia|apelido',
          'saldo': r'original|emitid|bruto'}
 
@@ -50,6 +57,10 @@ def _atende(coluna, exigido) -> bool:
         rotulo, campo = _norm(coluna), ''
     if campo and exigido in CAMPOS_EXATOS:
         return bool(re.search(CAMPOS_EXATOS[exigido], campo))
+    if campo and exigido in CAMPOS_CODIGO and re.search(CAMPOS_CODIGO[exigido], campo):
+        return False
+    if campo and exigido in CAMPOS_POSITIVOS and re.search(CAMPOS_POSITIVOS[exigido], campo):
+        return True
     if exigido in NAO_E and re.search(NAO_E[exigido], rotulo):
         return False
     if exigido == 'funcao' and re.search(r'cod|codigo', rotulo):
@@ -96,7 +107,65 @@ def completar(texto,res):
     if len(filiais)==1 and not any(_norm(c)=='filial' for c in res.colunas):
         from iativa.accounts.filiais import rotulo
         res.colunas.insert(0,'Filial');res.tipos.insert(0,'texto')
+        if getattr(res, 'colunas_meta', None):
+            res.colunas_meta.insert(0, {'campo': '_FILIAL', 'rotulo': 'Filial'})
         res.linhas=[[rotulo(filiais[0])]+list(l) for l in res.linhas]
+
+
+def garantir_campos(user, cm, exigidos) -> bool:
+    """M144: se uma consulta aprendida ainda não traz uma coluna pedida (ex.: função em SRJ.RJ_DESC ou nome do cliente
+    em SA1.A1_NOME), inclui automaticamente o campo da própria tabela ou da tabela ligada pelo SX9 (1 ou 2 saltos)."""
+    pendentes = [e for e in dict.fromkeys(exigidos or []) if e != 'filial' and faltam(cm.spec.get('colunas', []), [e])]
+    if not pendentes:
+        return False
+    from .aprendizado import (_testar_compilacao, _tipo, ampliar_para_campos, campos_da_tabela, juncoes_possiveis,
+                              sensivel)
+    mudou = False
+    try:
+        base_info = campos_da_tabela(user, cm.tabela, automatico=True)
+    except Exception:
+        base_info = None
+    tem = {c['campo'] for c in cm.spec.get('colunas', [])}
+    locais = []
+    ainda = []
+    for exig in pendentes:
+        achado = None
+        if base_info is not None:
+            achado = next((c for c in base_info['campos'] if c.nome not in tem and not sensivel(c)
+                           and _atende({'campo': c.nome, 'rotulo': c.titulo or ''}, exig)), None)
+        if achado is not None:
+            locais.append({'campo': achado.nome, 'rotulo': (achado.titulo or achado.nome).strip(),
+                           'tipo': _tipo(achado)})
+            tem.add(achado.nome)
+        else:
+            ainda.append(exig)
+    if locais:
+        antigo = cm.spec
+        cm.spec = {**cm.spec, 'colunas': list(cm.spec.get('colunas', [])) + locais}
+        try:
+            _testar_compilacao(cm)
+            cm.save(update_fields=['spec'])
+            mudou = True
+        except Exception:
+            cm.spec = antigo
+    if ainda:
+        try:
+            possiveis = juncoes_possiveis(user, cm.tabela, profundidade=2)
+        except Exception:
+            possiveis = []
+        campos_juncao = []
+        for exig in ainda:
+            for j in possiveis:
+                chaves_j = {a for a, _ in j['pares']}
+                c = next((x for x in j['campos'] if x.nome not in tem and x.nome not in chaves_j
+                          and _atende({'campo': x.nome, 'rotulo': x.titulo or ''}, exig)), None)
+                if c is not None:
+                    campos_juncao.append(c.nome)
+                    tem.add(c.nome)
+                    break
+        if campos_juncao and ampliar_para_campos(user, cm, campos_juncao):
+            mudou = True
+    return mudou
 
 
 def orientar(user, texto, d, objetivos):

@@ -234,7 +234,8 @@ def conferir(analise, decisao, saida, texto=""):
             continue
         if item.get('campos_pedidos'):
             from .entregas import faltam
-            if not getattr(res,'ok',False) or faltam(getattr(res,'colunas',[]),item['campos_pedidos']):
+            cols = getattr(res, 'colunas_meta', None) or getattr(res, 'colunas', [])
+            if not getattr(res, 'ok', False) or faltam(cols, item['campos_pedidos']):
                 faltantes.append(item['descricao'])
                 continue
         if item.get('detalhe_contagem'):
@@ -309,6 +310,16 @@ def registrar_entregas(acompanhamento, decisao, saida):
     ano_civil = ano_admissoes_e_desligamentos(acompanhamento.texto) if len(contrato) == 1 else ""
     mensais = tuple(i for i, item in enumerate(contrato) if item.get('evento_mensal'))
     indices = mensais or decisao.atende or ((0,) if len(contrato) == 1 else ())
+    antes = len(acompanhamento.cumpridas)
+
+    def _marcar(indice: int):
+        acompanhamento.cumpridas.append(indice)
+        if saida.resultado is not None and not getattr(saida.resultado, 'consolidado', False):
+            try:  # M68: título do bloco na resposta final com várias entregas
+                saida.resultado.titulo_entrega = contrato[indice]['descricao']
+            except AttributeError:
+                pass
+
     for indice in indices:
         if indice < len(contrato) and indice not in acompanhamento.cumpridas:
             motivo = divergencia(contrato[indice], decisao, ano_civil)
@@ -322,12 +333,18 @@ def registrar_entregas(acompanhamento, decisao, saida):
                 continue
         if (indice < len(contrato) and indice not in acompanhamento.cumpridas
                 and not conferir({'entregas': [contrato[indice]]}, decisao, saida, acompanhamento.texto)):
-            acompanhamento.cumpridas.append(indice)
-            if saida.resultado is not None and not getattr(saida.resultado, 'consolidado', False):
-                try:  # M68: título do bloco na resposta final com várias entregas
-                    saida.resultado.titulo_entrega = contrato[indice]['descricao']
-                except AttributeError:
-                    pass
+            _marcar(indice)
+    if len(acompanhamento.cumpridas) == antes and not mensais and len(contrato) > 1:
+        # M144: quando o modelo não informou `atende` (ou apontou índice trocado num pedido misto como contagem + lista),
+        # aceita somente se houver UMA ÚNICA entrega pendente compatível (nunca duas perguntas pela mesma tabela).
+        compativeis = [
+            i for i in range(len(contrato))
+            if i not in acompanhamento.cumpridas
+            and not divergencia(contrato[i], decisao, ano_civil)
+            and not conferir({'entregas': [contrato[i]]}, decisao, saida, acompanhamento.texto)
+        ]
+        if len(compativeis) == 1:
+            _marcar(compativeis[0])
 
 
 def guardar(user, conversa, mensagem_id, texto, analise, saida):

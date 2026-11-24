@@ -112,6 +112,7 @@ class Resultado:
     legenda_pendente: str = ""
     filtros_contagem_por_filial: tuple[Filtro, ...] = ()
     rodape: list[str] = field(default_factory=list)
+    colunas_meta: list[dict] = field(default_factory=list)
 
     @property
     def cabecalho(self):
@@ -449,6 +450,7 @@ def _executar_solicitacao(user, s: RequestContext) -> Resultado:
     inicio = time.monotonic()
     linhas, truncado, origem = [], False, []
     acumulador, totais_ok = None, True
+    nomes_juncoes = {}
     try:
         with abrir_catalogo() as cat:
             from iativa.agent import andamento
@@ -498,7 +500,10 @@ def _executar_solicitacao(user, s: RequestContext) -> Resultado:
                 # "10 fornecedores com mais pedidos"; a leitura agregada tem o próprio teto, bem maior.
                 lim = max(limite, int(cfg.get("limite_grupos", 20000))) if mesclar else limite
                 comp = compilar(replace(plano, top=0) if mesclar else plano, cat, lim)
-                permitidas = {t.fisica for t in cat.tabelas([plano.base] + [j.tabela for j in plano.juncoes]).values()}
+                infos_tab = cat.tabelas([plano.base] + [j.tabela for j in plano.juncoes])
+                permitidas = {t.fisica for t in infos_tab.values()}
+                nomes_juncoes = {j.alias: infos_tab[j.tabela].nome for j in plano.juncoes
+                                 if j.tabela in infos_tab and infos_tab[j.tabela].nome}
                 validar(comp.sql, permitidas, lim + 1)
                 if plano.juncoes:
                     andamento.avisar("Conferindo se as junções não duplicam registros")
@@ -606,6 +611,9 @@ def _executar_solicitacao(user, s: RequestContext) -> Resultado:
     if truncado and "dinheiro" in tipos and not any(c.agregacao for c in plano.colunas):
         i = tipos.index("dinheiro")
         subtotal = _fmt(sum((_dec(l[i]) for l in linhas if l[i] is not None), Decimal(0)), "dinheiro")
+    rotulos_base = _rotulos_exibicao(nomes_juncoes, plano, comp.rotulos)
+    colunas_meta = [{"campo": "" if c.agregacao else c.campo.nome, "rotulo": r}
+                    for c, r in zip(plano.colunas, rotulos_base)]
     if s.objetivo == "titulos-em-atraso" and linhas and "Cliente" in comp.rotulos:
         corte = date.fromisoformat(valores["data-corte"])
         i = comp.rotulos.index("Vencimento mais antigo")
@@ -613,15 +621,17 @@ def _executar_solicitacao(user, s: RequestContext) -> Resultado:
         for linha_bruta, linha in zip(linhas, formatadas):
             t = str(linha_bruta[i]).strip()
             linha.append(str((corte - date(int(t[:4]), int(t[4:6]), int(t[6:8]))).days) if len(t) == 8 else "")
-        colunas = list(comp.rotulos) + ["Dias de atraso (maior)"]
+        colunas = list(rotulos_base) + ["Dias de atraso (maior)"]
+        colunas_meta.append({"campo": "", "rotulo": "Dias de atraso (maior)"})
     else:
-        colunas = list(comp.rotulos)
+        colunas = list(rotulos_base)
     if todas and mesclou:
         plano.premissas = [p for p in plano.premissas if "filial" not in p.lower()] + [
             "Filiais: " + ", ".join(rotulo(f) for f in filiais) + ".",
             "Grupos iguais somados entre as filiais" + (f"; ranking geral dos {plano.top} maiores." if plano.top else ".")]
     elif todas and not categorias:
         colunas, tipos = ["Filial"] + colunas, ["texto"] + tipos
+        colunas_meta = [{"campo": "_FILIAL", "rotulo": "Filial"}] + colunas_meta
         formatadas = [[rotulo(o)] + linha for o, linha in zip(origem, formatadas)]
         plano.premissas = [p for p in plano.premissas if "filial" not in p.lower()] + [
             "Filiais: " + ", ".join(rotulo(f) for f in filiais) + "."]
@@ -638,6 +648,7 @@ def _executar_solicitacao(user, s: RequestContext) -> Resultado:
     destaque = _destaque(plano, comp, colunas, com_nome, linhas, tipos)
     for pos, rot, por_linha, mestre, campo_nome in sorted(nomes, key=lambda x: -x[0]):
         colunas.insert(desloc + pos + 1, rot)
+        colunas_meta.insert(desloc + pos + 1, {"campo": campo_nome, "rotulo": rot})
         tipos.insert(desloc + pos + 1, "texto")
         for n, linha in enumerate(formatadas):
             linha.insert(desloc + pos + 1, por_linha.get(n, ""))
@@ -665,7 +676,7 @@ def _executar_solicitacao(user, s: RequestContext) -> Resultado:
     res.legenda_pendente = legenda_pendente
     if legenda_pendente:
         res.situacao = PARCIAL
-    res.ok, res.colunas, res.tipos, res.linhas = True, colunas, tipos, formatadas
+    res.ok, res.colunas, res.colunas_meta, res.tipos, res.linhas = True, colunas, colunas_meta, tipos, formatadas
     res.premissas, res.truncado, res.total, res.total_valor = plano.premissas, truncado, total, total_valor
     res.totais, res.subtotal = totais, subtotal
     if formatadas and colunas[0] == "Filial" and totais and any(c.agregacao for c in plano.colunas):
@@ -733,6 +744,25 @@ def _nomes_dos_codigos(s, plano, comp, linhas, origem, filiais, cfg):
         import logging
         logging.getLogger(__name__).warning("nomes dos códigos não buscados (%s)", type(exc).__name__)
         return []
+
+
+def _rotulos_exibicao(nomes_juncoes: dict, plano, rotulos) -> list[str]:
+    """M144: títulos genéricos de tabelas juntadas ('Descricao' em SRJ/Funções, ou 'Nome' repetido em duas tabelas)
+    recebem o nome da tabela do dicionário para não ficarem ambíguos na tela nem na revisão."""
+    out = list(rotulos)
+    if not nomes_juncoes or len(out) != len(plano.colunas):
+        return out
+    contagem_nome = sum(1 for r in out if "nome" in str(r or "").lower())
+    for i, (c, r) in enumerate(zip(plano.colunas, out)):
+        if c.agregacao or c.campo.alias == "e1" or "(" in str(r or ""):
+            continue
+        nome_tab = (nomes_juncoes.get(c.campo.alias) or "").strip()
+        if not nome_tab:
+            continue
+        norm = str(r or "").strip().lower().replace("ç", "c").replace("ã", "a").rstrip(".")
+        if norm in ("descricao", "desc") or (norm == "nome" and contagem_nome > 1):
+            out[i] = f"{str(r).strip()} ({nome_tab})"
+    return out
 
 
 def escopo_do_plano(plano, setor_id, filiais):
