@@ -154,3 +154,28 @@ class AvaliacaoResposta(models.Model):
         verbose_name = "avaliação de resposta"
         verbose_name_plural = "avaliações de respostas"
         constraints = [models.UniqueConstraint(fields=["mensagem", "usuario"], name="avaliacao_unica")]
+
+
+class ErroResposta(models.Model):
+    """M149: toda resposta da IA que terminou em erro fica registrada para corrigir depois: a pergunta da pessoa, a
+    resposta da IA e o que precisa ser corrigido (tipo, trilha do pedido e o que o modelo decidiu em cada passo).
+    Nunca linhas ou números do ERP: só textos do chat (que já ficam no histórico) e códigos do sistema. Sai junto com a
+    conversa no expurgo."""
+
+    conversa = models.ForeignKey(ConversationContext, on_delete=models.CASCADE, related_name="erros")
+    usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name="+")
+    mensagem_usuario = models.ForeignKey(Mensagem, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    mensagem_ia = models.ForeignKey(Mensagem, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    pergunta = models.TextField(max_length=2000)
+    resposta = models.TextField(max_length=4000, blank=True)
+    tipo = models.CharField(max_length=40)
+    erro = models.TextField(max_length=4000, help_text="O que precisa ser corrigido.")
+    detalhe = models.JSONField(default=dict, blank=True)
+    corrigido = models.BooleanField(default=False)
+    versao = models.CharField(max_length=40, blank=True)
+    criado_em = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-criado_em"]
+        verbose_name = "erro da IA"
+        verbose_name_plural = "erros da IA"

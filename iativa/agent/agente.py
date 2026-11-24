@@ -730,6 +730,8 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
                              "Tente de novo em cerca de um minuto, com a mesma pergunta.", ficha={"tipo": "falha_modelo"})
             return Saida("Não consegui processar sua mensagem agora. Pode repetir ou escrever de outro jeito?",
                          ficha={"tipo": "falha_modelo"})
+        from iativa.chat import erros as erros_ia
+        erros_ia.anotar_passo(d, observacoes)  # M149: se a resposta terminar em erro, o registro mostra cada passo
         if interrompido is not None and interrompido():
             raise Interrompido  # antes de qualquer ação (e de consultar o ERP)
         if prazo.esgotado():

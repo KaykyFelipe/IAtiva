@@ -286,7 +286,10 @@ def enviar(user, c: ConversationContext, texto: str, provedor=None, pedido=None,
             guardar(msg, saida.resultado)
             definir_titulo(c, "", texto)  # fallback em fluxos que não chegam à triagem
             _tocar(c, texto)
-    except BaseException:
+    except BaseException as exc:
+        if isinstance(exc, Exception) and not isinstance(exc, agente.Interrompido):
+            from .erros import registrar_falha
+            registrar_falha(user, c, texto, exc)  # M149: falha do atendimento fica registrada para corrigir
         Mensagem.objects.filter(pk=m.pk).delete()  # parado ou falhou: a mensagem sai, como antes
         raise
     return msg, saida.resultado

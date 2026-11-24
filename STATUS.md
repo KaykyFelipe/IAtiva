@@ -4,6 +4,15 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **Etapa 7 aprovada em 2026-11-16 por Diego; em andamento.** Feito: roteiro do piloto (`docs/piloto/ROTEIRO.md`) e auditoria de não armazenamento (`manage.py auditar_armazenamento`). Falta: usuários do Financeiro, conferência dos números com relatórios do Protheus, avaliação da interpretação e latência. Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M149 — registro de todo erro da IA para corrigir (2026-11-24)
+
+- Pedido de Diego: sempre que a IA der algum tipo de erro, guardar a pergunta do usuário, a resposta da IA e o erro que precisa corrigir.
+- Nova tabela `ErroResposta` (admin “Erros da IA”), preenchida num único ponto: ao gravar qualquer resposta da IA (chat, continuação, retomada). É erro: recusa/bloqueio, falha de execução ou do modelo, fora de escopo, impedimento de dados, “Não terminei esta resposta”. Não é erro: resposta com dados, pergunta ao usuário e recusa de dado pessoal protegido.
+- “O que corrigir” traz o tipo, a trilha e o motivo do pedido acompanhado, as entregas pedidas e o que o modelo decidiu em cada passo (ação, consulta, texto curto da resposta dele e as observações do sistema). O modelo nunca vê linhas do ERP: nada do ERP entra no registro.
+- Também viram erro: falha inesperada do atendimento (só o tipo da exceção e o local no código, nunca a mensagem) e resposta marcada como incorreta pela pessoa (com o comentário).
+- Consulta: `manage.py erros_ia` (abertos), `--todos`, `--corrigido ID...`; no admin, a TI marca “corrigido”. Os registros saem junto com a conversa no expurgo.
+- Testes: `tests/test_m149_registro_de_erros.py`.
+
 ## Mudança M148 — recusa antiga no histórico não impede nova consulta (2026-11-24)
 
 - Causa de “quantos veículos tem a empresa?” terminar em “Não terminei esta resposta. Tentei: responder sem executar”, já com o acesso corrigido (M147): a conversa tinha as duas recusas anteriores (“A fonte não é autorizada…” e “Sem permissão de consulta…”) e o pedido de veículos continuava em estado “Bloqueada”. A IA lia isso como falta real de permissão e respondia sem executar (5 passos de “conversar”, trilha do objetivo 175).

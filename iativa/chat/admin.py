@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import AvaliacaoResposta, ConversationContext, RequestContext
+from .models import AvaliacaoResposta, ConversationContext, ErroResposta, RequestContext
 
 
 class SomenteLeitura(admin.ModelAdmin):
@@ -38,3 +38,23 @@ class AvaliacaoRespostaAdmin(admin.ModelAdmin):
     def pergunta(self, obj):
         p = obj.mensagem.conversa.mensagens.filter(papel="usuario", pk__lt=obj.mensagem_id).order_by("-pk").first()
         return (p.texto[:160] if p else "")
+
+
+@admin.register(ErroResposta)
+class ErroRespostaAdmin(admin.ModelAdmin):
+    """M149: respostas da IA que terminaram em erro: pergunta, resposta e o que corrigir. A TI marca como corrigido."""
+    list_display = ("id", "criado_em", "usuario", "tipo", "corrigido", "pergunta_curta", "versao")
+    list_filter = ("tipo", "corrigido")
+    list_editable = ("corrigido",)
+    search_fields = ("pergunta", "erro")
+    readonly_fields = ("criado_em", "usuario", "conversa", "mensagem_usuario", "mensagem_ia", "pergunta", "resposta",
+                       "tipo", "erro", "detalhe", "versao")
+    fields = ("pergunta", "resposta", "tipo", "erro", "detalhe", "corrigido", "versao", "usuario", "conversa",
+              "mensagem_usuario", "mensagem_ia", "criado_em")
+
+    def has_add_permission(self, request):
+        return False
+
+    @admin.display(description="Pergunta")
+    def pergunta_curta(self, obj):
+        return obj.pergunta[:120]
