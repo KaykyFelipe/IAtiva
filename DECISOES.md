@@ -263,3 +263,4 @@ M60 (Diego, 2026-11-16, aprovada no chat): implementar os seis ajustes da revis�
 | M139 | 2026-11-24 | Ranking geral entre filiais lê os grupos agregados com teto próprio (20000), separado do teto de exibição (500). |
 | M140 | 2026-11-24 | Pedido de Diego: todo código com cadastro (fornecedor, cliente, produto...) vem com o nome ao lado, pela relação do SX9, buscado só para os códigos exibidos, sem alterar a consulta principal. |
 | M141 | 2026-11-24 | Pedido de Diego: no resumo de contagens lado a lado, cada coluna mostra só o que a diferencia (“Admitidos”, “Desligados”); o mês entra só quando difere entre as colunas. |
+| M142 | 2026-11-24 | Pedido de Diego: a IA deve achar o que consultar e entregar. Agrupamento por campo de tabela ligada (SX9) junta a tabela sozinho; ligação pelo início da chave aceita, com a conferência de duplicação no banco; lista de partes pendentes removida da resposta. |

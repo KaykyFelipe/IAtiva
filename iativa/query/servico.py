@@ -722,8 +722,13 @@ def _nomes_dos_codigos(s, plano, comp, linhas, origem, filiais, cfg):
     try:
         with abrir_catalogo() as cat:
             andamento.avisar("Buscando os nomes dos códigos no cadastro")
+            resta = prazo.restante()
+            # M142: o nome é complemento; nunca come o tempo da resposta (no máximo 10 s, dentro do prazo).
+            tempo = max(1, int(min(10, cfg["timeout_s"], (resta - 5) if resta is not None else 10)))
+            if resta is not None and resta < 8:
+                return []
             return acrescentar_nomes(cat, plano, list(comp.rotulos), linhas, origem, filiais,
-                                     lambda a, c: _vis(a).campo(a, c), cfg["timeout_s"])
+                                     lambda a, c: _vis(a).campo(a, c), tempo)
     except Exception as exc:  # sem nome a resposta continua válida
         import logging
         logging.getLogger(__name__).warning("nomes dos códigos não buscados (%s)", type(exc).__name__)

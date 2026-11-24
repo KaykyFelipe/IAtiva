@@ -1212,13 +1212,9 @@ def _encerrar_sem_cumprir(ac, user, c, mensagem_id, saida, previa, causa, observ
              else "O ensinamento pedido ainda não foi guardado" if coord.pede_memoria(ac.texto) and not ac.memoria_feita
              else coord.FALTA[exig])
     if ac.contrato and ac.pendentes():
-        # M67: estado explícito por entrega — o que já está comprovado e o que não foi feito.
-        feitas = [e['descricao'] for i, e in enumerate(ac.contrato) if i in ac.cumpridas]
-        # M121: em lista, uma parte por linha (o chat mostra cada linha como parágrafo).
-        total = len(ac.contrato)
-        falta = "\n".join(([f"Já tenho {len(feitas)} de {total} partes do seu pedido:"] + [f"✓ {d}" for d in feitas]
-                           if feitas else [f"Seu pedido tem {total} partes."])
-                          + ["Ainda falta:"] + [f"• {d}" for d in ac.pendentes()])
+        # M142 (pedido de Diego): sem a lista "Seu pedido tem N partes / Ainda falta". Era o aviso da manutenção em
+        # segundo plano, que foi desligada. O que faltou fica no registro do objetivo, para a TI.
+        falta = "Não terminei esta resposta"
     if exig == coord.VERIFICACAO:
         ficha["verificacao_pendente"] = True
     registro = ac.registro

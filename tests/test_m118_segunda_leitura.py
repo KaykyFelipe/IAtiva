@@ -51,5 +51,7 @@ def test_m121_andamento_em_lista_e_passos_proporcionais(base):  # noqa: F811
     c = conversas.nova_individual(base["u"])
     m = c.mensagens.create(papel="usuario", texto=PEDIDO, autor=base["u"])
     s = agente._encerrar_sem_cumprir(ac, base["u"], c, m.pk, None, None, "passos", [])
-    assert "Já tenho 1 de 3 partes do seu pedido:\n✓ Lista\nAinda falta:\n• Admitidos por filial" in s.texto, s.texto
+    # M142: sem a lista de partes ("Seu pedido tem N partes / Ainda falta").
+    assert "Seu pedido tem" not in s.texto and "partes do seu pedido" not in s.texto, s.texto
+    assert "Ainda falta" not in s.texto, s.texto
     assert "passos = min(14, max(int(cfg[\"passos\"]), 2 * len(ac.contrato) + 1))" in inspect.getsource(agente)

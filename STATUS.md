@@ -4,6 +4,21 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **Etapa 7 aprovada em 2026-11-16 por Diego; em andamento.** Feito: roteiro do piloto (`docs/piloto/ROTEIRO.md`) e auditoria de não armazenamento (`manage.py auditar_armazenamento`). Falta: usuários do Financeiro, conferência dos números com relatórios do Protheus, avaliação da interpretação e latência. Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M142 — agrupar por campo de tabela ligada; sem a lista "Ainda falta" (2026-11-24)
+
+- "Quanto cada vendedor vendeu em outubro, por filial?" terminou em "Seu pedido tem 1 partes. Ainda falta…".
+  - A IA montou a consulta nos itens da nota (SD2), que não têm vendedor. O vendedor fica no cabeçalho (SF2.F2_VEND1).
+  - A junção SD2→SF2 era recusada porque a chave do SF2 também tem FORMUL e TIPO.
+  - A IA listou as notas em vez de somar por vendedor, e o tempo da mensagem acabou.
+- Correções gerais:
+  - "por CAMPO" aceita campo de tabela ligada pelo dicionário (SX9). A consulta ganha sozinha a junção e a coluna (ex.: "soma:D2_TOTAL por F2_VEND1"). Vale para qualquer dimensão: vendedor, grupo do produto, natureza, segmento do cliente.
+  - Ligação pelo início da chave do outro lado e pela maior parte dela passa a ser aceita (nota → cabeçalho). A execução continua conferindo no banco se a ligação repete registros e recusa se repetir.
+  - Quando o campo não existe, a recusa devolvida ao modelo lista os campos das tabelas ligadas que ele pode usar.
+  - Instrução ao modelo: nunca entregar lista quando a pessoa pediu "quanto por alguém"; montar a agregação.
+  - Busca dos nomes (M140) limitada a 10 s e ao tempo restante da mensagem.
+- Removida a lista "Seu pedido tem N partes / Ainda falta" (era o aviso da manutenção em segundo plano, desligada).
+- Revisão dos objetivos sem resposta dos últimos 3 dias: os demais casos eram a pergunta dos fornecedores antes da M138/M139.
+
 ## Mudança M141 — colunas curtas no resumo de contagens lado a lado (2026-11-24)
 
 - "Quantos funcionários foram desligados e admitidos em setembro, por filial" mostrava colunas com o título inteiro de cada contagem ("Contagem de funcionários admitidos em setembro/2026, por filial").

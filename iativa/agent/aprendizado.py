@@ -222,8 +222,14 @@ def juncoes_possiveis(user, alias: str) -> list[dict]:
                 continue
             pares = [(a, b) for a, b in zip(r.campos_origem, r.campos_destino)
                      if not a.endswith("_FILIAL") and not b.endswith("_FILIAL")]
-            chave = {c for c in t.chave if not c.endswith("_FILIAL")}
-            if not pares or not chave or not chave <= {a for a, _ in pares}:
+            chave = [c for c in t.chave if not c.endswith("_FILIAL")]
+            ligados = {a for a, _ in pares}
+            # M142: a ligação precisa começar pela chave do outro lado e cobrir a maior parte dela. Ex.: nota (SD2)
+            # → cabeçalho (SF2) por DOC+SERIE+CLIENTE+LOJA, sem FORMUL e TIPO. Antes só valia a chave inteira, e o
+            # vendedor do cabeçalho ficava fora. A execução confere no banco se a ligação repete registros
+            # (`_juncoes_sem_duplicar`) e recusa a consulta se repetir; a soma nunca sai inflada.
+            if (not pares or not chave or chave[0] not in ligados
+                    or len([c for c in chave if c in ligados]) * 2 < len(chave)):
                 continue  # não liga pela chave única: poderia duplicar linhas e somas
             vistos.add(dom)
             campos = [c for c in t.campos if c.consultavel and not c.nome.endswith("_FILIAL") and not sensivel(c)]
@@ -411,6 +417,75 @@ def salvar_proposta(user, alias: str, dados, automatico: bool = False) -> Consul
     cm.setores.set(setores)
     registrar("parametro_registrado", "agente", usuario=user, entidade_id=cm.pk, estado_novo="modelo_proposto")
     return cm
+
+
+MAX_JUNCOES_AUTO = 3
+_CAMPO_RE = re.compile(r"\b[A-Z][A-Z0-9]{1,2}_[A-Z0-9_]{1,10}\b")
+_DIMENSAO = re.compile(r"VEND|CLIENT|FORNE|PROD|GRUPO|TIPO|NATUR|CENTRO|C\.? ?CUSTO|COND|TRANSP|REGI|SEGM|ESTADO|"
+                       r"UF\b|MUNIC|CIDADE|COMPRAD|ARMAZ|LOCAL|FUNC|DEPART|CARGO|SETOR|BANCO|CONTA|MOEDA|STATUS|SITUA",
+                       re.I)
+
+
+def campos_citados(texto: str) -> list[str]:
+    return list(dict.fromkeys(_CAMPO_RE.findall(str(texto or "").upper())))
+
+
+def ampliar_para_campos(user, cm, campos) -> bool:
+    """M142: "soma:D2_TOTAL por F2_VEND1" numa consulta da SD2. O campo é de uma tabela ligada pelo dicionário
+    (SX9): a consulta ganha sozinha a junção e a coluna, em vez de recusar o cálculo. Vale para qualquer tabela e
+    dimensão (vendedor do cabeçalho, grupo do produto, natureza do título...). Só ligações seguras
+    (`juncoes_possiveis`). A duplicação é conferida no banco a cada execução. False = não deu para ampliar."""
+    spec = dict(cm.spec or {})
+    tem = {c["campo"] for c in spec.get("colunas", [])}
+    faltam = [c for c in dict.fromkeys(campos) if c and c != "*" and c not in tem]
+    if not faltam:
+        return False
+    juncoes = [dict(j) for j in spec.get("juncoes", [])]
+    extras = []
+    possiveis = juncoes_possiveis(user, cm.tabela)
+    for campo in faltam:
+        j = next((j for j in possiveis if any(c.nome == campo for c in j["campos"])), None)
+        if j is None:
+            return False
+        atual = next((x for x in juncoes if x["tabela"] == j["tabela"]), None)
+        if atual is None:
+            if len(juncoes) >= MAX_JUNCOES_AUTO:
+                return False
+            usados = {x["alias"] for x in juncoes}
+            atual = {"tabela": j["tabela"], "alias": next(f"j{k}" for k in range(1, 10) if f"j{k}" not in usados),
+                     "pares": j["pares"]}
+            juncoes.append(atual)
+        info = next(c for c in j["campos"] if c.nome == campo)
+        extras.append({"campo": campo, "rotulo": (info.titulo or campo).strip(), "tipo": _tipo(info),
+                       "alias": atual["alias"]})
+    antigo = cm.spec
+    cm.spec = {**spec, "juncoes": juncoes, "colunas": spec.get("colunas", []) + extras}
+    try:
+        _testar_compilacao(cm)
+    except Exception:
+        cm.spec = antigo
+        return False
+    cm.save(update_fields=["spec"])
+    registrar("parametro_registrado", "agente", usuario=user, entidade_id=cm.pk, estado_novo="consulta_ampliada")
+    return True
+
+
+def campos_ligados_texto(user, alias: str, limite: int = 30) -> str:
+    """M142: campos de dimensão das tabelas ligadas à consulta, para o modelo saber o que pode usar em "por CAMPO"
+    (ex.: "SF2: F2_VEND1 (Vendedor 1)"). Só estrutura do dicionário, nenhum dado."""
+    partes, n = [], 0
+    try:
+        possiveis = juncoes_possiveis(user, alias)
+    except Exception:
+        return ""
+    for j in possiveis:
+        campos = [c for c in j["campos"] if c.tipo == "C" and _DIMENSAO.search(f"{c.nome} {c.titulo}")][:6]
+        if not campos or n >= limite:
+            continue
+        campos = campos[:limite - n]
+        n += len(campos)
+        partes.append(f"{j['tabela']}: " + ", ".join(f"{c.nome} ({(c.titulo or '').strip()})" for c in campos))
+    return "; ".join(partes)
 
 
 def _testar_compilacao(cm, camada=None):

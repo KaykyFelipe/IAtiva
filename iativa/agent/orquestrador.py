@@ -170,10 +170,24 @@ def _registrar_parametro(user, s: RequestContext, definicao, texto: str):
             except ValueError as exc:
                 raise ValidationError(f"{exc}.") from None
         else:
+            cm = ConsultaModelo.objects.get(pk=obj.modelo_id)
             try:
-                ler_agregacao(valor, ConsultaModelo.objects.get(pk=obj.modelo_id).spec)
+                ler_agregacao(valor, cm.spec)
             except ValueError as exc:
-                raise ValidationError(f"Cálculo inválido: {exc}.") from None
+                # M142: campo de tabela ligada (ex.: F2_VEND1 numa consulta da SD2): junta sozinho e segue.
+                from .aprendizado import ampliar_para_campos, campos_citados, campos_ligados_texto
+                try:
+                    ampliou = "fora da consulta" in str(exc) and ampliar_para_campos(user, cm, campos_citados(valor))
+                    if ampliou:
+                        ler_agregacao(valor, cm.spec)
+                except ValueError as exc2:
+                    exc, ampliou = exc2, False
+                if not ampliou:
+                    dica = campos_ligados_texto(user, cm.tabela) if "fora da consulta" in str(exc) else ""
+                    raise ValidationError(
+                        f"Cálculo inválido: {exc}."
+                        + (f" Também aceitos em \"por CAMPO\" (tabelas ligadas, juntadas sozinhas): {dica}." if dica
+                           else "")) from None
     if definicao.tipo == TipoValor.FILIAL and valor == "TODAS" and filiais_autorizadas(user, s.setor):
         pass  # todas as filiais autorizadas; cada uma é conferida de novo na execução
     elif definicao.tipo == TipoValor.FILIAL and valor not in filiais_autorizadas(user, s.setor):
