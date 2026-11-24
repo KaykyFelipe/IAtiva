@@ -406,7 +406,9 @@ def _executar_solicitacao(user, s: RequestContext) -> Resultado:
                 transversais.update(aliases)
             for alias in aliases:
                 setores = autorizar_fonte(user, None, alias, conversa=s.conversa, transversais=transversais)
-                if s.setor.codigo not in setores:
+                # M146: leitura transversal já conferiu acesso vigente em todos os setores (acima). A fonte pode ser
+                # reclassificada depois (ex.: DA3 → só "operacoes") sem mudar o direito de quem lê todos os setores.
+                if s.setor.codigo not in setores and not cm.spec.get("leitura_transversal"):
                     raise PermissaoNegada("A fonte não é autorizada para o setor desta solicitação.")
         except FonteInconclusiva as exc:
             return Resultado(False, str(exc), fonte_inconclusiva=alias,
