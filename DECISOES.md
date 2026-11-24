@@ -258,3 +258,4 @@ M60 (Diego, 2026-11-16, aprovada no chat): implementar os seis ajustes da revis�
 | M134 | 2026-11-24 | Pedido de Diego: botão "Esta informação está correta?" nas respostas com tabela; "Não" fica para a TI verificar o motivo (admin). |
 | M135 | 2026-11-24 | Pedido de Diego: avaliação como botão no estilo do copiar (menu Sim/Não; Não abre janela com Enviar para a T.I). |
 | M136 | 2026-11-24 | Pedido de Diego: respostas marcadas como incorretas chegam ao T.I numa seção própria de "Memória e aprovações" (quem, motivo, pergunta, consulta, tabela, critérios). |
+| M137 | 2026-11-24 | Diagnóstico: motivo de cada tentativa de aprender_tabela sem consulta vai para o log, para achar a causa da pergunta dos fornecedores. |

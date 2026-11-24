@@ -4,6 +4,12 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **Etapa 7 aprovada em 2026-11-16 por Diego; em andamento.** Feito: roteiro do piloto (`docs/piloto/ROTEIRO.md`) e auditoria de não armazenamento (`manage.py auditar_armazenamento`). Falta: usuários do Financeiro, conferência dos números com relatórios do Protheus, avaliação da interpretação e latência. Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M137 — motivo de "aprender_tabela" sem consulta vai para o log (2026-11-24)
+
+- "Quais são os 10 fornecedores com mais pedidos de compra em 2026?" parou depois de 4 tentativas de criar consulta, sem dizer onde. O motivo de cada tentativa só ia para o modelo.
+- Agora cada tentativa sem consulta grava no log do app: o alvo e o motivo (tabelas candidatas, "não serviram" com a ação que o modelo devolveu, fonte inconclusiva, recusa do validador). Só nomes de tabelas e mensagens do sistema; nenhum dado do ERP.
+- Próximo passo: repetir a pergunta e corrigir a causa de forma geral.
+
 ## Mudança M136 — respostas incorretas chegam ao T.I em "Memória e aprovações" (2026-11-24)
 
 - Nova seção "Respostas para verificar" em "Memória e aprovações", visível só para o T.I (quem administra), com contador no menu.

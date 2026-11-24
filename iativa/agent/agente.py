@@ -1807,6 +1807,11 @@ def _aprender(user, c, d, texto, ficha, provedor=None, entrada=None, atual=None)
                      observacao=Observacao(d.acao, SEM_PERMISSAO, "usuário sem permissão para criar consultas"))
     # Falha recuperável: o modelo recebe o motivo e pode tentar outra tabela ou outros campos.
     obs = Observacao(d.acao, ERRO_METADADOS, "; ".join(motivo) or "nenhuma tabela adequada encontrada com esses termos")
+    # M137: o motivo de cada tentativa fica no log (só nomes de tabelas e mensagens do sistema, nunca dados do ERP),
+    # para o T.I saber onde a criação da consulta parou.
+    import logging
+    logging.getLogger(__name__).warning("aprender_tabela sem consulta: alvo=%r motivo=%s",
+                                        (d.alvo or "")[:80], obs.detalhe[:400])
     if not pode_aprender_sozinho(user) and not pode_aprender(user):
         return Saida("Procurei no dicionário do Protheus e não consegui montar essa consulta ("
                      + obs.detalhe + "). Diga outras palavras para o assunto ou o código da tabela (ex.: SRA).",
@@ -1958,7 +1963,8 @@ def _aprender_sozinho(user, c, d, texto, ficha, provedor, entrada, atual, motivo
         if d2.acao == "conversar" and d2.resposta.strip().endswith("?") and not d2.opcoes:
             return Saida(d2.resposta, ficha)
         if d2.acao != "criar_consulta" or d2.consulta is None:
-            motivo.append("as tabelas encontradas (" + ", ".join(t["tabela"] for t in tabelas) + ") não serviram")
+            motivo.append("as tabelas encontradas (" + ", ".join(t["tabela"] for t in tabelas) + ") não serviram"
+                          + f" (o modelo respondeu {d2.acao or 'nada'})")
             return None
         d, consulta = d2, d2.consulta
     consulta = {**consulta, "campo_data": consulta.get("campo_data", "").upper(),
