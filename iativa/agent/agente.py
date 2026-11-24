@@ -131,7 +131,10 @@ def _estado(user, s, defs) -> dict | None:
             definidos[d.nome] = exibir(r.valor) if mostrar else "[informado]"
         elif codigo in obj.obrigatorios:
             faltando.append(d.nome)
-    return {"objetivo": s.objetivo, "nome": obj.nome, "estado": s.get_estado_display(),
+    # M148: bloqueio/falha anterior não é decisão final; o acesso é reconferido na próxima execução.
+    estado = ("Aguardando nova tentativa (o acesso é conferido na execução)" if s.estado in (E.BLOQUEADA, E.FALHOU)
+              else s.get_estado_display())
+    return {"objetivo": s.objetivo, "nome": obj.nome, "estado": estado,
             "ja_definido": definidos, "faltando": faltando, "completa": not faltando}
 
 
@@ -172,11 +175,34 @@ def _consultas_conversa(user, c, defs) -> list[dict]:
     return out[::-1]
 
 
+_FALHA_ANTERIOR_RE = re.compile(
+    r"^(Não terminei esta resposta|Sem permissão de consulta|A fonte não é autorizada|Esta receita não está liberada|"
+    r"Essa fonte pertence a outro setor|O ERP ou a IA não responderam|Não consegui confirmar o assunto|"
+    r"A consulta depende de acesso vigente|Permissão insuficiente)")
+_FICHAS_FALHA = {"bloqueada", "falha_execucao", "falha_modelo"}
+FALHA_NO_HISTORICO = ("[o sistema não concluiu esta resposta (falha ou bloqueio passageiro, já revisto). Não é motivo "
+                      "para recusar nem para dizer que falta permissão: o sistema confere o acesso a cada execução. "
+                      "Execute a consulta de novo.]")
+
+
+def _falha_anterior(m) -> bool:
+    """M148: recusa/falha do próprio sistema numa mensagem anterior (não é resposta com dados)."""
+    if m.papel == "usuario" or m.resultado:
+        return False
+    ficha = m.ficha if isinstance(m.ficha, dict) else {}
+    if ficha.get("dado_protegido"):
+        return False  # recusa de dado pessoal protegido continua valendo como contexto
+    return ficha.get("tipo") in _FICHAS_FALHA or bool(_FALHA_ANTERIOR_RE.match((m.texto or "").strip()))
+
+
 def _historico(c, ate=None) -> list[dict]:
     msgs = c.mensagens.all()
     if ate is not None:
         msgs = msgs.filter(pk__lt=ate)
-    return [{"quem": "usuario" if m.papel == "usuario" else "iativa", "texto": m.texto[:600]}
+    # M148: recusas e falhas antigas do sistema no histórico levavam o modelo a responder "sem permissão" sem
+    # executar, mesmo depois de corrigido o acesso. Ficam como aviso neutro para ele tentar de novo.
+    return [{"quem": "usuario" if m.papel == "usuario" else "iativa",
+             "texto": FALHA_NO_HISTORICO if _falha_anterior(m) else m.texto[:600]}
             for m in reversed(list(msgs.order_by("-criado_em", "-id")[:HISTORICO]))]
 
 

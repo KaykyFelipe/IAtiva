@@ -4,6 +4,15 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **Etapa 7 aprovada em 2026-11-16 por Diego; em andamento.** Feito: roteiro do piloto (`docs/piloto/ROTEIRO.md`) e auditoria de não armazenamento (`manage.py auditar_armazenamento`). Falta: usuários do Financeiro, conferência dos números com relatórios do Protheus, avaliação da interpretação e latência. Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M148 — recusa antiga no histórico não impede nova consulta (2026-11-24)
+
+- Causa de “quantos veículos tem a empresa?” terminar em “Não terminei esta resposta. Tentei: responder sem executar”, já com o acesso corrigido (M147): a conversa tinha as duas recusas anteriores (“A fonte não é autorizada…” e “Sem permissão de consulta…”) e o pedido de veículos continuava em estado “Bloqueada”. A IA lia isso como falta real de permissão e respondia sem executar (5 passos de “conversar”, trilha do objetivo 175).
+- Correção geral (qualquer pergunta e setor):
+  - no histórico enviado à IA, recusas e falhas do próprio sistema viram um aviso neutro (“não concluída; o acesso é conferido a cada execução; execute de novo”). Respostas com dados, perguntas e recusa de dado pessoal protegido ficam como estão;
+  - pedido bloqueado ou com falha aparece para a IA como “Aguardando nova tentativa”;
+  - regra no prompt: nunca responder “sem permissão”/“não consigo” por causa de recusa anterior sem antes executar.
+- O acesso continua conferido no backend a cada execução. Testes: `tests/test_m148_historico_sem_recusa_antiga.py`.
+
 ## Mudança M147 — T.I com acesso total não é barrado pelo setor da pergunta (2026-11-24)
 
 - Causa de “quantos veículos tem a empresa?” voltar “Sem permissão de consulta ou sem filiais autorizadas neste setor.”: a pergunta foi classificada como do setor “operacoes” e `limitar_consulta` restringiu o pedido a esse setor. O pedido da consulta de veículos (já aberto antes no setor TI) foi reaproveitado e, fora do escopo, a permissão da TI deixou de valer. Nada mudou no dicionário: a fonte DA3 passou a ser classificada como “operacoes” quando a consulta nova foi criada.
