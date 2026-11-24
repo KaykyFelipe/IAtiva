@@ -478,8 +478,11 @@ def campos_ligados_texto(user, alias: str, limite: int = 30) -> str:
         possiveis = juncoes_possiveis(user, alias)
     except Exception:
         return ""
-    for j in possiveis:
-        campos = [c for c in j["campos"] if c.tipo == "C" and _DIMENSAO.search(f"{c.nome} {c.titulo}")][:6]
+    # Ligação mais forte primeiro (cabeçalho do documento liga por vários campos), e nela as dimensões mais pedidas.
+    principais = re.compile(r"VEND|CLIENT|FORNE|PROD|GRUPO|NATUR|COMPRAD", re.I)
+    for j in sorted(possiveis, key=lambda j: -len(j["pares"])):
+        campos = [c for c in j["campos"] if c.tipo == "C" and _DIMENSAO.search(f"{c.nome} {c.titulo}")]
+        campos = sorted(campos, key=lambda c: 0 if principais.search(f"{c.nome} {c.titulo}") else 1)[:8]
         if not campos or n >= limite:
             continue
         campos = campos[:limite - n]
