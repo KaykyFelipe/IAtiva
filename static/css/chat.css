@@ -281,14 +281,23 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 @keyframes piscar-cursor { 0%, 100% { opacity: 1; } 50% { opacity: .25; } }
 @media (prefers-reduced-motion: reduce) { .cursor-digitando { animation: none; } }
 
-/* M134: "Esta informação está correta?" ao lado do copiar. */
-.avaliacao { display: inline-flex; align-items: center; margin-left: 6px; position: relative; }
-.avaliacao-pergunta > summary { list-style: none; cursor: pointer; font-size: 12.5px; color: var(--sutil); padding: 4px 10px; border: 1px solid var(--borda); border-radius: 999px; }
-.avaliacao-pergunta > summary::-webkit-details-marker { display: none; }
-.avaliacao-pergunta > summary:hover, .avaliacao-pergunta[open] > summary { color: var(--texto); }
-.avaliacao-opcoes { position: absolute; left: 0; top: calc(100% + 6px); z-index: 20; width: min(340px, 80vw); display: flex; flex-direction: column; gap: 8px; padding: 10px; background: var(--papel, #fff); border: 1px solid var(--linha, var(--borda)); border-radius: 10px; box-shadow: 0 6px 20px rgba(0,0,0,.08); }
-.avaliacao-opcoes form { display: flex; flex-direction: column; gap: 6px; }
-.avaliacao-opcoes textarea { font: inherit; font-size: 13px; padding: 6px 8px; border: 1px solid var(--borda); border-radius: 6px; resize: vertical; }
-.avaliacao-opcoes button { font: inherit; font-size: 13px; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--borda); background: transparent; color: var(--texto); cursor: pointer; text-align: left; }
-.avaliacao-opcoes button:hover { background: var(--hover, rgba(0,0,0,.04)); }
-.avaliacao-feita { font-size: 12.5px; color: var(--sutil); }
+/* M135: "Esta informação está correta?" no estilo do botão de copiar. */
+.acoes-resposta .avaliacao { display: inline-flex; }
+.acoes-resposta .avaliada-sim .botao-avaliar { color: var(--verde); }
+.acoes-resposta .avaliada-nao .botao-avaliar { color: var(--pendente); }
+.menu-avaliar { min-width: 12rem; }
+.menu-avaliar .menu-titulo { padding: 6px 10px 4px; font-size: 12px; color: var(--sutil); }
+.menu-avaliar button { display: flex; align-items: center; gap: 8px; }
+.menu-avaliar button .marca { width: 16px; text-align: center; font-size: 13px; }
+.menu-avaliar button[data-sim] .marca { color: var(--verde); }
+.menu-avaliar button[data-nao] .marca { color: #b3392c; }
+.menu-avaliar button[aria-current="true"] { font-weight: 600; }
+.avaliar-caixa { width: min(460px, 100%); }
+.avaliar-caixa textarea { display: block; width: 100%; box-sizing: border-box; min-height: 104px; margin: 0 0 8px; padding: 10px 12px;
+  font: inherit; font-size: 14px; line-height: 1.5; color: inherit; background: #fff; border: 1px solid var(--linha); border-radius: 10px; resize: vertical; }
+.avaliar-caixa textarea:focus { outline: 2px solid #15559F33; border-color: var(--azul); }
+.avaliar-caixa .aviso { margin: 0 0 16px; font-size: 12px; color: var(--sutil); }
+.confirmar-acoes .primario { background: var(--azul); border-color: var(--azul); color: #fff; }
+.confirmar-acoes .primario:hover { filter: brightness(1.08); }
+.confirmar-acoes .primario:disabled { opacity: .6; cursor: default; }
+.avaliar-caixa .erro-envio { margin: -8px 0 12px; font-size: 13px; color: #b3392c; }

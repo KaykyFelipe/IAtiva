@@ -4,6 +4,14 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **Etapa 7 aprovada em 2026-11-16 por Diego; em andamento.** Feito: roteiro do piloto (`docs/piloto/ROTEIRO.md`) e auditoria de não armazenamento (`manage.py auditar_armazenamento`). Falta: usuários do Financeiro, conferência dos números com relatórios do Protheus, avaliação da interpretação e latência. Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M135 — avaliação da resposta no estilo do botão de copiar (2026-11-24)
+
+- "Esta informação está correta?" virou um botão-ícone ao lado do copiar, como o de copiar.
+- Ao clicar abre um menu com "Sim" e "Não".
+  - "Sim" registra a confirmação.
+  - "Não" abre uma janela para a pessoa explicar o que não está correto, com o botão "Enviar para a T.I".
+- Depois de avaliar, o ícone fica verde (correta) ou âmbar (enviada à T.I). Clicar de novo permite trocar a avaliação.
+
 ## Mudança M134 — "Esta informação está correta?" ao lado do copiar (2026-11-24)
 
 - Nova opção em toda resposta com tabela: "Esta informação está correta?".

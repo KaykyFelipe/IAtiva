@@ -711,6 +711,111 @@
     opcoes[0].focus({ preventScroll: true });
   }
 
+  // M135: "Esta informação está correta?" no estilo do copiar: menu Sim/Não; "Não" abre a janela para a T.I.
+  async function enviarAvaliacao(caixa, correta, comentario) {
+    const dados = new FormData();
+    dados.append("csrfmiddlewaretoken", csrf());
+    dados.append("correta", correta ? "1" : "0");
+    dados.append("comentario", comentario || "");
+    const r = await fetch(caixa.dataset.url, { method: "POST", body: dados, credentials: "same-origin" });
+    if (!r.ok) throw new Error(String(r.status));
+    const html = await r.text();
+    const nova = new DOMParser().parseFromString(html, "text/html").querySelector("[data-avaliacao]");
+    if (nova) caixa.replaceWith(nova);
+    const estado = (nova || caixa).closest(".acoes-resposta")?.querySelector("[data-estado-copia]");
+    if (estado) estado.textContent = correta ? "Obrigado pela confirmação" : "Enviado para a T.I verificar";
+    return nova;
+  }
+
+  function janelaNaoCorreta(caixa) {
+    const fundo = document.createElement("div");
+    fundo.className = "confirmar-fundo";
+    fundo.innerHTML = '<form class="confirmar-caixa avaliar-caixa" role="dialog" aria-modal="true" aria-labelledby="avaliar-titulo">' +
+      '<h2 id="avaliar-titulo">O que não está correto?</h2>' +
+      '<p>Explique o que esperava ver. A T.I vai verificar o motivo (ex.: filtro geral, filial errada, faltou um critério).</p>' +
+      '<textarea name="comentario" maxlength="1000" required placeholder="Ex.: pedi só os pedidos da filial Cuiabá, mas veio de todas."></textarea>' +
+      '<p class="aviso">Não envie CPF ou CNPJ.</p><p class="erro-envio" hidden></p>' +
+      '<div class="confirmar-acoes"><button type="button" data-cancelar>Cancelar</button>' +
+      '<button type="submit" class="primario" data-ok>Enviar para a T.I</button></div></form>';
+    const form = fundo.querySelector("form");
+    const campo = form.querySelector("textarea");
+    const ok = form.querySelector("[data-ok]");
+    const erro = form.querySelector(".erro-envio");
+    const anterior = document.activeElement;
+    const fechar = () => { document.removeEventListener("keydown", tecla, true); fundo.remove(); anterior?.focus?.({ preventScroll: true }); };
+    const tecla = (ev) => { if (ev.key === "Escape") { ev.preventDefault(); fechar(); } };
+    const atualizar = () => { ok.disabled = !campo.value.trim(); };
+    campo.addEventListener("input", atualizar);
+    fundo.addEventListener("click", (ev) => { if (ev.target === fundo || ev.target.closest("[data-cancelar]")) fechar(); });
+    form.addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      if (!campo.value.trim()) return;
+      ok.disabled = true;
+      ok.textContent = "Enviando…";
+      try {
+        await enviarAvaliacao(caixa, false, campo.value);
+        fechar();
+      } catch (_) {
+        erro.textContent = "Não consegui enviar agora. Tente de novo.";
+        erro.hidden = false;
+        ok.textContent = "Enviar para a T.I";
+        atualizar();
+      }
+    });
+    document.addEventListener("keydown", tecla, true);
+    document.body.append(fundo);
+    atualizar();
+    campo.focus();
+  }
+
+  function abrirMenuAvaliar(botao) {
+    const caixa = botao.closest("[data-avaliacao]");
+    const menu = caixa.querySelector("[data-menu-avaliar]");
+    if (menu.matches(":popover-open")) { menu.hidePopover(); return; }
+    const titulo = document.createElement("div");
+    titulo.className = "menu-titulo";
+    titulo.textContent = "Esta informação está correta?";
+    const opcao = (rotulo, marca, attr, atual) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.setAttribute(attr, "");
+      if (atual) b.setAttribute("aria-current", "true");
+      const m = document.createElement("span");
+      m.className = "marca";
+      m.setAttribute("aria-hidden", "true");
+      m.textContent = marca;
+      b.append(m, document.createTextNode(rotulo));
+      return b;
+    };
+    const sim = opcao("Sim", "✓", "data-sim", caixa.classList.contains("avaliada-sim"));
+    const nao = opcao("Não", "✕", "data-nao", caixa.classList.contains("avaliada-nao"));
+    sim.addEventListener("click", async () => {
+      menu.hidePopover();
+      try { (await enviarAvaliacao(caixa, true))?.querySelector("[data-avaliar]")?.focus({ preventScroll: true }); }
+      catch (_) { botao.title = "Não consegui registrar agora. Tente de novo."; }
+    });
+    nao.addEventListener("click", () => { menu.hidePopover(); janelaNaoCorreta(caixa); });
+    menu.replaceChildren(titulo, sim, nao);
+    menu.ontoggle = () => botao.setAttribute("aria-expanded", String(menu.matches(":popover-open")));
+    menu.onkeydown = (e) => {
+      if (e.key !== "Escape") return;
+      e.preventDefault(); e.stopPropagation();
+      menu.hidePopover();
+      botao.focus({ preventScroll: true });
+    };
+    menu.showPopover();
+    const posicao = botao.getBoundingClientRect();
+    const acima = posicao.top - menu.offsetHeight - 5;
+    const topo = acima >= 8 ? acima : Math.min(posicao.bottom + 5, innerHeight - menu.offsetHeight - 8);
+    menu.style.top = Math.max(8, topo) + "px";
+    menu.style.left = Math.max(8, Math.min(posicao.left, innerWidth - menu.offsetWidth - 8)) + "px";
+    sim.focus({ preventScroll: true });
+  }
+  document.addEventListener("click", (e) => {
+    const botao = e.target.closest("[data-avaliar]");
+    if (botao) abrirMenuAvaliar(botao);
+  });
+
   document.addEventListener("click", (e) => {
     const botao = e.target.closest("[data-copiar-resposta]");
     if (!botao) return;

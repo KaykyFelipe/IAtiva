@@ -1,23 +1,10 @@
-{# M134: "Esta informação está correta?" ao lado do copiar. "Não" vai para a TI verificar o motivo. #}
-<div class="avaliacao" data-avaliacao>
-  {% if avaliacao %}
-    <span class="avaliacao-feita{% if not avaliacao.correta %} negativa{% endif %}">
-      {% if avaliacao.correta %}Você confirmou que está correta{% else %}Enviado para a TI verificar{% endif %}
-    </span>
-  {% else %}
-    <details class="avaliacao-pergunta">
-      <summary title="Esta informação está correta?">Esta informação está correta?</summary>
-      <div class="avaliacao-opcoes">
-        <form hx-post="{% url 'chat:avaliar' conversa.pk m.pk %}" hx-target="closest [data-avaliacao]" hx-swap="outerHTML">
-          {% csrf_token %}<input type="hidden" name="correta" value="1">
-          <button type="submit" class="avaliacao-sim">Sim, está correta</button>
-        </form>
-        <form hx-post="{% url 'chat:avaliar' conversa.pk m.pk %}" hx-target="closest [data-avaliacao]" hx-swap="outerHTML">
-          {% csrf_token %}<input type="hidden" name="correta" value="0">
-          <textarea name="comentario" rows="2" maxlength="1000" placeholder="O que está errado? Ex.: era só uma filial, faltou um filtro (opcional). Não envie CPF ou CNPJ."></textarea>
-          <button type="submit" class="avaliacao-nao">Não, enviar para a TI verificar</button>
-        </form>
-      </div>
-    </details>
-  {% endif %}
-</div>
+{# M134/M135: "Esta informação está correta?" no estilo do copiar: ícone, menu Sim/Não; "Não" abre a janela para a TI. #}
+<span class="avaliacao{% if avaliacao %} {% if avaliacao.correta %}avaliada-sim{% else %}avaliada-nao{% endif %}{% endif %}" data-avaliacao
+      data-url="{% url 'chat:avaliar' conversa.pk m.pk %}">
+  <button class="icone botao-avaliar" type="button" data-avaliar aria-haspopup="menu" aria-expanded="false"
+          aria-label="Esta informação está correta?"
+          title="{% if not avaliacao %}Esta informação está correta?{% elif avaliacao.correta %}Você confirmou que está correta{% else %}Enviado para a T.I verificar{% endif %}">
+    {% include "chat/_icone.html" with nome="avaliar" %}
+  </button>
+  <div class="menu-copia menu-avaliar" popover data-menu-avaliar></div>
+</span>

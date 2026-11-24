@@ -37,5 +37,14 @@ def test_view_devolve_o_estado(base, client):  # noqa: F811
     c, m = _resposta(base)
     client.force_login(base["u"])
     r = client.post(reverse("chat:avaliar", args=[c.pk, m.pk]), {"correta": "0", "comentario": "filtro geral"})
-    assert r.status_code == 200 and "Enviado para a TI verificar" in r.content.decode()
+    assert r.status_code == 200 and "avaliada-nao" in r.content.decode()
     assert AvaliacaoResposta.objects.get().comentario == "filtro geral"
+
+
+def test_botao_aparece_ao_lado_do_copiar(base, client, monkeypatch):  # noqa: F811
+    from iativa.chat import resultados
+    monkeypatch.setattr(resultados, "restaurar", lambda user, r: None if not r else {"ok": True, "colunas": [], "linhas": []})
+    c, m = _resposta(base)
+    client.force_login(base["u"])
+    html = client.get(reverse("chat:conversa", args=[c.pk])).content.decode()
+    assert html.index("data-copiar-resposta") < html.index("data-avaliar") and "icone-avaliar" in html

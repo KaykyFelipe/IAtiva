@@ -52,6 +52,7 @@
                 <span class="seta-copia">{% include "chat/_icone.html" with nome="seta" %}</span>
               </button>
               <div class="menu-copia" popover data-menu-copia></div>
+              {% if item.avaliavel %}{% include "chat/_avaliacao.html" with avaliacao=item.avaliacao %}{% endif %}
               {% if item.refazer and pode_escrever %}
                 <form data-refazer-resposta method="post" action="{% url 'chat:mensagem' conversa.pk %}">
                   {% csrf_token %}<input type="hidden" name="refazer" value="{{ m.pk }}"><input type="hidden" name="mensagem" value="Executar de novo">
@@ -63,7 +64,6 @@
                   {% csrf_token %}<button class="icone" type="submit" aria-label="Executar de novo" title="Executar de novo">{% include "chat/_icone.html" with nome="repetir" %}</button>
                 </form>
               {% endif %}
-              {% if item.avaliavel %}{% include "chat/_avaliacao.html" with avaliacao=item.avaliacao %}{% endif %}
               <span class="sr" data-estado-copia aria-live="polite"></span>
             </div>
           {% endif %}
