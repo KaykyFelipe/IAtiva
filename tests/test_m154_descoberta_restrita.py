@@ -412,3 +412,13 @@ def test_pergunta_reservada_cobranca_duas_medidas_por_filial(novo_usuario, polit
     assert res.colunas[0] == "Filial" and len(res.linhas) == 2, (res.colunas, len(res.linhas))
     assert any("Soma" in c or "Valor" in c for c in res.colunas) and any("Quantidade" in c for c in res.colunas), res.colunas
     assert res.evidencia["alcance"]["filiais_autorizadas"] == 2 and res.evidencia["entidade"].startswith("SE5")
+
+
+def test_nome_do_codigo_pelo_titulo_de_descricao():
+    from types import SimpleNamespace as N
+    from iativa.query.nomes import _campo_nome
+    tqy = N(alias="TQY", chave=("TQY_FILIAL", "TQY_STATUS"), campos=[
+        N(nome="TQY_STATUS", titulo="Cod Status", tipo="C", consultavel=True),
+        N(nome="TQY_DESTAT", titulo="Desc Status", tipo="C", consultavel=True),
+        N(nome="TQY_CATBEM", titulo="Categ. Bem", tipo="C", consultavel=True)])
+    assert _campo_nome(tqy, "TQY_STATUS", lambda a, c: True) == "TQY_DESTAT"

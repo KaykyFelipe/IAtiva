@@ -760,6 +760,8 @@ def _executar_solicitacao(user, s: RequestContext) -> Resultado:
         receitas.registrar_validacao(cm, prova)
     if evidencia:
         evidencia["alcance"]["particoes_lidas"] = len(particoes_vistas) or len(filiais)
+        # Só o que de fato foi exibido: o nome de cada código ao lado (M140), por cadastro e campo.
+        evidencia["nomes_ao_lado"] = [f"{mestre}.{campo_nome}" for _, _, _, mestre, campo_nome in nomes]
         res.evidencia = evidencia
     res.escopo = escopo_do_plano(plano, s.setor_id, filiais)
     res.escopo["compartilhamento"] = escopo_consulta
@@ -835,7 +837,7 @@ def _evidencia_plano(cat, plano, infos_tab, filiais, particoes, escopo_consulta,
                 except Exception:
                     cadastro = None
                 classificacao.append({"campo": descrito(c.campo), "dominio": (
-                    [f"códigos do cadastro {cadastro}; o nome de cada código vai ao lado na resposta"] if cadastro
+                    [f"códigos do cadastro {cadastro} (ver nomes_ao_lado)"] if cadastro
                     else ["sem domínio no dicionário: códigos exibidos como estão"])})
     from iativa.agent.aprendizado import natureza_tabela
     return {

@@ -26,12 +26,21 @@ _NOMES = (r"_NOME$", r"_DESC$", r"_DESCRI$", r"_DESCRIC$", r"_RAZAO$", r"_NREDUZ
 _LOTE = 30
 
 
+_TITULO_NOME = re.compile(r"^(?:desc|nome|razao)", re.I)
+
+
 def _campo_nome(tabela, codigo: str, visivel) -> str:
     for padrao in _NOMES:
         for c in tabela.campos:
             if (c.consultavel and c.tipo == "C" and c.nome != codigo and re.search(padrao, c.nome)
                     and visivel(tabela.alias, c.nome)):
                 return c.nome
+    # M154: campo de descrição com nome fora do padrão (ex.: TQY_DESTAT "Desc Status"): vale o título do dicionário.
+    chave = set(getattr(tabela, "chave", ()) or ())
+    for c in tabela.campos:
+        if (c.consultavel and c.tipo == "C" and c.nome != codigo and c.nome not in chave
+                and _TITULO_NOME.match((c.titulo or "").strip()) and visivel(tabela.alias, c.nome)):
+            return c.nome
     return ""
 
 

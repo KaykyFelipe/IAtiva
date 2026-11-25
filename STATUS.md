@@ -24,6 +24,7 @@
   - consulta reprovada duas vezes na mesma mensagem não volta com outro parâmetro: muda a fonte ou pergunta;
   - revisão que conclui faltar uma definição de negócio pergunta na hora (sem pedir tabela ou campo). A resposta curta retoma o pedido original (`pedido_esclarecido`); pergunta nova segue como pedido próprio. O esclarecimento fica só na conversa e não vira regra da empresa.
 - Na instalação, o dicionário não tem cadastro com “módulo” no nome. Z54/Z55 são tabelas de cálculo. O status dos bens (ST9) é codificado pelo cadastro “Status do bem”, e a situação do ciclo de vida é outro campo.
+- Ensaio real transacional (provedor do atendimento, ERP real só leitura, tudo desfeito): a pergunta dos módulos executou em 25 s sobre o cadastro de bens, agrupada pelo status com domínio no cadastro de status, com as 8 filiais respondendo. O nome de cada status não apareceu porque o campo de descrição (“Desc Status”) não seguia o padrão de nome. Agora o nome também é achado pelo título do campo, e a evidência só cita os nomes de fato exibidos (`nomes_ao_lado`).
 - Testes: `tests/test_m154_descoberta_restrita.py`, com o caso dos módulos de ponta a ponta (1º plano errado, descoberta, pergunta de definição, retomada, receita reaproveitada sem o modelo com dados atualizados), RH, Comercial e Cobrança, permissão e uma pergunta reservada.
 ## Mudança M153 — descoberta após revisão de consulta inédita
 
