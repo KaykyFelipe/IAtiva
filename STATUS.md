@@ -16,6 +16,7 @@
   - contagens de uma mesma pergunta saem numa tabela “Situação | Quantidade” com a data de referência; cada valor é calculado no banco, sem somar situações para formar o total;
   - consulta com a mesma tabela, colunas e filtros e só outro nome não conta como tentativa nova.
 - Ensaio real transacional (e450af4): a pergunta da imagem terminou numa pergunta de definição, mas sem mostrar o levantamento e com o diagnóstico interno junto. Agora, quando a lacuna é só a definição, o levantamento feito (ex.: contagem por situação, com o nome de cada uma) vai com a pergunta, marcado como ainda sem a classificação pedida, e só a frase da pergunta aparece.
+- Ensaio real seguinte (970ca9b): o 2º plano já contou só os bens da família de módulos, por status com o nome, em todas as filiais. Mas o revisor aprovou a tabela por status para um pedido de categorias que ninguém definiu. Nova checagem determinística na revisão (`classificacao_sem_definicao`): várias entregas de categoria respondidas por uma tabela agrupada pelos códigos de um cadastro viram levantamento + pergunta. Se a definição já veio no esclarecimento, a correção pede uma contagem filtrada por categoria.
 - Testes em `tests/test_m154_descoberta_restrita.py`:
   - o 1º plano conta todos os bens, a revisão aponta o problema e o 2º conta só os módulos pela família;
   - um módulo com duas movimentações é contado uma vez;

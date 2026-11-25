@@ -77,6 +77,34 @@ def deterministico(blocos: list[dict]) -> str:
     return ""
 
 
+def classificacao_sem_definicao(contrato, blocos, texto) -> str:
+    """M155: várias entregas de categorias (ex.: disponíveis, deslocados) respondidas por UMA tabela agrupada pelos
+    códigos de um cadastro (os nomes aparecem para a pessoa, não para a revisão) não comprovam as categorias. Sem
+    definição na conversa: levantamento + pergunta específica. Com a definição dada: contar cada categoria."""
+    from .contagem import rotulos_curtos
+
+    itens = [e for e in (contrato or []) if isinstance(e, dict) and e.get("metrica") == "contagem"]
+    if len(itens) < 2 or len(blocos) != 1:
+        return ""
+    ev = blocos[0].get("evidencia") or {}
+    classes = ev.get("classificacao_pelo_dominio") or []
+    if not ev.get("agrupado_por") or ev.get("categorias_pedidas") or not any(
+            "cadastro" in str(d) for c in classes for d in c.get("dominio", [])):
+        return ""
+    rotulos = rotulos_curtos([str(e.get("descricao", "")) for e in itens])
+    categorias = [r.strip() for r in rotulos if r.strip() and not re.search(r"\btota", r, re.I)]
+    if len(categorias) < 1 or len(categorias) == len(rotulos) and len(categorias) < 2:
+        return ""
+    campo = re.sub(r"^[A-Z0-9]+_[A-Z0-9]+\s*\(|\)$", "", classes[0].get("campo", "")).strip() or "situação"
+    falta = "A resposta montada não atende: " + "; ".join(str(e.get("descricao", "")) for e in itens[-len(categorias):])
+    if "Esclarecimento da pessoa" in (texto or ""):
+        return (falta + ". Como corrigir: a pessoa já definiu as categorias no esclarecimento. Conte cada categoria em "
+                "uma consulta própria, com filtro-campo no nome da situação (CAMPO_NOME~termo da definição) e o mesmo "
+                "filtro da entidade, uma entrega por consulta.")
+    lista = " e quais como ".join(f"“{c.lower()}”" for c in categorias)
+    return falta + f". Como corrigir: Na contagem por {campo.lower()}, quais situações contam como {lista}?"
+
+
 def revisar(user, provedor, texto: str, contrato: list, saida, *, preservadas=None) -> str:
     """'' = aprovado; caso contrário, devolve o motivo para o atendimento retentar."""
     if not ligado():
@@ -84,7 +112,7 @@ def revisar(user, provedor, texto: str, contrato: list, saida, *, preservadas=No
     blocos = descrever(saida)
     if not blocos:
         return ""  # sem tabela/cálculo (conversa, pergunta, bloqueio): nada a revisar aqui
-    det = deterministico(blocos)
+    det = deterministico(blocos) or classificacao_sem_definicao(contrato, blocos, texto)
     if det:
         return det
     from . import andamento, prazo

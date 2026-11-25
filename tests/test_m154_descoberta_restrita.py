@@ -545,3 +545,29 @@ def test_pergunta_de_definicao_sem_o_diagnostico():
     falta = ("A resposta montada não atende: x. Como corrigir: A contagem por status cobre o total, mas as categorias "
              "não estão comprovadas. Quais status compõem disponível e quais compõem deslocado?")
     assert agente.pergunta_de_definicao(falta) == "Quais status compõem disponível e quais compõem deslocado?"
+
+
+def _bloco_por_cadastro():
+    return [{"titulo": "Módulos por status", "evidencia": {
+        "agrupado_por": ["T9_STATUS (Status Bem)"], "categorias_pedidas": [],
+        "classificacao_pelo_dominio": [{"campo": "T9_STATUS (Status Bem)",
+                                        "dominio": ["códigos do cadastro TQY (ver nomes_ao_lado)"]}]}}]
+
+
+def test_categorias_por_tabela_de_cadastro_viram_levantamento_e_pergunta():
+    from iativa.agent import revisao
+    contrato = [{"descricao": d, "tipo": "calculo", "metrica": "contagem"} for d in (
+        "Quantidade total de módulos hoje na empresa", "Quantidade de módulos disponíveis hoje",
+        "Quantidade de módulos deslocados hoje")]
+    falta = revisao.classificacao_sem_definicao(contrato, _bloco_por_cadastro(), PEDIDO)
+    pergunta = agente.pergunta_de_definicao(falta)
+    assert pergunta.startswith("Na contagem por status bem") and "“disponíveis”" in pergunta and "“deslocados”" in pergunta
+    # Com a definição já dada na conversa, a correção pede a contagem filtrada (sem perguntar de novo).
+    com = revisao.classificacao_sem_definicao(contrato, _bloco_por_cadastro(),
+                                              PEDIDO + "\nEsclarecimento da pessoa sobre “x”: em trânsito")
+    assert com and not agente.pergunta_de_definicao(com) and "filtro-campo" in com
+    # Uma entrega só, ou categorias do domínio do dicionário, não disparam.
+    assert not revisao.classificacao_sem_definicao(contrato[:1], _bloco_por_cadastro(), PEDIDO)
+    estatico = _bloco_por_cadastro()
+    estatico[0]["evidencia"]["categorias_pedidas"] = ["Disponivel"]
+    assert not revisao.classificacao_sem_definicao(contrato, estatico, PEDIDO)
