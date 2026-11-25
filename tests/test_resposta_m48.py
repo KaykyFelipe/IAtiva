@@ -4,7 +4,7 @@ import re
 import pytest
 from django.urls import reverse
 
-from iativa.agent.decisao import DecisaoInvalida, validar
+from iativa.agent.decisao import validar
 from iativa.agent.provedores import _contexto_agente
 from iativa.chat import conversas
 from iativa.query.servico import Medida, Resultado, Totais
@@ -20,8 +20,8 @@ def test_decisao_aceita_formato_e_recusa_desconhecido():
     assert validar(_d(formato="direto"), [], []).formato == "direto"
     assert validar(_d(formato="resumo"), [], []).formato == "resumo"
     assert validar(_d(), [], []).formato == ""
-    with pytest.raises(DecisaoInvalida):
-        validar(_d(formato="longo"), [], [])
+    # M154: formato desconhecido não derruba a decisão; vale a resposta completa (o padrão seguro).
+    assert validar(_d(formato="longo"), [], []).formato == ""
 
 
 def test_resposta_curta_de_cada_tipo_de_resultado():

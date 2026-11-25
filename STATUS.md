@@ -1,9 +1,30 @@
 # STATUS — IAtiva
 
-**Atualizado em:** 2026-11-24
+**Atualizado em:** 2026-11-25
 **Etapa atual:** 7 — Piloto local
 **Situação:** **Etapa 7 aprovada em 2026-11-16 por Diego; em andamento.** Feito: roteiro do piloto (`docs/piloto/ROTEIRO.md`) e auditoria de não armazenamento (`manage.py auditar_armazenamento`). Falta: usuários do Financeiro, conferência dos números com relatórios do Protheus, avaliação da interpretação e latência. Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M154 — pergunta inédita: descoberta restrita, revisão com evidência do backend e definição perguntada na hora (2026-11-25)
+- Caso: “quantos módulos tem hoje na ativa, disponíveis e deslocados” (registro M149 nº 3). A mesma consulta aprendida foi decidida três vezes, “na Ativa” virou categoria de status e o pedido terminou sem resposta.
+- Causas encontradas no fluxo real:
+  - com as tabelas da descoberta em mãos o esquema inteiro valia: o modelo voltava à consulta reprovada (`preparar_consulta`) ou respondia sem consultar;
+  - `calculo` e `formato` preenchidos com valores vazios em ações que não os usam derrubavam a decisão inteira;
+  - a busca no dicionário usava o nome da empresa (“ativa”) como termo e listava centenas de tabelas com “ativo”; um IN com dezenas de tabelas na leitura do dicionário parava no túnel VPN (mesmo caso da M143);
+  - o revisor via só títulos, colunas e contagem: não sabia a entidade contada, o significado dos filtros nem o alcance;
+  - quando a descoberta criava e executava a consulta, a receita ficava registrada como `aprender_tabela` e não era gravada;
+  - reprovar a mesma consulta com outro parâmetro não contava como método esgotado;
+  - a pergunta de definição só aparecia no fim, depois de gastar as tentativas.
+- Correções gerais (qualquer setor e provedor):
+  - descoberta com ações restritas (`EntradaAgente.acoes_permitidas`, também no esquema JSON dos adaptadores Claude e ChatGPT): montar a consulta, pedir outra fonte com motivo (só tabela nova entra) ou fazer uma pergunta de negócio terminada em “?”; fora disso, a próxima tentativa recebe a restrição específica;
+  - `calculo` só é lido em `calcular_resultado`; formato desconhecido vira resposta completa; a recusa de campo devolve a correção daquele campo;
+  - busca sem o nome da empresa (`IATIVA_EMPRESA_TERMOS`), leitura de tabelas em lotes de 10 e natureza de cada tabela (cadastro, histórico/movimentação, itens/eventos, cálculo/parâmetro);
+  - campo de código cujo significado está em cadastro ligado pelo SX9 (ex.: status do bem) aparece ao modelo como `dominio_por_cadastro`;
+  - o resultado leva `evidencia` (entidade e natureza, chave, medidas, agrupamento, filtros com o significado do domínio, alcance das filiais) e o revisor confere a classificação por ela, sem linhas do ERP;
+  - a decisão que de fato executou substitui a ação externa para receita, revisão e repetição; filtro exato por código entra na receita (busca por texto não);
+  - consulta reprovada duas vezes na mesma mensagem não volta com outro parâmetro: muda a fonte ou pergunta;
+  - revisão que conclui faltar uma definição de negócio pergunta na hora (sem pedir tabela ou campo). A resposta curta retoma o pedido original (`pedido_esclarecido`); pergunta nova segue como pedido próprio. O esclarecimento fica só na conversa e não vira regra da empresa.
+- Na instalação, o dicionário não tem cadastro com “módulo” no nome. Z54/Z55 são tabelas de cálculo. O status dos bens (ST9) é codificado pelo cadastro “Status do bem”, e a situação do ciclo de vida é outro campo.
+- Testes: `tests/test_m154_descoberta_restrita.py`, com o caso dos módulos de ponta a ponta (1º plano errado, descoberta, pergunta de definição, retomada, receita reaproveitada sem o modelo com dados atualizados), RH, Comercial e Cobrança, permissão e uma pergunta reservada.
 ## Mudança M153 — descoberta após revisão de consulta inédita
 
 - Registro M149 inspecionado no servidor autorizado: a revisão rejeitou duas consultas ao mesmo objetivo e a terceira decisão repetiu a consulta. O registro histórico não identifica o modelo da chamada.

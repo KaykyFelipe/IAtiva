@@ -52,6 +52,9 @@ def descrever(saida) -> list[dict]:
             "resumo": _resumo(getattr(r, "mensagem", ""), 400),
             "resumo_calculo": _resumo(getattr(r, "mensagem", ""), 300) if medida else "",
             "criterios": [str(p)[:200] for p in criterios[:8]],
+            # M154: o que o backend comprova sobre a consulta (entidade, chave, filtros com o significado do domínio,
+            # classificação e alcance). Só metadados e códigos de domínio do dicionário.
+            **({"evidencia": getattr(r, "evidencia")} if getattr(r, "evidencia", None) else {}),
         })
     return out
 

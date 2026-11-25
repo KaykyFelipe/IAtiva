@@ -64,6 +64,9 @@ class EntradaAgente:
     # M48: consultas já executadas nesta conversa (critérios, filtros, colunas; nunca linhas ou números).
     consultas_conversa: list[dict] = field(default_factory=list)
     planejamento: dict = field(default_factory=dict)
+    # M154: ações válidas nesta etapa (vazio = todas). Ex.: com as tabelas da descoberta em mãos, só montar a
+    # consulta, pedir outra fonte ou perguntar uma definição de negócio.
+    acoes_permitidas: tuple = ()
 
 
 @dataclass(frozen=True)
@@ -94,7 +97,8 @@ FORMATOS = ("", "direto", "resumo")
 ENTREGAS = ("", "resposta", "consulta", "calculo", "verificacao", "investigacao", "historico")
 
 
-def esquema(codigos_objetivo, codigos_parametro) -> dict:
+def esquema(codigos_objetivo, codigos_parametro, acoes=()) -> dict:
+    acoes = [a for a in ACOES if a in acoes] or list(ACOES)
     return {
         "type": "object",
         "properties": {
@@ -145,7 +149,7 @@ def esquema(codigos_objetivo, codigos_parametro) -> dict:
                            "este número de dias corridos entre campo e campo_final (sem data final = ignorado)."},
                 "mensagem": {"type": "integer", "minimum": 0, "description": "Id de resultado_anterior.mensagem; 0 = último."},
                 "campo": {"type": "string"}, "campo_final": {"type": "string"}}, "required": ["operacao"]},
-            "acao": {"type": "string", "enum": list(ACOES)},
+            "acao": {"type": "string", "enum": acoes},
             "objetivo": {"type": "string", "enum": [""] + list(codigos_objetivo)},
             "parametros": {
                 "type": "array",
@@ -310,6 +314,12 @@ def validar(saida, codigos_objetivo, codigos_parametro) -> Decisao:
     if acao == "ajustar_filtro" and not (ajuste and (ajuste["filtros"] or ajuste["remover"])):
         raise DecisaoInvalida("ajuste")
     calculo = saida.get('calculo') or None
+    if acao != 'calcular_resultado':
+        # M154: o cálculo só é usado por calcular_resultado. Os modelos preenchem o objeto opcional com valores
+        # vazios em outras ações ({"operacao": "", "limite": 0}); isso derrubava a decisão inteira.
+        calculo = None
+    elif isinstance(calculo, dict) and calculo.get('limite') in (0, None):
+        calculo = {k: v for k, v in calculo.items() if k != 'limite'}
     if calculo is not None:
         from .calculos import OPERACOES
         if not isinstance(calculo, dict) or set(calculo) - {'operacao', 'mensagem', 'campo', 'campo_final', 'limite'}:
@@ -329,7 +339,7 @@ def validar(saida, codigos_objetivo, codigos_parametro) -> Decisao:
         raise DecisaoInvalida('calculo')
     formato = saida.get("formato") or ""
     if formato not in FORMATOS:
-        raise DecisaoInvalida("formato")
+        formato = ""  # M154: formato desconhecido ("completo", "tabela") = resposta completa, o padrão seguro
     capacidade = _texto(saida.get("capacidade") or "", 300, "capacidade", cortar=True)
     if acao == "falta_capacidade" and not capacidade.strip():
         raise DecisaoInvalida("capacidade")

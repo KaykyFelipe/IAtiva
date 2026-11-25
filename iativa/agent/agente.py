@@ -86,6 +86,9 @@ class Saida:
     solicitacao: object = None
     resultado: object = None  # só em memória; `resultado.mensagem` é a resposta final com números
     observacao: Observacao | None = None
+    # M154: a decisão que de fato executou (ex.: aprender_tabela criou a consulta e rodou preparar_consulta com
+    # ela). Receita, memória e controle de repetição usam esta, não a ação externa.
+    decisao_efetiva: object = None
 
 
 def _ciclo() -> dict:
@@ -256,6 +259,48 @@ def _catalogo(user, objetivos, defs) -> list[dict]:
     return cat
 
 
+# M154: com as tabelas da descoberta em mãos, a decisão é uma destas três. Pedir de novo a consulta antiga
+# (preparar_consulta) ou "responder" sem consultar gastava o prazo com decisões equivalentes.
+ETAPA_MONTAR = ("criar_consulta", "aprender_tabela", "conversar")
+ETAPA_MONTAR_TEXTO = (
+    "Nesta etapa só valem três decisões: (1) criar_consulta com uma tabela de tabelas_para_aprender, escolhendo a "
+    "entidade contada (a chave da tabela), os campos de classificação pelos domínios do dicionário e os filtros que o "
+    "pedido exige; (2) aprender_tabela para outra fonte, dizendo em resposta por que as tabelas atuais não servem e "
+    "em alvo o assunto ou os códigos das tabelas; (3) conversar com UMA pergunta objetiva, terminada em ?, sobre o "
+    "significado de negócio de um termo do pedido que muda o resultado. Nunca peça tabela, campo ou SQL à pessoa.")
+_CORRECOES_CAMPO = {
+    "acao": "Use uma das ações do esquema{etapa}.",
+    "objetivo": "Use um código de objetivo da lista objetivos_disponiveis ou deixe vazio.",
+    "parametro": "Use só códigos de parâmetro da lista; o valor vai em 'valor'.",
+    "consulta": "Na criar_consulta preencha consulta com tabela (3 letras), nome e colunas com nomes técnicos.",
+    "calculo": "Na calcular_resultado preencha calculo.operacao com uma operação da lista e mensagem com um inteiro.",
+    "ajuste": "Na ajustar_filtro preencha ajuste.filtros (campo, operador 'igual' ou 'diferente', valor) ou remover.",
+}
+
+
+def _fora_da_etapa(d, entrada) -> str:
+    permitidas = tuple(getattr(entrada, "acoes_permitidas", ()) or ())
+    if not permitidas:
+        return ""
+    if d.acao not in permitidas:
+        return (f"A ação '{d.acao}' não vale nesta etapa. "
+                + (ETAPA_MONTAR_TEXTO if permitidas == ETAPA_MONTAR else "Use: " + ", ".join(permitidas) + "."))
+    if permitidas == ETAPA_MONTAR and d.acao == "conversar" and not d.resposta.strip().endswith("?"):
+        return "Resposta sem consulta não conclui o pedido. " + ETAPA_MONTAR_TEXTO
+    return ""
+
+
+def _correcao_do_campo(campo, entrada) -> str:
+    """M154: a próxima tentativa recebe a restrição específica do campo recusado, não um aviso genérico."""
+    raiz = str(campo).split(".")[0].split(":")[0].strip()
+    permitidas = tuple(getattr(entrada, "acoes_permitidas", ()) or ())
+    etapa = (": " + ", ".join(permitidas)) if permitidas else ""
+    especifica = _CORRECOES_CAMPO.get(raiz, "").format(etapa=etapa)
+    return (f"Sua resposta anterior foi recusada no campo '{campo}'. " + (especifica + " " if especifica else "")
+            + "Responda de novo no formato do esquema: só os campos previstos, códigos de objetivo e de parâmetro da "
+              "lista, filtros com operador 'igual' ou 'diferente', tabela com 3 letras e campos com o nome técnico.")
+
+
 def _interpretar(provedor, entrada, codigos_obj, codigos_par):
     """M138: resposta do modelo fora do formato volta para ele com o motivo (antes repetia a mesma entrada às cegas
     e, depois de 3 recusas iguais, o pedido parava como "a IA não respondeu a tempo")."""
@@ -266,16 +311,21 @@ def _interpretar(provedor, entrada, codigos_obj, codigos_par):
             from . import tempos
             with tempos.medir("decisao"):
                 bruta = provedor.decidir(entrada)
-            return validar(bruta, codigos_obj, codigos_par)
+            d = validar(bruta, codigos_obj, codigos_par)
+            fora = _fora_da_etapa(d, entrada)
+            if not fora:
+                return d
+            logging.getLogger(__name__).warning("decisao_fora_da_etapa: acao=%s", d.acao[:40])
+            entrada = replace(entrada, observacoes=list(getattr(entrada, "observacoes", None) or []) + [{
+                "acao": d.acao, "situacao": "etapa_errada", "motivo": fora}])
+            continue
         except (DecisaoInvalida, FalhaDecisao) as exc:
             motivo = exc.campo if isinstance(exc, FalhaDecisao) else str(exc)[:120]
             acao = str(bruta.get("acao", ""))[:40] if isinstance(bruta, dict) else ""
             logging.getLogger(__name__).warning("decisao_invalida: campo=%s acao=%s", motivo, acao)
             entrada = replace(entrada, observacoes=list(getattr(entrada, "observacoes", None) or []) + [{
                 "acao": "formato_da_resposta", "situacao": "decisao_invalida",
-                "motivo": (f"Sua resposta anterior foi recusada no campo '{motivo}'. Responda de novo no formato do "
-                           "esquema: só os campos previstos, códigos de objetivo e de parâmetro da lista, filtros com "
-                           "operador 'igual' ou 'diferente', tabela com 3 letras e campos com o nome técnico.")}])
+                "motivo": _correcao_do_campo(motivo, entrada)}])
             continue
         except FalhaModelo as exc:
             if exc.temporaria:
@@ -338,6 +388,8 @@ def conversar(user, c, texto: str, provedor=None, mensagem_usuario_id=None, inte
     from . import planejamento
     from .contagem import contextualizar, contextualizar_separadas
     contexto_id = contexto_id or mensagem_usuario_id
+    if acomp is None:
+        texto = pedido_esclarecido(c, texto, contexto_id)
     texto, fontes = _pedido_com_fontes(user, c, texto, contexto_id)
     if not fontes:
         from .comparacao import contextualizar_ano
@@ -645,6 +697,7 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
     feitas, observacoes, saida = set(), list(observacoes or []), None
     parametros_recusados = set()
     planos_reprovados = set()
+    reprovacoes_objetivo = {}  # M154: quantas vezes a revisão reprovou cada consulta nesta mensagem
     previa = None  # etapa intermediária concluída (ex.: a lista) que a próxima etapa completa
     previa_parte = None  # M41: resposta já conferida da 1ª pergunta de uma mensagem com várias
     resultado_base = None  # M45: última consulta desta mensagem; só em memória, autorizada pelo backend
@@ -847,13 +900,29 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
                     break
         # Se a decisão executaria de novo a consulta rejeitada, use o dicionário
         # e o mesmo fluxo autorizado de criação de consulta, dentro do orçamento do pedido.
-        if (d.acao == "preparar_consulta" and (d.objetivo, tuple(sorted(d.parametros))) in planos_reprovados
-                and pode_aprender_sozinho(user)):
+        # M154: um método (consulta) reprovado duas vezes não volta só com outro parâmetro: a próxima tentativa
+        # muda a fonte (descoberta) ou pergunta a definição; não gasta o prazo com decisões equivalentes.
+        metodo_esgotado = d.acao == "preparar_consulta" and reprovacoes_objetivo.get(d.objetivo, 0) >= 2
+        if (d.acao == "preparar_consulta" and pode_aprender_sozinho(user)
+                and ((d.objetivo, tuple(sorted(d.parametros))) in planos_reprovados or metodo_esgotado)):
             fonte = next((o for o in objetivos if o.codigo == d.objetivo), None)
             alvo = " ".join([texto, *fonte.tabelas]) if fonte else texto
             descoberta = Decisao("", "aprender_tabela", "", (), alvo, "", False, ())
             if _assinatura(descoberta) not in feitas:
                 d, assinatura = descoberta, _assinatura(descoberta)
+                metodo_esgotado = False
+        if metodo_esgotado:
+            ac.anotar(d.acao, "metodo_reprovado")
+            if ac.pode_cutucar():
+                ac.cutucadas += 1
+                observacoes.append(Observacao(d.acao, "metodo_reprovado", (
+                    f"A consulta {d.objetivo} já foi reprovada pela revisão duas vezes nesta mensagem. Não use de novo: "
+                    "mude a fonte, o campo, a chave da contagem ou o critério (aprender_tabela), ou faça UMA pergunta "
+                    "objetiva sobre o significado de negócio do termo que falta (conversar terminando em ?).")))
+                andamento.avisar("Essa consulta já foi reprovada; mudando a fonte ou o critério")
+                continue
+            causa = "revisao_reprovada" if ac.reprovada else "acao_repetida"
+            break
         if assinatura in feitas:
             ac.anotar(d.acao, "acao_repetida")
             if ac.pode_cutucar():
@@ -900,6 +969,12 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
             ac.anotar(d.acao, TEMPO_ESGOTADO)
             causa = TEMPO_ESGOTADO if passo_programado else "prazo"
             break
+        if getattr(saida, "decisao_efetiva", None) is not None:
+            # M154: a descoberta criou a consulta e executou preparar_consulta com ela: é ESSA decisão que vale para a
+            # receita, a revisão e o controle de repetição (antes ficava registrada como aprender_tabela e a receita
+            # não era gravada; a pergunta equivalente voltava à descoberta).
+            d = replace(saida.decisao_efetiva, atende=d.atende or saida.decisao_efetiva.atende)
+            feitas.add(_assinatura(d))
         if passo_programado and saida.observacao and saida.observacao.situacao in TRANSITORIAS:
             # Reexecuta o plano conhecido no worker. Um passo posterior bem-sucedido não deve ocultar a falha.
             causa = saida.observacao.situacao
@@ -1001,7 +1076,8 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
         ev = coord.evidencia(d, saida, texto)  # o que ESTA ação entregou (antes de juntar com a etapa anterior)
         if saida.observacao is not None and saida.observacao.situacao == ERRO_PARAMETROS:
             parametros_recusados.add(assinatura)
-        if ev and d.acao in ("aprender_tabela", "criar_consulta", "ajustar_filtro", "voltar_filtro"):
+        if ev and (d.acao in ("aprender_tabela", "criar_consulta", "ajustar_filtro", "voltar_filtro")
+                   or getattr(saida, "decisao_efetiva", None) is not None):
             # M40: a consulta criada/ajustada neste passo precisa estar entre as que o modelo pode escolher.
             objetivos = objetivos_para(user)
             codigos_par = sorted({cod for o in objetivos for cod in o.parametros} | set(PARAMETROS_APRENDIDOS))
@@ -1114,6 +1190,16 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
                     receita_id, receita_d, fila_receita = None, None, []
                 if d.acao == "preparar_consulta":
                     planos_reprovados.add((d.objetivo, tuple(sorted(d.parametros))))
+                    reprovacoes_objetivo[d.objetivo] = reprovacoes_objetivo.get(d.objetivo, 0) + 1
+                pergunta = pergunta_de_definicao(falta_rev)
+                if pergunta:
+                    # M154: a revisão concluiu que falta uma definição de negócio que só a pessoa sabe (ex.: o que a
+                    # operação chama de "deslocado"). Pergunta já, enquanto ajuda; nada reprovado vai junto. A resposta
+                    # curta retoma este pedido (`pedido_esclarecido`).
+                    ac.anotar("revisao", "definicao_pendente")
+                    return _fechar(ac, user, c, mensagem_id,
+                                   Saida(pergunta, {"tipo": "esclarecimento", "pedido_original": texto[:1000]}),
+                                   coord.PERGUNTA)
                 preservadas.intersection_update(ac.cumpridas)
                 passos_verificados = [p for p in passos_verificados if set(p["atende"]) <= preservadas]
                 ac.revisoes += 1
@@ -1392,9 +1478,9 @@ def _encerrar_sem_cumprir(ac, user, c, mensagem_id, saida, previa, causa, observ
             if ac.reprovada and causa == "revisao_reprovada":
                 lacuna, _, orientacao = ac.reprovada.partition(" Como corrigir:")
                 lacuna = lacuna.removeprefix("A resposta montada não atende: ").rstrip(".")
-                pergunta = orientacao.strip()
-                if pergunta.endswith("?") and pergunta.count("?") == 1:
-                    final = Saida(pergunta, {**ficha, "tipo": "esclarecimento"})
+                pergunta = pergunta_de_definicao(ac.reprovada)
+                if pergunta:
+                    final = Saida(pergunta, {**ficha, "tipo": "esclarecimento", "pedido_original": ac.texto[:1000]})
                 else:
                     final = Saida(f"Não consegui confirmar com os dados consultados: {lacuna}." + aviso,
                                   {**ficha, "tipo": "impedimento_dados"})
@@ -1647,6 +1733,38 @@ def pergunta_nova(c, texto: str) -> bool:
         return True
     # Pergunta de dados com sujeito próprio ("quantos veículos tem a empresa?"); "me diga apenas os dias úteis" é ajuste.
     return len(t.split()) >= 5 and bool(_PERGUNTA_DADOS_RE.search(t)) and not _AJUSTE_RE.search(t)
+
+
+_TECNICO_RE = re.compile(r"\b(?:tabela|campo|coluna|sql|alias|dicionario|sx[23]|[a-z][a-z0-9]{1,2}_[a-z0-9]+)\b")
+
+
+def pergunta_de_definicao(falta_rev: str) -> str:
+    """M154: a correção da revisão é UMA pergunta de negócio (termina em ?, sem pedir tabela/campo/SQL)."""
+    _, _, orientacao = (falta_rev or "").partition(" Como corrigir:")
+    pergunta = orientacao.strip()
+    if not pergunta.endswith("?") or pergunta.count("?") != 1 or len(pergunta) > 300:
+        return ""
+    from . import objetivos as coord
+    return "" if _TECNICO_RE.search(coord._norm(pergunta)) else pergunta
+
+
+def pedido_esclarecido(c, texto: str, antes_de=None) -> str:
+    """M154: resposta curta a uma pergunta de esclarecimento da IA retoma o pedido original: o texto passa a ser o
+    pedido + o esclarecimento. Pergunta nova e completa segue como pedido próprio. O esclarecimento fica só nesta
+    conversa (não vira regra da empresa)."""
+    ultima = c.mensagens.filter(papel="ia")
+    if antes_de is not None:
+        ultima = ultima.filter(pk__lt=antes_de)
+    ultima = ultima.order_by("-id").first()
+    ficha = (ultima.ficha or {}) if ultima is not None else {}
+    original = str(ficha.get("pedido_original") or "").strip()
+    if ficha.get("tipo") != "esclarecimento" or not original or not (texto or "").strip():
+        return texto
+    from . import objetivos as coord
+    t = coord._norm(texto).strip(" ?!.")
+    if t == coord._norm(original).strip(" ?!.") or (len(t.split()) > 25 or pergunta_nova(c, texto)):
+        return texto
+    return (f"{original}\nEsclarecimento da pessoa sobre “{(ultima.texto or '').strip()[:300]}”: {texto.strip()}")
 
 
 ROTULO_ACAO = {"investigar_lista":"verificar a lista inteira", "preparar_consulta": "consultar", "executar_consulta": "executar a consulta",
@@ -2008,9 +2126,12 @@ def _aprender(user, c, d, texto, ficha, provedor=None, entrada=None, atual=None)
 
 def _campos_para_modelo(user, alias, pedido=""):
     info = aprendizado.campos_da_tabela(user, alias, automatico=True)
+    por_cadastro = aprendizado.dominios_por_cadastro(user, alias)  # M154: ex.: T9_STATUS → TQY (Status do bem)
     campos = [{"campo": f.nome, "tipo": {"D": "data", "N": "numero"}.get(f.tipo, "texto"), "titulo": f.titulo, "descricao": f.descricao,
                "opcoes": info["opcoes"].get(f.nome, {}),
-               **({"origem_dominio_dinamico": info["dinamicos"][f.nome]} if f.nome in info["dinamicos"] else {})}
+               **({"origem_dominio_dinamico": info["dinamicos"][f.nome]} if f.nome in info["dinamicos"] else {}),
+               **({"dominio_por_cadastro": por_cadastro[f.nome]}
+                  if f.nome in por_cadastro and not info["opcoes"].get(f.nome) else {})}
               for f in info["campos"] if not aprendizado.sensivel(f)]
     try:
         juncoes = [{"tabela": j["tabela"], "nome": j["nome"],
@@ -2035,7 +2156,9 @@ def _campos_para_modelo(user, alias, pedido=""):
         campos.sort(key=lambda c: (c["campo"] in info["chave"],
                                    len(termos & aprendizado._radicais(c["titulo"] + " " + c["descricao"]))),
                     reverse=True)
-    return {"tabela": info["alias"], "nome": info["nome"], "chave_local": info["chave"], "campos": campos[:150], "juncoes_possiveis": juncoes,
+    return {"tabela": info["alias"], "nome": info["nome"], "chave_local": info["chave"],
+            "natureza": aprendizado.natureza_tabela(info["nome"], info["chave"], info["campos"]),
+            "campos": campos[:150], "juncoes_possiveis": juncoes,
             "referencia_publica": referencia, "memoria_tecnica": memoria}
 
 
@@ -2089,6 +2212,32 @@ def _lembrar_fonte(user, cm, setor):
         pass  # a memória é auxiliar: nunca impede a resposta
 
 
+def tentadas_descoberta(entrada) -> set:
+    plan = getattr(entrada, "planejamento", None) or {}
+    return set(plan.get("fontes_inconclusivas", [])) | set(plan.get("fontes_vazias", []))
+
+
+def _outras_fontes(user, alvo, excluir, pedido, limite=2) -> list:
+    """M154: o modelo pediu outra fonte com as tabelas em mãos. Só entra tabela nova (não vista, não vazia nem
+    inconclusiva); pedir de novo as mesmas tabelas não é outra fonte."""
+    citadas = set(aprendizado._aliases_citados(alvo or ""))
+    if citadas and citadas <= set(excluir):
+        return []
+    try:
+        lista = candidatos(user, alvo or pedido, limite=limite + len(excluir), automatico=True)
+    except Exception:
+        return []
+    out = []
+    for item in lista:
+        if item["alias"] in excluir or len(out) >= limite:
+            continue
+        try:
+            out.append(_campos_para_modelo(user, item["alias"], pedido))
+        except Exception:
+            continue
+    return out
+
+
 def _aprender_sozinho(user, c, d, texto, ficha, provedor, entrada, atual, motivo=None):
     motivo = motivo if motivo is not None else []
     consulta = d.consulta
@@ -2130,22 +2279,41 @@ def _aprender_sozinho(user, c, d, texto, ficha, provedor, entrada, atual, motivo
             motivo.append(f"nenhuma tabela utilizável para “{(d.alvo or texto)[:60]}”")
             return None
         andamento.avisar("Montando a consulta nova com os campos de " + ", ".join(t["tabela"] for t in tabelas))
-        entrada2 = replace(entrada, tabelas_para_aprender=tabelas)
+        # M154: com as tabelas em mãos, a decisão fica restrita a montar a consulta, pedir outra fonte (com o
+        # motivo) ou perguntar uma definição de negócio. Antes o esquema inteiro valia e o modelo voltava a
+        # escolher a consulta reprovada (preparar_consulta) ou pedia as mesmas tabelas de novo.
+        entrada2 = replace(entrada, tabelas_para_aprender=tabelas, acoes_permitidas=ETAPA_MONTAR,
+                           observacoes=list(getattr(entrada, "observacoes", None) or []) + [{
+                               "acao": "aprender_tabela", "situacao": "tabelas_em_maos",
+                               "motivo": ETAPA_MONTAR_TEXTO}])
         codigos_par = sorted({p["codigo"] for o in entrada.objetivos for p in o.get("parametros", [])}
                              | set(PARAMETROS_APRENDIDOS))
-        d2 = _interpretar(provedor, entrada2, [o["codigo"] for o in entrada.objetivos], codigos_par)
-        if d2.acao != "criar_consulta" and not (d2.acao == "conversar" and d2.resposta.strip().endswith("?")):
-            # M138: com as tabelas e os campos em mãos, o passo é montar a consulta. O modelo às vezes pede de novo
-            # "aprender_tabela" (o ciclo repetia até o limite): uma segunda chance com a instrução explícita.
-            entrada3 = replace(entrada2, observacoes=list(getattr(entrada2, "observacoes", None) or []) + [{
-                "acao": d2.acao or "aprender_tabela", "situacao": "etapa_errada",
-                "motivo": ("As tabelas e os campos já estão em tabelas_para_aprender. Agora responda acao "
-                           "'criar_consulta' com a tabela que responde a pergunta (" + ", ".join(t["tabela"] for t in tabelas)
-                           + "), as colunas, o campo_data, as juncoes para trazer nomes e a agregacao pedida "
-                           "(ex.: contagem_distinta:CAMPO por CAMPO_GRUPO, com top N se pedido). Não peça a tabela de novo.")}])
-            d2 = _interpretar(provedor, entrada3, [o["codigo"] for o in entrada.objetivos], codigos_par)
+        codigos_obj = [o["codigo"] for o in entrada.objetivos]
+        d2 = _interpretar(provedor, entrada2, codigos_obj, codigos_par)
+        for rodada in range(2):
+            if d2.acao != "aprender_tabela":
+                break
+            vistas = {t["tabela"] for t in tabelas}
+            novas = [] if rodada else _outras_fontes(user, d2.alvo, vistas | tentadas_descoberta(entrada), d2.alvo or texto)
+            if novas:
+                tabelas = tabelas + novas
+                andamento.avisar("Incluindo outra fonte: " + ", ".join(t["tabela"] for t in novas))
+                obs = {"acao": "aprender_tabela", "situacao": "outra_fonte",
+                       "motivo": "Acrescentei " + ", ".join(t["tabela"] for t in novas) + " às tabelas. " + ETAPA_MONTAR_TEXTO}
+            else:
+                # M138: as tabelas pedidas já estão em mãos (ou não há outra fonte com esses termos): montar agora.
+                obs = {"acao": "aprender_tabela", "situacao": "etapa_errada",
+                       "motivo": ("As tabelas e os campos já estão em tabelas_para_aprender e não há outra fonte para "
+                                  "esses termos. Agora responda acao 'criar_consulta' com a tabela que responde a pergunta ("
+                                  + ", ".join(t["tabela"] for t in tabelas) + "), as colunas, o campo_data, as juncoes "
+                                  "para trazer nomes e a agregacao pedida (ex.: contagem_distinta:CAMPO por CAMPO_GRUPO, "
+                                  "com top N se pedido), ou faça a pergunta de negócio. Não peça a tabela de novo.")}
+            entrada2 = replace(entrada2, tabelas_para_aprender=tabelas,
+                               observacoes=list(entrada2.observacoes or []) + [obs])
+            d2 = _interpretar(provedor, entrada2, codigos_obj, codigos_par)
         if d2.acao == "conversar" and d2.resposta.strip().endswith("?"):
-            return Saida(d2.resposta, {**ficha, "opcoes": list(d2.opcoes)})
+            return Saida(d2.resposta, {**ficha, "tipo": "esclarecimento", "opcoes": list(d2.opcoes),
+                                       "pedido_original": texto[:1000]})
         if d2.acao != "criar_consulta" or d2.consulta is None:
             motivo.append("as tabelas encontradas (" + ", ".join(t["tabela"] for t in tabelas) + ") não serviram"
                           + f" (o modelo respondeu {d2.acao or 'nada'})")
@@ -2194,6 +2362,7 @@ def _aprender_sozinho(user, c, d, texto, ficha, provedor, entrada, atual, motivo
                  parametros=tuple((k, v) for k, v in d.parametros if k in codigos),
                  resposta=(f"Aprendi a consultar “{cm.nome}” ({cm.tabela}). " + (d.resposta or "")).strip())
     saida = _preparar(user, c, d3, atual, defs, ficha, texto)
+    saida.decisao_efetiva = d3
     if (getattr(saida.resultado, "ok", False) and not cm.spec.get("leitura_transversal")
             and not getattr(saida.resultado, "legenda_pendente", "")):
         _lembrar_fonte(user, cm, saida.solicitacao.setor)

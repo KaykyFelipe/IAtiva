@@ -113,6 +113,7 @@ class Resultado:
     filtros_contagem_por_filial: tuple[Filtro, ...] = ()
     rodape: list[str] = field(default_factory=list)
     colunas_meta: list[dict] = field(default_factory=list)
+    evidencia: dict = field(default_factory=dict)  # M154: entidade, filtros com domínio e alcance, para a revisão
 
     @property
     def cabecalho(self):
@@ -457,6 +458,7 @@ def _executar_solicitacao(user, s: RequestContext) -> Resultado:
     particoes_vistas = set()
     filial_registro = None  # M150: (campo, premissa) quando a filial vem de um campo do cadastro compartilhado
     plano_executado = None
+    evidencia = None
     try:
         with abrir_catalogo() as cat:
             from iativa.agent import andamento
@@ -535,6 +537,12 @@ def _executar_solicitacao(user, s: RequestContext) -> Resultado:
                                      "A junção desta consulta repete registros e inflaria os valores; por isso o "
                                      "resultado não foi validado. A consulta precisa ser refeita sem essa junção.",
                                      ERRO_METADADOS)
+                if evidencia is None:
+                    try:
+                        evidencia = _evidencia_plano(cat, plano, infos_tab, filiais, particoes_vistas,
+                                                     escopo_consulta, categorias)
+                    except Exception:
+                        evidencia = {}  # a evidência é auxiliar da revisão: nunca impede a consulta
                 parte, cortou = executar(
                     cat, comp.sql, comp.params, lim, cfg["timeout_s"],
                     validar_final=lambda sql, p=permitidas, n=lim: validar(sql, p, n + 1),
@@ -750,6 +758,9 @@ def _executar_solicitacao(user, s: RequestContext) -> Resultado:
                  "chave_local": list(base.chave), "campo_data": cm.spec.get("campo_data", ""),
                  "agregacao": expressao_validada(valores.get(AGREGACAO, ""), cm.spec)}
         receitas.registrar_validacao(cm, prova)
+    if evidencia:
+        evidencia["alcance"]["particoes_lidas"] = len(particoes_vistas) or len(filiais)
+        res.evidencia = evidencia
     res.escopo = escopo_do_plano(plano, s.setor_id, filiais)
     res.escopo["compartilhamento"] = escopo_consulta
     for _, _, _, mestre, campo_nome in nomes:
@@ -766,6 +777,80 @@ def _executar_solicitacao(user, s: RequestContext) -> Resultado:
 
 
 SEM_FILIAL_REGISTRO = "Sem filial informada"
+
+
+def _evidencia_plano(cat, plano, infos_tab, filiais, particoes, escopo_consulta, categorias) -> dict:
+    """M154: o que o backend comprova sobre a consulta executada, para o revisor conferir a classificação: a
+    entidade contada (tabela e chave), as medidas, o agrupamento, os filtros efetivamente aplicados com o significado
+    do domínio no dicionário, e o alcance (filiais autorizadas e partições lidas). Só metadados e códigos de domínio;
+    valores livres de filtro (nomes, textos) nunca entram."""
+    aliases = {"e1": plano.base, **{j.alias: j.tabela for j in plano.juncoes}}
+
+    def info(campo):
+        t = infos_tab.get(aliases.get(campo.alias))
+        f = next((x for x in t.campos if x.nome == campo.nome), None) if t is not None else None
+        return t, f
+
+    def descrito(campo):
+        _, f = info(campo)
+        return f"{campo.nome} ({(f.titulo or '').strip()})" if f is not None and f.titulo else campo.nome
+
+    def dominio(campo):
+        alias = aliases.get(campo.alias)
+        try:
+            return cat.dominios_campos(alias)[0].get(campo.nome, {}) if alias else {}
+        except Exception:
+            return {}
+
+    base = infos_tab.get(plano.base)
+    filtros = []
+    for f in plano.filtros:
+        if f.campo.nome.endswith("_FILIAL") or isinstance(f.valor, Campo):
+            continue
+        _, meta = info(f.campo)
+        dom = dominio(f.campo) if f.op in ("=", "<>", "IN", "NOT_IN") else {}
+        valores = f.valor if isinstance(f.valor, (tuple, list)) else (f.valor,)
+        if dom:
+            significado = [f"{str(v).strip()} = {dom.get(str(v).strip(), 'código sem legenda no dicionário')}"
+                           for v in valores][:12]
+        elif meta is not None and meta.tipo == "D":
+            significado = ["período/data"]
+        elif f.op in ("LIKE", "NOT_LIKE"):
+            significado = ["texto informado (contém)"]
+        else:
+            significado = ["valor informado sem domínio no dicionário"]
+        filtros.append({"campo": descrito(f.campo), "operador": f.op, "significado": significado})
+    agrupado = [descrito(c.campo) for c in plano.colunas if not c.agregacao] if plano.agrupar else []
+    classificacao = []
+    for c in plano.colunas:
+        if not c.agregacao and plano.agrupar:
+            dom = dominio(c.campo)
+            if dom:
+                classificacao.append({"campo": descrito(c.campo),
+                                      "dominio": [f"{k} = {v}" for k, v in list(dom.items())[:15]]})
+            else:
+                try:
+                    from iativa.agent.aprendizado import cadastros_de_dominio
+                    cadastro = cadastros_de_dominio(cat, aliases.get(c.campo.alias, "")).get(c.campo.nome)
+                except Exception:
+                    cadastro = None
+                classificacao.append({"campo": descrito(c.campo), "dominio": (
+                    [f"códigos do cadastro {cadastro}; o nome de cada código vai ao lado na resposta"] if cadastro
+                    else ["sem domínio no dicionário: códigos exibidos como estão"])})
+    from iativa.agent.aprendizado import natureza_tabela
+    return {
+        "entidade": f"{plano.base} ({base.nome})" if base is not None else plano.base,
+        "natureza_da_tabela": natureza_tabela(base.nome, base.chave, base.campos) if base is not None else "",
+        "chave_da_tabela": [k for k in (base.chave if base is not None else ()) if not k.endswith("_FILIAL")],
+        "medidas": [f"{c.agregacao} de {descrito(c.campo)}" for c in plano.colunas if c.agregacao],
+        "agrupado_por": agrupado,
+        "classificacao_pelo_dominio": classificacao,
+        "categorias_pedidas": list(categorias.values())[:12] if categorias else [],
+        "filtros_aplicados": filtros[:12],
+        "alcance": {"filiais_autorizadas": len(filiais), "particoes_lidas": len(particoes),
+                    "compartilhamento": escopo_consulta,
+                    "todas_responderam": True},  # uma falha em qualquer filial encerra a consulta inteira
+    }
 
 
 def _rotulo_filial_registro(valor) -> str:

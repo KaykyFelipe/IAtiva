@@ -88,4 +88,4 @@ class CodexProvider(LLMProvider):
     def decidir(self, entrada):
         objs, pars = _codigos(entrada)
         return self._gerar(INSTRUCOES_AGENTE + '\n' + _contexto_agente(entrada),
-                           decisao.esquema(objs, pars), decisao.validar, objs, pars)
+                           decisao.esquema(objs, pars, getattr(entrada, "acoes_permitidas", ())), decisao.validar, objs, pars)

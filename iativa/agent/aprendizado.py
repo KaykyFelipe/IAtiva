@@ -80,6 +80,32 @@ def _radicais(texto: str) -> set[str]:
     return {SINONIMOS.get(r, r) for r in radicais}
 
 
+def termos_empresa() -> set[str]:
+    """M154: o nome da empresa ("na Ativa") é o universo da consulta, não assunto: não procura tabelas por ele.
+    Sem isso, "ATIVA" casava com centenas de campos "ativo/ativação" e empurrava as fontes certas para fora."""
+    return {_radical(_normalizar(t)) for t in getattr(settings, "IATIVA_EMPRESA_TERMOS", ("Ativa",)) if len(t) >= 5}
+
+
+_MOVIMENTO_RE = re.compile(r"MOVIM|HISTOR|\bLOG\b|MOVTO|TRANSFER|OCORRENC|APONTAM|BAIXA")
+_CALCULO_RE = re.compile(r"CALCUL|APURAC|FORMULA|INDICADOR|PARAMETR|CONFIGURA|SIMULA|ORCAMENT")
+
+
+def natureza_tabela(nome: str, chave=(), campos=()) -> str:
+    """M154: que tipo de registro a tabela guarda, pelo nome (SX2) e pela chave (SIX). Ajuda a distinguir um
+    cadastro (um registro por item: conta itens), um histórico/movimentação (vários registros por item: conta
+    eventos) e uma tabela de cálculo ou parâmetros (não conta itens). Heurística declarada, não decisão."""
+    n = _normalizar(nome)
+    if _CALCULO_RE.search(n):
+        return "calculo_ou_parametro"
+    if _MOVIMENTO_RE.search(n):
+        return "historico_ou_movimentacao"
+    sem_filial = [c for c in chave if not c.endswith("_FILIAL")]
+    tipos = {c.nome: c.tipo for c in campos}
+    if any(tipos.get(c) == "D" for c in sem_filial) or (len(sem_filial) >= 2 and re.search(r"SEQ|ITEM", sem_filial[-1])):
+        return "itens_ou_eventos"
+    return "cadastro"
+
+
 def _aliases_citados(texto: str) -> list[str]:
     # Só o que o usuário escreveu em maiúsculas (ex.: "SRA"), para não confundir "com", "dia"...
     return [p for p in re.findall(r"\b[A-Z][A-Z0-9]{2}\b", texto or "") if ALIAS_RE.match(p)]
@@ -99,7 +125,7 @@ def _restritas(user) -> set[str]:
 def candidatos(user, texto: str, limite: int = 5, automatico: bool = False) -> list[dict]:
     if not (pode_aprender_sozinho(user) if automatico else pode_aprender(user)):
         raise PermissaoNegada("Somente administradores ensinam novas consultas.")
-    radicais = _radicais(texto)
+    radicais = _radicais(texto) - termos_empresa()
     citados = _aliases_citados(texto)
     with abrir_catalogo() as cat:
         tabelas, campos = cat.dicionario.indice()
@@ -144,7 +170,12 @@ def candidatos(user, texto: str, limite: int = 5, automatico: bool = False) -> l
                    if ALIAS_RE.match(i["alias"]) and not i["alias"].startswith(SISTEMA) and i["alias"] not in restritas]
         validos.sort(key=lambda i: (-i["pontos"], i["alias"]))
         # M104: tabela sem nenhum registro na instalação (ex.: CN9 quando a empresa usa outra rotina) não é candidata.
-        fisicas = cat.tabelas([i["alias"] for i in validos[:limite * 3]])
+        # M154: em lotes de 10 (como os nomes da M143): um IN com dezenas de tabelas passa do MTU do túnel VPN e a
+        # leitura do dicionário ficava parada sem resposta.
+        alvo = [i["alias"] for i in validos[:limite * 3]]
+        fisicas = {}
+        for k in range(0, len(alvo), 10):
+            fisicas.update(cat.tabelas(alvo[k:k + 10]))
         validos = [i for i in validos if not (i["alias"] in fisicas and cat.vazia(fisicas[i["alias"]].fisica))]
         escolhidos = validos[:limite]
         existentes = cat.dicionario.tabelas([i["alias"] for i in escolhidos])
@@ -154,10 +185,39 @@ def candidatos(user, texto: str, limite: int = 5, automatico: bool = False) -> l
         if td is None:
             continue
         comp = fisicas[i["alias"]].compartilhamento if i["alias"] in fisicas else ""
+        chave = fisicas[i["alias"]].chave if i["alias"] in fisicas else ()
         out.append({"alias": i["alias"], "nome": td.nome, "campos": i["campos"],
-                    "compartilhamento": comp, "referencia_publica": bool(i.get("referencia"))})
+                    "compartilhamento": comp, "referencia_publica": bool(i.get("referencia")),
+                    "natureza": natureza_tabela(td.nome, chave)})
     registrar("metadado_consultado", "metadado", usuario=user, estado_novo="aprendizado", linhas=len(out))
     return out
+
+
+def cadastros_de_dominio(cat, alias: str) -> dict:
+    """M154: {campo: tabela} dos campos de código cujo significado está num cadastro ligado pelo SX9 por um único
+    campo (ex.: T9_STATUS → TQY "Status do bem"). Sem legenda estática nem rotina dinâmica, o nome de cada código
+    vem desse cadastro (a resposta mostra o nome ao lado, M140). Só estrutura do dicionário."""
+    out = {}
+    for r in cat.relacionados(alias):
+        pares = [(a, b) for a, b in zip(r.campos_origem, r.campos_destino)
+                 if not a.endswith("_FILIAL") and not b.endswith("_FILIAL")]
+        if r.origem != alias and len(pares) == 1 and ALIAS_RE.match(r.origem) and not r.origem.startswith(SISTEMA):
+            out.setdefault(pares[0][1], r.origem)
+    return out
+
+
+def dominios_por_cadastro(user, alias: str) -> dict:
+    """{campo: "TQY (STATUS DO BEM)"} para o modelo; tabela restrita ao setor da pessoa não é citada."""
+    try:
+        restritas = _restritas(user)
+        with abrir_catalogo() as cat:
+            mapa = {c: t for c, t in cadastros_de_dominio(cat, alias).items() if t not in restritas}
+            alvos, nomes = sorted(set(mapa.values())), {}
+            for k in range(0, len(alvos), 10):
+                nomes.update({a: t.nome for a, t in cat.dicionario.tabelas(alvos[k:k + 10]).items()})
+    except Exception:
+        return {}
+    return {c: f"{t} ({nomes[t]})" if nomes.get(t) else t for c, t in mapa.items()}
 
 
 def campos_da_tabela(user, alias: str, automatico: bool = False) -> dict:

@@ -224,4 +224,5 @@ class ClaudeCodeProvider(LLMProvider):
     def decidir(self, entrada):
         objetivos, parametros = _codigos(entrada)
         return self._gerar(INSTRUCOES_AGENTE + "\n" + _contexto_agente(entrada),
-                           decisao.esquema(objetivos, parametros), decisao.validar, objetivos, parametros)
+                           decisao.esquema(objetivos, parametros, getattr(entrada, "acoes_permitidas", ())),
+                           decisao.validar, objetivos, parametros)
