@@ -19,8 +19,9 @@ def agora() -> float:
 
 
 @contextmanager
-def definir(segundos: float):
-    token = _PRAZO.set(agora() + max(0.0, float(segundos)))
+def definir(segundos: float | None):
+    fim = None if segundos is None else agora() + max(0.0, float(segundos))
+    token = _PRAZO.set(fim)
     try:
         yield
     finally:

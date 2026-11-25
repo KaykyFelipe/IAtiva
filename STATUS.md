@@ -4,6 +4,12 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **Etapa 7 aprovada em 2026-11-16 por Diego; em andamento.** Feito: roteiro do piloto (`docs/piloto/ROTEIRO.md`) e auditoria de não armazenamento (`manage.py auditar_armazenamento`). Falta: usuários do Financeiro, conferência dos números com relatórios do Protheus, avaliação da interpretação e latência. Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M160 — prazo total configurável e revisão antecipada
+
+- Registro nº 8: duas consultas produziram resultados intermediários, e o prazo total expirou durante a descoberta seguinte. O servidor estava com prazo de 180 segundos e continuação em segundo plano desativada.
+- A configuração com prazo total igual a zero desativa o limite do ciclo. Os timeouts de operações individuais e a proteção do proxy continuam ativos. O encerramento identifica qual etapa venceu o prazo ou falhou.
+- Um levantamento completo por situação de cadastro pode passar pela revisão mesmo com categorias pendentes. A revisão pode pedir a definição de negócio com o levantamento aprovado, evitando que o agente repita a descoberta enquanto falta o significado das categorias.
+
 ## Mudança M159 — seletores de modelo e esforço para Gemini
 
 - O cartão Gemini mostra o catálogo atualizado pela própria CLI com cache, o padrão automático e a entrada de ID manual. Os esforços disponíveis variam conforme o modelo e são validados também no backend.

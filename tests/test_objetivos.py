@@ -318,7 +318,7 @@ def test_falha_passageira_continua_e_depois_para_com_motivo(base, settings, monk
     assert tarefas.processar_proxima()
     o.refresh_from_db()
     assert o.situacao == SO.IMPEDIDO and "passageira" in o.motivo  # não vira correção de código
-    assert "não responderam a tempo" in Mensagem.objects.filter(conversa=c).latest("id").texto
+    assert "Uma consulta ao Protheus excedeu o prazo de execução" in Mensagem.objects.filter(conversa=c).latest("id").texto
     assert not tarefas.processar_proxima()
 
 

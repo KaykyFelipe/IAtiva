@@ -536,7 +536,8 @@ def _conversar_autorizado(user, c, texto, provedor, mensagem_usuario_id, interro
     from .objetivos import _verificar_pessoas
     pede_cobertura = _verificar_pessoas(t_norm)
     cobertura = base_lista if (lista is not None and pede_cobertura) else None
-    with prazo.definir(float(cfg["tempo_s"])):
+    limite = float(cfg["tempo_s"])
+    with prazo.definir(limite if limite > 0 else None):
         saida = _ciclo_agente(user, c, texto, provedor, interrompido, entrada, objetivos, codigos_par, defs, atual,
                              administrador, cfg, cobertura, pede_cobertura, mensagem_id=mensagem_usuario_id,
                              acomp=acomp, observacoes=observacoes)
@@ -1092,7 +1093,9 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
             defs = orq._definicoes(codigos_par)
             entrada = replace(entrada, objetivos=_catalogo(user, objetivos, defs),
                               aprendidos=_aprendidos(administrador))
+        revisao_antecipada = False
         if ac.contrato:
+            from . import revisao
             from .planejamento import registrar_entregas
             anteriores = set(ac.cumpridas)
             registrar_entregas(ac, d, saida)
@@ -1106,7 +1109,13 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
                     pass
             if saida.observacao and saida.observacao.recuperavel:
                 observacoes.append(saida.observacao)
-            if ac.pendentes() and ev not in (coord.PERGUNTA, coord.BLOQUEIO, coord.DELEGADA):
+            if ac.pendentes() and ev == coord.CALCULO and revisao.ligado():
+                blocos = revisao.descrever(saida)
+                completos = all(b.get("evidencia", {}).get("alcance", {}).get("todas_responderam") for b in blocos)
+                if completos:
+                    motivos = revisao.classificacao_sem_definicao(ac.contrato, blocos, texto)
+                    revisao_antecipada = bool(pergunta_de_definicao(motivos))
+            if ac.pendentes() and not revisao_antecipada and ev not in (coord.PERGUNTA, coord.BLOQUEIO, coord.DELEGADA):
                 # Sem entrega comprovada, são revisões da mesma tentativa, não novas respostas.
                 if ((saida.observacao is None or not saida.observacao.recuperavel)
                         and (len(ac.contrato) == 1 or novos_indices)):
@@ -1127,7 +1136,7 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
                 entrada = replace(entrada, planejamento={**entrada.planejamento, 'pendentes': ac.pendentes(), 'cumpridas': ac.cumpridas})
                 atual = _ativa(user, c)
                 continue
-        if (previa is not None and not comparacao.ranking(texto)
+        if (previa is not None and not revisao_antecipada and not comparacao.ranking(texto)
                 and not (ev == coord.VERIFICACAO and coord.ano_admissoes_e_desligamentos(texto)
                          and not any(getattr(r, 'titulo_entrega', '') for r in _blocos(previa.resultado)))
                 and (not comparacao.contagens_mensais(texto)
@@ -1160,7 +1169,8 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
             # M41: depois da 1ª resposta, texto sem consulta não comprova a outra pergunta ("já rodei as duas"):
             # ficam só as respostas já conferidas, sem a afirmação do modelo.
             return _encerrar_sem_cumprir(ac, user, c, mensagem_id, previa, previa, "passos", observacoes)
-        if (ac.partes_faltam > 0 and (ac.cumprido(ev) or (d.acao == "lembrar" and ac.memoria_feita))
+        if (not revisao_antecipada and ac.partes_faltam > 0
+                and (ac.cumprido(ev) or (d.acao == "lembrar" and ac.memoria_feita))
                 and ev not in (coord.PERGUNTA, coord.BLOQUEIO, coord.DELEGADA)):
             # M41: "quantos entraram? e quantos saíram?": a primeira resposta saiu; falta a outra pergunta.
             if not ac.pode_cutucar():
@@ -1177,7 +1187,7 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
             andamento.avisar("Uma pergunta respondida; agora a próxima")
             continue
         if (ev and ev not in (coord.PERGUNTA, coord.BLOQUEIO, coord.DELEGADA, coord.ACAO)
-                and (ac.entregue or ac.cumprido(ev))):
+                and (revisao_antecipada or ac.entregue or ac.cumprido(ev))):
             # M109: a resposta está montada, mas ainda não foi enviada: a própria IA confere se atende ao pedido.
             from . import revisao
             from .contagem import entregas_separadas
@@ -1448,8 +1458,13 @@ def _encerrar_sem_cumprir(ac, user, c, mensagem_id, saida, previa, causa, observ
         if mensagem_id is not None:
             o = coord.registrar(ac, user, c, mensagem_id, SO.IMPEDIDO, f"falha passageira persistente: {causa}")
             ficha["objetivo"] = o.pk
-        final = Saida(f"{texto}\n\n{falta}. O ERP ou a IA não responderam a tempo mesmo depois de eu tentar de novo; "
-                      "nada ficou pela metade. Tente outra vez em alguns minutos.".strip(), ficha)
+        motivo = {
+            "prazo": "O prazo total do pedido terminou antes de eu concluir.",
+            TEMPO_ESGOTADO: "Uma consulta ao Protheus excedeu o prazo de execução.",
+            "modelo_falhou": "O serviço de IA falhou enquanto preparava ou conferia a resposta.",
+            "passos": "As tentativas de consulta terminaram antes de confirmar todas as partes do pedido.",
+        }.get(causa, "Uma falha temporária interrompeu a consulta.")
+        final = Saida(f"{texto}\n\n{falta}. {motivo}".strip(), ficha)
     else:
         ultima = _ultima(user, c)
         tabela = ""

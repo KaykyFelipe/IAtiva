@@ -589,3 +589,33 @@ def test_levantamento_agrupado_depende_de_aprovar_a_entidade(monkeypatch):
     assert isinstance(revisao.revisar(None, modelo, PEDIDO, contrato, None), revisao.ClassificacaoPendente)
     monkeypatch.setattr(agente.prazo, 'restante', lambda: 5)
     assert revisao.revisar(None, modelo, PEDIDO, contrato, None) == revisao.INDISPONIVEL
+
+
+def test_pedido_sem_prazo_revisa_levantamento_antes_de_repetir_descoberta(modulos, novo_usuario, politica,
+                                                                        settings, monkeypatch):
+    from iativa.agent import prazo, revisao
+    user = _usuario(novo_usuario, politica, "comercial")
+    settings.IATIVA_AGENTE_CICLO = {**settings.IATIVA_AGENTE_CICLO, "tempo_s": 0}
+    descrever = revisao.descrever
+
+    def descrever_com_cadastro(saida):
+        blocos = descrever(saida)
+        for bloco in blocos:
+            evidencia = bloco.get("evidencia", {})
+            if evidencia.get("agrupado_por"):
+                # Equivalente ao cadastro de status ligado por SX9, em vez do domínio literal da base sintética.
+                for cod in evidencia["classificacao_pelo_dominio"]:
+                    cod["dominio"] = ["códigos do cadastro relacionado"]
+        return blocos
+
+    def primeira_decisao(_entrada):
+        assert prazo.restante() is None
+        return _criar("ZZB", "contagem_distinta:ZZB_COD por ZZB_SITUAC", [0],
+                      "Módulos por situação", ["ZZB_COD", "ZZB_SITUAC"])
+
+    monkeypatch.setattr(revisao, "descrever", descrever_com_cadastro)
+    p = Operador([primeira_decisao], lambda _: _aprovado())
+    msg, res = conversas.enviar(user, conversas.nova_individual(user), PEDIDO, p)
+    assert msg.ficha["tipo"] == "esclarecimento" and msg.ficha["pedido_original"] == PEDIDO, msg.texto
+    assert "disponíveis" in msg.texto and "deslocados" in msg.texto
+    assert _ok(res) and len(p.entradas) == len(p.revisoes_recebidas) == 1
