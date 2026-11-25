@@ -64,6 +64,8 @@ RUN curl -fsSL --retry 3 https://claude.ai/install.sh -o /tmp/iativa-claude-inst
     && claude --version \
     && claude --help | grep -q -- '--safe-mode'
 
+RUN gemini --list-models --output-format json > /tmp/iativa-gemini-modelos.json
+
 COPY . .
 
 # M31: versão imutável da imagem (commit) e servidor de aplicação. Migrações rodam à parte

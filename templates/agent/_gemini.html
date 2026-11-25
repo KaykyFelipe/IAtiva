@@ -29,14 +29,33 @@
       {% if c.provedor_atual != 'gemini' %}<button name="acao" value="usar" class="secundario">Usar Gemini neste agente</button>{% endif %}
       <button name="acao" value="desconectar" class="ia-text-button">Desconectar Gemini</button>
     </form>
-    <details class="ia-models">
-      <summary><span>Modelo</span><span class="ia-model-current">{{ c.gemini.modelo|default:'Padrão da CLI' }}</span></summary>
-      <form method="post" action="{% url 'gemini-conta' %}#gemini-cartao" class="ia-model-form">
+    <details class="ia-models"{% if c.provedor_atual == 'gemini' or c.gemini.editar %} open{% endif %}>
+      <summary><span>Modelo e raciocínio</span><span class="ia-model-current">{{ c.gemini.modelo|default:'Padrão da CLI' }}</span></summary>
+      <form method="post" action="{% url 'gemini-conta' %}#gemini-cartao" class="ia-model-form" data-gemini-modelo>
         {% csrf_token %}<input type="hidden" name="perfil" value="atendimento">
-        <label for="gemini-modelo">ID do modelo</label>
-        <input id="gemini-modelo" name="modelo" value="{{ c.gemini.modelo }}" placeholder="Padrão da CLI" maxlength="80">
-        <p class="ia-help">A disponibilidade depende da sua conta Google. Salvar faz uma consulta de verificação.</p>
-        <button name="acao" value="modelo" class="secundario">Verificar e salvar modelo</button>
+        <div class="ia-fields">
+          <div>
+            <label for="gemini-modelo">Modelo</label>
+            <select id="gemini-modelo" name="modelo">
+              <option value=""{% if c.gemini.modelo == 'auto' %} selected{% endif %}>Padrão da CLI</option>
+              {% for m in c.gemini.modelos %}<option value="{{ m.id }}" data-esforcos="{{ m.niveis }}"{% if m.id == c.gemini.modelo %} selected{% endif %}>{{ m.nome }}</option>{% endfor %}
+              <option value="outro">Outro modelo…</option>
+            </select>
+          </div>
+          <div>
+            <label for="gemini-esforco">Esforço de raciocínio</label>
+            <select id="gemini-esforco" name="esforco">
+              <option value="">Padrão do modelo</option>
+              {% for valor, nome in c.gemini.esforcos %}<option value="{{ valor }}"{% if valor == c.gemini.esforco %} selected{% endif %}>{{ nome }}</option>{% endfor %}
+            </select>
+          </div>
+        </div>
+        <div data-gemini-outro>
+          <label for="gemini-modelo-id">ID do modelo</label>
+          <input id="gemini-modelo-id" name="modelo_id" maxlength="80" placeholder="gemini-…">
+        </div>
+        <p class="ia-help">O esforço disponível depende do modelo. A conta Google determina o acesso e a cota.</p>
+        <button name="acao" value="modelo" class="secundario">Salvar modelo e esforço</button>
       </form>
     </details>
   {% else %}

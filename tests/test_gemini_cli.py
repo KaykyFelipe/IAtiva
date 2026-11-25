@@ -20,6 +20,9 @@ def test_login_google_e_modelo_sem_expor_credenciais(client, admin, fake, settin
     client.force_login(admin)
     segredo = 'refresh-sintetico'
     chamadas = []
+    catalogo = tmp_path / 'modelos.json'
+    catalogo.write_text(json.dumps([{'id': 'gemini-3.8-flash', 'displayName': 'Gemini 3.8 Flash'}]))
+    monkeypatch.setattr(gemini_cli, 'CATALOGO', catalogo)
 
     def conectar(user, sessao, projeto):
         origem = tmp_path / 'nativo'
@@ -35,6 +38,10 @@ def test_login_google_e_modelo_sem_expor_credenciais(client, admin, fake, settin
         assert json.loads((raiz / '.gemini/oauth_creds.json').read_text())['refresh_token'] == segredo
         assert '--admin-policy' in cmd and 'none' in cmd
         assert 'toolName = "*"' in (raiz / 'deny.toml').read_text()
+        ajustes = json.loads((raiz / '.gemini/settings.json').read_text())
+        [regra] = ajustes['modelConfigs']['customOverrides']
+        assert regra['match']['model'] == 'gemini-3.8-flash'
+        assert regra['modelConfig']['generateContentConfig']['thinkingConfig'] == {'thinkingLevel': 'MEDIUM'}
         chamadas.append(kw['input'])
         return SimpleNamespace(returncode=0, stdout=json.dumps({'response': json.dumps(DECISAO)}))
 
@@ -44,11 +51,14 @@ def test_login_google_e_modelo_sem_expor_credenciais(client, admin, fake, settin
     base = {'perfil': 'atendimento'}
     r = client.post(url, {**base, 'acao': 'conectar'})
     assert 'Conta Google conectada' in r.content.decode() and segredo.encode() not in r.content
-    r = client.post(url, {**base, 'acao': 'modelo', 'modelo': 'gemini-teste'})
-    assert 'Modelo Gemini verificado' in r.content.decode()
+    assert 'Gemini 3.8 Flash' in r.content.decode()
+    r = client.post(url, {**base, 'acao': 'modelo', 'modelo': 'gemini-3.8-flash', 'esforco': 'MINIMAL'})
+    assert 'Escolha um esforço compatível' in r.content.decode() and not chamadas
+    r = client.post(url, {**base, 'acao': 'modelo', 'modelo': 'gemini-3.8-flash', 'esforco': 'MEDIUM'})
+    assert 'Modelo e esforço Gemini salvos' in r.content.decode()
     assert client.post(url, {**base, 'acao': 'usar'}).status_code == 200
     provedor = obter_provedor(admin)
-    assert provedor.nome == 'gemini-cli' and provedor.modelo == 'gemini-teste'
+    assert provedor.nome == 'gemini-cli' and provedor.modelo == 'gemini-3.8-flash' and provedor.esforco == 'MEDIUM'
     assert provedor.decidir(EntradaAgente('Olá', '2026-11-25', [], [], None)) == DECISAO
     assert len(chamadas) == 2
     assert client.post(url, {'perfil': 'manutencao', 'acao': 'usar'}).status_code == 403

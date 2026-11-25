@@ -27,9 +27,43 @@ def configuracao(user):
         return {}
 
 
+ESFORCOS = (('MINIMAL', 'Mínimo'), ('LOW', 'Baixo'), ('MEDIUM', 'Médio'), ('HIGH', 'Alto'))
+NIVEIS = {
+    'gemini-3.1-pro-preview': ('LOW', 'MEDIUM', 'HIGH'),
+    'gemini-3-pro-preview': ('LOW', 'HIGH'),
+    'gemini-3.8-flash': ('LOW', 'MEDIUM', 'HIGH'),
+    'gemini-3-flash-preview': ('MINIMAL', 'LOW', 'MEDIUM', 'HIGH'),
+    'gemini-3.5-flash-lite': ('MINIMAL', 'LOW', 'MEDIUM', 'HIGH'),
+}
+ORCAMENTOS = {'LOW': 1024, 'MEDIUM': 4096, 'HIGH': 8192}
+CATALOGO = Path('/tmp/iativa-gemini-modelos.json')
+
+
+def niveis(modelo):
+    if modelo in ('gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-2.5-flash-lite'):
+        return tuple(ORCAMENTOS)
+    return NIVEIS.get(modelo.removesuffix('-customtools'), ())
+
+
 def cartao(user):
     config = configuracao(user)
-    return {'ativo': ativo(user), 'modelo': config.get('modelo', '')}
+    modelo = config.get('modelo', '')
+    conectado = ativo(user)
+    modelos = {}
+    if conectado:
+        try:
+            for item in json.loads(CATALOGO.read_text(encoding='utf-8')):
+                ident = item.get('id', '')
+                if ident.startswith('gemini-'):
+                    modelos[ident] = item.get('displayName') or ident
+        except (OSError, ValueError, TypeError, AttributeError):
+            pass
+        if modelo and modelo != 'auto':
+            modelos.setdefault(modelo, modelo)
+    return {'ativo': conectado, 'modelo': modelo, 'esforco': config.get('esforco', ''),
+            'esforcos': ESFORCOS,
+            'modelos': [{'id': ident, 'nome': nome, 'niveis': ' '.join(niveis(ident))}
+                        for ident, nome in modelos.items()]}
 
 
 ARQUIVOS_OAUTH = ('oauth_creds.json', 'google_accounts.json')
@@ -69,7 +103,7 @@ def ativo(user):
     return (pasta_oauth(user) / ARQUIVOS_OAUTH[0]).is_file()
 
 
-def preparar_cli(root, projeto=''):
+def preparar_cli(root, projeto='', modelo='', esforco=''):
     workspace = root / 'workspace'
     workspace.mkdir(mode=0o700, exist_ok=True)
     nativo = root / '.gemini'
@@ -77,12 +111,20 @@ def preparar_cli(root, projeto=''):
     politica = root / 'deny.toml'
     politica.write_text('[[rule]]\ntoolName = "*"\ndecision = "deny"\npriority = 999\n', encoding='utf-8')
     config = nativo / 'settings.json'
-    config.write_text(json.dumps({
+    preferencias = {
         'security': {'auth': {'selectedType': 'oauth-personal'}, 'disableYoloMode': True},
         'general': {'enableAutoUpdate': False, 'maxAttempts': 1},
         'telemetry': {'enabled': False, 'logPrompts': False},
         'tools': {'core': ['__iativa_sem_ferramentas__']},
-    }), encoding='utf-8')
+    }
+    if esforco:
+        pensamento = ({'thinkingBudget': ORCAMENTOS[esforco]} if modelo.startswith('gemini-2.5-')
+                      else {'thinkingLevel': esforco})
+        preferencias['modelConfigs'] = {'customOverrides': [{
+            'match': {'model': modelo},
+            'modelConfig': {'generateContentConfig': {'thinkingConfig': pensamento}},
+        }]}
+    config.write_text(json.dumps(preferencias), encoding='utf-8')
     ambiente = {
         'PATH': os.defpath + os.pathsep + '/usr/local/bin',
         'HOME': str(root), 'GEMINI_CLI_HOME': str(root), 'XDG_CACHE_HOME': str(root),
@@ -112,7 +154,7 @@ def copiar_credenciais(origem, destino, *, existentes=False):
             temp.unlink(missing_ok=True)
 
 
-def _executar(user, modelo, prompt):
+def _executar(user, modelo, prompt, esforco=''):
     _exigir_envio_liberado()
     restante = prazo.restante()
     if restante is not None and restante <= 0:
@@ -129,7 +171,7 @@ def _executar(user, modelo, prompt):
             inicial = versao_credencial(origem)
             if inicial is None:
                 raise FalhaModelo('Conecte sua conta Google em Conexões de IA.')
-            cmd, workspace, ambiente = preparar_cli(root, configuracao(user).get('projeto', ''))
+            cmd, workspace, ambiente = preparar_cli(root, configuracao(user).get('projeto', ''), modelo, esforco)
             temporaria = root / '.gemini'
             copiar_credenciais(origem, temporaria)
             copia = versao_credencial(temporaria)
@@ -166,16 +208,20 @@ def salvar_conexao(user, origem, projeto):
         conexoes.gravar_json(arquivo(user), {'projeto': projeto, 'modelo': ''})
 
 
-def salvar_modelo(user, modelo):
+def salvar_modelo(user, modelo, esforco=''):
     modelo = modelo.strip()
     if modelo and not re.fullmatch(r'(?:auto|pro|flash|flash-lite|gemini-[a-z0-9.-]{1,72})', modelo):
         raise FalhaModelo('Informe um ID Gemini válido ou deixe o modelo padrão.')
+    if esforco and esforco not in niveis(modelo):
+        raise FalhaModelo('Escolha um esforço compatível com o modelo selecionado.')
     config = configuracao(user)
-    _executar(user, modelo, 'Responda somente OK.')
+    if modelo == config.get('modelo', '') and esforco == config.get('esforco', ''):
+        return
+    _executar(user, modelo, 'Responda somente OK.', esforco)
     with trava(user):
         if not ativo(user) or config != configuracao(user):
             raise FalhaModelo('A conexão Gemini mudou. Verifique o modelo novamente.')
-        conexoes.gravar_json(arquivo(user), {**config, 'modelo': modelo})
+        conexoes.gravar_json(arquivo(user), {**config, 'modelo': modelo, 'esforco': esforco})
 
 
 def desconectar(user):
@@ -192,11 +238,13 @@ class GeminiCLIProvider(LLMProvider):
 
     def __init__(self, user):
         self.user = user
-        self.modelo = configuracao(user).get('modelo', '')
+        config = configuracao(user)
+        self.modelo = config.get('modelo', '')
+        self.esforco = config.get('esforco', '')
 
     def _gerar(self, prompt, schema, _validar, _objetivos, _parametros):
         prompt += '\nResponda apenas com um objeto JSON neste esquema, sem Markdown:\n' + json.dumps(schema, ensure_ascii=False)
-        texto = _executar(self.user, self.modelo, prompt).strip()
+        texto = _executar(self.user, self.modelo, prompt, self.esforco).strip()
         if texto.startswith('```json') and texto.endswith('```'):
             texto = texto[7:-3].strip()
         try:

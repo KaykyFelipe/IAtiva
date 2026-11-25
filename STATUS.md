@@ -4,6 +4,11 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **Etapa 7 aprovada em 2026-11-16 por Diego; em andamento.** Feito: roteiro do piloto (`docs/piloto/ROTEIRO.md`) e auditoria de não armazenamento (`manage.py auditar_armazenamento`). Falta: usuários do Financeiro, conferência dos números com relatórios do Protheus, avaliação da interpretação e latência. Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M159 — seletores de modelo e esforço para Gemini
+
+- O cartão Gemini mostra o catálogo da CLI instalada, o padrão automático e a entrada de ID manual. Os esforços disponíveis variam conforme o modelo e são validados também no backend.
+- A preferência é individual e aplicada no Gemini CLI por configuração nativa de raciocínio. Modelos Gemini 2.5 usam orçamento de raciocínio e os Gemini 3 conhecidos usam nível de raciocínio. Combinações novas são verificadas com a conta conectada.
+
 ## Mudança M158 — login Google no Gemini CLI
 
 - O cartão Gemini de atendimento inicia a autorização nativa da CLI. O link oficial do Google é validado, o código passa uma única vez ao terminal privado e o fluxo é vinculado à sessão da pessoa.

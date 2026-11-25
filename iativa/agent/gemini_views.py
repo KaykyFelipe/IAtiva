@@ -13,7 +13,8 @@ def _contexto(request, fluxo=None, mensagem='', erro=''):
     ctx = claude_views._contexto(request)
     for cartao in ctx['cartoes']:
         if cartao['perfil'] == 'atendimento':
-            cartao['gemini'].update(fluxo=fluxo, mensagem=mensagem, erro=erro)
+            cartao['gemini'].update(fluxo=fluxo, mensagem=mensagem, erro=erro,
+                                   editar=request.method == 'POST' and request.POST.get('acao') == 'modelo')
             ctx['c'] = cartao
     return ctx
 
@@ -36,8 +37,13 @@ def conta(request):
         elif acao == 'cancelar':
             fluxo = gemini_login.cancelar(request.user, sessao, fluxo_id)
         elif acao == 'modelo':
-            gemini_cli.salvar_modelo(request.user, request.POST.get('modelo', ''))
-            mensagem = 'Modelo Gemini verificado e salvo.'
+            modelo = request.POST.get('modelo', '')
+            if modelo == 'outro':
+                modelo = request.POST.get('modelo_id', '').strip()
+                if not modelo:
+                    raise FalhaModelo('Informe o ID do modelo Gemini.')
+            gemini_cli.salvar_modelo(request.user, modelo, request.POST.get('esforco', ''))
+            mensagem = 'Modelo e esforço Gemini salvos.'
         elif acao == 'usar':
             conexoes.escolher(request.user, 'atendimento', 'gemini')
             mensagem = 'Gemini está em uso no atendimento.'
