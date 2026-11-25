@@ -6,7 +6,7 @@
 
 ## Mudança M159 — seletores de modelo e esforço para Gemini
 
-- O cartão Gemini mostra o catálogo da CLI instalada, o padrão automático e a entrada de ID manual. Os esforços disponíveis variam conforme o modelo e são validados também no backend.
+- O cartão Gemini mostra o catálogo atualizado pela própria CLI com cache, o padrão automático e a entrada de ID manual. Os esforços disponíveis variam conforme o modelo e são validados também no backend.
 - A preferência é individual e aplicada no Gemini CLI por configuração nativa de raciocínio. Modelos Gemini 2.5 usam orçamento de raciocínio e os Gemini 3 conhecidos usam nível de raciocínio. Combinações novas são verificadas com a conta conectada.
 
 ## Mudança M158 — login Google no Gemini CLI

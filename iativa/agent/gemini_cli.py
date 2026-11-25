@@ -4,6 +4,7 @@ import json
 import os
 import re
 import subprocess
+import time
 from pathlib import Path
 from tempfile import NamedTemporaryFile, TemporaryDirectory
 from threading import RLock
@@ -31,12 +32,46 @@ ESFORCOS = (('MINIMAL', 'Mínimo'), ('LOW', 'Baixo'), ('MEDIUM', 'Médio'), ('HI
 NIVEIS = {
     'gemini-3.1-pro-preview': ('LOW', 'MEDIUM', 'HIGH'),
     'gemini-3-pro-preview': ('LOW', 'HIGH'),
+    'gemini-3.7-flash': ('LOW', 'MEDIUM', 'HIGH'),
+    'gemini-3.6-flash': ('MINIMAL', 'LOW', 'MEDIUM', 'HIGH'),
+    'gemini-3.5-flash': ('MINIMAL', 'LOW', 'MEDIUM', 'HIGH'),
     'gemini-3.8-flash': ('LOW', 'MEDIUM', 'HIGH'),
     'gemini-3-flash-preview': ('MINIMAL', 'LOW', 'MEDIUM', 'HIGH'),
     'gemini-3.5-flash-lite': ('MINIMAL', 'LOW', 'MEDIUM', 'HIGH'),
 }
 ORCAMENTOS = {'LOW': 1024, 'MEDIUM': 4096, 'HIGH': 8192}
 CATALOGO = Path('/tmp/iativa-gemini-modelos.json')
+
+
+_TRAVA_CATALOGO = RLock()
+_cache_catalogo = (0.0, ())
+
+
+def catalogo_cli():
+    """Atualiza o catálogo público da CLI sem iniciar sessão ou enviar perguntas."""
+    global _cache_catalogo
+    with _TRAVA_CATALOGO:
+        agora = time.monotonic()
+        vence, modelos = _cache_catalogo
+        if agora < vence:
+            return modelos
+        try:
+            with TemporaryDirectory(prefix='iativa-gemini-modelos-') as pasta:
+                cmd, cwd, env = preparar_cli(Path(pasta))
+                result = subprocess.run([*cmd, '--list-models', '--output-format', 'json'], cwd=cwd, env=env,
+                                        capture_output=True, encoding='utf-8', timeout=8, check=True)
+                modelos = json.loads(result.stdout)
+                if not isinstance(modelos, list) or not modelos:
+                    raise ValueError
+            _cache_catalogo = agora + 300, modelos
+        except (subprocess.SubprocessError, OSError, ValueError):
+            if not modelos:
+                try:
+                    modelos = json.loads(CATALOGO.read_text(encoding='utf-8'))
+                except (OSError, ValueError):
+                    modelos = ()
+            _cache_catalogo = agora + 30, modelos
+        return modelos
 
 
 def niveis(modelo):
@@ -51,13 +86,12 @@ def cartao(user):
     conectado = ativo(user)
     modelos = {}
     if conectado:
-        try:
-            for item in json.loads(CATALOGO.read_text(encoding='utf-8')):
-                ident = item.get('id', '')
-                if ident.startswith('gemini-'):
-                    modelos[ident] = item.get('displayName') or ident
-        except (OSError, ValueError, TypeError, AttributeError):
-            pass
+        for item in catalogo_cli():
+            if not isinstance(item, dict):
+                continue
+            ident = item.get('id', '')
+            if isinstance(ident, str) and ident.startswith('gemini-'):
+                modelos[ident] = item.get('displayName') or ident
         if modelo and modelo != 'auto':
             modelos.setdefault(modelo, modelo)
     return {'ativo': conectado, 'modelo': modelo, 'esforco': config.get('esforco', ''),

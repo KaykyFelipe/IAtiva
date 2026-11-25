@@ -20,9 +20,8 @@ def test_login_google_e_modelo_sem_expor_credenciais(client, admin, fake, settin
     client.force_login(admin)
     segredo = 'refresh-sintetico'
     chamadas = []
-    catalogo = tmp_path / 'modelos.json'
-    catalogo.write_text(json.dumps([{'id': 'gemini-3.8-flash', 'displayName': 'Gemini 3.8 Flash'}]))
-    monkeypatch.setattr(gemini_cli, 'CATALOGO', catalogo)
+    monkeypatch.setattr(gemini_cli, 'catalogo_cli', lambda: [
+        {'id': 'gemini-3.8-flash', 'displayName': 'Gemini 3.8 Flash'}])
 
     def conectar(user, sessao, projeto):
         origem = tmp_path / 'nativo'
