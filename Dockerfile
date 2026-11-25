@@ -1,5 +1,12 @@
 # Imagem de DESENVOLVIMENTO do IAtiva (Etapa 1). Não é imagem de produção (ver Etapa 9).
+FROM node:22.23.5-bookworm-slim AS gemini-cli
+RUN npm install --global --no-audit --no-fund @google/gemini-cli@0.71.1 && gemini --version
+
 FROM ubuntu:24.04
+COPY --from=gemini-cli /usr/local/bin/node /usr/local/bin/node
+COPY --from=gemini-cli /usr/local/lib/node_modules/@google/gemini-cli /usr/local/lib/node_modules/@google/gemini-cli
+RUN ln -s /usr/local/lib/node_modules/@google/gemini-cli/bundle/gemini.js /usr/local/bin/gemini \
+    && gemini --version
 
 ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONDONTWRITEBYTECODE=1 \

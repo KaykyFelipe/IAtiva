@@ -22,7 +22,7 @@ def _perfil(valor):
 
 
 def _cartao(request, perfil, estado=None, erro=""):
-    from . import codex_login, conexoes
+    from . import codex_login, conexoes, gemini_cli
     cfg = config_usuario(request.user, perfil)
     chatgpt = codex_login.cartao(request.user, perfil)
     nomes = {'none':'Sem esforço extra', 'minimal':'Mínimo', 'low':'Baixo', 'medium':'Médio', 'high':'Alto',
@@ -30,7 +30,7 @@ def _cartao(request, perfil, estado=None, erro=""):
     chatgpt['esforcos_opcoes'] = [(e, nomes.get(e, e)) for e in chatgpt['esforcos']]
     return {"perfil": perfil, **PERFIS[perfil], "estado": estado, "erro": erro, "claude_ativo": ativa(request.user, perfil),
             "modelo_atual": cfg["claude_modelo"], "esforco_atual": cfg["claude_esforco"],
-            "chatgpt": chatgpt, "provedor_atual": conexoes.selecionado(request.user, perfil),
+            "chatgpt": chatgpt, "gemini": gemini_cli.cartao(request.user) if perfil == "atendimento" else {}, "provedor_atual": conexoes.selecionado(request.user, perfil),
             "provedor_definido": bool(conexoes.preferido(request.user, perfil))}
 
 

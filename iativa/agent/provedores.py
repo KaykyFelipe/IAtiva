@@ -680,6 +680,9 @@ def obter_provedor(usuario=None) -> LLMProvider:
     if usuario is not None:
         from .conexoes import selecionado
         escolha = selecionado(usuario)
+        if escolha == "gemini":
+            from .gemini_cli import GeminiCLIProvider
+            return GeminiCLIProvider(usuario)
         if escolha == "chatgpt":
             from .codex_provider import CodexProvider
             return CodexProvider(usuario)

@@ -294,6 +294,7 @@ def test_tela_separa_agentes_e_nao_faz_chamadas_ao_abrir(admin,fake,client):
     client.force_login(admin)
     r=client.get(reverse('claude-conta'));html=r.content.decode()
     assert 'id="agente-atendimento"' in html and 'id="agente-manutencao"' in html
-    assert html.count('class="ia-provider"')==4
+    assert html.count('class="ia-provider"') == 5
+    assert html.count('id="gemini-titulo"') == 1
     assert 'css/conexoes.css' in html and not fake.instancias
     assert 'Salvar modelo Claude' in html and 'Salvar modelo ChatGPT' in html

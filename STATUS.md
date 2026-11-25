@@ -4,6 +4,12 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **Etapa 7 aprovada em 2026-11-16 por Diego; em andamento.** Feito: roteiro do piloto (`docs/piloto/ROTEIRO.md`) e auditoria de não armazenamento (`manage.py auditar_armazenamento`). Falta: usuários do Financeiro, conferência dos números com relatórios do Protheus, avaliação da interpretação e latência. Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M157 — Gemini CLI nas Conexões de IA
+
+- Gemini CLI oficial com versão fixa na imagem da aplicação. O cartão Gemini do atendimento conecta com chave individual do Google AI Studio, verifica o modelo e permite selecionar o provedor.
+- Execução headless com ambiente temporário, política de ferramentas bloqueadas, extensões desativadas, prazo do pedido e contrato de decisão validado pelo backend.
+- A conexão exige credencial fornecida pela TI no cartão. O agente de manutenção continua com os provedores já integrados ao executor.
+
 ## Mudança M156 — revisão de categorias e contexto na triagem (2026-11-25)
 
 - O levantamento agrupado só acompanha a pergunta sobre classificação após aprovação da base pelo revisor. Com revisão indisponível, um agrupamento ainda sem classificação não é aprovado por falta de prazo.

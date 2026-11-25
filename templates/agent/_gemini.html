@@ -1,0 +1,24 @@
+<section class="ia-provider" aria-labelledby="gemini-titulo">
+  <header class="ia-provider-heading">
+    <span class="ia-provider-mark" aria-hidden="true">G</span>
+    <div><h3 id="gemini-titulo">Gemini</h3><p>Google AI Studio · Gemini CLI</p></div>
+  </header>
+  {% if c.gemini.erro %}<p role="alert">{{ c.gemini.erro }}</p>{% endif %}
+  {% if c.gemini.mensagem %}<p role="status">{{ c.gemini.mensagem }}</p>{% endif %}
+  <p class="ia-help">{% if c.gemini.ativo %}Conexão verificada{% else %}Aguardando chave do Google AI Studio{% endif %}</p>
+  <form method="post" action="{% url 'gemini-conta' %}#gemini-titulo" class="ia-model-form">
+    {% csrf_token %}<input type="hidden" name="perfil" value="atendimento">
+    <label for="gemini-chave">Chave do Google AI Studio</label>
+    <input id="gemini-chave" name="chave" type="password" autocomplete="new-password" maxlength="200"{% if not c.gemini.ativo %} required{% endif %}>
+    <label for="gemini-modelo">ID do modelo</label>
+    <input id="gemini-modelo" name="modelo" value="{{ c.gemini.modelo }}" placeholder="Padrão da CLI" maxlength="80">
+    <button name="acao" value="conectar" class="secundario">{% if c.gemini.ativo %}Verificar e salvar{% else %}Conectar Gemini{% endif %}</button>
+  </form>
+  {% if c.gemini.ativo %}
+  <form method="post" action="{% url 'gemini-conta' %}#gemini-titulo" class="ia-catalog-form">
+    {% csrf_token %}<input type="hidden" name="perfil" value="atendimento">
+    {% if c.provedor_atual != 'gemini' %}<button name="acao" value="usar" class="secundario">Usar neste agente</button>{% endif %}
+    <button name="acao" value="desconectar" class="ia-text-button">Desconectar Gemini</button>
+  </form>
+  {% endif %}
+</section>

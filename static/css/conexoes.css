@@ -16,6 +16,7 @@
 .ia-agent-heading p { margin: 0; color: #65758b; font-size: 13px; }
 .ia-agent-current { display: flex; flex-direction: column; gap: 1px; text-align: right; white-space: nowrap; }
 .ia-agent-current strong { font-size: 15px; color: #15559f; }
+#agente-atendimento .ia-providers { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .ia-providers { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
 .ia-provider { min-width: 0; padding: 24px 26px; }
 .ia-provider + .ia-provider { border-left: 1px solid #e7edf3; }
@@ -87,7 +88,7 @@
   .ia-agent-current { font-size: 12px; }
   .ia-agent-current strong { font-size: 13px; }
   .ia-agent-current .ia-help { font-size: 10px; }
-  .ia-providers { grid-template-columns: minmax(0, 1fr); }
+  #agente-atendimento .ia-providers, .ia-providers { grid-template-columns: minmax(0, 1fr); }
   .ia-provider { padding: 21px 18px; }
   .ia-provider + .ia-provider { border-left: 0; border-top: 1px solid #e7edf3; }
   .ia-agent-foot { align-items: flex-start; flex-direction: column; gap: 3px; padding: 12px 18px; }

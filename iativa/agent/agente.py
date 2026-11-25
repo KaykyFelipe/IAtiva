@@ -420,7 +420,7 @@ def conversar(user, c, texto: str, provedor=None, mensagem_usuario_id=None, inte
             return _encerrar_sem_cumprir(acomp, user, c, mensagem_usuario_id, None, None, 'modelo_falhou', [])
         if exc.temporaria:
             nome = getattr(provedor, "nome", "")
-            servico = {"claude-code": "Claude", "anthropic": "Claude", "chatgpt": "ChatGPT"}.get(nome, "modelo de IA")
+            servico = {"claude-code": "Claude", "anthropic": "Claude", "chatgpt": "ChatGPT", "gemini-cli": "Gemini"}.get(nome, "modelo de IA")
             return Saida(f"O serviço {servico} está indisponível no momento. A consulta ainda não começou.",
                          ficha={"tipo": "falha_modelo", "provedor": nome})
         return Saida("O modelo não devolveu um plano válido para a consulta. Tente novamente.",
@@ -790,7 +790,7 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
                 causa = "prazo" if prazo.esgotado() else "modelo_falhou"
                 break  # a correção não veio (ou o tempo acabou): decide abaixo se continua depois
             registrar("modelo_falhou", "agente", usuario=user, estado_novo=provedor.nome.replace('-', '_'), resultado="erro")
-            if provedor.nome in ("claude-code", "chatgpt"):
+            if provedor.nome in ("claude-code", "chatgpt", "gemini-cli"):
                 return Saida(str(exc), ficha={"tipo": "falha_modelo"})
             if exc.temporaria:
                 return Saida("A IA (Gemini) está sobrecarregada ou no limite de uso do plano gratuito neste momento. "

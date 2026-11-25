@@ -49,6 +49,7 @@
             <form method="post" action="{% url 'chatgpt-conta' %}#agente-{{ c.perfil }}" class="ia-catalog-form">{% csrf_token %}<input type="hidden" name="perfil" value="{{ c.perfil }}"><button name="acao" value="modelos" type="submit" class="ia-text-button">Atualizar modelos ChatGPT</button></form>
           </details>
         </section>
+        {% if c.perfil == 'atendimento' %}{% include "agent/_gemini.html" %}{% endif %}
       </div>
       <footer class="ia-agent-foot"><span>{% if c.perfil == 'atendimento' %}Conexão da sua conta{% else %}Conexão compartilhada, gerenciada pela TI{% endif %}</span><p>{% if c.perfil == 'atendimento' %}Trocar de IA mantém seu histórico no IAtiva.{% else %}Trocar de IA não altera a ativação da manutenção automática.{% endif %}</p></footer>
     </section>

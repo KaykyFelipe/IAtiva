@@ -45,7 +45,7 @@ def preferido(user, perfil='atendimento'):
     except (OSError, ValueError):
         dado = {}
     p = dado.get('provedor') if isinstance(dado, dict) else None
-    if p in ('claude', 'chatgpt'):
+    if p in ('claude', 'chatgpt') or (p == 'gemini' and perfil == 'atendimento'):
         return p
     return ''
 
@@ -62,6 +62,12 @@ def selecionado(user, perfil='atendimento'):
 
 def escolher(user, perfil, provedor):
     path = arquivo(user, perfil)
+    if provedor == 'gemini' and perfil == 'atendimento':
+        from .gemini_cli import cartao
+        if not cartao(user)['ativo']:
+            raise FalhaModelo('Conecte o Gemini antes de selecionar este provedor.')
+        gravar_json(path, {'provedor': provedor})
+        return
     if provedor not in ('claude', 'chatgpt'):
         raise FalhaModelo('Provedor inválido.')
     if provedor == 'claude':
