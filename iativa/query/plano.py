@@ -101,6 +101,11 @@ def padrao_tolerante(texto: str) -> str:
     return re.sub(r"[A-Z0-9]{4,}", lambda m: m.group(0)[0] + re.sub(r"[AEIOU]", "_", m.group(0)[1:]), padrao)
 
 
+def padrao_palavra(texto: str) -> str:
+    """M155: termo para LIKE_PALAVRA (sem os % das pontas), tolerante a acento."""
+    return padrao_tolerante(texto).strip("%")
+
+
 def _aplicar_busca(plano, campo: Campo, valores: dict):
     padrao = padrao_busca(valores.get(BUSCA) or "")
     if padrao:
@@ -507,8 +512,9 @@ def montar_modelo(tabela: str, spec: dict, valores: dict, codigo: str) -> Plano:
                 plano.premissas.append(
                     f"Período de {campo}: {date.fromisoformat(inicio):%d/%m/%Y} a {date.fromisoformat(fim):%d/%m/%Y}.")
             elif op == "~":
-                plano.filtros.append(Filtro(Campo(apelido(spec, campo), campo), "LIKE", padrao_tolerante(valor)))
-                plano.premissas.append(f"Filtro: {campo} contém “{valor}”.")
+                # M155: palavra iniciada pelo termo, com ou sem acento ("DISPON" não acha "INDISPONIVEL").
+                plano.filtros.append(Filtro(Campo(apelido(spec, campo), campo), "LIKE_PALAVRA", padrao_palavra(valor)))
+                plano.premissas.append(f"Filtro: {campo} com palavra iniciada por “{valor}”.")
             elif op == "<>":
                 plano.filtros.append(Filtro(Campo(apelido(spec, campo), campo), "<>", valor))
                 plano.premissas.append(f"Filtro: {campo} diferente de {valor}.")

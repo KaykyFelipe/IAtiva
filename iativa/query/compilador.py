@@ -101,6 +101,12 @@ class _Montador:
             # M83: o padrão vem em maiúsculas e a base compara exatamente (collation binária); campos gravados em
             # minúsculas ou misto (ex.: solicitante "fernando.nonato") não eram achados.
             return f"UPPER({esquerda}) LIKE ?"
+        if f.op == "LIKE_PALAVRA":  # M155: alguma palavra começa pelo termo ("DISPON" acha DISPONIVEL, não INDISPONIVEL)
+            v = str(f.valor or "").strip("%")
+            if not v:
+                raise PlanoInvalido("Termo vazio.")
+            params.extend([f"{v}%", f"% {v}%"])
+            return f"(UPPER({esquerda}) LIKE ? OR UPPER({esquerda}) LIKE ?)"
         if f.op == "NOT_LIKE":
             params.append(f.valor)
             return f"{esquerda} NOT LIKE ?"

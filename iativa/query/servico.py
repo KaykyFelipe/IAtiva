@@ -817,6 +817,9 @@ def _evidencia_plano(cat, plano, infos_tab, filiais, particoes, escopo_consulta,
                            for v in valores][:12]
         elif meta is not None and meta.tipo == "D":
             significado = ["período/data"]
+        elif f.op == "LIKE_PALAVRA":
+            # M155: termo de classificação vindo do pedido (ex.: MODUL), não valor do ERP.
+            significado = [f"palavra iniciada por {str(f.valor).replace('_', '?')}"]
         elif f.op in ("LIKE", "NOT_LIKE"):
             significado = ["texto informado (contém)"]
         else:

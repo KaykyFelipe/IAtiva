@@ -9,7 +9,8 @@ import sqlglot
 
 # Valores que podem virar literal no SQL Server: só os caracteres que os parâmetros do sistema
 # usam (datas, filial, códigos, tipos, padrões de LIKE). Qualquer outro caractere recusa.
-LITERAL_SEGURO = re.compile(r"^[0-9A-Za-zÀ-ÖØ-öø-ÿ %\-]*$")  # M117: nomes acentuados; nunca aspas/;/comentário
+LITERAL_SEGURO = re.compile(r"^[0-9A-Za-zÀ-ÖØ-öø-ÿ %_\-]*$")  # M117: nomes acentuados; nunca aspas/;/comentário
+# M155: "_" (curinga de um caractere do LIKE) entra: o termo tolerante a acento ("M_D_L") era recusado só no SQL Server.
 LITERAL_MAX = 100  # M117: nome completo do cadastro (70 posições) cabe
 
 

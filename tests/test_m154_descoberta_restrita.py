@@ -180,9 +180,12 @@ def test_modulos_primeiro_plano_errado_descoberta_definicao_e_receita(modulos, n
     p = Operador(roteiro, revisor_pela_evidencia)
     msg, res = conversas.enviar(user, c, PEDIDO, p)
     # 1ª conversa: a definição que muda o resultado vira pergunta específica; nada reprovado aparece.
-    assert msg.texto == DEFINICAO, msg.texto
+    assert msg.texto.endswith(DEFINICAO), msg.texto
     assert msg.ficha.get("tipo") == "esclarecimento" and msg.ficha.get("pedido_original")
-    assert not _ok(res)
+    # M155: o que a revisão aprovou (total de módulos do cadastro) vai junto; nada da consulta reprovada (ZZM).
+    blocos = [b.resultado for b in res.blocos] if hasattr(res, "blocos") else [res]
+    assert blocos and all(b.evidencia["entidade"].startswith("ZZB") for b in blocos)
+    assert "6" in _texto(res)
     restrita = [e for e in p.entradas if e.tabelas_para_aprender]
     assert restrita and all(e.acoes_permitidas == agente.ETAPA_MONTAR for e in restrita)
     assert any(o.get("situacao") == "etapa_errada" for o in restrita[-1].observacoes), "restrição volta ao modelo"
@@ -207,7 +210,9 @@ def test_modulos_primeiro_plano_errado_descoberta_definicao_e_receita(modulos, n
     assert "Esclarecimento da pessoa" in p2.entradas[0].mensagem and PEDIDO in p2.entradas[0].mensagem
     assert _ok(res2), msg2.texto
     texto = _texto(res2)
-    assert "6" in texto and "3" in texto and "1" in texto, texto  # total 6, disponíveis 3, em trânsito 1 (sem excluído)
+    assert res2.colunas == ["Situação", "Quantidade"], texto  # M155: tabela compacta com data de referência
+    assert [l[1] for l in res2.linhas] == ["6", "3", "1"], res2.linhas  # total, disponíveis, em trânsito (sem excluído)
+    assert "Posição em" in res2.mensagem
     receita = NotaAgente.objects.filter(ativo=True, criterios__has_key="receita").exclude(
         criterios__receita__passos=None).order_by("-pk").first()
     assert receita is not None
@@ -474,3 +479,63 @@ def test_entidade_restrita_pela_familia_conta_so_modulos(familias, novo_usuario,
     msg, res = conversas.enviar(user, conversas.nova_individual(user), "quantos módulos tem hoje na ativa?", p)
     assert _ok(res), msg.texto
     assert "6" in _texto(res) and "8" not in _texto(res), _texto(res)  # 6 módulos, não os 8 bens
+
+
+def test_primeiro_plano_conta_todos_os_bens_revisao_pede_so_modulos(familias, novo_usuario, politica):
+    """M155: a revisão lê na evidência que a contagem não restringiu a entidade e diz o problema concreto; a
+    segunda tentativa (outro critério: a família) conta só os módulos."""
+    user = _usuario(novo_usuario, politica, "comercial")
+
+    def revisor(plan):
+        e = plan["resposta_montada"][0]["evidencia"]
+        if not any("palavra iniciada por M?D?L" in s for f in e["filtros_aplicados"] for s in f["significado"]):
+            return {"natureza": "dados", "entregas": [{"descricao": ENTREGAS[0]["descricao"], "tipo": "calculo",
+                                                       "metrica": "contagem"}],
+                    "resumo": "A consulta contou todos os bens e ainda não identificou quais são módulos."}
+        return _aprovado()
+
+    cad = lambda: ConsultaModelo.objects.get(tabela="ZZB").codigo  # noqa: E731
+    p = Operador([
+        _d(acao="aprender_tabela", alvo="cadastro de modulos"),
+        _d(acao="criar_consulta", entrega="calculo", atende=[0], parametros=_agregacao("contagem_distinta:ZZB_COD"),
+           consulta={"tabela": "ZZB", "nome": "Bens cadastrados", "colunas": ["ZZB_COD", "ZZB_SITUAC"],
+                     "juncoes": [{"tabela": "ZZF", "colunas": ["ZZF_NOME"]}]}),
+        lambda e: _d(acao="preparar_consulta", entrega="calculo", atende=[0], objetivo=cad(),
+                     parametros=_agregacao("contagem_distinta:ZZB_COD") + [
+                         {"codigo": "filtro-campo", "valor": "ZZF_NOME~MODUL"}]),
+    ], revisor, entregas=ENTREGAS[:1])
+    msg, res = conversas.enviar(user, conversas.nova_individual(user), "quantos módulos tem hoje na ativa?", p)
+    assert _ok(res), msg.texto
+    assert "6" in _texto(res) and "8" not in _texto(res), _texto(res)
+    obs = [o.get("motivo", "") for e in p.entradas for o in (e.observacoes or [])]
+    assert any("não identificou quais são módulos" in m for m in obs), "o problema concreto chega ao modelo"
+
+
+def test_modulo_com_duas_movimentacoes_conta_uma_vez(modulos, novo_usuario, politica):
+    """Duas movimentações do mesmo módulo (histórico) contam um módulo só, pela chave da unidade."""
+    with sqlite3.connect(modulos) as db:
+        db.execute("DELETE FROM ZZM010")
+        db.executemany("INSERT INTO ZZM010 VALUES (?,?,?,?,?,?)", [
+            ("01", "M00005", "001", "20261101", "T", " "), ("01", "M00005", "002", "20261120", "T", " "),
+            ("01", "M00004", "001", "20261110", "T", " ")])
+    user = _usuario(novo_usuario, politica, "comercial")
+    p = Operador([
+        _criar("ZZM", "contagem_distinta:ZZM_COD", [0], "Modulos transferidos", ["ZZM_COD", "ZZM_TIPO"]),
+    ], lambda plan: _aprovado(), entregas=ENTREGAS[:1])
+    msg, res = conversas.enviar(user, conversas.nova_individual(user), "quantos módulos tiveram transferência?", p)
+    assert _ok(res), msg.texto
+    assert res.totais.medidas[0].valor == 2  # 3 movimentações, 2 módulos
+
+
+def test_mesma_consulta_com_outro_nome_nao_e_tentativa_nova():
+    a = validar(_d(acao="criar_consulta", consulta={"tabela": "ZZB", "nome": "Modulos", "colunas": ["ZZB_COD"]}), [], [])
+    b = validar(_d(acao="criar_consulta", consulta={"tabela": "ZZB", "nome": "Bens", "descricao": "x",
+                                                    "colunas": ["ZZB_COD"]}), [], [])
+    assert agente._assinatura(a) == agente._assinatura(b)
+
+
+def test_literal_do_termo_tolerante_passa_no_sql_server():
+    from iativa.query.executor import embutir_literais
+    from iativa.query.plano import padrao_palavra
+    assert padrao_palavra("módulo") == "M_D_L_"
+    assert "'M_D_L_%'" in embutir_literais("SELECT 1 WHERE X LIKE ?", ("M_D_L_%",))

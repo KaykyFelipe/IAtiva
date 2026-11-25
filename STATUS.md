@@ -4,6 +4,23 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **Etapa 7 aprovada em 2026-11-16 por Diego; em andamento.** Feito: roteiro do piloto (`docs/piloto/ROTEIRO.md`) e auditoria de não armazenamento (`manage.py auditar_armazenamento`). Falta: usuários do Financeiro, conferência dos números com relatórios do Protheus, avaliação da interpretação e latência. Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M155 — filtro por palavra no SQL Server, entrega do que foi comprovado e problema concreto (2026-11-25)
+- Caso: “quantos módulos tem hoje na ativa, disponíveis e deslocados” respondeu só a lista do que faltava (registro M149 nº 4).
+- Reconstrução: a 1ª consulta contou todos os bens e a revisão disse o problema concreto (a entidade não foi restringida). O modelo tentou restringir pela família de bens, que era o caminho certo. As duas execuções seguintes foram recusadas pelo executor (“Valor fora do formato permitido”), e a repetição encerrou o pedido.
+- Primeira decisão que travou: o termo do “contém” tolerante a acento (M154) usa `_`, que o literal seguro do SQL Server não aceitava. Nos testes com sqlite não há literal embutido, por isso não apareceu. A mesma recusa desligava a sonda de termos no servidor.
+- Correções gerais:
+  - `_` aceito no literal seguro (curinga de um caractere; nunca aspas, ponto e vírgula ou comentário);
+  - “contém” do `filtro-campo` e sonda de termos passam a casar por início de palavra (`LIKE_PALAVRA`), com ou sem acento: um termo não acha outra palavra que só o contém (ex.: “disponível” em “indisponível”);
+  - revisão reprovada entrega junto o que já foi aprovado (ex.: o total) e, se faltar definição, a pergunta vem com essa parte;
+  - o encerramento diz o problema concreto da revisão e separa falha técnica (validador/ERP) de falta de dado ou definição, em vez de repetir as entregas pedidas;
+  - contagens de uma mesma pergunta saem numa tabela “Situação | Quantidade” com a data de referência; cada valor é calculado no banco, sem somar situações para formar o total;
+  - consulta com a mesma tabela, colunas e filtros e só outro nome não conta como tentativa nova.
+- Testes em `tests/test_m154_descoberta_restrita.py`:
+  - o 1º plano conta todos os bens, a revisão aponta o problema e o 2º conta só os módulos pela família;
+  - um módulo com duas movimentações é contado uma vez;
+  - o literal tolerante é aceito no SQL Server;
+  - a pergunta de definição vem com o total comprovado e a resposta curta retoma o pedido.
+- Limite conhecido: a situação “hoje” derivada do último evento vigente de cada unidade (movimentação com retorno/cancelamento) ainda não é calculada; vale a situação registrada no cadastro.
 ## Mudança M154 — pergunta inédita: descoberta restrita, revisão com evidência do backend e definição perguntada na hora (2026-11-25)
 - Caso: “quantos módulos tem hoje na ativa, disponíveis e deslocados” (registro M149 nº 3). A mesma consulta aprendida foi decidida três vezes, “na Ativa” virou categoria de status e o pedido terminou sem resposta.
 - Causas encontradas no fluxo real:

@@ -474,6 +474,39 @@ def resumo_lado_a_lado(resultados, rotulos):
                      linhas=linhas, escopo=escopo)
 
 
+def resumo_situacoes(resultados, rotulos):
+    """M155: várias contagens de uma mesma pergunta (ex.: total, disponíveis, deslocados) numa tabela de duas colunas,
+    Situação e Quantidade. Cada valor é o total calculado no banco por aquela consulta; nada é somado aqui (o total
+    só é soma das situações quando a própria consulta do total o comprova). Zero apurado aparece como 0."""
+    from django.utils import timezone
+
+    from iativa.query.servico import Resultado
+
+    if len(resultados) < 2 or len(resultados) != len(rotulos) or not all(rotulos):
+        return None
+    valores, premissas = [], []
+    for r in resultados:
+        totais = getattr(r, "totais", None)
+        if not getattr(r, "ok", False) or getattr(r, "truncado", False):
+            return None
+        categorias = (getattr(r, "evidencia", None) or {}).get("categorias_pedidas")
+        if (totais and len(totais.medidas) == 1 and totais.medidas[0].funcao in ("COUNT", "COUNT_DISTINCT")
+                and len(r.linhas) <= 1 and not categorias):
+            valores.append(int(totais.medidas[0].valor))  # total único (sem quebra por filial ou grupo)
+        elif (categorias and getattr(r, "medida_calculada", "") == "contagem" and len(r.colunas) == 2
+              and r.tipos[1] == "inteiro" and r.linhas):
+            # Contagem por categorias do domínio (códigos distintos, um por registro): a entrega é a soma delas.
+            valores.append(sum(int(str(l[1]).replace(".", "") or 0) for l in r.linhas))
+        else:
+            return None
+        premissas += [p for p in (r.premissas or []) if p not in premissas]
+    hoje = timezone.localdate()
+    return Resultado(True, f"Posição em {hoje:%d/%m/%Y}.", colunas=["Situação", "Quantidade"],
+                     tipos=["texto", "inteiro"], linhas=[[r, str(v)] for r, v in zip(rotulos, valores)],
+                     premissas=[f"Data de referência: {hoje:%d/%m/%Y} (posição atual do cadastro)."] + premissas[:12],
+                     escopo=getattr(resultados[0], "escopo", {}), medida_calculada="contagem")
+
+
 def detalhe_eventos_separados(user, conversa, itens, objetivos, defs, escopo_resumo):
     from iativa.accounts.filiais import rotulo
     from iativa.query.servico import Resultado, _valores

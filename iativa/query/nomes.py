@@ -53,8 +53,8 @@ def _padrao_termo(radical: str) -> str:
 
 
 def termos_no_cadastro(cat, mestre, termos, filial, visivel, timeout_s=10) -> dict:
-    """M154: quantos registros de um cadastro de domínio (família, status, tipo...) têm cada termo do pedido no
-    nome. Devolve {"campo_nome": ..., "contagens": {termo: n}}: só contagens (agregado), nunca nomes ou códigos.
+    """M154: quantos registros de um cadastro de domínio (família, status, tipo...) têm alguma palavra do nome
+    iniciada por cada termo do pedido (M155: "DISPON" não conta "INDISPONIVEL"). Devolve {"campo_nome": ..., "contagens": {termo: n}}: só contagens (agregado), nunca nomes ou códigos.
     Mostra ao modelo, sem dados, que "módulo" é uma família de bens (filtrar por ela) ou que "deslocado" não é
     nenhum status (falta a definição). Cadastro grande não é sondado; a leitura passa pelo mesmo validador."""
     campo_nome = _campo_nome(mestre, "", visivel)
@@ -69,7 +69,7 @@ def termos_no_cadastro(cat, mestre, termos, filial, visivel, timeout_s=10) -> di
         p = Plano(objetivo="termos-do-cadastro", base=mestre.alias, filial=filial)
         if mestre.campo_filial:
             p.filtros.append(Filtro(Campo("e1", mestre.campo_filial), "=", filial))
-        p.filtros.append(Filtro(Campo("e1", campo_nome), "LIKE", _padrao_termo(termo)))
+        p.filtros.append(Filtro(Campo("e1", campo_nome), "LIKE_PALAVRA", _padrao_termo(termo).strip("%")))
         p.colunas = [Coluna("n", Campo("e1", chave[0]), "COUNT_DISTINCT", "inteiro")]
         comp = compilar(p, cat, 1)
         validar(comp.sql, permitidas, 2)

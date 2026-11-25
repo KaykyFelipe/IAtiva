@@ -96,7 +96,9 @@ def _ciclo() -> dict:
 
 
 def _assinatura(d) -> str:
-    return json.dumps([d.acao, d.objetivo, sorted(d.parametros), d.alvo, d.nota, d.consulta, d.regra, d.investigacao,
+    # M155: o nome e a descrição da consulta não mudam o método; mesma tabela, colunas e filtros = mesma tentativa.
+    consulta = {k: v for k, v in (d.consulta or {}).items() if k not in ("nome", "descricao")} if d.consulta else None
+    return json.dumps([d.acao, d.objetivo, sorted(d.parametros), d.alvo, d.nota, consulta, d.regra, d.investigacao,
                        d.ajuste, d.calculo],
                       sort_keys=True, ensure_ascii=False, default=str)
 
@@ -697,6 +699,7 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
     feitas, observacoes, saida = set(), list(observacoes or []), None
     parametros_recusados = set()
     planos_reprovados = set()
+    previa_comprovada = None  # M155: blocos aprovados pela revisão antes de uma reprovação parcial
     reprovacoes_objetivo = {}  # M154: quantas vezes a revisão reprovou cada consulta nesta mensagem
     previa = None  # etapa intermediária concluída (ex.: a lista) que a próxima etapa completa
     previa_parte = None  # M41: resposta já conferida da 1ª pergunta de uma mensagem com várias
@@ -1191,29 +1194,31 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
                 if d.acao == "preparar_consulta":
                     planos_reprovados.add((d.objetivo, tuple(sorted(d.parametros))))
                     reprovacoes_objetivo[d.objetivo] = reprovacoes_objetivo.get(d.objetivo, 0) + 1
-                pergunta = pergunta_de_definicao(falta_rev)
-                if pergunta:
-                    # M154: a revisão concluiu que falta uma definição de negócio que só a pessoa sabe (ex.: o que a
-                    # operação chama de "deslocado"). Pergunta já, enquanto ajuda; nada reprovado vai junto. A resposta
-                    # curta retoma este pedido (`pedido_esclarecido`).
-                    ac.anotar("revisao", "definicao_pendente")
-                    return _fechar(ac, user, c, mensagem_id,
-                                   Saida(pergunta, {"tipo": "esclarecimento", "pedido_original": texto[:1000]}),
-                                   coord.PERGUNTA)
                 preservadas.intersection_update(ac.cumpridas)
                 passos_verificados = [p for p in passos_verificados if set(p["atende"]) <= preservadas]
-                ac.revisoes += 1
-                ac.reprovada = falta_rev
-                andamento.avisar("A resposta não atendia ao pedido; tentando de outro jeito")
-                if ac.revisoes > revisao.tentativas():
-                    causa = "revisao_reprovada"
-                    break
-                ac.cumpridas, ac.entregue, previa = sorted(preservadas), "", None
+                comprovada = None  # M155: só os blocos que a revisão aprovou (ex.: o total), nunca os reprovados
                 titulos_validos = {ac.contrato[i]["descricao"] for i in preservadas}
                 for bloco in _blocos(saida.resultado):
                     if getattr(bloco, "titulo_entrega", "") in titulos_validos:
                         parte = Saida("", {}, resultado=bloco)
-                        previa = _juntar(previa, parte) if previa else parte
+                        comprovada = _juntar(comprovada, parte) if comprovada else parte
+                pergunta = pergunta_de_definicao(falta_rev)
+                if pergunta:
+                    # M154: a revisão concluiu que falta uma definição de negócio que só a pessoa sabe (ex.: o que a
+                    # operação chama de "deslocado"). Pergunta já, enquanto ajuda. M155: o que já foi comprovado
+                    # (ex.: o total) vai junto; nada reprovado aparece. A resposta curta retoma este pedido.
+                    ac.anotar("revisao", "definicao_pendente")
+                    duvida = Saida(pergunta, {"tipo": "esclarecimento", "pedido_original": texto[:1000]})
+                    return _fechar(ac, user, c, mensagem_id,
+                                   _juntar(comprovada, duvida) if comprovada else duvida, coord.PERGUNTA)
+                ac.revisoes += 1
+                ac.reprovada = falta_rev
+                previa_comprovada = comprovada
+                andamento.avisar("A resposta não atendia ao pedido; tentando de outro jeito")
+                if ac.revisoes > revisao.tentativas():
+                    causa = "revisao_reprovada"
+                    break
+                ac.cumpridas, ac.entregue, previa = sorted(preservadas), "", comprovada
                 ac.anotar("revisao", "entrega_nao_atende", "")
                 observacoes.append(Observacao("revisao", "entrega_nao_atende", falta_rev))
                 entrada = replace(entrada, planejamento={**entrada.planejamento, 'pendentes': ac.pendentes(),
@@ -1266,10 +1271,11 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
                         saida.solicitacao = None  # repetir um único evento não refaz os dois
             elif (len(ac.contrato) > 1 and not ac.pendentes() and all(
                     e.get("metrica") == "contagem" and e.get("tipo") == coord.CALCULO for e in ac.contrato)):
-                from .contagem import resumo_lado_a_lado, rotulos_curtos
+                from .contagem import resumo_lado_a_lado, resumo_situacoes, rotulos_curtos
                 blocos = _blocos(saida.resultado)
                 titulos = [getattr(r, "titulo_entrega", "") for r in blocos]
-                resumo = resumo_lado_a_lado(blocos, rotulos_curtos(titulos) if all(titulos) else titulos)
+                rotulos = rotulos_curtos(titulos) if all(titulos) else titulos
+                resumo = resumo_lado_a_lado(blocos, rotulos) or resumo_situacoes(blocos, rotulos)
                 if resumo is not None and len(blocos) == len(ac.contrato):
                     saida.resultado = resumo
                     saida.texto = ""
@@ -1303,7 +1309,8 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
     if ac.reprovada:
         # M109: a última resposta montada foi reprovada pelo revisor: nada dela vai para a pessoa; vai para a
         # manutenção com o que faltava (que corrige e refaz o pedido, que passa pelo revisor de novo).
-        causa, saida, previa = "revisao_reprovada", Saida("", {}), None
+        # M155: o que a revisão já aprovou (ex.: o total) é entregue junto com o problema concreto que falta resolver.
+        causa, saida, previa = "revisao_reprovada", Saida("", {}), previa_comprovada
         ac.capacidade = ac.capacidade or ac.reprovada[:300]
     return _encerrar_sem_cumprir(ac, user, c, mensagem_id, saida, previa, causa, observacoes)
 
@@ -1482,8 +1489,17 @@ def _encerrar_sem_cumprir(ac, user, c, mensagem_id, saida, previa, causa, observ
                 if pergunta:
                     final = Saida(pergunta, {**ficha, "tipo": "esclarecimento", "pedido_original": ac.texto[:1000]})
                 else:
-                    final = Saida(f"Não consegui confirmar com os dados consultados: {lacuna}." + aviso,
-                                  {**ficha, "tipo": "impedimento_dados"})
+                    # M155: nunca devolver só a lista do que foi pedido: diz o problema concreto encontrado pela
+                    # revisão e separa a falha técnica real (validador, ERP) da falta de dado ou definição.
+                    problema = orientacao.strip().rstrip(".") or lacuna
+                    tecnica = next((o.detalhe for o in reversed(observacoes or [])
+                                    if o.situacao in (ERRO_METADADOS, ERRO_PARAMETROS)
+                                    and ("validador" in o.detalhe or "recusad" in o.detalhe)), "")
+                    texto_final = f"Ainda não consegui responder com segurança. O que falta resolver: {problema}."
+                    if tecnica:
+                        texto_final += (" Uma das tentativas parou numa falha técnica do sistema ("
+                                        + tecnica.rstrip(".")[:160] + "); isso não é falta de dado nem de definição.")
+                    final = Saida(texto_final + aviso, {**ficha, "tipo": "impedimento_dados"})
             else:
                 final = Saida(f"{texto}\n\n{falta}." + (f" Tentei: {tentei}." if tentei else "")
                               + " Não vou repetir a mesma tentativa nem dizer que está pronto." + aviso, ficha)
