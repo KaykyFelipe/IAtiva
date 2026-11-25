@@ -33,6 +33,14 @@ class FalhaModelo(RuntimeError):
         self.temporaria = temporaria
 
 
+class FalhaDecisao(FalhaModelo):
+    """Decisão recusada pelo adaptador antes de chegar ao laço de recuperação."""
+    def __init__(self, erro):
+        super().__init__("Resposta do modelo fora do contrato permitido.")
+        campo = str(erro)
+        self.campo = campo if re.fullmatch(r"[a-z_]+(?:\.[a-z_]+)*", campo) else "formato"
+
+
 class LLMProvider:
     nome = "base"
 

@@ -9,6 +9,7 @@
 - Registro M149 inspecionado no servidor autorizado: a revisão rejeitou duas consultas ao mesmo objetivo e a terceira decisão repetiu a consulta. O registro histórico não identifica o modelo da chamada.
 - Planos de consulta reprovados que o agente tentaria executar novamente acionam a descoberta existente dentro das permissões e do orçamento. A revisão devolve ao modelo colunas e lacuna, e pode preservar blocos independentes identificados sem ambiguidade. O catálogo é atualizado antes de continuar uma entrega pendente.
 - Ensaio transacional com o provedor real confirmou descoberta e revisão, mas o agrupamento da operação não foi comprovado. A descoberta agora aceita esclarecimentos com opções e o encerramento usa a lacuna específica da revisão.
+- Os adaptadores Claude e ChatGPT agora identificam o campo inválido de uma decisão estruturada para que o ciclo possa pedir a correção desse campo.
 - Testes de regressão em `tests/test_m153_replanejamento.py`, além do fluxo de recuperação em `tests/test_m109_revisao.py`.
 
 ## Mudança M152 — pergunta nova não reaproveita resultado antigo; cadastro dividido pela filial base (2026-11-25)

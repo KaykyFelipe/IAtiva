@@ -7,7 +7,7 @@ from django.core.exceptions import ImproperlyConfigured
 
 from . import codex_login, decisao, esquema, prazo
 from .codex_rpc import PERFIL_ATENDIMENTO
-from .provedores import FalhaModelo, LLMProvider, INSTRUCOES, INSTRUCOES_AGENTE, _codigos, _catalogo, _renderizar, _contexto_agente
+from .provedores import FalhaDecisao, FalhaModelo, LLMProvider, INSTRUCOES, INSTRUCOES_AGENTE, _codigos, _catalogo, _renderizar, _contexto_agente
 
 
 def schema_estrito(schema):
@@ -73,7 +73,9 @@ class CodexProvider(LLMProvider):
                     try:
                         raw = json.loads(texto)
                         validar(raw, objetivos, parametros)
-                    except (ValueError, TypeError, esquema.SaidaInvalida, decisao.DecisaoInvalida):
+                    except decisao.DecisaoInvalida as exc:
+                        raise FalhaDecisao(exc) from None
+                    except (ValueError, TypeError, esquema.SaidaInvalida):
                         raise FalhaModelo('Resposta do ChatGPT fora do contrato permitido.') from None
                     return raw
             raise FalhaModelo('ChatGPT excedeu o limite de eventos.')

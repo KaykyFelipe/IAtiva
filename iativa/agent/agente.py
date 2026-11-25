@@ -43,7 +43,7 @@ from .contratos import BUSCA, OBJETIVOS, PARAMETROS_APRENDIDOS, objetivos_para
 from .conversao import exibir
 from .decisao import Decisao, DecisaoInvalida, EntradaAgente, validar
 from .models import ConsultaModelo, SituacaoModelo
-from .provedores import FalhaModelo, obter_provedor
+from .provedores import FalhaDecisao, FalhaModelo, obter_provedor
 
 class Interrompido(Exception):
     """A pessoa clicou em "parar" enquanto a IA pensava: nada desta mensagem é aplicado."""
@@ -261,16 +261,14 @@ def _interpretar(provedor, entrada, codigos_obj, codigos_par):
     e, depois de 3 recusas iguais, o pedido parava como "a IA não respondeu a tempo")."""
     import logging
     for _ in range(TENTATIVAS):
+        bruta = None
         try:
             from . import tempos
             with tempos.medir("decisao"):
                 bruta = provedor.decidir(entrada)
             return validar(bruta, codigos_obj, codigos_par)
-        except FalhaModelo as exc:
-            if exc.temporaria:
-                raise  # o provedor já esperou e tentou outros modelos
-        except DecisaoInvalida as exc:
-            motivo = str(exc)[:120]
+        except (DecisaoInvalida, FalhaDecisao) as exc:
+            motivo = exc.campo if isinstance(exc, FalhaDecisao) else str(exc)[:120]
             acao = str(bruta.get("acao", ""))[:40] if isinstance(bruta, dict) else ""
             logging.getLogger(__name__).warning("decisao_invalida: campo=%s acao=%s", motivo, acao)
             entrada = replace(entrada, observacoes=list(getattr(entrada, "observacoes", None) or []) + [{
@@ -279,6 +277,9 @@ def _interpretar(provedor, entrada, codigos_obj, codigos_par):
                            "esquema: só os campos previstos, códigos de objetivo e de parâmetro da lista, filtros com "
                            "operador 'igual' ou 'diferente', tabela com 3 letras e campos com o nome técnico.")}])
             continue
+        except FalhaModelo as exc:
+            if exc.temporaria:
+                raise
     raise FalhaModelo("sem decisão válida")
 
 

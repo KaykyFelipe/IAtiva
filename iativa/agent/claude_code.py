@@ -16,7 +16,7 @@ from django.core.exceptions import ImproperlyConfigured
 
 from . import decisao, esquema
 from .provedores import (
-    FalhaModelo, LLMProvider, INSTRUCOES, INSTRUCOES_AGENTE,
+    FalhaDecisao, FalhaModelo, LLMProvider, INSTRUCOES, INSTRUCOES_AGENTE,
     _catalogo, _codigos, _contexto_agente, _renderizar,
 )
 
@@ -210,7 +210,9 @@ class ClaudeCodeProvider(LLMProvider):
             raise FalhaModelo("Claude Code não devolveu a saída estruturada solicitada.")
         try:
             validar(raw, objetivos, parametros)
-        except (esquema.SaidaInvalida, decisao.DecisaoInvalida):
+        except decisao.DecisaoInvalida as exc:
+            raise FalhaDecisao(exc) from None
+        except esquema.SaidaInvalida:
             raise FalhaModelo("Resposta do Claude fora do contrato permitido.") from None
         return raw
 

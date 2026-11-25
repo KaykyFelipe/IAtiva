@@ -213,3 +213,16 @@ def test_comando_diagnostico_sem_envio(provider, monkeypatch):
     call_command("testar_claude", stdout=out)
     assert "login Claude confirmado" in out.getvalue()
     assert not any("-p" in c[0] for c in calls)
+
+
+def test_correcao_do_campo_rejeitado_pela_cli(provider, monkeypatch):
+    from iativa.agent.agente import _interpretar
+    chamadas = []
+    def gerar(args, prompt):
+        chamadas.append(prompt)
+        raw = decisao() if len(chamadas) > 1 else {**decisao(), "objetivo": "inexistente"}
+        return 0, json.dumps({"type": "result", "subtype": "success", "structured_output": raw}), ""
+    monkeypatch.setattr(provider, "verificar", lambda: None)
+    monkeypatch.setattr(provider, "_executar", gerar)
+    assert _interpretar(provider, entrada(), ["teste"], ["data"]).acao == "conversar"
+    assert len(chamadas) == 2 and "campo 'objetivo'" in chamadas[1]
