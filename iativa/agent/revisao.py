@@ -74,7 +74,7 @@ def deterministico(blocos: list[dict]) -> str:
     return ""
 
 
-def revisar(user, provedor, texto: str, contrato: list, saida) -> str:
+def revisar(user, provedor, texto: str, contrato: list, saida, *, preservadas=None) -> str:
     """'' = aprovado; caso contrário, devolve o motivo para o atendimento retentar."""
     if not ligado():
         return ""
@@ -111,5 +111,12 @@ def revisar(user, provedor, texto: str, contrato: list, saida) -> str:
               if isinstance(e, dict) and str(e.get("descricao", "")).strip()]
     if not faltas:
         return ""
+    if preservadas is not None:
+        descricoes = [item.get("descricao") for item in contrato]
+        # Uma reprovação geral ou parafraseada não identifica blocos independentes.
+        if set(faltas) <= set(descricoes):
+            titulos = [b["titulo"] for b in blocos]
+            preservadas.update(i for i, desc in enumerate(descricoes)
+                               if desc not in faltas and descricoes.count(desc) == 1 and titulos.count(desc) == 1)
     como = str(a.get("resumo") or "").strip()
     return ("A resposta montada não atende: " + "; ".join(faltas) + "." + (f" Como corrigir: {como}" if como else ""))[:600]

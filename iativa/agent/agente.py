@@ -639,6 +639,7 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
     ac = acomp or coord.Acompanhamento(texto)
     feitas, observacoes, saida = set(), list(observacoes or []), None
     parametros_recusados = set()
+    planos_reprovados = set()
     previa = None  # etapa intermediária concluída (ex.: a lista) que a próxima etapa completa
     previa_parte = None  # M41: resposta já conferida da 1ª pergunta de uma mensagem com várias
     resultado_base = None  # M45: última consulta desta mensagem; só em memória, autorizada pelo backend
@@ -839,6 +840,15 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
                 if candidata not in feitas:
                     d, assinatura = alternativa, candidata
                     break
+        # Se a decisão executaria de novo a consulta rejeitada, use o dicionário
+        # e o mesmo fluxo autorizado de criação de consulta, dentro do orçamento do pedido.
+        if (d.acao == "preparar_consulta" and (d.objetivo, tuple(sorted(d.parametros))) in planos_reprovados
+                and pode_aprender_sozinho(user)):
+            fonte = next((o for o in objetivos if o.codigo == d.objetivo), None)
+            alvo = " ".join([texto, *fonte.tabelas]) if fonte else texto
+            descoberta = Decisao("", "aprender_tabela", "", (), alvo, "", False, ())
+            if _assinatura(descoberta) not in feitas:
+                d, assinatura = descoberta, _assinatura(descoberta)
         if assinatura in feitas:
             ac.anotar(d.acao, "acao_repetida")
             if ac.pode_cutucar():
@@ -986,6 +996,13 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
         ev = coord.evidencia(d, saida, texto)  # o que ESTA ação entregou (antes de juntar com a etapa anterior)
         if saida.observacao is not None and saida.observacao.situacao == ERRO_PARAMETROS:
             parametros_recusados.add(assinatura)
+        if ev and d.acao in ("aprender_tabela", "criar_consulta", "ajustar_filtro", "voltar_filtro"):
+            # M40: a consulta criada/ajustada neste passo precisa estar entre as que o modelo pode escolher.
+            objetivos = objetivos_para(user)
+            codigos_par = sorted({cod for o in objetivos for cod in o.parametros} | set(PARAMETROS_APRENDIDOS))
+            defs = orq._definicoes(codigos_par)
+            entrada = replace(entrada, objetivos=_catalogo(user, objetivos, defs),
+                              aprendidos=_aprendidos(administrador))
         if ac.contrato:
             from .planejamento import registrar_entregas
             anteriores = set(ac.cumpridas)
@@ -1079,7 +1096,8 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
             titulos = [getattr(r, 'titulo_entrega', '') for r in _blocos(saida.resultado)]
             comprovadas = (separadas and ac.contrato == separadas and not ac.pendentes()
                            and sorted(titulos) == sorted(e['descricao'] for e in separadas))
-            falta_rev = "" if comprovadas else revisao.revisar(user, provedor, texto, ac.contrato, saida)
+            preservadas = set()
+            falta_rev = "" if comprovadas else revisao.revisar(user, provedor, texto, ac.contrato, saida, preservadas=preservadas)
             if falta_rev == revisao.INDISPONIVEL:
                 ac.anotar("revisao", "modelo_falhou")
                 ac.reprovada = ""
@@ -1089,18 +1107,30 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
                 if receita_id:
                     aprendizado_receita.descartar(receita_id)
                     receita_id, receita_d, fila_receita = None, None, []
-                passos_verificados.clear()
+                if d.acao == "preparar_consulta":
+                    planos_reprovados.add((d.objetivo, tuple(sorted(d.parametros))))
+                preservadas.intersection_update(ac.cumpridas)
+                passos_verificados = [p for p in passos_verificados if set(p["atende"]) <= preservadas]
                 ac.revisoes += 1
                 ac.reprovada = falta_rev
                 andamento.avisar("A resposta não atendia ao pedido; tentando de outro jeito")
                 if ac.revisoes > revisao.tentativas():
                     causa = "revisao_reprovada"
                     break
-                ac.cumpridas, ac.entregue, previa = [], "", None  # o que foi reprovado não vai para a resposta
+                ac.cumpridas, ac.entregue, previa = sorted(preservadas), "", None
+                titulos_validos = {ac.contrato[i]["descricao"] for i in preservadas}
+                for bloco in _blocos(saida.resultado):
+                    if getattr(bloco, "titulo_entrega", "") in titulos_validos:
+                        parte = Saida("", {}, resultado=bloco)
+                        previa = _juntar(previa, parte) if previa else parte
                 ac.anotar("revisao", "entrega_nao_atende", "")
                 observacoes.append(Observacao("revisao", "entrega_nao_atende", falta_rev))
                 entrada = replace(entrada, planejamento={**entrada.planejamento, 'pendentes': ac.pendentes(),
-                                                         'cumpridas': ac.cumpridas})
+                                                         'cumpridas': ac.cumpridas,
+                                                         'ultima_revisao': {
+                                                             'objetivo': d.objetivo,
+                                                             'colunas_obtidas': [b['colunas'] for b in revisao.descrever(saida)],
+                                                             'correcao': falta_rev}})
                 atual = _ativa(user, c)
                 continue
             if ac.reprovada:
@@ -1172,13 +1202,6 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
                 if lista is not None:
                     cobertura = base
                     entrada = replace(entrada, lista_anterior=lista)
-            if d.acao in ("aprender_tabela", "criar_consulta", "ajustar_filtro", "voltar_filtro"):
-                # M40: a consulta criada/ajustada neste passo precisa estar entre as que o modelo pode escolher.
-                objetivos = objetivos_para(user)
-                codigos_par = sorted({cod for o in objetivos for cod in o.parametros} | set(PARAMETROS_APRENDIDOS))
-                defs = orq._definicoes(codigos_par)
-                entrada = replace(entrada, objetivos=_catalogo(user, objetivos, defs),
-                                  aprendidos=_aprendidos(administrador))
             observacoes.append(Observacao(d.acao, coord.ETAPA, ac.falta_obs(_consulta_recente(user, c))))
             andamento.avisar("Etapa concluída; ainda falta parte do pedido" if ac.exig != coord.VERIFICACAO
                              else "Lista pronta; agora vou verificar cada pessoa")
@@ -2061,6 +2084,7 @@ def _aprender_sozinho(user, c, d, texto, ficha, provedor, entrada, atual, motivo
                 lista = [{"alias": a} for a in indicadas]
             else:
                 tentadas = set(entrada.planejamento.get("fontes_inconclusivas", []))
+                tentadas.update(entrada.planejamento.get("fontes_vazias", []))
                 lista = candidatos(user, d.alvo or texto, limite=3 + len(tentadas), automatico=True)
                 lista = [item for item in lista if item["alias"] not in tentadas][:3]
         except Exception:

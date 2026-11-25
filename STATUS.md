@@ -4,6 +4,12 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **Etapa 7 aprovada em 2026-11-16 por Diego; em andamento.** Feito: roteiro do piloto (`docs/piloto/ROTEIRO.md`) e auditoria de não armazenamento (`manage.py auditar_armazenamento`). Falta: usuários do Financeiro, conferência dos números com relatórios do Protheus, avaliação da interpretação e latência. Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M153 — descoberta após revisão de consulta inédita
+
+- Registro M149 inspecionado no servidor autorizado: a revisão rejeitou duas consultas ao mesmo objetivo e a terceira decisão repetiu a consulta. O registro histórico não identifica o modelo da chamada.
+- Planos de consulta reprovados que o agente tentaria executar novamente acionam a descoberta existente dentro das permissões e do orçamento. A revisão devolve ao modelo colunas e lacuna, e pode preservar blocos independentes identificados sem ambiguidade. O catálogo é atualizado antes de continuar uma entrega pendente.
+- Testes de regressão em `tests/test_m153_replanejamento.py`, além do fluxo de recuperação em `tests/test_m109_revisao.py`.
+
 ## Mudança M152 — pergunta nova não reaproveita resultado antigo; cadastro dividido pela filial base (2026-11-25)
 
 - Caso: “quantos veículos tem a empresa?” trouxe primeiro uma “Soma” sem sentido e, abaixo, a tabela por filial com números acima do real na Matriz.

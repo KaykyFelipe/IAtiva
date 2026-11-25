@@ -106,7 +106,7 @@ def candidatos(user, texto: str, limite: int = 5, automatico: bool = False) -> l
         pontos: dict[str, dict] = {}
 
         def item(alias):
-            return pontos.setdefault(alias, {"alias": alias, "pontos": 0, "termos": set(), "campos": []})
+            return pontos.setdefault(alias, {"alias": alias, "pontos": 0, "termos": set(), "campos": [], "termos_campos": set()})
 
         for alias, nome in tabelas:
             achados = radicais & _radicais(nome)
@@ -119,7 +119,8 @@ def candidatos(user, texto: str, limite: int = 5, automatico: bool = False) -> l
             if achados:
                 i = item(alias)
                 i["termos"] |= achados
-                i["pontos"] += 1
+                i["pontos"] += len(achados - i["termos_campos"])
+                i["termos_campos"].update(achados)
                 if len(i["campos"]) < 5:
                     i["campos"].append({"campo": campo, "titulo": titulo})
         for alias in citados:
