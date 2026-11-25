@@ -1,24 +1,52 @@
-<section class="ia-provider" aria-labelledby="gemini-titulo">
+<section class="ia-provider" id="gemini-cartao" aria-labelledby="gemini-titulo"
+ {% if c.gemini.fluxo.fase == 'iniciando' or c.gemini.fluxo.fase == 'confirmando' %}hx-get="{% url 'gemini-estado' c.gemini.fluxo.id %}" hx-trigger="every 2s" hx-target="this" hx-swap="outerHTML"{% endif %}>
   <header class="ia-provider-heading">
     <span class="ia-provider-mark" aria-hidden="true">G</span>
-    <div><h3 id="gemini-titulo">Gemini</h3><p>Google AI Studio · Gemini CLI</p></div>
+    <div><h3 id="gemini-titulo">Gemini</h3><p>Conta Google · Gemini CLI</p></div>
   </header>
-  {% if c.gemini.erro %}<p role="alert">{{ c.gemini.erro }}</p>{% endif %}
-  {% if c.gemini.mensagem %}<p role="status">{{ c.gemini.mensagem }}</p>{% endif %}
-  <p class="ia-help">{% if c.gemini.ativo %}Conexão verificada{% else %}Aguardando chave do Google AI Studio{% endif %}</p>
-  <form method="post" action="{% url 'gemini-conta' %}#gemini-titulo" class="ia-model-form">
-    {% csrf_token %}<input type="hidden" name="perfil" value="atendimento">
-    <label for="gemini-chave">Chave do Google AI Studio</label>
-    <input id="gemini-chave" name="chave" type="password" autocomplete="new-password" maxlength="200"{% if not c.gemini.ativo %} required{% endif %}>
-    <label for="gemini-modelo">ID do modelo</label>
-    <input id="gemini-modelo" name="modelo" value="{{ c.gemini.modelo }}" placeholder="Padrão da CLI" maxlength="80">
-    <button name="acao" value="conectar" class="secundario">{% if c.gemini.ativo %}Verificar e salvar{% else %}Conectar Gemini{% endif %}</button>
-  </form>
-  {% if c.gemini.ativo %}
-  <form method="post" action="{% url 'gemini-conta' %}#gemini-titulo" class="ia-catalog-form">
-    {% csrf_token %}<input type="hidden" name="perfil" value="atendimento">
-    {% if c.provedor_atual != 'gemini' %}<button name="acao" value="usar" class="secundario">Usar neste agente</button>{% endif %}
-    <button name="acao" value="desconectar" class="ia-text-button">Desconectar Gemini</button>
-  </form>
+  {% if c.gemini.erro %}<p class="ia-feedback ia-feedback-error" role="alert">{{ c.gemini.erro }}</p>{% endif %}
+  {% if c.gemini.mensagem or c.gemini.fluxo.mensagem %}<p class="ia-feedback" role="status">{% if c.gemini.mensagem %}{{ c.gemini.mensagem }}{% else %}{{ c.gemini.fluxo.mensagem }}{% endif %}</p>{% endif %}
+  {% if c.gemini.fluxo.fase == 'aguardando' %}
+    <div class="ia-login">
+      <a class="ia-login-link" href="{{ c.gemini.fluxo.url }}" target="_blank" rel="noopener noreferrer">Abrir login do Google ↗</a>
+      <form method="post" action="{% url 'gemini-conta' %}#gemini-cartao" autocomplete="off">
+        {% csrf_token %}<input type="hidden" name="perfil" value="atendimento"><input type="hidden" name="fluxo" value="{{ c.gemini.fluxo.id }}">
+        <label for="gemini-codigo">Código de autorização do Google</label>
+        <input id="gemini-codigo" name="codigo" type="password" autocomplete="off" maxlength="1024" required>
+        <button name="acao" value="concluir">Concluir conexão</button>
+      </form>
+    </div>
+  {% endif %}
+  {% if c.gemini.fluxo.pendente %}
+    <form method="post" action="{% url 'gemini-conta' %}#gemini-cartao">
+      {% csrf_token %}<input type="hidden" name="perfil" value="atendimento"><input type="hidden" name="fluxo" value="{{ c.gemini.fluxo.id }}">
+      <button name="acao" value="cancelar" class="ia-text-button">Cancelar conexão</button>
+    </form>
+  {% elif c.gemini.ativo %}
+    <p class="ia-help">Conta Google conectada{% if c.provedor_atual == 'gemini' %} · Em uso neste agente{% endif %}</p>
+    <form method="post" action="{% url 'gemini-conta' %}#gemini-cartao" class="ia-catalog-form">
+      {% csrf_token %}<input type="hidden" name="perfil" value="atendimento">
+      {% if c.provedor_atual != 'gemini' %}<button name="acao" value="usar" class="secundario">Usar Gemini neste agente</button>{% endif %}
+      <button name="acao" value="desconectar" class="ia-text-button">Desconectar Gemini</button>
+    </form>
+    <details class="ia-models">
+      <summary><span>Modelo</span><span class="ia-model-current">{{ c.gemini.modelo|default:'Padrão da CLI' }}</span></summary>
+      <form method="post" action="{% url 'gemini-conta' %}#gemini-cartao" class="ia-model-form">
+        {% csrf_token %}<input type="hidden" name="perfil" value="atendimento">
+        <label for="gemini-modelo">ID do modelo</label>
+        <input id="gemini-modelo" name="modelo" value="{{ c.gemini.modelo }}" placeholder="Padrão da CLI" maxlength="80">
+        <p class="ia-help">A disponibilidade depende da sua conta Google. Salvar faz uma consulta de verificação.</p>
+        <button name="acao" value="modelo" class="secundario">Verificar e salvar modelo</button>
+      </form>
+    </details>
+  {% else %}
+    <form method="post" action="{% url 'gemini-conta' %}#gemini-cartao" class="ia-model-form">
+      {% csrf_token %}<input type="hidden" name="perfil" value="atendimento">
+      <button name="acao" value="conectar">Entrar com Google</button>
+      <details class="ia-manage"><summary>Opções para contas de empresa</summary>
+        <label for="gemini-projeto">ID do projeto Google Cloud</label>
+        <input id="gemini-projeto" name="projeto" maxlength="30" placeholder="Opcional">
+      </details>
+    </form>
   {% endif %}
 </section>

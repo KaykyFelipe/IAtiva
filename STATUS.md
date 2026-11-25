@@ -4,6 +4,12 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **Etapa 7 aprovada em 2026-11-16 por Diego; em andamento.** Feito: roteiro do piloto (`docs/piloto/ROTEIRO.md`) e auditoria de não armazenamento (`manage.py auditar_armazenamento`). Falta: usuários do Financeiro, conferência dos números com relatórios do Protheus, avaliação da interpretação e latência. Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M158 — login Google no Gemini CLI
+
+- O cartão Gemini de atendimento inicia a autorização nativa da CLI. O link oficial do Google é validado, o código passa uma única vez ao terminal privado e o fluxo é vinculado à sessão da pessoa.
+- A credencial é isolada por usuário e a CLI atende com uma cópia temporária do cache OAuth. A preferência de modelo é verificada com a conta conectada. Contas corporativas podem informar o projeto Google Cloud.
+- A versão instalada no servidor foi conferida até a chegada do link oficial e da solicitação de código. A etapa de consentimento depende da conta Google de quem está conectando.
+
 ## Mudança M157 — Gemini CLI nas Conexões de IA
 
 - Gemini CLI oficial com versão fixa na imagem da aplicação. O cartão Gemini do atendimento conecta com chave individual do Google AI Studio, verifica o modelo e permite selecionar o provedor.

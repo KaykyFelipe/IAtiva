@@ -22,6 +22,7 @@ urlpatterns = [
     re_path(r"^static/(?P<path>.*)$", login_not_required(lambda r, path: servir_estatico(r, path, insecure=True))),
     path("configuracoes/claude/", claude_views.conta, name="claude-conta"),
     path("configuracoes/gemini/", gemini_views.conta, name="gemini-conta"),
+    path("configuracoes/gemini/estado/<uuid:fluxo_id>/", gemini_views.estado, name="gemini-estado"),
     path("configuracoes/chatgpt/", codex_views.conta, name="chatgpt-conta"),
     path("configuracoes/chatgpt/estado/<uuid:fluxo_id>/", codex_views.estado, name="chatgpt-estado"),
     path("configuracoes/claude/estado/<uuid:fluxo_id>/", claude_views.estado, name="claude-estado"),

@@ -1,10 +1,12 @@
 """Gemini CLI para atendimento, com credencial isolada por usuário."""
+from contextlib import contextmanager
 import json
 import os
 import re
 import subprocess
 from pathlib import Path
-from tempfile import TemporaryDirectory
+from tempfile import NamedTemporaryFile, TemporaryDirectory
+from threading import RLock
 
 from django.conf import settings
 
@@ -27,10 +29,90 @@ def configuracao(user):
 
 def cartao(user):
     config = configuracao(user)
-    return {'ativo': bool(config.get('chave')), 'modelo': config.get('modelo', '')}
+    return {'ativo': ativo(user), 'modelo': config.get('modelo', '')}
 
 
-def _executar(chave, modelo, prompt):
+ARQUIVOS_OAUTH = ('oauth_creds.json', 'google_accounts.json')
+_TRAVA_LOCAL = RLock()
+
+
+@contextmanager
+def trava(user):
+    path = arquivo(user)
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    with _TRAVA_LOCAL:
+        if os.name == 'nt':
+            yield
+        else:
+            import fcntl
+            fd = os.open(path.with_suffix('.lock'), os.O_CREAT | os.O_RDWR, 0o600)
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX)
+                yield
+            finally:
+                os.close(fd)
+
+
+def versao_credencial(pasta):
+    try:
+        info = (pasta / ARQUIVOS_OAUTH[0]).stat()
+        return info.st_ino, info.st_mtime_ns, info.st_size
+    except FileNotFoundError:
+        return None
+
+
+def pasta_oauth(user):
+    return arquivo(user).with_suffix('')
+
+
+def ativo(user):
+    return (pasta_oauth(user) / ARQUIVOS_OAUTH[0]).is_file()
+
+
+def preparar_cli(root, projeto=''):
+    workspace = root / 'workspace'
+    workspace.mkdir(mode=0o700, exist_ok=True)
+    nativo = root / '.gemini'
+    nativo.mkdir(mode=0o700, exist_ok=True)
+    politica = root / 'deny.toml'
+    politica.write_text('[[rule]]\ntoolName = "*"\ndecision = "deny"\npriority = 999\n', encoding='utf-8')
+    config = nativo / 'settings.json'
+    config.write_text(json.dumps({
+        'security': {'auth': {'selectedType': 'oauth-personal'}, 'disableYoloMode': True},
+        'general': {'enableAutoUpdate': False, 'maxAttempts': 1},
+        'telemetry': {'enabled': False, 'logPrompts': False},
+        'tools': {'core': ['__iativa_sem_ferramentas__']},
+    }), encoding='utf-8')
+    ambiente = {
+        'PATH': os.defpath + os.pathsep + '/usr/local/bin',
+        'HOME': str(root), 'GEMINI_CLI_HOME': str(root), 'XDG_CACHE_HOME': str(root),
+        'TMPDIR': str(root), 'NO_BROWSER': 'true', 'TERM': 'dumb',
+        'GEMINI_FORCE_FILE_STORAGE': 'true',
+    }
+    if projeto:
+        ambiente['GOOGLE_CLOUD_PROJECT'] = projeto
+    cmd = ['gemini', '--admin-policy', str(politica), '--extensions', 'none', '--approval-mode', 'default']
+    return cmd, workspace, ambiente
+
+
+def copiar_credenciais(origem, destino, *, existentes=False):
+    """Transfere apenas os arquivos nativos de login, com gravação privada e atômica."""
+    destino.mkdir(mode=0o700, exist_ok=True)
+    for nome in ARQUIVOS_OAUTH:
+        arquivo = origem / nome
+        alvo = destino / nome
+        if not arquivo.is_file() or (existentes and not alvo.is_file()):
+            continue
+        with NamedTemporaryFile(dir=destino, delete=False) as tmp:
+            temp = Path(tmp.name)
+            tmp.write(arquivo.read_bytes())
+        try:
+            temp.replace(alvo)
+        finally:
+            temp.unlink(missing_ok=True)
+
+
+def _executar(user, modelo, prompt):
     _exigir_envio_liberado()
     restante = prazo.restante()
     if restante is not None and restante <= 0:
@@ -38,27 +120,20 @@ def _executar(chave, modelo, prompt):
     timeout = float(settings.IATIVA_AGENTE.get('timeout_s', 90))
     if restante is not None:
         timeout = min(timeout, restante)
+    origem = pasta_oauth(user)
+    if not ativo(user):
+        raise FalhaModelo('Conecte sua conta Google em Conexões de IA.')
     with TemporaryDirectory(prefix='iativa-gemini-') as pasta:
         root = Path(pasta)
-        workspace = root / 'workspace'
-        workspace.mkdir()
-        politica = root / 'deny.toml'
-        politica.write_text('[[rule]]\ntoolName = "*"\ndecision = "deny"\npriority = 999\n', encoding='utf-8')
-        config = root / 'settings.json'
-        config.write_text(json.dumps({
-            'security': {'auth': {'selectedType': 'gemini-api-key'}, 'disableYoloMode': True},
-            'general': {'enableAutoUpdate': False, 'maxAttempts': 1},
-            'telemetry': {'enabled': False, 'logPrompts': False},
-            'tools': {'core': ['__iativa_sem_ferramentas__']},
-        }), encoding='utf-8')
-        ambiente = {
-            'PATH': os.defpath + os.pathsep + '/usr/local/bin',
-            'HOME': pasta, 'GEMINI_CLI_HOME': pasta, 'XDG_CACHE_HOME': pasta,
-            'TMPDIR': pasta, 'CI': 'true', 'GEMINI_API_KEY': chave,
-            'GEMINI_CLI_SYSTEM_SETTINGS_PATH': str(config),
-        }
-        cmd = ['gemini', '--admin-policy', str(politica), '--extensions', 'none', '--output-format', 'json',
-               '--approval-mode', 'default', '--prompt', 'Responda ao pedido recebido pela entrada padrão.']
+        with trava(user):
+            inicial = versao_credencial(origem)
+            if inicial is None:
+                raise FalhaModelo('Conecte sua conta Google em Conexões de IA.')
+            cmd, workspace, ambiente = preparar_cli(root, configuracao(user).get('projeto', ''))
+            temporaria = root / '.gemini'
+            copiar_credenciais(origem, temporaria)
+            copia = versao_credencial(temporaria)
+        cmd.extend(['--output-format', 'json', '--prompt', 'Responda ao pedido recebido pela entrada padrão.'])
         if modelo:
             cmd.extend(['--model', modelo])
         try:
@@ -68,8 +143,12 @@ def _executar(chave, modelo, prompt):
             raise FalhaModelo('O Gemini CLI excedeu o prazo.', temporaria=True) from None
         except OSError:
             raise FalhaModelo('O Gemini CLI está indisponível no servidor.', temporaria=True) from None
+        if versao_credencial(temporaria) not in (None, copia):
+            with trava(user):
+                if versao_credencial(origem) == inicial:
+                    copiar_credenciais(temporaria, origem, existentes=True)
         if processo.returncode:
-            raise FalhaModelo('O Gemini CLI recusou a consulta. Confira a chave, o modelo e a cota no Google AI Studio.',
+            raise FalhaModelo('O Gemini CLI recusou a consulta. Confira a conexão Google, o modelo e a cota da conta.',
                               temporaria=True)
         try:
             dados = json.loads(processo.stdout)
@@ -81,36 +160,43 @@ def _executar(chave, modelo, prompt):
             raise FalhaModelo('O Gemini CLI devolveu uma resposta inválida.') from None
 
 
-def conectar(user, chave, modelo):
-    path = arquivo(user)
-    chave = chave.strip() or configuracao(user).get('chave', '')
+def salvar_conexao(user, origem, projeto):
+    with trava(user):
+        copiar_credenciais(origem, pasta_oauth(user))
+        conexoes.gravar_json(arquivo(user), {'projeto': projeto, 'modelo': ''})
+
+
+def salvar_modelo(user, modelo):
     modelo = modelo.strip()
-    if not re.fullmatch(r'[A-Za-z0-9_-]{20,200}', chave):
-        raise FalhaModelo('Informe uma chave válida do Google AI Studio.')
-    if modelo and not re.fullmatch(r'gemini-[a-z0-9.-]{1,72}', modelo):
-        raise FalhaModelo('Informe o ID de um modelo Gemini ou deixe o modelo padrão.')
-    _executar(chave, modelo, 'Responda somente OK.')
-    conexoes.gravar_json(path, {'chave': chave, 'modelo': modelo})
+    if modelo and not re.fullmatch(r'(?:auto|pro|flash|flash-lite|gemini-[a-z0-9.-]{1,72})', modelo):
+        raise FalhaModelo('Informe um ID Gemini válido ou deixe o modelo padrão.')
+    config = configuracao(user)
+    _executar(user, modelo, 'Responda somente OK.')
+    with trava(user):
+        if not ativo(user) or config != configuracao(user):
+            raise FalhaModelo('A conexão Gemini mudou. Verifique o modelo novamente.')
+        conexoes.gravar_json(arquivo(user), {**config, 'modelo': modelo})
 
 
 def desconectar(user):
-    arquivo(user).unlink(missing_ok=True)
-    if conexoes.preferido(user) == 'gemini':
-        conexoes.arquivo(user, 'atendimento').unlink(missing_ok=True)
+    with trava(user):
+        for nome in ARQUIVOS_OAUTH:
+            (pasta_oauth(user) / nome).unlink(missing_ok=True)
+        arquivo(user).unlink(missing_ok=True)
+        if conexoes.preferido(user) == 'gemini':
+            conexoes.arquivo(user, 'atendimento').unlink(missing_ok=True)
 
 
 class GeminiCLIProvider(LLMProvider):
     nome = 'gemini-cli'
 
     def __init__(self, user):
-        self.config = configuracao(user)
-        self.modelo = self.config.get('modelo', '')
+        self.user = user
+        self.modelo = configuracao(user).get('modelo', '')
 
     def _gerar(self, prompt, schema, _validar, _objetivos, _parametros):
-        if not self.config.get('chave'):
-            raise FalhaModelo('Reconecte o Gemini em Conexões de IA.')
         prompt += '\nResponda apenas com um objeto JSON neste esquema, sem Markdown:\n' + json.dumps(schema, ensure_ascii=False)
-        texto = _executar(self.config['chave'], self.modelo, prompt).strip()
+        texto = _executar(self.user, self.modelo, prompt).strip()
         if texto.startswith('```json') and texto.endswith('```'):
             texto = texto[7:-3].strip()
         try:
