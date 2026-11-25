@@ -15,6 +15,10 @@ MODO = "revisar_entrega"
 INDISPONIVEL = "A revisão da resposta está temporariamente indisponível."
 
 
+class ClassificacaoPendente(str):
+    """O revisor aprovou a base exibida e a classificação ainda depende da definição."""
+
+
 def ligado() -> bool:
     return bool(getattr(settings, "IATIVA_REVISAO", True))
 
@@ -112,15 +116,16 @@ def revisar(user, provedor, texto: str, contrato: list, saida, *, preservadas=No
     blocos = descrever(saida)
     if not blocos:
         return ""  # sem tabela/cálculo (conversa, pergunta, bloqueio): nada a revisar aqui
-    det = deterministico(blocos) or classificacao_sem_definicao(contrato, blocos, texto)
+    det = deterministico(blocos)
     if det:
         return det
     from . import andamento, prazo
     from .decisao import EntradaAgente
 
+    classificacao = classificacao_sem_definicao(contrato, blocos, texto)
     resta = prazo.restante()
     if resta is not None and resta < 10:
-        return ""  # M143: sem folga no prazo, preserva o resultado já validado pelo contrato em vez de descartá-lo
+        return INDISPONIVEL if classificacao else ""  # M143: sem folga no prazo, preserva o resultado já validado pelo contrato em vez de descartá-lo
     andamento.avisar("Conferindo se a resposta atende ao que você pediu")
     entrada = EntradaAgente(
         "Confira se a resposta montada atende ao pedido.", timezone.localdate().isoformat(), [], [], None,
@@ -133,7 +138,7 @@ def revisar(user, provedor, texto: str, contrato: list, saida, *, preservadas=No
             a = provedor.planejar(entrada)
     except prazo.PrazoEsgotado:
         from . import objetivos as coord
-        return "" if int(coord.cfg().get("continuacoes", 0)) <= 0 else INDISPONIVEL
+        return INDISPONIVEL if classificacao or int(coord.cfg().get("continuacoes", 0)) > 0 else ""
     except Exception:
         return INDISPONIVEL
     if not isinstance(a, dict):
@@ -141,7 +146,9 @@ def revisar(user, provedor, texto: str, contrato: list, saida, *, preservadas=No
     faltas = [str(e.get("descricao", "")).strip() for e in (a.get("entregas") or [])
               if isinstance(e, dict) and str(e.get("descricao", "")).strip()]
     if not faltas:
-        return ""
+        # M155: entidade e filtros aprovados pela revisão; só então categorias pedidas sobre uma tabela agrupada por
+        # cadastro (nomes que a revisão não vê) viram levantamento + pergunta, ou contagem filtrada se já definidas.
+        return ClassificacaoPendente(classificacao) if classificacao else ""
     if preservadas is not None:
         descricoes = [item.get("descricao") for item in contrato]
         # Uma reprovação geral ou parafraseada não identifica blocos independentes.

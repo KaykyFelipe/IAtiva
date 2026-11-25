@@ -86,16 +86,20 @@ def contextos(user, conversa, texto):
     alvo = _radicais(texto)
     registros = [r for r in registros if set(r.setores) <= permitidos and not r.conversa.encerrada_em
                  and (r.conversa.usuario_id == user.pk or r.conversa.setor_id in setores_autorizados(user, Permissao.CONSULTAR))]
-    registros.sort(key=lambda r: (r.conversa_id == conversa.pk, len(alvo & _radicais(r.resumo)), r.atualizado_em), reverse=True)
+    relevantes = [(r, len(alvo & _radicais(r.resumo))) for r in registros]
+    relevantes = [(r, pontos) for r, pontos in relevantes if r.conversa_id == conversa.pk or pontos]
+    relevantes.sort(key=lambda par: (par[0].conversa_id == conversa.pk, par[1], par[0].atualizado_em), reverse=True)
     return [{'conversa': r.conversa_id, 'origem': r.mensagem_id, 'resumo': r.resumo, 'setores': r.setores}
-            for r in registros[:5]]
+            for r, _ in relevantes[:5]]
 
 
 def preparar(user, conversa, texto, provedor, historico):
+    from .memoria import notas_relevantes, rotulo_nota
     setores = list(Department.objects.filter(ativo=True).values('codigo', 'nome'))
     permitidos = list(Department.objects.filter(pk__in=setores_autorizados(user, Permissao.CONSULTAR), ativo=True)
                       .values_list('codigo', flat=True))
     entrada = EntradaAgente(texto, timezone.localdate().isoformat(), historico, [], None,
+        notas=[rotulo_nota(n) for n in notas_relevantes(user, texto)],
         planejamento={'modo': 'classificar', 'setores_disponiveis': setores, 'autorizados': permitidos,
                       'criar_titulo': conversa.tipo == 'individual' and not conversa.titulo,
                       'contextos_recuperados': contextos(user, conversa, texto)})
@@ -144,7 +148,7 @@ def preparar(user, conversa, texto, provedor, historico):
         or not isinstance(e.get('descricao'), str) or len(e['descricao']) > 200 for e in entregas):
         raise FalhaModelo('Entregas inválidas.')
     if analise.get('natureza') == 'dados':
-        analise = _segunda_leitura(provedor, texto, historico, analise, tipos, metricas)
+        analise = _segunda_leitura(provedor, texto, historico, analise, tipos, metricas, entrada.notas)
         # M125: o contrato fica fiel ao pedido (interseção = uma entrega; lista só quando pedida).
         from .fidelidade import ajustar
         analise = {**analise, 'entregas': ajustar(texto, analise.get('entregas', []), user)}
@@ -153,13 +157,13 @@ def preparar(user, conversa, texto, provedor, historico):
     return tabela.planejar(texto, comparacao.planejar(texto, entregas.planejar(texto, admissoes.planejar(texto, {**analise, 'setores': sorted(set(alvos)), 'contextos': entrada.planejamento['contextos_recuperados']}, user))))
 
 
-def _segunda_leitura(provedor, texto, historico, analise, tipos, metricas):
+def _segunda_leitura(provedor, texto, historico, analise, tipos, metricas, notas=None):
     """M118: o pedido é lido DUAS vezes antes de agir. A segunda leitura recebe a pergunta e a primeira
     interpretação (só a lista de entregas) e devolve a lista completa e corrigida: cada evento citado separado,
     a interseção quando pedida e quem compõe cada contagem. Falha ou resposta inválida: fica a primeira leitura."""
     primeira = [dict(e) for e in analise.get('entregas', [])]
     entrada = EntradaAgente(texto, timezone.localdate().isoformat(), historico, [], None,
-                            planejamento={'modo': 'reler_pedido', 'pedido': texto[:1000], 'primeira_leitura': primeira})
+                            notas=notas or [], planejamento={'modo': 'reler_pedido', 'pedido': texto[:1000], 'primeira_leitura': primeira})
     from . import tempos
     try:
         with tempos.medir('leitura'):

@@ -302,3 +302,32 @@ def test_investigacao_completa_conclui_contrato_e_parcial_nao():
     saida.ficha['investigacao_completa']=True
     planejamento.registrar_entregas(ac,d,saida)
     assert not ac.pendentes()
+
+
+def test_triagem_recebe_memoria_autorizada_de_outros_chats(base, novo_usuario, monkeypatch):
+    from iativa.agent.provedores import FakeProvider
+
+    u = base['u']
+    outro = novo_usuario('outro-contexto', base['cob'])
+    antigo = conversas.nova_individual(u)
+    m = Mensagem.objects.create(conversa=antigo, autor=u, papel='usuario', texto='Consulta de faturas')
+    ContextoPersistente.objects.create(usuario=u, conversa=antigo, mensagem=m, resumo='Consulta de faturas',
+                                     setores=[base['cob'].codigo])
+    for alcance, texto in [('usuario', 'Módulo alfa pessoal'), ('setor', 'Módulo beta do setor'),
+                           ('empresa', 'Módulo gama corporativo')]:
+        nota = memoria.lembrar(u, texto, alcance=alcance)
+        NotaAgente.objects.filter(pk=nota.pk).update(situacao='aprovada')
+    memoria.lembrar(outro, 'Módulo secreto de outra pessoa', alcance='usuario')
+    provedor = FakeProvider()
+    entradas = []
+    original = provedor.planejar
+
+    def capturar(entrada):
+        entradas.append(entrada)
+        return original(entrada)
+
+    monkeypatch.setattr(provedor, 'planejar', capturar)
+    planejamento.preparar(u, conversas.nova_individual(u), 'Quais módulos estão disponíveis?', provedor, [])
+    assert len(entradas[0].notas) == 3
+    assert all(t in ' '.join(entradas[0].notas) for t in ('alfa pessoal', 'beta do setor', 'gama corporativo'))
+    assert entradas[0].planejamento['contextos_recuperados'] == []

@@ -4,6 +4,14 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **Etapa 7 aprovada em 2026-11-16 por Diego; em andamento.** Feito: roteiro do piloto (`docs/piloto/ROTEIRO.md`) e auditoria de não armazenamento (`manage.py auditar_armazenamento`). Falta: usuários do Financeiro, conferência dos números com relatórios do Protheus, avaliação da interpretação e latência. Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M156 — revisão de categorias e contexto na triagem (2026-11-25)
+
+- O levantamento agrupado só acompanha a pergunta sobre classificação após aprovação da base pelo revisor. Com revisão indisponível, um agrupamento ainda sem classificação não é aprovado por falta de prazo.
+- Falha temporária do provedor na triagem identifica o serviço indisponível. O registro no servidor da tentativa nº 5 confirmou limite ou capacidade do Claude antes da consulta.
+- A triagem e a segunda leitura passam a receber notas relevantes aprovadas nos escopos pessoal, setorial e corporativo. Para outros chats, recupera apenas resumos relevantes do próprio usuário e revalida o acesso.
+- Validação local direcionada aos módulos alterados. A atualização mantém uma execução integral e isolada no servidor antes da troca de tráfego.
+- Context7 instalado no Codex para documentação técnica. O histórico e a memória da IAtiva seguem no backend com os controles de acesso existentes.
+
 ## Mudança M155 — filtro por palavra no SQL Server, entrega do que foi comprovado e problema concreto (2026-11-25)
 - Caso: “quantos módulos tem hoje na ativa, disponíveis e deslocados” respondeu só a lista do que faltava (registro M149 nº 4).
 - Reconstrução: a 1ª consulta contou todos os bens e a revisão disse o problema concreto (a entidade não foi restringida). O modelo tentou restringir pela família de bens, que era o caminho certo. As duas execuções seguintes foram recusadas pelo executor (“Valor fora do formato permitido”), e a repetição encerrou o pedido.

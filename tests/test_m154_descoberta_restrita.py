@@ -571,3 +571,21 @@ def test_categorias_por_tabela_de_cadastro_viram_levantamento_e_pergunta():
     estatico = _bloco_por_cadastro()
     estatico[0]["evidencia"]["categorias_pedidas"] = ["Disponivel"]
     assert not revisao.classificacao_sem_definicao(contrato, estatico, PEDIDO)
+
+
+def test_levantamento_agrupado_depende_de_aprovar_a_entidade(monkeypatch):
+    from types import SimpleNamespace
+    from iativa.agent import revisao
+
+    contrato = [{"descricao": d, "tipo": "calculo", "metrica": "contagem"} for d in (
+        "Quantidade total de módulos hoje na empresa", "Quantidade de módulos disponíveis hoje",
+        "Quantidade de módulos deslocados hoje")]
+    monkeypatch.setattr(revisao, 'descrever', lambda _: [{**_bloco_por_cadastro()[0], "medida_calculada": "contagem"}])
+    modelo = SimpleNamespace(planejar=lambda _: {
+        "entregas": [contrato[0]], "resumo": "O levantamento contou todos os bens. Quais deles são módulos?"})
+    falta = revisao.revisar(None, modelo, PEDIDO, contrato, None)
+    assert not isinstance(falta, revisao.ClassificacaoPendente)
+    modelo.planejar = lambda _: {"entregas": []}
+    assert isinstance(revisao.revisar(None, modelo, PEDIDO, contrato, None), revisao.ClassificacaoPendente)
+    monkeypatch.setattr(agente.prazo, 'restante', lambda: 5)
+    assert revisao.revisar(None, modelo, PEDIDO, contrato, None) == revisao.INDISPONIVEL

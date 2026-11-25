@@ -418,8 +418,13 @@ def conversar(user, c, texto: str, provedor=None, mensagem_usuario_id=None, inte
         if acomp is not None:  # M127: na continuação, falha do modelo na triagem é passageira: tenta de novo depois
             acomp.anotar('classificacao', 'modelo_falhou')
             return _encerrar_sem_cumprir(acomp, user, c, mensagem_usuario_id, None, None, 'modelo_falhou', [])
-        return Saida('Não consegui confirmar o assunto e o acesso deste pedido agora. Tente novamente.',
-                     ficha={'tipo': 'falha_modelo'})
+        if exc.temporaria:
+            nome = getattr(provedor, "nome", "")
+            servico = {"claude-code": "Claude", "anthropic": "Claude", "chatgpt": "ChatGPT"}.get(nome, "modelo de IA")
+            return Saida(f"O serviço {servico} está indisponível no momento. A consulta ainda não começou.",
+                         ficha={"tipo": "falha_modelo", "provedor": nome})
+        return Saida("O modelo não devolveu um plano válido para a consulta. Tente novamente.",
+                     ficha={"tipo": "falha_modelo"})
     except ImproperlyConfigured:
         return Saida('Não consegui confirmar o assunto e o acesso deste pedido agora. Tente novamente.',
                      ficha={'tipo': 'falha_modelo'})
@@ -1209,7 +1214,7 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
                     # (ex.: o total) vai junto; nada reprovado aparece. A resposta curta retoma este pedido.
                     ac.anotar("revisao", "definicao_pendente")
                     duvida = Saida(pergunta, {"tipo": "esclarecimento", "pedido_original": texto[:1000]})
-                    if comprovada is None and saida.resultado is not None:
+                    if comprovada is None and saida.resultado is not None and isinstance(falta_rev, revisao.ClassificacaoPendente):
                         # A lacuna é só a definição: o levantamento (ex.: contagem por situação, com o nome de cada
                         # uma) é o que a pessoa precisa ver para responder. Vai junto, sem afirmar a classificação.
                         comprovada = Saida("Levantamento até aqui (ainda sem a classificação pedida):", {},
