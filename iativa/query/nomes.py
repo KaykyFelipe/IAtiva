@@ -44,6 +44,41 @@ def _campo_nome(tabela, codigo: str, visivel) -> str:
     return ""
 
 
+_MAX_CADASTRO = 20000
+
+
+def _padrao_termo(radical: str) -> str:
+    """Radical sem acento ("MODUL") casa com o nome gravado com ou sem acento ("MÓDULO"): vogal vira curinga."""
+    return "%" + re.sub(r"[AEIOU]", "_", radical.upper()) + "%"
+
+
+def termos_no_cadastro(cat, mestre, termos, filial, visivel, timeout_s=10) -> dict:
+    """M154: quantos registros de um cadastro de domínio (família, status, tipo...) têm cada termo do pedido no
+    nome. Devolve {"campo_nome": ..., "contagens": {termo: n}}: só contagens (agregado), nunca nomes ou códigos.
+    Mostra ao modelo, sem dados, que "módulo" é uma família de bens (filtrar por ela) ou que "deslocado" não é
+    nenhum status (falta a definição). Cadastro grande não é sondado; a leitura passa pelo mesmo validador."""
+    campo_nome = _campo_nome(mestre, "", visivel)
+    chave = [c for c in (getattr(mestre, "chave", ()) or ()) if not c.endswith("_FILIAL")]
+    if not campo_nome or not chave or not termos:
+        return {}
+    n = cat.linhas(mestre.fisica)
+    if n is None or n > _MAX_CADASTRO:
+        return {}
+    permitidas, contagens = {mestre.fisica}, {}
+    for termo in termos:
+        p = Plano(objetivo="termos-do-cadastro", base=mestre.alias, filial=filial)
+        if mestre.campo_filial:
+            p.filtros.append(Filtro(Campo("e1", mestre.campo_filial), "=", filial))
+        p.filtros.append(Filtro(Campo("e1", campo_nome), "LIKE", _padrao_termo(termo)))
+        p.colunas = [Coluna("n", Campo("e1", chave[0]), "COUNT_DISTINCT", "inteiro")]
+        comp = compilar(p, cat, 1)
+        validar(comp.sql, permitidas, 2)
+        linhas, _ = executar(cat, comp.sql, comp.params, 1, timeout_s,
+                             validar_final=lambda sql: validar(sql, permitidas, 2))
+        contagens[termo] = int(linhas[0][0] or 0) if linhas else 0
+    return {"campo_nome": campo_nome, "contagens": contagens}
+
+
 def _eh_nome(campo: str) -> bool:
     return any(re.search(p, campo) for p in _NOMES)
 

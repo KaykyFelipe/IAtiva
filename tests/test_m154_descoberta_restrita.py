@@ -33,8 +33,10 @@ def agregacao_definida(db):
     """Testes transaction=True apagam até as definições semeadas por migração: recria a de agregação."""
     from importlib import import_module
     from iativa.memory.models import ParameterDefinition
-    dados = import_module("iativa.memory.migrations.0004_definicao_agregacao").DADOS
-    ParameterDefinition.objects.get_or_create(codigo="agregacao", defaults=dados)
+    for codigo, migracao in (("texto-busca", "0002_definicao_texto_busca"),
+                             ("filtro-campo", "0003_definicao_filtro_campo"), ("agregacao", "0004_definicao_agregacao")):
+        dados = import_module(f"iativa.memory.migrations.{migracao}").DADOS
+        ParameterDefinition.objects.get_or_create(codigo=codigo, defaults=dados)
 
 
 @pytest.fixture
@@ -422,3 +424,53 @@ def test_nome_do_codigo_pelo_titulo_de_descricao():
         N(nome="TQY_DESTAT", titulo="Desc Status", tipo="C", consultavel=True),
         N(nome="TQY_CATBEM", titulo="Categ. Bem", tipo="C", consultavel=True)])
     assert _campo_nome(tqy, "TQY_STATUS", lambda a, c: True) == "TQY_DESTAT"
+
+
+@pytest.fixture
+def familias(modulos):
+    """Família dos bens num cadastro ligado pelo SX9; nem todo bem do cadastro é módulo."""
+    with sqlite3.connect(modulos) as db:
+        db.execute("ALTER TABLE ZZB010 ADD COLUMN ZZB_FAMI TEXT")
+        db.execute("""INSERT INTO SX3010 (X3_ARQUIVO,X3_CAMPO,X3_TITULO,X3_DESCRIC,X3_TIPO,X3_TAMANHO,X3_CBOX)
+                      VALUES ('ZZB','ZZB_FAMI','Familia do bem','Familia do bem','C',2,'')""")
+        db.execute("""INSERT INTO SX2010 (X2_CHAVE,X2_ARQUIVO,X2_NOME,X2_MODO,X2_MODOUN,X2_MODOEMP)
+                      VALUES ('ZZF','ZZF010','Familias de bens','E','E','E')""")
+        db.execute("INSERT INTO SIX010 (INDICE,ORDEM,CHAVE) VALUES ('ZZF','1','ZZF_FILIAL+ZZF_COD')")
+        db.execute("CREATE TABLE ZZF010 (ZZF_FILIAL TEXT, ZZF_COD TEXT, ZZF_NOME TEXT, D_E_L_E_T_ TEXT DEFAULT ' ')")
+        for campo, titulo, tam in (("ZZF_FILIAL", "Filial", 2), ("ZZF_COD", "Familia", 2), ("ZZF_NOME", "Nome", 30)):
+            db.execute("""INSERT INTO SX3010 (X3_ARQUIVO,X3_CAMPO,X3_TITULO,X3_DESCRIC,X3_TIPO,X3_TAMANHO,X3_CBOX)
+                          VALUES ('ZZF',?,?,?,'C',?,'')""", (campo, titulo, titulo, tam))
+        db.executemany("INSERT INTO ZZF010 VALUES (?,?,?,' ')", [
+            ("01", "F1", "MODULO HABITACIONAL"), ("01", "F2", "MÓDULO SANITÁRIO"), ("01", "F3", "FERRAMENTA")])
+        db.execute("INSERT INTO SX9010 (X9_DOM, X9_IDENT, X9_CDOM, X9_EXPDOM, X9_EXPCDOM) "
+                   "VALUES ('ZZF', '001', 'ZZB', 'ZZF_COD', 'ZZB_FAMI')")
+        db.execute("UPDATE ZZB010 SET ZZB_FAMI = CASE WHEN ZZB_COD IN ('M00001','M00002','M00003') THEN 'F1' ELSE 'F2' END")
+        db.executemany("INSERT INTO ZZB010 VALUES (?,?,?,?,?,?)", [
+            ("01", "B00001", "FURADEIRA", "D", " ", "F3"), ("01", "B00002", "ESMERILHADEIRA", "D", " ", "F3")])
+    return modulos
+
+
+def test_termo_do_pedido_no_cadastro_de_dominio_so_por_contagem(familias, novo_usuario, politica):
+    user = _usuario(novo_usuario, politica, "comercial")
+    sonda = agente._termos_em_cadastros(user, "ZZB", PEDIDO)
+    assert set(sonda) == {"ZZB_FAMI"}, sonda
+    assert sonda["ZZB_FAMI"]["campo_nome"] == "ZZF_NOME"
+    assert sonda["ZZB_FAMI"]["contagens"] == {"DESLO": 0, "DISPO": 0, "MODUL": 2}  # acento não impede
+    campos = {c["campo"]: c for c in agente._campos_para_modelo(user, "ZZB", PEDIDO)["campos"]}
+    assert campos["ZZB_FAMI"]["termos_do_pedido_no_cadastro"]["contagens"]["MODUL"] == 2
+    assert "FERRAMENTA" not in str(sonda) and "HABITACIONAL" not in str(sonda)  # nenhum dado do ERP
+
+
+def test_entidade_restrita_pela_familia_conta_so_modulos(familias, novo_usuario, politica):
+    user = _usuario(novo_usuario, politica, "comercial")
+    p = Operador([
+        _d(acao="aprender_tabela", alvo="cadastro de modulos"),
+        lambda e: _d(acao="criar_consulta", entrega="calculo", atende=[0],
+                     parametros=_agregacao("contagem_distinta:ZZB_COD") + [
+                         {"codigo": "filtro-campo", "valor": "ZZF_NOME~MODUL"}],
+                     consulta={"tabela": "ZZB", "nome": "Modulos por familia", "colunas": ["ZZB_COD", "ZZB_SITUAC"],
+                               "juncoes": [{"tabela": "ZZF", "colunas": ["ZZF_NOME"]}]}),
+    ], lambda plan: _aprovado(), entregas=ENTREGAS[:1])
+    msg, res = conversas.enviar(user, conversas.nova_individual(user), "quantos módulos tem hoje na ativa?", p)
+    assert _ok(res), msg.texto
+    assert "6" in _texto(res) and "8" not in _texto(res), _texto(res)  # 6 módulos, não os 8 bens

@@ -2124,14 +2124,51 @@ def _aprender(user, c, d, texto, ficha, provedor=None, entrada=None, atual=None)
     return Saida(texto, {**ficha, "tipo": "aprendizado", "candidatos": lista}, observacao=obs)
 
 
+def _termos_em_cadastros(user, alias, pedido, maximo=6) -> dict:
+    """M154: {campo: {"cadastro", "campo_nome", "contagens"}} dos cadastros de domínio da tabela (SX9) que têm algum
+    termo do pedido no nome. Só contagens: o modelo descobre que o termo é uma família/categoria a filtrar, ou que
+    nenhum registro tem o termo (falta a definição de negócio), sem ver nenhuma linha do ERP."""
+    termos = sorted(aprendizado._radicais(pedido or "") - aprendizado.termos_empresa())[:4]
+    filiais = [f for f in _filiais(user) if f != "TODAS"]
+    if not termos or not filiais:
+        return {}
+    from iativa.metadata.catalogo import abrir_catalogo
+    from iativa.metadata.descoberta import _Visibilidade
+    from iativa.query.nomes import _MAX_CADASTRO, termos_no_cadastro
+    out = {}
+    try:
+        restritas = aprendizado._restritas(user)
+        with abrir_catalogo() as cat:
+            mapa = {c: t for c, t in aprendizado.cadastros_de_dominio(cat, alias).items() if t not in restritas}
+            vis = _Visibilidade(setores_autorizados(user, Permissao.CONSULTAR), sorted(set(mapa.values())))
+            sondados = 0
+            for campo, t in mapa.items():
+                if sondados >= maximo or prazo.esgotado():
+                    break
+                mestre = cat.tabelas([t], com_campos=True).get(t)
+                n = cat.linhas(mestre.fisica) if mestre is not None else None
+                if mestre is None or n is None or n == 0 or n > _MAX_CADASTRO:
+                    continue
+                sondados += 1
+                r = termos_no_cadastro(cat, mestre, termos, filiais[0], vis.campo, prazo.limitar(10))
+                if r and any(r["contagens"].values()):
+                    out[campo] = {"cadastro": f"{t} ({mestre.nome})", **r}
+    except Exception as exc:  # auxiliar da descoberta: nunca impede a consulta; nada do ERP no log
+        import logging
+        logging.getLogger(__name__).warning("termos no cadastro não sondados: %s (%s)", alias, type(exc).__name__)
+    return out
+
+
 def _campos_para_modelo(user, alias, pedido=""):
     info = aprendizado.campos_da_tabela(user, alias, automatico=True)
     por_cadastro = aprendizado.dominios_por_cadastro(user, alias)  # M154: ex.: T9_STATUS → TQY (Status do bem)
+    termos_cad = _termos_em_cadastros(user, alias, pedido)  # M154: ex.: T9_CODFAMI → ST6 com "módulo" no nome
     campos = [{"campo": f.nome, "tipo": {"D": "data", "N": "numero"}.get(f.tipo, "texto"), "titulo": f.titulo, "descricao": f.descricao,
                "opcoes": info["opcoes"].get(f.nome, {}),
                **({"origem_dominio_dinamico": info["dinamicos"][f.nome]} if f.nome in info["dinamicos"] else {}),
                **({"dominio_por_cadastro": por_cadastro[f.nome]}
-                  if f.nome in por_cadastro and not info["opcoes"].get(f.nome) else {})}
+                  if f.nome in por_cadastro and not info["opcoes"].get(f.nome) else {}),
+               **({"termos_do_pedido_no_cadastro": termos_cad[f.nome]} if f.nome in termos_cad else {})}
               for f in info["campos"] if not aprendizado.sensivel(f)]
     try:
         juncoes = [{"tabela": j["tabela"], "nome": j["nome"],

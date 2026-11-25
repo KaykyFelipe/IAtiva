@@ -41,6 +41,22 @@ class Catalogo:
         self._relacionados: dict[str, list[Relacionamento]] = {}
         self._dominios: dict[str, tuple[dict, dict]] = {}
 
+    def linhas(self, fisica: str) -> int | None:
+        """M154: quantidade aproximada de registros (estatística do SQL Server, sem ler dados). None = sem saber."""
+        if self.conn is None or not fisica.replace("_", "").isalnum():
+            return None
+        try:
+            cur = self.conn.cursor()
+            if self.dialeto == "tsql":
+                cur.execute("SELECT SUM(p.rows) FROM sys.partitions p WHERE p.object_id = OBJECT_ID(?) "
+                            "AND p.index_id IN (0, 1)", (fisica,))
+            else:
+                cur.execute(f"SELECT COUNT(*) FROM {fisica}")
+            n = cur.fetchone()[0]
+            return None if n is None else int(n)
+        except Exception:
+            return None
+
     def vazia(self, fisica: str) -> bool | None:
         """M104: a tabela física não tem nenhum registro nesta instalação? (None = não deu para saber).
         SQL Server: estatística de linhas (sys.partitions), instantânea; sem ler dados."""

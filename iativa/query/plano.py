@@ -94,6 +94,13 @@ def padrao_busca(texto: str) -> str:
     return f"%{miolo}%" if miolo else ""
 
 
+def padrao_tolerante(texto: str) -> str:
+    """M154: "contém" de filtro-campo que casa com o valor gravado com ou sem acento ("MODUL" acha "MÓDULO"): nas
+    palavras de 4+ letras, cada vogal depois da primeira letra vira curinga de um caractere."""
+    padrao = padrao_busca(texto)
+    return re.sub(r"[A-Z0-9]{4,}", lambda m: m.group(0)[0] + re.sub(r"[AEIOU]", "_", m.group(0)[1:]), padrao)
+
+
 def _aplicar_busca(plano, campo: Campo, valores: dict):
     padrao = padrao_busca(valores.get(BUSCA) or "")
     if padrao:
@@ -500,7 +507,7 @@ def montar_modelo(tabela: str, spec: dict, valores: dict, codigo: str) -> Plano:
                 plano.premissas.append(
                     f"Período de {campo}: {date.fromisoformat(inicio):%d/%m/%Y} a {date.fromisoformat(fim):%d/%m/%Y}.")
             elif op == "~":
-                plano.filtros.append(Filtro(Campo(apelido(spec, campo), campo), "LIKE", padrao_busca(valor)))
+                plano.filtros.append(Filtro(Campo(apelido(spec, campo), campo), "LIKE", padrao_tolerante(valor)))
                 plano.premissas.append(f"Filtro: {campo} contém “{valor}”.")
             elif op == "<>":
                 plano.filtros.append(Filtro(Campo(apelido(spec, campo), campo), "<>", valor))
