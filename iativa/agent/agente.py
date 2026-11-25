@@ -350,6 +350,10 @@ def conversar(user, c, texto: str, provedor=None, mensagem_usuario_id=None, inte
     try:
         provedor = provedor or obter_provedor(usuario=user)
         analise = planejamento.preparar(user, c, texto, provedor, _historico(c, contexto_id))
+    except planejamento.DicionarioIndisponivel:
+        return Saida("O dicionário do Protheus está indisponível. Tentei conectar duas vezes para localizar "
+                     "a fonte do pedido. A consulta pode ser refeita quando a conexão voltar.",
+                     ficha={"tipo": "falha_execucao"})
     except PermissaoNegada as exc:
         return Saida(str(exc), ficha={'tipo': 'bloqueada'})
     except ValidationError as exc:

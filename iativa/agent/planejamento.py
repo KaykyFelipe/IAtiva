@@ -194,6 +194,10 @@ def _continua_assunto(conversa, alvos) -> bool:
     return False
 
 
+class DicionarioIndisponivel(Exception):
+    """A conexão ao catálogo falhou mesmo após a retentativa."""
+
+
 def _explorar_dicionario(user, texto) -> bool:
     """M82: o pedido fala de dados que o dicionário do ERP tem (tabela encontrada pelos termos do pedido) e a
     pessoa pode fazer a IA aprender consultas novas. Só estrutura do dicionário; nenhuma linha do ERP."""
@@ -207,6 +211,8 @@ def _explorar_dicionario(user, texto) -> bool:
         except Exception as exc:
             logging.getLogger(__name__).warning("busca no dicionário falhou (tentativa %s): %s", tentativa,
                                                 type(exc).__name__)
+            if tentativa == 2 and isinstance(exc, (ConnectionError, TimeoutError)):
+                raise DicionarioIndisponivel from exc
     return False
 
 

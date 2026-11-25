@@ -74,3 +74,16 @@ def test_perguntas_novas_com_erp_controlado(base, alias, campos, busca, pergunta
             binds.append("%" + busca.upper().replace("É", "E") + "%")
         esperado = {tuple(str(c).strip() for c in row) for row in db.execute(sql, binds)}
     assert {tuple(str(c).strip() for c in row[-2:]) for row in r.linhas} == esperado
+
+
+def test_falha_de_conexao_na_descoberta_nao_vira_ambiguidade(monkeypatch):
+    from iativa.agent import aprendizado, planejamento
+    tentativas = []
+    def falhar(*args, **kwargs):
+        tentativas.append(1)
+        raise ConnectionError()
+    monkeypatch.setattr(aprendizado, "pode_aprender_sozinho", lambda u: True)
+    monkeypatch.setattr(aprendizado, "candidatos", falhar)
+    with pytest.raises(planejamento.DicionarioIndisponivel):
+        planejamento._explorar_dicionario(None, "Quantos equipamentos existem hoje?")
+    assert len(tentativas) == 2
