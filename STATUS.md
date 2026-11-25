@@ -4,6 +4,12 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **Etapa 7 aprovada em 2026-11-16 por Diego; em andamento.** Feito: roteiro do piloto (`docs/piloto/ROTEIRO.md`) e auditoria de não armazenamento (`manage.py auditar_armazenamento`). Falta: usuários do Financeiro, conferência dos números com relatórios do Protheus, avaliação da interpretação e latência. Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M151 — destaque não quebra com a coluna Filial da própria consulta (2026-11-25)
+
+- Caso: depois da M150, “quantos veículos tem a empresa?” lia o ERP e devolvia a pergunta para a caixa de texto, sem resposta. O registro de erros (M149) mostrou `IndexError` em `servico._destaque`.
+- Causa: a checagem da coluna “Filial” comparava os rótulos do compilado (tupla) com uma lista, e o resultado era sempre “diferente”. Com a filial vinda da consulta (`DA3_FILATU`, M150), a coluna era deslocada de novo e o índice passava do fim da linha.
+- Correção: comparação por tupla, que vale para qualquer consulta com a coluna Filial vinda do banco. Teste em `tests/test_m150_cadastro_compartilhado.py`.
+
 ## Mudança M150 — cadastro compartilhado dividido pela filial do registro e resposta só com número apenas quando pedida (2026-11-25)
 
 - Caso: “quantos veículos tem a empresa?” mostrou o mesmo total em todas as filiais e, depois, só um número solto (a soma das 8 repetições). A DA3 (Veículos) é compartilhada: o `DA3_FILIAL` fica em branco, então cada consulta “por filial” lia o cadastro inteiro.

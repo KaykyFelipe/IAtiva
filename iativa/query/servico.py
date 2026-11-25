@@ -939,7 +939,9 @@ def _mesclar_filiais(plano, comp, linhas):
 def _destaque(plano, comp, colunas, formatadas, linhas, tipos) -> str:
     """M40: cálculo agrupado com 2+ grupos: diz qual grupo ficou no topo (e no fim), em vez de só a tabela."""
     # Coluna "Filial" na frente (uma linha por filial); colunas extras no fim (ex.: dias de atraso) não deslocam.
-    desloc = 1 if colunas and colunas[0] == "Filial" and comp.rotulos[:1] != ["Filial"] else 0
+    # M151: rótulos do compilado são tupla; comparar com lista dava sempre "diferente" e deslocava a coluna Filial
+    # que já é da consulta (cadastro compartilhado dividido por DA3_FILATU, M150) → IndexError.
+    desloc = 1 if colunas and colunas[0] == "Filial" and tuple(comp.rotulos[:1]) != ("Filial",) else 0
     if not (plano.agrupar or desloc) or not linhas:
         return ""
     aggs = [c.agregacao for c in plano.colunas]

@@ -94,3 +94,17 @@ def test_formato_direto_so_quando_pedido(texto, direto):
     ac = Acompanhamento(texto)
     ac.definir(SimpleNamespace(formato="direto"))
     assert (ac.formato == "direto") is direto
+
+
+@pytest.mark.django_db
+def test_destaque_com_filial_da_propria_consulta_nao_quebra():
+    """M151: a coluna Filial vinda da consulta (DA3_FILATU) era deslocada de novo e dava IndexError no destaque."""
+    from iativa.query.servico import _destaque
+
+    setor = Department.objects.create(codigo="ti-w", nome="TI W")
+    plano, _ = _dividir_por_filial_do_registro(_contagem(), DA3, FILIAIS, setor.pk)
+    comp = compilar(plano, _Cat(), 100)
+    linhas = [("001001 · Matriz", 7), ("001002 · Filial", 3)]
+    formatadas = [list(map(str, l)) for l in linhas]
+    texto = _destaque(plano, comp, ["Filial", "Quantidade"], formatadas, linhas, ["texto", "inteiro"])
+    assert "Matriz" in texto and "(7)" in texto and "(3)" in texto
