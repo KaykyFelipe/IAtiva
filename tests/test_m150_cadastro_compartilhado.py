@@ -25,7 +25,8 @@ def _c(nome, titulo, tamanho=6, tipo="C", descricao=""):
 
 DA3 = Tabela("DA3", "DA3010", "Veiculos", "compartilhado", True, "DA3_FILIAL", ("DA3_FILIAL", "DA3_COD"), (
     _c("DA3_FILIAL", "Filial"), _c("DA3_COD", "Veiculo", 8), _c("DA3_PLACA", "Placa", 8),
-    _c("DA3_FILBAS", "Fil. Base"), _c("DA3_FILATU", "Fil.Atual"), _c("DA3_FILTRO", "Filtro", 1),
+    _c("DA3_FILBAS", "Fil. Base"), _c("DA3_FILATU", "Fil.Atual"), _c("DA3_FILVGA", "Fil.Vge.Atu."),
+    _c("DA3_FILTRO", "Filtro", 1),
 ))
 
 
@@ -41,18 +42,19 @@ def _contagem():
                  premissas=["Veículos cadastrados."])
 
 
-def test_campos_de_filial_do_registro_atual_antes_da_base():
-    assert [c.nome for c in campos_filial_do_registro(DA3)] == ["DA3_FILATU", "DA3_FILBAS"]
+def test_campos_de_filial_do_registro_base_antes_da_atual():
+    """M152: a filial base é a dona do veículo; a atual muda com a viagem."""
+    assert [c.nome for c in campos_filial_do_registro(DA3)] == ["DA3_FILBAS", "DA3_FILATU", "DA3_FILVGA"]
 
 
 @pytest.mark.django_db
-def test_contagem_em_todas_as_filiais_divide_pela_filial_atual():
+def test_contagem_em_todas_as_filiais_divide_pela_filial_base():
     setor = Department.objects.create(codigo="ti-x", nome="TI X")
     plano, filial = _dividir_por_filial_do_registro(_contagem(), DA3, FILIAIS, setor.pk)
-    assert filial[0] == "DA3_FILATU" and "Fil. Base (DA3_FILBAS)" in filial[1]
-    assert plano.agrupar and plano.colunas[0].rotulo == "Filial" and plano.colunas[0].campo.nome == "DA3_FILATU"
+    assert filial[0] == "DA3_FILBAS" and "Fil.Atual (DA3_FILATU)" in filial[1]
+    assert plano.agrupar and plano.colunas[0].rotulo == "Filial" and plano.colunas[0].campo.nome == "DA3_FILBAS"
     sql = compilar(plano, _Cat(), 100)
-    assert "GROUP BY e1.DA3_FILATU" in sql.sql and "e1.DA3_FILATU IN (?, ?, ?)" in sql.sql
+    assert "GROUP BY e1.DA3_FILBAS" in sql.sql and "e1.DA3_FILBAS IN (?, ?, ?)" in sql.sql
     assert sql.params[-1] == " " * 6  # registros sem filial informada também entram
     assert _contagem().colunas[0].campo.nome == "DA3_COD"  # o plano original não é alterado
 
@@ -60,9 +62,9 @@ def test_contagem_em_todas_as_filiais_divide_pela_filial_atual():
 @pytest.mark.django_db
 def test_campo_oculto_ao_setor_usa_o_proximo():
     setor = Department.objects.create(codigo="ti-y", nome="TI Y")
-    RestricaoMetadado.objects.create(tabela="DA3", campo="DA3_FILATU", ativo=True)
+    RestricaoMetadado.objects.create(tabela="DA3", campo="DA3_FILBAS", ativo=True)
     _, filial = _dividir_por_filial_do_registro(_contagem(), DA3, FILIAIS, setor.pk)
-    assert filial[0] == "DA3_FILBAS"
+    assert filial[0] == "DA3_FILATU"
 
 
 @pytest.mark.django_db
@@ -73,7 +75,7 @@ def test_pedido_ja_agrupado_ou_filtrado_pela_filial_do_registro_nao_muda():
     agrupado.agrupar = True
     assert _dividir_por_filial_do_registro(agrupado, DA3, FILIAIS, setor.pk)[1] is None
     filtrado = _contagem()
-    filtrado.filtros.append(Filtro(Campo("e1", "DA3_FILBAS"), "=", "001002"))
+    filtrado.filtros.append(Filtro(Campo("e1", "DA3_FILATU"), "=", "001002"))
     assert _dividir_por_filial_do_registro(filtrado, DA3, FILIAIS, setor.pk)[1] is None
 
 
@@ -108,3 +110,35 @@ def test_destaque_com_filial_da_propria_consulta_nao_quebra():
     formatadas = [list(map(str, l)) for l in linhas]
     texto = _destaque(plano, comp, ["Filial", "Quantidade"], formatadas, linhas, ["texto", "inteiro"])
     assert "Matriz" in texto and "(7)" in texto and "(3)" in texto
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("texto,nova", [
+    ("quantos veiculos tem a empresa?", True),
+    ("qual o total de pedidos de venda em 2026?", True),
+    ("some isso", False),
+    ("e a média?", False),
+    ("qual o total desse resultado por filial?", False),
+    ("soma tudo", False),
+])
+def test_calculo_sobre_resultado_anterior_so_quando_a_mensagem_se_refere_a_ele(setores, novo_usuario, texto, nova):
+    """M152: a pergunta repetida somou a tabela antiga (errada) da resposta anterior em vez de consultar de novo."""
+    from iativa.agent.agente import pergunta_nova
+    from iativa.chat import conversas
+
+    c = conversas.nova_individual(novo_usuario("diego", setores["ti"]))
+    assert pergunta_nova(c, texto) is nova
+
+
+@pytest.mark.django_db
+def test_pergunta_curta_repetida_e_nova(setores, novo_usuario):
+    from iativa.agent.agente import pergunta_nova
+    from iativa.chat import conversas
+    from iativa.chat.models import Mensagem, Papel
+
+    c = conversas.nova_individual(novo_usuario("diego", setores["ti"]))
+    Mensagem.objects.create(conversa=c, papel=Papel.USUARIO, autor=c.usuario, texto="quantos veículos?")
+    assert not pergunta_nova(c, "quantos veiculos?")  # só a mensagem atual (já gravada): não é repetição
+    Mensagem.objects.create(conversa=c, papel=Papel.IA, texto="Consulta executada.")
+    Mensagem.objects.create(conversa=c, papel=Papel.USUARIO, autor=c.usuario, texto="Quantos veiculos?")
+    assert pergunta_nova(c, "quantos veiculos?")

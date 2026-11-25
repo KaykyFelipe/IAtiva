@@ -780,8 +780,8 @@ def _sem_acento(t: str) -> str:
 
 def campos_filial_do_registro(tabela) -> list:
     """M150: num cadastro compartilhado (DA3 Veículos, SA1...) o campo filial fica em branco e a filial de cada registro
-    mora num campo próprio da tabela (DA3_FILATU 'Fil.Atual', DA3_FILBAS 'Fil. Base'...). Devolve esses campos, o de
-    filial atual antes do de filial base, pelo dicionário (mesmo prefixo, título de filial, tamanho do campo filial)."""
+    mora num campo próprio da tabela (DA3_FILBAS 'Fil. Base', DA3_FILATU 'Fil.Atual'...). Devolve esses campos, o de
+    filial base antes do de filial atual (M152), pelo dicionário (mesmo prefixo, título de filial, tamanho do campo filial)."""
     if not tabela.campo_filial or "_" not in tabela.campo_filial:
         return []
     prefixo = tabela.campo_filial.split("_")[0] + "_FIL"
@@ -792,7 +792,9 @@ def campos_filial_do_registro(tabela) -> list:
              and (ref is None or not ref.tamanho or not c.tamanho or c.tamanho == ref.tamanho)]
     def ordem(c):
         t = _sem_acento(f"{c.titulo} {c.descricao}")
-        return (0 if "atu" in t else 1 if "base" in t else 2, c.nome)
+        # M152: a filial base é a dona do registro; a atual muda com a viagem (a atual inflava a Matriz, que tem
+        # menos de 20 veículos próprios). Viagem/previsão por último.
+        return (0 if "base" in t else 2 if ("vg" in t or "viag" in t or "prev" in t) else 1 if "atu" in t else 3, c.nome)
     return sorted(cands, key=ordem)
 
 

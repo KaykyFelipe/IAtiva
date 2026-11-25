@@ -1587,7 +1587,28 @@ def _reduz_escopo(d, cobertura) -> "Saida | None":
                  observacao=Observacao(d.acao, ERRO_PARAMETROS, motivo))
 
 
-ROTULO_ACAO = {"investigar_lista": "verificar a lista inteira", "preparar_consulta": "consultar", "executar_consulta": "executar a consulta",
+_REFERE_ANTERIOR_RE = re.compile(
+    r"^e\b|\b(?:disso|disto|desse|dessa|deste|desta|desses|dessas|destes|destas|nisso|nesse|nessa|neste|nesta|"
+    r"nesses|nessas|isso|isto|dele|dela|deles|delas|acima|anterior|anteriores|mesm[oa]s?|ai|la)\b")
+
+
+def pergunta_nova(c, texto: str) -> bool:
+    """M152: calcular sobre o resultado anterior só vale quando a mensagem se refere a ele ("some isso", "e a média?",
+    "desse total"). Pergunta completa (5+ palavras) sem referência, ou repetida na conversa, pede dados atuais: o
+    resultado antigo pode estar errado ou desatualizado e nunca é reapresentado como resposta nova."""
+    from . import objetivos as coord
+
+    t = coord._norm(texto or "").strip(" ?!.")
+    if not t or _REFERE_ANTERIOR_RE.search(t):
+        return False
+    anteriores = [coord._norm(m.texto or "").strip(" ?!.")
+                  for m in c.mensagens.filter(papel="usuario").order_by("-id")[:20]]
+    if anteriores.count(t) >= (2 if anteriores and anteriores[0] == t else 1):
+        return True
+    return len(t.split()) >= 5
+
+
+ROTULO_ACAO = {"investigar_lista":"verificar a lista inteira", "preparar_consulta": "consultar", "executar_consulta": "executar a consulta",
                "aprender_tabela": "procurar a tabela no dicionário", "criar_consulta": "criar uma consulta nova",
                "lembrar": "guardar na memória"}
 
@@ -1600,6 +1621,12 @@ def _agir(user, c, d, atual, defs, texto, provedor, entrada, objetivos, administ
     acao = d.acao
     if acao == 'calcular_resultado':
         from . import calculos
+        if resultado_base is None and entrada.resultado_anterior and pergunta_nova(c, texto):
+            # M152: "quantos veículos tem a empresa?" repetida somou a tabela errada da resposta anterior (3.336).
+            motivo = ("A mensagem é uma pergunta nova e completa; não se refere ao resultado anterior. Não calcule "
+                      "sobre a resposta antiga: execute a consulta de novo (preparar_consulta) com dados atuais.")
+            return Saida("Pergunta nova: não reaproveitei o resultado anterior.", ficha,
+                         observacao=Observacao(acao, ERRO_PARAMETROS, motivo))
         try:
             plano = calculos.operacao_exigida(d.calculo, texto)
             if (plano.get('operacao') in ('dias_uteis', 'dias_corridos') and not plano.get('campo')

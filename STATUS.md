@@ -4,6 +4,15 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **Etapa 7 aprovada em 2026-11-16 por Diego; em andamento.** Feito: roteiro do piloto (`docs/piloto/ROTEIRO.md`) e auditoria de não armazenamento (`manage.py auditar_armazenamento`). Falta: usuários do Financeiro, conferência dos números com relatórios do Protheus, avaliação da interpretação e latência. Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M152 — pergunta nova não reaproveita resultado antigo; cadastro dividido pela filial base (2026-11-25)
+
+- Caso: “quantos veículos tem a empresa?” trouxe primeiro uma “Soma” sem sentido e, abaixo, a tabela por filial com números acima do real na Matriz.
+- Causa 1: o modelo escolheu `calcular_resultado` sobre a resposta anterior da conversa (a tabela errada de antes da M150) e somou a coluna; depois consultou de novo e juntou as duas coisas.
+- Correção geral: cálculo sobre o resultado anterior só vale quando a mensagem se refere a ele (“isso”, “desse”, “e a média?”, “acima”…). Pergunta completa (5+ palavras) sem referência, ou repetida na conversa, recebe a observação para consultar de novo (`agente.pergunta_nova`). O resultado antigo nunca volta como resposta nova.
+- Causa 2: a M150 dividia pela filial atual (`DA3_FILATU`), que muda com a viagem. A filial dona do registro é a base.
+- Correção: `campos_filial_do_registro` põe a filial base primeiro, depois a atual e por último viagem/previsão. Registros sem filial base aparecem como “Sem filial informada”, e a premissa cita os outros campos.
+- Testes: `tests/test_m150_cadastro_compartilhado.py`.
+
 ## Mudança M151 — destaque não quebra com a coluna Filial da própria consulta (2026-11-25)
 
 - Caso: depois da M150, “quantos veículos tem a empresa?” lia o ERP e devolvia a pergunta para a caixa de texto, sem resposta. O registro de erros (M149) mostrou `IndexError` em `servico._destaque`.
