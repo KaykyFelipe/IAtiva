@@ -1590,6 +1590,8 @@ def _reduz_escopo(d, cobertura) -> "Saida | None":
 _REFERE_ANTERIOR_RE = re.compile(
     r"^e\b|\b(?:disso|disto|desse|dessa|deste|desta|desses|dessas|destes|destas|nisso|nesse|nessa|neste|nesta|"
     r"nesses|nessas|isso|isto|dele|dela|deles|delas|acima|anterior|anteriores|mesm[oa]s?|ai|la)\b")
+_PERGUNTA_DADOS_RE = re.compile(r"\b(?:quant[oa]s?|qual|quais|quem|liste|listar|lista|mostre|mostrar|traga|trazer)\b")
+_AJUSTE_RE = re.compile(r"\b(?:apenas|somente|so)\b")
 
 
 def pergunta_nova(c, texto: str) -> bool:
@@ -1605,7 +1607,8 @@ def pergunta_nova(c, texto: str) -> bool:
                   for m in c.mensagens.filter(papel="usuario").order_by("-id")[:20]]
     if anteriores.count(t) >= (2 if anteriores and anteriores[0] == t else 1):
         return True
-    return len(t.split()) >= 5
+    # Pergunta de dados com sujeito próprio ("quantos veículos tem a empresa?"); "me diga apenas os dias úteis" é ajuste.
+    return len(t.split()) >= 5 and bool(_PERGUNTA_DADOS_RE.search(t)) and not _AJUSTE_RE.search(t)
 
 
 ROTULO_ACAO = {"investigar_lista":"verificar a lista inteira", "preparar_consulta": "consultar", "executar_consulta": "executar a consulta",

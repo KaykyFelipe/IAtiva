@@ -8,7 +8,7 @@
 
 - Caso: “quantos veículos tem a empresa?” trouxe primeiro uma “Soma” sem sentido e, abaixo, a tabela por filial com números acima do real na Matriz.
 - Causa 1: o modelo escolheu `calcular_resultado` sobre a resposta anterior da conversa (a tabela errada de antes da M150) e somou a coluna; depois consultou de novo e juntou as duas coisas.
-- Correção geral: cálculo sobre o resultado anterior só vale quando a mensagem se refere a ele (“isso”, “desse”, “e a média?”, “acima”…). Pergunta completa (5+ palavras) sem referência, ou repetida na conversa, recebe a observação para consultar de novo (`agente.pergunta_nova`). O resultado antigo nunca volta como resposta nova.
+- Correção geral: cálculo sobre o resultado anterior só vale quando a mensagem se refere a ele (“isso”, “desse”, “e a média?”, “acima”…). Pergunta de dados completa (5+ palavras, com “quantos/qual/liste…”, sem “apenas/só” de ajuste) e sem referência, ou repetida na conversa, recebe a observação para consultar de novo (`agente.pergunta_nova`). O resultado antigo nunca volta como resposta nova.
 - Causa 2: a M150 dividia pela filial atual (`DA3_FILATU`), que muda com a viagem. A filial dona do registro é a base.
 - Correção: `campos_filial_do_registro` põe a filial base primeiro, depois a atual e por último viagem/previsão. Registros sem filial base aparecem como “Sem filial informada”, e a premissa cita os outros campos.
 - Testes: `tests/test_m150_cadastro_compartilhado.py`.
