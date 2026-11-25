@@ -539,3 +539,9 @@ def test_literal_do_termo_tolerante_passa_no_sql_server():
     from iativa.query.plano import padrao_palavra
     assert padrao_palavra("módulo") == "M_D_L_"
     assert "'M_D_L_%'" in embutir_literais("SELECT 1 WHERE X LIKE ?", ("M_D_L_%",))
+
+
+def test_pergunta_de_definicao_sem_o_diagnostico():
+    falta = ("A resposta montada não atende: x. Como corrigir: A contagem por status cobre o total, mas as categorias "
+             "não estão comprovadas. Quais status compõem disponível e quais compõem deslocado?")
+    assert agente.pergunta_de_definicao(falta) == "Quais status compõem disponível e quais compõem deslocado?"

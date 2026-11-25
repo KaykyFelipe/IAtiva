@@ -1209,6 +1209,11 @@ def _ciclo_passos(user, c, texto, provedor, interrompido, entrada, objetivos, co
                     # (ex.: o total) vai junto; nada reprovado aparece. A resposta curta retoma este pedido.
                     ac.anotar("revisao", "definicao_pendente")
                     duvida = Saida(pergunta, {"tipo": "esclarecimento", "pedido_original": texto[:1000]})
+                    if comprovada is None and saida.resultado is not None:
+                        # A lacuna é só a definição: o levantamento (ex.: contagem por situação, com o nome de cada
+                        # uma) é o que a pessoa precisa ver para responder. Vai junto, sem afirmar a classificação.
+                        comprovada = Saida("Levantamento até aqui (ainda sem a classificação pedida):", {},
+                                           resultado=saida.resultado, solicitacao=saida.solicitacao)
                     return _fechar(ac, user, c, mensagem_id,
                                    _juntar(comprovada, duvida) if comprovada else duvida, coord.PERGUNTA)
                 ac.revisoes += 1
@@ -1757,8 +1762,12 @@ _TECNICO_RE = re.compile(r"\b(?:tabela|campo|coluna|sql|alias|dicionario|sx[23]|
 def pergunta_de_definicao(falta_rev: str) -> str:
     """M154: a correção da revisão é UMA pergunta de negócio (termina em ?, sem pedir tabela/campo/SQL)."""
     _, _, orientacao = (falta_rev or "").partition(" Como corrigir:")
-    pergunta = orientacao.strip()
-    if not pergunta.endswith("?") or pergunta.count("?") != 1 or len(pergunta) > 300:
+    orientacao = orientacao.strip()
+    if not orientacao.endswith("?") or orientacao.count("?") != 1:
+        return ""
+    # M155: só a frase da pergunta; o diagnóstico antes dela é para o sistema, não para o funcionário.
+    pergunta = re.split(r"(?<=[.!])\s+", orientacao)[-1].strip()
+    if len(pergunta) > 300:
         return ""
     from . import objetivos as coord
     return "" if _TECNICO_RE.search(coord._norm(pergunta)) else pergunta

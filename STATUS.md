@@ -15,6 +15,7 @@
   - o encerramento diz o problema concreto da revisão e separa falha técnica (validador/ERP) de falta de dado ou definição, em vez de repetir as entregas pedidas;
   - contagens de uma mesma pergunta saem numa tabela “Situação | Quantidade” com a data de referência; cada valor é calculado no banco, sem somar situações para formar o total;
   - consulta com a mesma tabela, colunas e filtros e só outro nome não conta como tentativa nova.
+- Ensaio real transacional (e450af4): a pergunta da imagem terminou numa pergunta de definição, mas sem mostrar o levantamento e com o diagnóstico interno junto. Agora, quando a lacuna é só a definição, o levantamento feito (ex.: contagem por situação, com o nome de cada uma) vai com a pergunta, marcado como ainda sem a classificação pedida, e só a frase da pergunta aparece.
 - Testes em `tests/test_m154_descoberta_restrita.py`:
   - o 1º plano conta todos os bens, a revisão aponta o problema e o 2º conta só os módulos pela família;
   - um módulo com duas movimentações é contado uma vez;
