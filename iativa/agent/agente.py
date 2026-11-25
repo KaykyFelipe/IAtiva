@@ -1384,8 +1384,18 @@ def _encerrar_sem_cumprir(ac, user, c, mensagem_id, saida, previa, causa, observ
             aviso = (" Isso já tinha sido encaminhado à manutenção e voltou a acontecer; ficou para análise de uma "
                      "pessoa da TI." if retomado else
                      " " + AVISAR_TI.format(n=inc.pk) if inc is not None and not automatica() else "")
-            final = Saida(f"{texto}\n\n{falta}." + (f" Tentei: {tentei}." if tentei else "")
-                          + " Não vou repetir a mesma tentativa nem dizer que está pronto." + aviso, ficha)
+            if ac.reprovada and causa == "revisao_reprovada":
+                lacuna, _, orientacao = ac.reprovada.partition(" Como corrigir:")
+                lacuna = lacuna.removeprefix("A resposta montada não atende: ").rstrip(".")
+                pergunta = orientacao.strip()
+                if pergunta.endswith("?") and pergunta.count("?") == 1:
+                    final = Saida(pergunta, {**ficha, "tipo": "esclarecimento"})
+                else:
+                    final = Saida(f"Não consegui confirmar com os dados consultados: {lacuna}." + aviso,
+                                  {**ficha, "tipo": "impedimento_dados"})
+            else:
+                final = Saida(f"{texto}\n\n{falta}." + (f" Tentei: {tentei}." if tentei else "")
+                              + " Não vou repetir a mesma tentativa nem dizer que está pronto." + aviso, ficha)
         registrar("modelo_falhou", "agente", usuario=user, estado_novo=f"objetivo_{causa}"[:40], resultado="erro")
     final.texto = final.texto.strip()
     final.solicitacao = saida.solicitacao if saida is not None else None
@@ -2129,8 +2139,8 @@ def _aprender_sozinho(user, c, d, texto, ficha, provedor, entrada, atual, motivo
                            + "), as colunas, o campo_data, as juncoes para trazer nomes e a agregacao pedida "
                            "(ex.: contagem_distinta:CAMPO por CAMPO_GRUPO, com top N se pedido). Não peça a tabela de novo.")}])
             d2 = _interpretar(provedor, entrada3, [o["codigo"] for o in entrada.objetivos], codigos_par)
-        if d2.acao == "conversar" and d2.resposta.strip().endswith("?") and not d2.opcoes:
-            return Saida(d2.resposta, ficha)
+        if d2.acao == "conversar" and d2.resposta.strip().endswith("?"):
+            return Saida(d2.resposta, {**ficha, "opcoes": list(d2.opcoes)})
         if d2.acao != "criar_consulta" or d2.consulta is None:
             motivo.append("as tabelas encontradas (" + ", ".join(t["tabela"] for t in tabelas) + ") não serviram"
                           + f" (o modelo respondeu {d2.acao or 'nada'})")
