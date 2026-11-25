@@ -35,7 +35,7 @@ def xfilial(tabela, filial: str) -> str:
         return filial.ljust(tamanho)
     if nivel == "compartilhado":
         return " " * tamanho
-    if nivel == "empresa":
+    if nivel in ("empresa", "unidade"):
         return filial[:TAMANHO_EMPRESA].ljust(tamanho)
     raise PlanoInvalido(f"Compartilhamento '{nivel}' de {tabela.alias} não suportado.")
 

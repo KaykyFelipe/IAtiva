@@ -110,7 +110,7 @@ def acrescentar_nomes(cat, plano, rotulos, linhas, origem, filiais, visivel, tim
     for i, c in enumerate(plano.colunas):
         if c.agregacao or c.transformacao or c.tipo != "texto" or i in feitos:
             continue
-        if c.campo.nome.endswith("_FILIAL"):
+        if c.campo.nome.endswith("_FILIAL") or c.rotulo == "Filial":  # M150: filial do registro (DA3_FILATU)
             continue
         if any(_eh_nome(x.campo.nome) for x in plano.colunas if x.campo.alias == c.campo.alias):
             continue  # a própria tabela já exibe coluna de nome/descrição (ex.: E1_NOMCLI, RA_NOME): não repete

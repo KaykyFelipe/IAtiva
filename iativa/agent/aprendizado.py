@@ -33,7 +33,9 @@ MAX_COLUNAS = 15
 MAX_FILTROS = 3
 VALOR_FIXO_RE = re.compile(r"^[0-9A-Za-z \-]{1,40}$")
 IGNORAR = {"QUAIS", "QUAL", "QUANTOS", "QUANTAS", "DIAS", "ULTIMOS", "ULTIMAS", "MATRIZ",
-           "FILIAL", "LISTA", "LISTAR", "MOSTRE", "MOSTRAR", "PARA", "COM", "SEM", "QUE", "FORAM", "ESTAO",
+           "FILIAL", "FILIAIS", "EMPRESA", "EMPRESAS", "QUANTIDADE", "TOTAL", "TOTAIS", "VALOR", "VALORES",
+           "TEMOS", "EXISTE", "EXISTEM", "INFORME", "INFORMAR", "DIGA", "DIZER", "SABER",
+           "LISTA", "LISTAR", "MOSTRE", "MOSTRAR", "PARA", "COM", "SEM", "QUE", "FORAM", "ESTAO",
            "TODOS", "TODAS", "MINHA", "NOSSA", "ESSE", "ESSA", "ENTRE", "DESDE", "PERIODO"}
 SISTEMA = ("SX", "SIX", "XX", "SYS", "SM0")
 
@@ -150,8 +152,9 @@ def candidatos(user, texto: str, limite: int = 5, automatico: bool = False) -> l
         td = existentes.get(i["alias"])
         if td is None:
             continue
+        comp = fisicas[i["alias"]].compartilhamento if i["alias"] in fisicas else ""
         out.append({"alias": i["alias"], "nome": td.nome, "campos": i["campos"],
-                    "referencia_publica": bool(i.get("referencia"))})
+                    "compartilhamento": comp, "referencia_publica": bool(i.get("referencia"))})
     registrar("metadado_consultado", "metadado", usuario=user, estado_novo="aprendizado", linhas=len(out))
     return out
 
@@ -173,9 +176,9 @@ def campos_da_tabela(user, alias: str, automatico: bool = False) -> dict:
     vis = _Visibilidade(setores_autorizados(user, Permissao.CONSULTAR), [alias])
     campos = [c for c in t.campos if c.consultavel and c.nome != t.campo_filial and vis.campo(alias, c.nome)]
     return {
-        "alias": t.alias, "nome": t.nome, "fisica": t.fisica, "campo_filial": t.campo_filial,
-        "chave": t.chave, "opcoes": opcoes, "dinamicos": dinamicos, "campos": campos, "datas": [c for c in campos if c.tipo == "D"],
-        "textos": [c for c in campos if c.tipo == "C"],
+        "alias": t.alias, "nome": t.nome, "fisica": t.fisica, "compartilhamento": t.compartilhamento,
+        "campo_filial": t.campo_filial, "chave": t.chave, "opcoes": opcoes, "dinamicos": dinamicos, "campos": campos,
+        "datas": [c for c in campos if c.tipo == "D"], "textos": [c for c in campos if c.tipo == "C"],
         "setores": Department.objects.filter(ativo=True).order_by("nome"),
     }
 
@@ -481,9 +484,8 @@ def _rotulo_juncao(titulo: str, nome_tabela: str, campo: str) -> str:
 
 
 def ampliar_para_campos(user, cm, campos) -> bool:
-    """M142/M143: campo de tabela ligada pelo dicionário (SX9 em 1 ou 2 saltos, ex.: F2_VEND1 do cabeçalho SF2 ou
-    A3_NOME do vendedor SA3 a partir da SD2): a consulta ganha sozinha a junção (e a intermediária, se houver) e a
-    coluna, em vez de recusar o cálculo ou filtro. A duplicação é conferida no banco a cada execução."""
+    """M142/M143/M150: campo oculto da própria tabela base ou de tabela ligada pelo dicionário (SX9 em 1 ou 2 saltos):
+    a consulta ganha sozinha a coluna (e a junção, se for de outra tabela), em vez de recusar o cálculo ou filtro."""
     spec = dict(cm.spec or {})
     tem = {c["campo"] for c in spec.get("colunas", [])}
     faltam = [c for c in dict.fromkeys(campos) if c and c != "*" and c not in tem]
@@ -491,8 +493,18 @@ def ampliar_para_campos(user, cm, campos) -> bool:
         return False
     juncoes = [dict(j) for j in spec.get("juncoes", [])]
     extras = []
-    possiveis = juncoes_possiveis(user, cm.tabela, profundidade=2)
+    try:
+        por_base = {c.nome: c for c in campos_da_tabela(user, cm.tabela, automatico=True)["campos"] if not sensivel(c)}
+    except Exception:
+        por_base = {}
+    possiveis = None
     for campo in faltam:
+        if campo in por_base:
+            info = por_base[campo]
+            extras.append({"campo": campo, "rotulo": (info.titulo or campo).strip(), "tipo": _tipo(info)})
+            continue
+        if possiveis is None:
+            possiveis = juncoes_possiveis(user, cm.tabela, profundidade=2)
         j = next((j for j in possiveis if any(c.nome == campo for c in j["campos"])), None)
         if j is None:
             return False

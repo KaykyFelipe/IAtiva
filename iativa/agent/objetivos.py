@@ -75,6 +75,24 @@ FALTA_MEMORIA = ("A pessoa também pediu para guardar o que ensinou, e isso aind
                  "tipo_nota termo ou regra, e o alcance pedido (empresa, setor ou usuário). Não refaça a consulta.")
 _MEMORIA_RE = re.compile(r"\b(guard[ae]|lembr[ae]|memoriz|anot[ae]|grav[ae]|daqui (pra|para) frente|"
                          r"a partir de agora|de agora em diante|sempre que)", re.I)
+_FORMATO_DIRETO_RE = re.compile(
+    r"\b(?:so|somente|apenas|unicamente)\s+(?:me\s+(?:diga|informe|mostre|traga)\s+)?"
+    r"(?:o\s+|a\s+|os\s+|as\s+)?(?:valor\w*|numer\w*|quantidad\w*|contagem|total|totais|resultado|"
+    r"dias?(?:\s+uteis|\s+corridos)?|meses|percentual|taxa)\b|\bsem\s+(?:tabela|detalh\w*|explicac\w*)\b"
+)
+
+
+def pede_formato_direto(texto: str, notas=()) -> bool:
+    """M150: resposta só com o número ('formato': 'direto') vale SOMENTE quando a pessoa pediu explicitamente
+    ('apenas o valor', 'só o número', 'sem tabela') ou guardou preferência explícita por resposta só com o valor.
+    'Quantos veículos tem a empresa?' recebia só "3336", sem filial nem contexto."""
+    if _FORMATO_DIRETO_RE.search(_norm(texto or "")):
+        return True
+    for nota in notas or ():
+        n = _norm(str(nota or ""))
+        if "preferencia" in n and _FORMATO_DIRETO_RE.search(n):
+            return True
+    return False
 
 
 FALTA_PARTE = ("A mensagem tem mais de uma pergunta e a resposta acima cobriu só parte dela. Responda agora a "
@@ -389,13 +407,17 @@ class Acompanhamento:
     divergencias: dict = field(default_factory=dict)  # M74: entrega -> período/filial usado diferente do pedido
     revisoes: int = 0  # M109: respostas montadas que o revisor reprovou nesta mensagem
     reprovada: str = ""  # M109: o que faltava na última resposta reprovada (vai à manutenção)
+    notas: tuple = ()
 
     def pendentes(self):
         return [e['descricao'] for i, e in enumerate(self.contrato) if i not in self.cumpridas]
 
     def definir(self, decisao):
-        if getattr(decisao, "formato", ""):
-            self.formato = decisao.formato
+        fmt = getattr(decisao, "formato", "")
+        if fmt == "direto" and not pede_formato_direto(self.texto, self.notas):
+            fmt = ""
+        if fmt:
+            self.formato = fmt
         if not self.exig:
             self.exig, self.origem = exigencia(self.texto, decisao)
 

@@ -4,6 +4,16 @@
 **Etapa atual:** 7 — Piloto local
 **Situação:** **Etapa 7 aprovada em 2026-11-16 por Diego; em andamento.** Feito: roteiro do piloto (`docs/piloto/ROTEIRO.md`) e auditoria de não armazenamento (`manage.py auditar_armazenamento`). Falta: usuários do Financeiro, conferência dos números com relatórios do Protheus, avaliação da interpretação e latência. Etapa 6 aprovada em 2026-11-12 por Diego. Pendente: conferência dos números com o Financeiro (T29). Base do ERP sem movimento após 08/09/2026 (confirmado, esperado). Filiais 002001 e 002002 nomeadas.
 
+## Mudança M150 — cadastro compartilhado dividido pela filial do registro e resposta só com número apenas quando pedida (2026-11-25)
+
+- Caso: “quantos veículos tem a empresa?” mostrou o mesmo total em todas as filiais e, depois, só um número solto (a soma das 8 repetições). A DA3 (Veículos) é compartilhada: o `DA3_FILIAL` fica em branco, então cada consulta “por filial” lia o cadastro inteiro.
+- Correções gerais (qualquer tabela e setor):
+  - Execução por partição física real (xFilial): tabela compartilhada ou por empresa não é consultada nem somada de novo para cada filial com a mesma partição.
+  - Cadastro compartilhado consultado em todas as filiais é dividido pelo campo de filial do próprio registro, achado pelo dicionário (mesmo prefixo, título de filial, tamanho do campo filial; “atual” antes de “base”, ex.: `DA3_FILATU`, depois `DA3_FILBAS`). Fica restrito às filiais autorizadas, mais a linha “Sem filial informada”, e a premissa diz o campo usado e os outros disponíveis. Nada muda quando o pedido já agrupa ou filtra por esses campos, quando há categorias ou top N, ou quando o setor não vê o campo.
+  - O formato “direto” (só o número) vale apenas quando a pessoa pede (“apenas o valor”, “só o número”, “sem tabela”) ou tem preferência guardada nesse sentido; senão a resposta vem completa, com tabela e premissas.
+  - Campo oculto da própria tabela base também amplia a consulta aprendida, além do campo de tabela ligada (M142/M143).
+- Testes: `tests/test_m150_cadastro_compartilhado.py`.
+
 ## Mudança M149 — registro de todo erro da IA para corrigir (2026-11-24)
 
 - Pedido de Diego: sempre que a IA der algum tipo de erro, guardar a pergunta do usuário, a resposta da IA e o erro que precisa corrigir.

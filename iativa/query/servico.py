@@ -35,7 +35,7 @@ from iativa.accounts.filiais import TODAS, rotulo
 
 from .compilador import PlanoInvalido, compilar, xfilial
 from .executor import TempoEsgotado, ValorRecusado, executar
-from .plano import Campo, Filtro, REGRAS, medidas_do_plano, montar, plano_chave, plano_total
+from .plano import Campo, Coluna, Filtro, REGRAS, medidas_do_plano, montar, plano_chave, plano_total
 from .validador import ConsultaRecusada, validar
 
 # Situação do resultado (observação estruturada para o agente).
@@ -453,6 +453,10 @@ def _executar_solicitacao(user, s: RequestContext) -> Resultado:
     linhas, truncado, origem = [], False, []
     acumulador, totais_ok = None, True
     nomes_juncoes = {}
+    escopo_consulta = "filial"
+    particoes_vistas = set()
+    filial_registro = None  # M150: (campo, premissa) quando a filial vem de um campo do cadastro compartilhado
+    plano_executado = None
     try:
         with abrir_catalogo() as cat:
             from iativa.agent import andamento
@@ -460,9 +464,27 @@ def _executar_solicitacao(user, s: RequestContext) -> Resultado:
             categorias = {}
             legenda_pendente = ""
             legenda_grupo = {}
-            for filial in filiais:  # "todas as filiais": uma consulta por filial autorizada, mesmo validador
-                andamento.avisar(f"Consultando o ERP — {rotulo(filial)}")
+            for filial in filiais:  # "todas as filiais": uma consulta por partição física real (xFilial), mesmo validador
                 plano = montar(s.objetivo, {**valores, "filial-analise": filial})
+                aliases_plano = [plano.base] + [j.tabela for j in plano.juncoes]
+                infos_tab = cat.tabelas(aliases_plano, com_campos=True)
+                if plano.base in infos_tab:
+                    niveis = [infos_tab[a].compartilhamento for a in aliases_plano if a in infos_tab]
+                    escopo_consulta = ("filial" if "filial" in niveis
+                                       else "empresa" if ("empresa" in niveis or "unidade" in niveis)
+                                       else "compartilhado")
+                    particao = tuple((a, xfilial(infos_tab[a], filial) if infos_tab[a].campo_filial else "")
+                                     for a in aliases_plano if a in infos_tab)
+                    if particao in particoes_vistas:
+                        # M150: tabela compartilhada (DA3, SA1, SB1...) ou por empresa (CTT, SF4) tem a mesma partição
+                        # física em várias filiais: nunca executa nem soma 8 vezes a mesma partição.
+                        continue
+                    particoes_vistas.add(particao)
+                    if todas and len(filiais) > 1 and escopo_consulta == "compartilhado":
+                        plano, filial_registro = _dividir_por_filial_do_registro(
+                            plano, infos_tab[plano.base], filiais, s.setor_id)
+                andamento.avisar(f"Consultando o ERP — {rotulo(filial)}" if escopo_consulta == "filial"
+                                 else f"Consultando o ERP — {plano.base}")
                 if s.objetivo.startswith(PREFIXO_APRENDIDO):
                     from iativa.metadata.descoberta import _Visibilidade
                     campos = escopo_do_plano(plano, s.setor_id, filiais)["campos"]
@@ -502,7 +524,6 @@ def _executar_solicitacao(user, s: RequestContext) -> Resultado:
                 # "10 fornecedores com mais pedidos"; a leitura agregada tem o próprio teto, bem maior.
                 lim = max(limite, int(cfg.get("limite_grupos", 20000))) if mesclar else limite
                 comp = compilar(replace(plano, top=0) if mesclar else plano, cat, lim)
-                infos_tab = cat.tabelas([plano.base] + [j.tabela for j in plano.juncoes])
                 permitidas = {t.fisica for t in infos_tab.values()}
                 nomes_juncoes = {j.alias: infos_tab[j.tabela].nome for j in plano.juncoes
                                  if j.tabela in infos_tab and infos_tab[j.tabela].nome}
@@ -552,6 +573,7 @@ def _executar_solicitacao(user, s: RequestContext) -> Resultado:
                 linhas += parte
                 origem += [filial] * len(parte)
                 truncado = truncado or cortou
+                plano_executado = plano
     except (ConsultaRecusada, PlanoInvalido, ValorRecusado) as exc:
         return _encerrar(user, s, E.FALHOU, inicio, 0, f"Consulta recusada pelo validador: {exc}",
                          ERRO_PARAMETROS if isinstance(exc, PlanoInvalido) else ERRO_METADADOS)
@@ -564,6 +586,13 @@ def _executar_solicitacao(user, s: RequestContext) -> Resultado:
                          f"A consulta não pôde ser concluída ({type(exc).__name__}). Tente de novo em instantes.",
                          _situacao_da_falha(exc))
 
+    if plano_executado is not None:
+        plano = plano_executado  # M150: a última filial pode ter sido pulada (mesma partição) com o plano sem ajustes
+    if filial_registro and linhas:
+        if any(c.agregacao for c in plano.colunas):
+            linhas = sorted(linhas, key=lambda l: (not str(l[0] or "").strip(), str(l[0] or "")))
+        linhas = [(_rotulo_filial_registro(l[0]), *l[1:]) for l in linhas]
+
     # 2. Checagem pós-execução: chave repetida indica junção que duplica valores.
     idx = [comp.rotulos.index(r) for r in plano.chave_unica]
     chaves = [(o,) + tuple(str(l[i]).strip() for i in idx) for o, l in zip(origem, linhas)]
@@ -573,7 +602,7 @@ def _executar_solicitacao(user, s: RequestContext) -> Resultado:
                          ERRO_METADADOS)
 
     mesclou = False
-    if todas and len(filiais) > 1 and plano.agrupar and linhas and not getattr(plano, "por_filial", False):
+    if todas and len(particoes_vistas or filiais) > 1 and plano.agrupar and linhas and not getattr(plano, "por_filial", False):
         linhas, mesclou = _mesclar_filiais(plano, comp, linhas)
         if mesclou:
             if len(linhas) > limite:  # M139: sem top N, a tela mostra os primeiros grupos do ranking e avisa
@@ -627,7 +656,25 @@ def _executar_solicitacao(user, s: RequestContext) -> Resultado:
         colunas_meta.append({"campo": "", "rotulo": "Dias de atraso (maior)"})
     else:
         colunas = list(rotulos_base)
-    if todas and mesclou:
+    if escopo_consulta == "compartilhado":
+        plano.premissas = [p for p in plano.premissas if "filial" not in p.lower()] + [
+            f"Tabela {plano.base} ({base.nome}) compartilhada entre todas as filiais no Protheus "
+            f"({base.campo_filial or 'sem filial'} em branco): o cadastro é único e não separa registros por filial neste campo."
+        ]
+        if todas and not categorias and len(colunas) == 1 and any(c.agregacao for c in plano.colunas):
+            colunas, tipos = ["Escopo"] + colunas, ["texto"] + tipos
+            colunas_meta = [{"campo": "", "rotulo": "Escopo"}] + colunas_meta
+            formatadas = [["Cadastro compartilhado (todas as filiais)"] + linha for linha in formatadas]
+    elif escopo_consulta == "empresa":
+        plano.premissas = [p for p in plano.premissas if "filial" not in p.lower()] + [
+            f"Tabela {plano.base} ({base.nome}) compartilhada por empresa no Protheus "
+            "(não separa individualmente cada filial da mesma empresa)."
+        ]
+        if todas and not mesclou and not categorias:
+            colunas, tipos = ["Empresa"] + colunas, ["texto"] + tipos
+            colunas_meta = [{"campo": "_FILIAL", "rotulo": "Empresa"}] + colunas_meta
+            formatadas = [[f"Empresa {str(o)[:3]}"] + linha for o, linha in zip(origem, formatadas)]
+    elif todas and mesclou:
         plano.premissas = [p for p in plano.premissas if "filial" not in p.lower()] + [
             "Filiais: " + ", ".join(rotulo(f) for f in filiais) + ".",
             "Grupos iguais somados entre as filiais" + (f"; ranking geral dos {plano.top} maiores." if plano.top else ".")]
@@ -638,11 +685,14 @@ def _executar_solicitacao(user, s: RequestContext) -> Resultado:
         plano.premissas = [p for p in plano.premissas if "filial" not in p.lower()] + [
             "Filiais: " + ", ".join(rotulo(f) for f in filiais) + "."]
 
-    if categorias and todas and not mesclou:
+    if filial_registro:
+        plano.premissas.append(filial_registro[1])
+    if categorias and todas and not mesclou and escopo_consulta == "filial":
         plano.premissas.append("Filiais consultadas: " + ", ".join(rotulo(f) for f in filiais) + ".")
+    n_particoes = len(particoes_vistas) if escopo_consulta != "filial" and particoes_vistas else len(filiais)
     mensagem = _resposta_final(s.objetivo, plano, len(linhas), truncado, totais, total, subtotal,
-                               bool(valores.get(AGREGACAO)), len(filiais))
-    desloc = 1 if colunas and colunas[0] == "Filial" and comp.rotulos[:1] != ("Filial",) else 0
+                               bool(valores.get(AGREGACAO)), n_particoes if escopo_consulta == "filial" else 1)
+    desloc = 1 if colunas and colunas[0] in ("Filial", "Empresa", "Escopo") and comp.rotulos[:1] != (colunas[0],) else 0
     com_nome = [list(f) for f in formatadas]
     for pos, _, por_linha, _, _ in nomes:  # M140: o destaque diz "000269 - NOME DO FORNECEDOR"
         for n, nome in por_linha.items():
@@ -701,6 +751,7 @@ def _executar_solicitacao(user, s: RequestContext) -> Resultado:
                  "agregacao": expressao_validada(valores.get(AGREGACAO, ""), cm.spec)}
         receitas.registrar_validacao(cm, prova)
     res.escopo = escopo_do_plano(plano, s.setor_id, filiais)
+    res.escopo["compartilhamento"] = escopo_consulta
     for _, _, _, mestre, campo_nome in nomes:
         res.escopo["campos"][mestre] = sorted(set(res.escopo["campos"].get(mestre, [])) | {campo_nome})
     res.agregado = any(c.agregacao for c in plano.colunas)
@@ -712,6 +763,70 @@ def _executar_solicitacao(user, s: RequestContext) -> Resultado:
             and plano.colunas[0].campo == plano.filtros[0].campo and plano.filtros[0].campo.nome.endswith("_FILIAL")):
         res.filtros_contagem_por_filial = tuple(plano.filtros[1:])
     return res
+
+
+SEM_FILIAL_REGISTRO = "Sem filial informada"
+
+
+def _rotulo_filial_registro(valor) -> str:
+    codigo = str(valor or "").strip()
+    return rotulo(codigo) if codigo else SEM_FILIAL_REGISTRO
+
+
+def _sem_acento(t: str) -> str:
+    import unicodedata
+    return "".join(ch for ch in unicodedata.normalize("NFD", str(t or "")) if unicodedata.category(ch) != "Mn").lower()
+
+
+def campos_filial_do_registro(tabela) -> list:
+    """M150: num cadastro compartilhado (DA3 Veículos, SA1...) o campo filial fica em branco e a filial de cada registro
+    mora num campo próprio da tabela (DA3_FILATU 'Fil.Atual', DA3_FILBAS 'Fil. Base'...). Devolve esses campos, o de
+    filial atual antes do de filial base, pelo dicionário (mesmo prefixo, título de filial, tamanho do campo filial)."""
+    if not tabela.campo_filial or "_" not in tabela.campo_filial:
+        return []
+    prefixo = tabela.campo_filial.split("_")[0] + "_FIL"
+    ref = next((c for c in tabela.campos if c.nome == tabela.campo_filial), None)
+    cands = [c for c in tabela.campos
+             if c.nome.startswith(prefixo) and c.nome != tabela.campo_filial and c.consultavel and c.tipo == "C"
+             and "fil" in _sem_acento(c.titulo)
+             and (ref is None or not ref.tamanho or not c.tamanho or c.tamanho == ref.tamanho)]
+    def ordem(c):
+        t = _sem_acento(f"{c.titulo} {c.descricao}")
+        return (0 if "atu" in t else 1 if "base" in t else 2, c.nome)
+    return sorted(cands, key=ordem)
+
+
+def _dividir_por_filial_do_registro(plano, tabela, filiais, setor_id):
+    """M150: 'quantos veículos tem a empresa' em todas as filiais, sobre cadastro compartilhado: em vez de repetir o
+    total do cadastro em cada filial (417 em todas) ou entregar um número solto, separa pelo campo de filial do próprio
+    registro, restrito às filiais autorizadas (mais os registros sem filial informada). Nada muda quando a pessoa já
+    agrupou ou filtrou por algum desses campos, quando há categorias/top N ou quando o setor não vê o campo."""
+    cands = campos_filial_do_registro(tabela)
+    if not cands or plano.categorias or plano.top or not plano.colunas:
+        return plano, None
+    nomes = {c.nome for c in cands}
+    if any(c.campo.nome in nomes for c in plano.colunas) or any(
+            f.campo.nome in nomes for f in plano.filtros if isinstance(f.campo, Campo)):
+        return plano, None
+    agregado = any(c.agregacao for c in plano.colunas)
+    if agregado and (plano.agrupar or not all(c.agregacao for c in plano.colunas)):
+        return plano, None  # já agrupado por outro campo: o pedido define a divisão
+    from iativa.metadata.descoberta import _Visibilidade
+    escolhido = next((c for c in cands if _Visibilidade({setor_id}, [tabela.alias]).campo(tabela.alias, c.nome)), None)
+    if escolhido is None:
+        return plano, None
+    campo = Campo("e1", escolhido.nome)
+    outros = [c for c in cands if c is not escolhido]
+    premissa = (f"Filial de cada registro pelo campo {(escolhido.titulo or escolhido.nome).strip()} ({escolhido.nome}): "
+                f"a tabela {tabela.alias} é compartilhada e o {tabela.campo_filial} fica em branco. "
+                f"Registros sem esse campo aparecem como “{SEM_FILIAL_REGISTRO}”.")
+    if outros:
+        premissa += " Outro campo de filial no cadastro: " + ", ".join(
+            f"{(c.titulo or c.nome).strip()} ({c.nome})" for c in outros) + "."
+    novo = replace(plano, colunas=[Coluna("Filial", campo, tipo="texto"), *plano.colunas],
+                   filtros=[*plano.filtros, Filtro(campo, "IN", tuple(filiais) + ("",))],
+                   agrupar=plano.agrupar or agregado, premissas=list(plano.premissas))
+    return novo, (escolhido.nome, premissa)
 
 
 def _nomes_dos_codigos(s, plano, comp, linhas, origem, filiais, cfg):
